@@ -1,27 +1,5 @@
 #include "GFTerritoryMap.h"
 
-void FGFTerritoryMap::SetDefaultFactions()
-{
-	Factions.Reset();
-	const FName Ids[] = {
-		FGFTerritoryFactions::Cinderwrights,
-		FGFTerritoryFactions::Verdant,
-		FGFTerritoryFactions::Rime
-	};
-	// Far enough from the hub that a one-member disc (default curve) does not cover the origin, so an
-	// enabled neutral zone can sit on the hub until factions grow over it.
-	const float Ring = 2800.f;
-	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Ids); ++Index)
-	{
-		const float Angle = FMath::DegreesToRadians(120.f * static_cast<float>(Index));
-		FGFTerritoryFaction Faction;
-		Faction.Id = Ids[Index];
-		Faction.Center = FVector(FMath::Cos(Angle) * Ring, FMath::Sin(Angle) * Ring, 0.f);
-		Faction.Members = 0;
-		Factions.Add(Faction);
-	}
-}
-
 FGFTerritoryFaction* FGFTerritoryMap::FindFaction(FName Id)
 {
 	return Factions.FindByPredicate([Id](const FGFTerritoryFaction& Faction) { return Faction.Id == Id; });
@@ -103,44 +81,78 @@ TArray<FGFSafeRegion> FGFTerritoryMap::CopySafeRegions() const
 	return Out;
 }
 
-bool FGFTerritoryMap::BeatsOnTie(const FGFTerritoryFaction& Challenger, const FGFTerritoryFaction& Holder) const
+bool FGFTerritoryMap::BeatsOnTie(const FGFSafeRegion& Challenger, const FGFSafeRegion& Holder) const
 {
-	const int32 ChallengerMembers = EffectiveMembers(Challenger.Members);
-	const int32 HolderMembers = EffectiveMembers(Holder.Members);
-	if (ChallengerMembers != HolderMembers)
+	if (Challenger.Members != Holder.Members)
 	{
-		return ChallengerMembers > HolderMembers;
+		return Challenger.Members > Holder.Members;
 	}
 	return Challenger.Id.ToString().Compare(Holder.Id.ToString(), ESearchCase::IgnoreCase) < 0;
 }
 
+bool FGFTerritoryMap::InDisc(const FGFSafeRegion& Region, const FVector& Location)
+{
+	if (Region.Radius() <= 0.f)
+	{
+		return false;
+	}
+	return FGFSafeCircles(TArray<FGFSafeRegion>{ Region }).IsInsideSafe(Location);
+}
+
+bool FGFTerritoryMap::CircleCacheMatches() const
+{
+	if (!bCirclesReady || CachedMaxMembers != MaxMembers || CachedBase != Curve.BaseRadius || CachedPer != Curve.RadiusPerMember || CachedMaxRadius != Curve.MaxRadius || CachedFactions.Num() != Factions.Num())
+	{
+		return false;
+	}
+	for (int32 Index = 0; Index < Factions.Num(); ++Index)
+	{
+		const FGFTerritoryFaction& Live = Factions[Index];
+		const FGFTerritoryFaction& Cached = CachedFactions[Index];
+		if (Live.Id != Cached.Id || Live.Members != Cached.Members || Live.Center != Cached.Center)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+const FGFSafeCircles& FGFTerritoryMap::Circles() const
+{
+	if (!CircleCacheMatches())
+	{
+		CachedCircles = FGFSafeCircles(CopySafeRegions());
+		CachedFactions = Factions;
+		CachedMaxMembers = MaxMembers;
+		CachedBase = Curve.BaseRadius;
+		CachedPer = Curve.RadiusPerMember;
+		CachedMaxRadius = Curve.MaxRadius;
+		bCirclesReady = true;
+	}
+	return CachedCircles;
+}
+
 FGFTerritoryZoneHit FGFTerritoryMap::GetZoneAt(const FVector& Location) const
 {
-	const FGFTerritoryFaction* Best = nullptr;
+	const FGFSafeRegion* Best = nullptr;
 	float BestDist = 0.f;
-	for (const FGFTerritoryFaction& Faction : Factions)
+	for (const FGFSafeRegion& Region : Circles().Regions)
 	{
-		const FGFSafeRegion Region = RegionFor(Faction);
-		const float Radius = Region.Radius();
-		if (Radius <= 0.f)
-		{
-			continue;
-		}
-		if (FVector::DistSquared2D(Region.Center, Location) > FMath::Square(Radius))
+		if (!InDisc(Region, Location))
 		{
 			continue;
 		}
 		const float Dist = FVector::Dist2D(Region.Center, Location);
 		if (!Best)
 		{
-			Best = &Faction;
+			Best = &Region;
 			BestDist = Dist;
 			continue;
 		}
 		const float Delta = Dist - BestDist;
-		if (Delta < -OverlapTieSlopCm || (FMath::Abs(Delta) <= OverlapTieSlopCm && BeatsOnTie(Faction, *Best)))
+		if (Delta < -OverlapTieSlopCm || (FMath::Abs(Delta) <= OverlapTieSlopCm && BeatsOnTie(Region, *Best)))
 		{
-			Best = &Faction;
+			Best = &Region;
 			BestDist = Dist;
 		}
 	}
@@ -152,57 +164,65 @@ FGFTerritoryZoneHit FGFTerritoryMap::GetZoneAt(const FVector& Location) const
 		Hit.FactionId = Best->Id;
 		return Hit;
 	}
-	if (Neutral.Contains(Location))
+	if (Neutral.bEnabled)
 	{
-		Hit.Zone = EGFTerritoryZone::Neutral;
-		return Hit;
+		FGFSafeRegion Disc;
+		Disc.Center = Neutral.Center;
+		Disc.Members = 1;
+		Disc.BaseRadius = FMath::Max(0.f, Neutral.Radius);
+		Disc.RadiusPerExtraMember = 0.f;
+		Disc.MaxRadius = Disc.BaseRadius;
+		if (InDisc(Disc, Location))
+		{
+			Hit.Zone = EGFTerritoryZone::Neutral;
+			return Hit;
+		}
 	}
 	Hit.Zone = EGFTerritoryZone::Wild;
 	return Hit;
 }
 
-bool FGFTerritoryMap::IsSafeFor(const FGFTerritorySubject& Who, const FVector& Location) const
+bool FGFTerritoryMap::IsSafeFor(FName FactionId, const FVector& Location) const
 {
-	// bHost is AGFPlayerState::bIsHost. The host does not get land the faction doesn't own.
-	if (Who.bWildCreature || Who.FactionId.IsNone())
+	if (FactionId.IsNone())
 	{
 		return false;
 	}
 	const FGFTerritoryZoneHit Hit = GetZoneAt(Location);
-	return Hit.Zone == EGFTerritoryZone::Faction && Hit.FactionId == Who.FactionId;
+	return Hit.Zone == EGFTerritoryZone::Faction && Hit.FactionId == FactionId;
 }
 
-FGFSafeCircles FGFTerritoryMap::BuildCircles() const
+bool FGFTerritoryMap::IsSafeFor(const FGFSocialPlayer& Who, const FVector& Location) const
 {
-	return FGFSafeCircles(CopySafeRegions());
+	return IsSafeFor(Who.Faction, Location);
 }
 
 bool FGFTerritoryMap::IsInsideSafe(const FVector& Location) const
 {
-	return BuildCircles().IsInsideSafe(Location);
+	return Circles().IsInsideSafe(Location);
 }
 
 FVector FGFTerritoryMap::ClosestSafePoint(const FVector& Location) const
 {
-	const FGFSafeCircles Circles = BuildCircles();
-	if (!Circles.HasAnySafe())
+	const FGFSafeCircles& Cached = Circles();
+	if (!Cached.HasAnySafe())
 	{
 		return Location;
 	}
-	return Circles.ClosestSafePoint(Location);
+	return Cached.ClosestSafePoint(Location);
 }
 
 bool FGFTerritoryMap::ClosestEdge(const FVector& Location, FVector& OutPoint, FVector& OutOutward) const
 {
-	const FGFSafeCircles Circles = BuildCircles();
-	if (!Circles.HasAnySafe())
+	const FGFSafeCircles& Cached = Circles();
+	if (!Cached.HasAnySafe())
 	{
 		return false;
 	}
-	return Circles.ClosestEdge(Location, OutPoint, OutOutward);
+	return Cached.ClosestEdge(Location, OutPoint, OutOutward);
 }
 
 bool FGFTerritoryMap::HasAnySafe() const
 {
-	return CopySafeRegions().Num() > 0;
+	return Circles().HasAnySafe();
 }

@@ -1,10 +1,8 @@
 #pragma once
 
 // World side of faction territory. Counts members from AGFGameState::FactionCount, caps growth with
-// FGFTerritoryLimits (AGameSession::MaxPlayers and AGFGameState::MaxPerFaction), and answers
-// IsSafeFor(Player, Location). Registers as an IGFSafeZoneProvider only while some faction owns land,
-// so an empty world still uses the giant's default circle. The giant's own herding still uses its
-// component until it is pointed at CopySafeRegions (see the handoff).
+// AGFGameState::MaxPerFaction, and answers IsSafeFor(Player, Location) through FGFSocialPlayer::Faction.
+// Registers once with UGFSafeZoneSubsystem from Initialize. The giant keeps its own circles.
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
@@ -20,8 +18,6 @@ class GFGAME_API UGFTerritorySubsystem : public UTickableWorldSubsystem, public 
 	GENERATED_BODY()
 
 public:
-	UGFTerritorySubsystem();
-
 	static UGFTerritorySubsystem* Get(const UObject* WorldContext);
 
 	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "GF|Territory")
@@ -30,8 +26,8 @@ public:
 	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "GF|Territory")
 	FGFNeutralZone NeutralZone;
 
-	/** Empty means the three default factions. Centers are tunable; member counts are filled from the game state. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Territory")
+	/** Anchors from DefaultGame.ini. Member counts are filled from the game state. Empty means no land. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "GF|Territory")
 	TArray<FGFTerritoryFaction> FactionLayout;
 
 	UFUNCTION(BlueprintCallable, Category = "GF|Territory")
@@ -44,7 +40,7 @@ public:
 	/** Tamed: the owner's faction. Wild (anything but EGFTameState::Tamed): never safe. */
 	bool IsSafeForDino(const AGFDino* Dino, const FVector& Location);
 
-	/** Discs for UGFGiantEventComponent::SetSafeRegions. Radius is already baked into each FGFSafeRegion. */
+	/** Owned discs. See FGFTerritoryMap::CopySafeRegions. */
 	TArray<FGFSafeRegion> CopySafeRegions();
 
 	const FGFTerritoryMap& GetMap() const { return Map; }
@@ -62,8 +58,9 @@ protected:
 private:
 	void RefreshFromWorld();
 	void Publish();
-	static FGFTerritorySubject SubjectFor(const AGFPlayerState* Player);
-	FGFTerritorySubject SubjectFor(const AGFDino* Dino) const;
+	FGFSocialPlayer SubjectFor(const AGFPlayerState* Player) const;
+	FGFSocialPlayer SubjectFor(const AGFDino* Dino) const;
 
 	FGFTerritoryMap Map;
+	bool bPublished = false;
 };

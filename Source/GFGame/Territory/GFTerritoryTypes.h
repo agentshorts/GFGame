@@ -1,12 +1,11 @@
 #pragma once
 
-// Faction territory values. Membership itself stays on AGFPlayerState / AGFGameState; this file is only the
-// curve, the optional neutral disc, and the zone a point falls in.
+// Curve, optional neutral disc, and the zone a point falls in. Faction ids and anchor positions live in
+// Config/DefaultGame.ini (UGFTerritorySubsystem::FactionLayout), not in code.
 
 #include "CoreMinimal.h"
 #include "GFTerritoryTypes.generated.h"
 
-class UWorld;
 class AGFGameState;
 
 /** What GetZoneAt reports. Faction land wins over the neutral disc; everything else is wild. */
@@ -67,11 +66,6 @@ struct GFGAME_API FGFNeutralZone
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Territory", meta = (ClampMin = "0"))
 	float Radius = 800.f;
-
-	bool Contains(const FVector& Location) const
-	{
-		return bEnabled && Radius > 0.f && FVector::DistSquared2D(Center, Location) <= FMath::Square(Radius);
-	}
 };
 
 /** One faction anchor. Members is the head count; the curve may clamp how much of that count grows the radius. */
@@ -90,60 +84,13 @@ struct GFGAME_API FGFTerritoryFaction
 	int32 Members = 0;
 };
 
-/** Faction ids this mode adds. Other ids already on a player state still work if an anchor uses them. */
-struct GFGAME_API FGFTerritoryFactions
-{
-	static const FName Cinderwrights;
-	static const FName Verdant;
-	static const FName Rime;
-};
-
 /**
- * Who IsSafeFor is answering. Built from AGFPlayerState (faction, bIsHost) or from AGFDino
- * (wild, or tamed and then the owner's faction). bHost is recorded and does not grant land.
- */
-struct GFGAME_API FGFTerritorySubject
-{
-	FName FactionId;
-	bool bHost = false;
-	bool bWildCreature = false;
-
-	static FGFTerritorySubject Player(FName InFactionId, bool bInHost = false)
-	{
-		FGFTerritorySubject S;
-		S.FactionId = InFactionId;
-		S.bHost = bInHost;
-		return S;
-	}
-
-	static FGFTerritorySubject TamedDino(FName OwnerFactionId, bool bOwnerIsHost = false)
-	{
-		FGFTerritorySubject S;
-		S.FactionId = OwnerFactionId;
-		S.bHost = bOwnerIsHost;
-		return S;
-	}
-
-	static FGFTerritorySubject WildDino()
-	{
-		FGFTerritorySubject S;
-		S.bWildCreature = true;
-		return S;
-	}
-};
-
-/**
- * How many members may grow one faction's land. Reads the session player cap and the faction seat cap.
- * Never a baked-in player total: 0 from a source means that source is not set.
+ * How many members may grow one faction's land. This is AGFGameState::MaxPerFaction (0 = no clamp).
+ * The session's MaxPlayers is not read: the live game session exists only on the server, so a client
+ * read is 0 and would disagree with the server.
  */
 struct GFGAME_API FGFTerritoryLimits
 {
-	/** Tighter of the two caps. 0 if both sources are missing (the curve does not clamp). */
-	static int32 CapMembers(int32 SessionMaxPlayers, int32 MaxPerFaction);
-
-	/** AGameSession::MaxPlayers on the world's game mode. 0 when there is no session. */
-	static int32 SessionMaxPlayers(const UWorld* World);
-
-	/** AGFGameState::MaxPerFaction. 0 when there is no game state. */
+	/** AGFGameState::MaxPerFaction. 0 when there is no game state, or when the property is 0 (no clamp). */
 	static int32 FactionSeatCap(const AGFGameState* GS);
 };

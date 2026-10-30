@@ -5,13 +5,6 @@
 #include "GFTamingComponent.h"
 #include "Engine/World.h"
 
-UGFTerritorySubsystem::UGFTerritorySubsystem()
-{
-	FGFTerritoryMap Defaults;
-	Defaults.SetDefaultFactions();
-	FactionLayout = Defaults.Factions;
-}
-
 UGFTerritorySubsystem* UGFTerritorySubsystem::Get(const UObject* WorldContext)
 {
 	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
@@ -32,6 +25,7 @@ void UGFTerritorySubsystem::Deinitialize()
 	{
 		Zones->UnregisterProvider(this);
 	}
+	bPublished = false;
 	Super::Deinitialize();
 }
 
@@ -39,7 +33,6 @@ void UGFTerritorySubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	RefreshFromWorld();
-	Publish();
 }
 
 TStatId UGFTerritorySubsystem::GetStatId() const
@@ -54,20 +47,11 @@ bool UGFTerritorySubsystem::DoesSupportWorldType(const EWorldType::Type WorldTyp
 
 void UGFTerritorySubsystem::RefreshFromWorld()
 {
-	if (FactionLayout.Num() == 0)
-	{
-		FGFTerritoryMap Defaults;
-		Defaults.SetDefaultFactions();
-		FactionLayout = Defaults.Factions;
-	}
-
 	const UWorld* World = GetWorld();
 	const AGFGameState* GS = World ? World->GetGameState<AGFGameState>() : nullptr;
 	Map.Curve = Curve;
 	Map.Neutral = NeutralZone;
-	Map.MaxMembers = FGFTerritoryLimits::CapMembers(
-		FGFTerritoryLimits::SessionMaxPlayers(World),
-		FGFTerritoryLimits::FactionSeatCap(GS));
+	Map.MaxMembers = FGFTerritoryLimits::FactionSeatCap(GS);
 
 	TArray<FGFTerritoryFaction> Next = FactionLayout;
 	for (FGFTerritoryFaction& Slot : Next)
@@ -90,20 +74,14 @@ void UGFTerritorySubsystem::RefreshFromWorld()
 
 void UGFTerritorySubsystem::Publish()
 {
-	UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(this);
-	if (!Zones)
+	if (bPublished)
 	{
 		return;
 	}
-	// Only take the safe-zone slot once some faction actually owns land. An empty registration would
-	// sit newest and hide the giant's default circle.
-	if (Map.HasAnySafe())
+	if (UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(this))
 	{
 		Zones->RegisterProvider(this);
-	}
-	else
-	{
-		Zones->UnregisterProvider(this);
+		bPublished = true;
 	}
 }
 
@@ -133,31 +111,27 @@ TArray<FGFSafeRegion> UGFTerritorySubsystem::CopySafeRegions()
 
 const IGFSafeZoneQuery* UGFTerritorySubsystem::GetSafeZoneQuery() const
 {
-	// Null when nobody owns land, so a newer registration still falls through to the giant's default circle.
-	return Map.HasAnySafe() ? &Map : nullptr;
+	return &Map;
 }
 
-FGFTerritorySubject UGFTerritorySubsystem::SubjectFor(const AGFPlayerState* Player)
+FGFSocialPlayer UGFTerritorySubsystem::SubjectFor(const AGFPlayerState* Player) const
 {
 	if (!Player || Player->bLoggedOut)
 	{
-		return FGFTerritorySubject::Player(NAME_None, Player && Player->bIsHost);
+		return FGFSocialPlayer(Player ? Player->PlayerKey : FString(), NAME_None, Player && Player->bIsHost, false, false);
 	}
-	return FGFTerritorySubject::Player(Player->FactionId, Player->bIsHost);
+	const AGFGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGFGameState>() : nullptr;
+	return FGFSocialPlayer(Player->PlayerKey, Player->FactionId, Player->bIsHost, false, GS && GS->IsFactionLeader(Player));
 }
 
-FGFTerritorySubject UGFTerritorySubsystem::SubjectFor(const AGFDino* Dino) const
+FGFSocialPlayer UGFTerritorySubsystem::SubjectFor(const AGFDino* Dino) const
 {
 	if (!Dino || !Dino->Taming || Dino->Taming->GetTameState() != EGFTameState::Tamed)
 	{
-		return FGFTerritorySubject::WildDino();
+		return FGFSocialPlayer();
 	}
 	const UWorld* World = GetWorld();
 	const AGFGameState* GS = World ? World->GetGameState<AGFGameState>() : nullptr;
 	const AGFPlayerState* Owner = GS ? GS->FindPlayerByKey(Dino->Taming->GetOwnerKey()) : nullptr;
-	if (!Owner || Owner->bLoggedOut)
-	{
-		return FGFTerritorySubject::TamedDino(NAME_None, false);
-	}
-	return FGFTerritorySubject::TamedDino(Owner->FactionId, Owner->bIsHost);
+	return SubjectFor(Owner);
 }
