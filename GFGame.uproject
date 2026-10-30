@@ -1,0 +1,30 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "",
+	"Description": "GFGame: a cozy co-op dino builder (voxel home and garden hub, dino taming and mini-games).",
+	"Modules": [
+		{ "Name": "GFGame", "Type": "Runtime", "LoadingPhase": "Default", "AdditionalDependencies": [ "Engine", "EnhancedInput" ] },
+		{ "Name": "GFCore", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFVoxel", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFBuild", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFGarden", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFCompanion", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFFashion", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFMoba", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFRhythm", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFNet", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFSave", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFTests", "Type": "Editor", "LoadingPhase": "Default" }
+	],
+	"Plugins": [
+		{ "Name": "EnhancedInput", "Enabled": true },
+		{ "Name": "StateTree", "Enabled": true },
+		{ "Name": "GameplayStateTree", "Enabled": true },
+		{ "Name": "CommonUI", "Enabled": true },
+		{ "Name": "FunctionalTestingEditor", "Enabled": true, "TargetAllowList": [ "Editor" ] },
+		{ "Name": "PythonScriptPlugin", "Enabled": true, "TargetAllowList": [ "Editor" ] },
+		{ "Name": "ModelContextProtocol", "Enabled": true, "TargetAllowList": [ "Editor" ] },
+		{ "Name": "AllToolsets", "Enabled": true, "TargetAllowList": [ "Editor" ] }
+	]
+}

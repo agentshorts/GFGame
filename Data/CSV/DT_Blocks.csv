@@ -1,0 +1,7 @@
+---,DisplayName,Mesh,MaterialOverride,bPivotIsBottomCenter,DebugColor,Hardness,DropItem,bPlaceable,bDyeable,bEmissive,SoundSet
+Grass,"NSLOCTEXT(""GFBlocks"", ""Grass"", ""Grass"")",None,None,True,"(R=0.30,G=0.65,B=0.25,A=1.0)",0.5,Dirt,True,False,False,Soil
+Dirt,"NSLOCTEXT(""GFBlocks"", ""Dirt"", ""Dirt"")",None,None,True,"(R=0.45,G=0.30,B=0.18,A=1.0)",0.5,Dirt,True,False,False,Soil
+WoodPlank,"NSLOCTEXT(""GFBlocks"", ""WoodPlank"", ""Wood Plank"")",None,None,True,"(R=0.70,G=0.50,B=0.30,A=1.0)",1.0,WoodPlank,True,False,False,Wood
+Stone,"NSLOCTEXT(""GFBlocks"", ""Stone"", ""Stone"")",None,None,True,"(R=0.55,G=0.55,B=0.58,A=1.0)",1.5,Stone,True,False,False,Stone
+Glass,"NSLOCTEXT(""GFBlocks"", ""Glass"", ""Glass"")",None,None,True,"(R=0.75,G=0.90,B=0.95,A=1.0)",0.3,Glass,True,False,False,Glass
+Fabric,"NSLOCTEXT(""GFBlocks"", ""Fabric"", ""Fabric"")",None,None,True,"(R=0.85,G=0.55,B=0.75,A=1.0)",0.3,Fabric,True,True,False,Cloth

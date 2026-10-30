@@ -1,0 +1,6 @@
+---,DisplayName,SeedItem,StageMeshes,StageSeconds,YieldItem,YieldMin,YieldMax,RareItem,RareChance
+Berry,"NSLOCTEXT(""GFPlants"", ""Berry"", ""Berry Bush"")",BerrySeed,(),"(100.0,200.0,300.0)",Fruit,2,4,RareBloom,0.1
+Cotton,"NSLOCTEXT(""GFPlants"", ""Cotton"", ""Cotton"")",CottonSeed,(),"(150.0,300.0)",Fiber,2,3,,0.0
+Steakroot,"NSLOCTEXT(""GFPlants"", ""Steakroot"", ""Steakroot"")",SteakrootSeed,(),"(120.0,240.0,360.0)",Steakroot,1,3,,0.0
+Emberpepper,"NSLOCTEXT(""GFPlants"", ""Emberpepper"", ""Emberpepper"")",EmberpepperSeed,(),"(120.0,240.0,360.0)",Emberpepper,1,2,,0.0
+Thornmelon,"NSLOCTEXT(""GFPlants"", ""Thornmelon"", ""Thornmelon"")",ThornmelonSeed,(),"(120.0,240.0,360.0)",Thornmelon,1,1,,0.0

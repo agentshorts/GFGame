@@ -1,0 +1,636 @@
+#include "GFVoxelWorld.h"
+#include "GFLog.h"
+#include "GFDataTables.h"
+#include "GFAssetMap.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Engine/DataTable.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/World.h"
+#include "Net/UnrealNetwork.h"
+
+// ---------------- Fast array callbacks (clients) ----------------
+
+void FGFChunkBaseItem::PostReplicatedAdd(const FGFChunkBaseArray& InArray)
+{
+	if (InArray.Owner) { InArray.Owner->OnChunkReplicated(Coord); }
+}
+void FGFChunkBaseItem::PostReplicatedChange(const FGFChunkBaseArray& InArray)
+{
+	if (InArray.Owner) { InArray.Owner->OnChunkReplicated(Coord); }
+}
+void FGFChunkDeltaItem::PostReplicatedAdd(const FGFChunkDeltaArray& InArray)
+{
+	if (InArray.Owner) { InArray.Owner->OnChunkReplicated(Coord); }
+}
+void FGFChunkDeltaItem::PostReplicatedChange(const FGFChunkDeltaArray& InArray)
+{
+	if (InArray.Owner) { InArray.Owner->OnChunkReplicated(Coord); }
+}
+
+// ---------------- Setup ----------------
+
+AGFVoxelWorld::AGFVoxelWorld()
+{
+	PrimaryActorTick.bCanEverTick = true;
+	bReplicates = true;
+	bAlwaysRelevant = true;
+	SetNetUpdateFrequency(20.f);
+	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	Root->SetMobility(EComponentMobility::Static);
+	RootComponent = Root;
+	Grid = FGFVoxelGrid(PlotSizeInBlocks);
+	ChunkBases.Owner = this;
+	ChunkDeltas.Owner = this;
+}
+
+void AGFVoxelWorld::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AGFVoxelWorld, PlotSizeInBlocks);
+	DOREPLIFETIME(AGFVoxelWorld, ChunkBases);
+	DOREPLIFETIME(AGFVoxelWorld, ChunkDeltas);
+}
+
+void AGFVoxelWorld::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	ChunkBases.Owner = this;
+	ChunkDeltas.Owner = this;
+}
+
+void AGFVoxelWorld::EnsureGridSize()
+{
+	if (Grid.GetSize() != PlotSizeInBlocks)
+	{
+		Grid = FGFVoxelGrid(PlotSizeInBlocks);
+	}
+	if (!HasAuthority() && AuthGrid.GetSize() != PlotSizeInBlocks)
+	{
+		AuthGrid = FGFVoxelGrid(PlotSizeInBlocks);
+	}
+}
+
+void AGFVoxelWorld::EnsureBlockTable()
+{
+	if (!BlockTable)
+	{
+		BlockTable = FGFDataTables::Get<FGFBlockRow>(TEXT("DT_Blocks"));
+	}
+}
+
+void AGFVoxelWorld::BeginPlay()
+{
+	Super::BeginPlay();
+	EnsureBlockTable();
+	EnsureGridSize();
+	if (HasAuthority())
+	{
+		if (Grid.CountSolid() == 0 && StarterGroundLayers > 0 && ChunkBases.Items.Num() == 0)
+		{
+			FillLayers(StarterGroundLayers, GroundBlock);
+		}
+		else
+		{
+			ServerRebaseAll();
+		}
+	}
+	else
+	{
+		// Anything that arrived before BeginPlay.
+		for (const FGFChunkBaseItem& Base : ChunkBases.Items)
+		{
+			ClientReconcileChunk(Base.Coord);
+		}
+	}
+	for (const FIntVector& C : Grid.GetChunkCoords())
+	{
+		MarkChunkDirty(C);
+	}
+	RebuildDirtyChunks();
+}
+
+void AGFVoxelWorld::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	RebuildDirtyChunks();
+}
+
+const FGFBlockRow* AGFVoxelWorld::FindBlockRow(FName BlockId) const
+{
+	return BlockTable ? BlockTable->FindRow<FGFBlockRow>(BlockId, TEXT("GFVoxelWorld"), false) : nullptr;
+}
+
+TArray<FName> AGFVoxelWorld::GetPlaceableBlockIds() const
+{
+	TArray<FName> Out;
+	if (BlockTable)
+	{
+		for (const FName& RowName : BlockTable->GetRowNames())
+		{
+			const FGFBlockRow* Row = FindBlockRow(RowName);
+			if (Row && Row->bPlaceable)
+			{
+				Out.Add(RowName);
+			}
+		}
+	}
+	if (Out.Num() == 0)
+	{
+		Out.Add(GroundBlock);
+	}
+	return Out;
+}
+
+FIntVector AGFVoxelWorld::WorldToCell(FVector WorldLocation) const
+{
+	const FVector Local = (WorldLocation - GetActorLocation()) / GFBlockSize;
+	return FIntVector(FMath::FloorToInt(Local.X), FMath::FloorToInt(Local.Y), FMath::FloorToInt(Local.Z));
+}
+
+FVector AGFVoxelWorld::CellToWorld(FIntVector Cell) const
+{
+	return GetActorLocation() + FVector(Cell.X + 0.5f, Cell.Y + 0.5f, Cell.Z) * GFBlockSize;
+}
+
+void AGFVoxelWorld::HitToCells(FVector HitLocation, FVector HitNormal, FIntVector& OutHitCell, FIntVector& OutAdjacentCell) const
+{
+	const FVector N = HitNormal.GetSafeNormal();
+	OutHitCell = WorldToCell(HitLocation - N * 1.f);
+	OutAdjacentCell = WorldToCell(HitLocation + N * 1.f);
+}
+
+// ---------------- Server edits ----------------
+
+FGFChunkBaseItem* AGFVoxelWorld::FindBase(const FIntVector& ChunkCoord)
+{
+	return ChunkBases.Items.FindByPredicate([&](const FGFChunkBaseItem& I) { return I.Coord == ChunkCoord; });
+}
+
+FGFChunkDeltaItem* AGFVoxelWorld::FindDelta(const FIntVector& ChunkCoord)
+{
+	return ChunkDeltas.Items.FindByPredicate([&](const FGFChunkDeltaItem& I) { return I.Coord == ChunkCoord; });
+}
+
+int32 AGFVoxelWorld::GetChunkRevision(const FIntVector& ChunkCoord) const
+{
+	if (HasAuthority())
+	{
+		const FGFChunkBaseItem* Base = ChunkBases.Items.FindByPredicate([&](const FGFChunkBaseItem& I) { return I.Coord == ChunkCoord; });
+		const FGFChunkDeltaItem* Delta = ChunkDeltas.Items.FindByPredicate([&](const FGFChunkDeltaItem& I) { return I.Coord == ChunkCoord; });
+		const int32 BaseRev = Base ? Base->BaseRevision : 0;
+		return BaseRev + ((Delta && Delta->BaseRevision == BaseRev) ? Delta->Edits.Num() : 0);
+	}
+	const FChunkApplied* Applied = ClientApplied.Find(ChunkCoord);
+	return Applied ? Applied->BaseRevision + Applied->EditsApplied : 0;
+}
+
+int64 AGFVoxelWorld::GetTotalRevision() const
+{
+	int64 Total = 0;
+	for (const FGFChunkBaseItem& Base : ChunkBases.Items)
+	{
+		Total += GetChunkRevision(Base.Coord);
+	}
+	return Total;
+}
+
+void AGFVoxelWorld::ServerRebaseChunk(const FIntVector& ChunkCoord)
+{
+	FGFChunkBaseItem* Base = FindBase(ChunkCoord);
+	FGFChunkDeltaItem* Delta = FindDelta(ChunkCoord);
+	const int32 NewRevision = GetChunkRevision(ChunkCoord) + 1; // +1 so a re-base is always a visible change
+	if (!Base)
+	{
+		Base = &ChunkBases.Items.AddDefaulted_GetRef();
+		Base->Coord = ChunkCoord;
+	}
+	Base->BaseRevision = NewRevision;
+	Grid.EncodeChunk(ChunkCoord, Base->Palette, Base->RLE);
+	ChunkBases.MarkItemDirty(*Base);
+	if (Delta)
+	{
+		Delta->BaseRevision = NewRevision;
+		Delta->Edits.Reset();
+		ChunkDeltas.MarkItemDirty(*Delta);
+	}
+}
+
+void AGFVoxelWorld::ServerRebaseAll()
+{
+	TSet<FIntVector> Coords(Grid.GetChunkCoords());
+	for (const FGFChunkBaseItem& Base : ChunkBases.Items)
+	{
+		Coords.Add(Base.Coord);
+	}
+	for (const FIntVector& C : Coords)
+	{
+		ServerRebaseChunk(C);
+	}
+	ForceNetUpdate();
+}
+
+bool AGFVoxelWorld::ServerApplyEdit(const FIntVector& Cell, FName BlockId, FName* OutPrevious, FString* OutReason)
+{
+	auto Fail = [OutReason](const TCHAR* Why) { if (OutReason) { *OutReason = Why; } return false; };
+	if (!HasAuthority())
+	{
+		return Fail(TEXT("not authority"));
+	}
+	EnsureGridSize();
+	if (!Grid.IsInBounds(Cell))
+	{
+		return Fail(TEXT("out of bounds"));
+	}
+	const FName Previous = Grid.Get(Cell);
+	if (!BlockId.IsNone())
+	{
+		if (!Previous.IsNone())
+		{
+			return Fail(TEXT("cell occupied"));
+		}
+		if (BlockTable)
+		{
+			const FGFBlockRow* Row = FindBlockRow(BlockId);
+			if (!Row || !Row->bPlaceable)
+			{
+				return Fail(TEXT("unknown or unplaceable block"));
+			}
+		}
+	}
+	else if (Previous.IsNone())
+	{
+		return Fail(TEXT("cell empty"));
+	}
+
+	Grid.Set(Cell, BlockId);
+	const FIntVector ChunkCoord = FGFVoxelGrid::CellToChunk(Cell);
+	FGFChunkBaseItem* Base = FindBase(ChunkCoord);
+	if (!Base)
+	{
+		ServerRebaseChunk(ChunkCoord); // new chunk: its first base already contains this edit
+	}
+	else
+	{
+		FGFChunkDeltaItem* Delta = FindDelta(ChunkCoord);
+		if (!Delta)
+		{
+			Delta = &ChunkDeltas.Items.AddDefaulted_GetRef();
+			Delta->Coord = ChunkCoord;
+			Delta->BaseRevision = Base->BaseRevision;
+		}
+		FGFVoxelEdit& Edit = Delta->Edits.AddDefaulted_GetRef();
+		Edit.LocalIndex = static_cast<uint16>(FGFVoxelGrid::LocalIndex(Cell));
+		Edit.BlockId = BlockId;
+		ChunkDeltas.MarkItemDirty(*Delta);
+		if (Delta->Edits.Num() >= CompactThreshold)
+		{
+			ServerRebaseChunk(ChunkCoord);
+		}
+	}
+	ForceNetUpdate();
+	MarkChunkDirty(ChunkCoord);
+	if (OutPrevious)
+	{
+		*OutPrevious = Previous;
+	}
+	OnBlockChanged.Broadcast(Cell, BlockId);
+	return true;
+}
+
+bool AGFVoxelWorld::PlaceBlock(FIntVector Cell, FName BlockId)
+{
+	if (BlockId.IsNone())
+	{
+		return false;
+	}
+	FString Reason;
+	const bool bOk = ServerApplyEdit(Cell, BlockId, nullptr, &Reason);
+	if (!bOk && Reason.Contains(TEXT("unplaceable")))
+	{
+		UE_LOG(LogGF, Warning, TEXT("PlaceBlock: %s (%s)"), *Reason, *BlockId.ToString());
+	}
+	return bOk;
+}
+
+FName AGFVoxelWorld::RemoveBlock(FIntVector Cell)
+{
+	FName Previous;
+	return ServerApplyEdit(Cell, NAME_None, &Previous) ? Previous : FName();
+}
+
+void AGFVoxelWorld::FillLayers(int32 NumLayers, FName BlockId)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	EnsureGridSize();
+	const FIntVector S = Grid.GetSize();
+	for (int32 Z = 0; Z < FMath::Min(NumLayers, S.Z); ++Z)
+	{
+		for (int32 Y = 0; Y < S.Y; ++Y)
+		{
+			for (int32 X = 0; X < S.X; ++X)
+			{
+				Grid.Set(FIntVector(X, Y, Z), BlockId);
+			}
+		}
+	}
+	ServerRebaseAll();
+	for (const FIntVector& C : Grid.GetChunkCoords())
+	{
+		MarkChunkDirty(C);
+	}
+}
+
+int32 AGFVoxelWorld::ClearRegion(const FIntVector& Min, const FIntVector& Max)
+{
+	int32 Removed = 0;
+	TArray<FIntVector> Cells;
+	Grid.ForEachSolid([&](const FIntVector& C, FName)
+	{
+		if (C.X >= Min.X && C.Y >= Min.Y && C.Z >= Min.Z && C.X <= Max.X && C.Y <= Max.Y && C.Z <= Max.Z)
+		{
+			Cells.Add(C);
+		}
+	});
+	for (const FIntVector& C : Cells)
+	{
+		Removed += ServerApplyEdit(C, NAME_None) ? 1 : 0;
+	}
+	return Removed;
+}
+
+bool AGFVoxelWorld::ApplyRegion(const FIntVector& Min, const FGFVoxelSaveData& Data, const FIntVector& RegionSize)
+{
+	if (!HasAuthority())
+	{
+		return false;
+	}
+	FGFVoxelGrid Temp(RegionSize);
+	if (!Temp.FromSaveData(Data))
+	{
+		return false;
+	}
+	ClearRegion(Min, Min + RegionSize - FIntVector(1, 1, 1));
+	bool bAll = true;
+	Temp.ForEachSolid([&](const FIntVector& C, FName Id)
+	{
+		bAll &= ServerApplyEdit(Min + C, Id);
+	});
+	return bAll;
+}
+
+void AGFVoxelWorld::ClearAll()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	for (const FIntVector& C : Grid.GetChunkCoords())
+	{
+		MarkChunkDirty(C);
+	}
+	Grid.Clear();
+	ServerRebaseAll();
+}
+
+bool AGFVoxelWorld::LoadData(const FGFVoxelSaveData& Data)
+{
+	if (!HasAuthority())
+	{
+		return false;
+	}
+	for (const FIntVector& C : Grid.GetChunkCoords())
+	{
+		MarkChunkDirty(C);
+	}
+	const bool bOk = Grid.FromSaveData(Data);
+	PlotSizeInBlocks = Grid.GetSize();
+	ServerRebaseAll();
+	for (const FIntVector& C : Grid.GetChunkCoords())
+	{
+		MarkChunkDirty(C);
+	}
+	return bOk;
+}
+
+// ---------------- Client side ----------------
+
+void AGFVoxelWorld::OnChunkReplicated(const FIntVector& ChunkCoord)
+{
+	if (HasAuthority())
+	{
+		return;
+	}
+	EnsureGridSize();
+	ClientReconcileChunk(ChunkCoord);
+}
+
+void AGFVoxelWorld::ClientReconcileChunk(const FIntVector& ChunkCoord)
+{
+	const FGFChunkBaseItem* Base = FindBase(ChunkCoord);
+	if (!Base)
+	{
+		return; // deltas without their base: wait for the base
+	}
+	FChunkApplied& Applied = ClientApplied.FindOrAdd(ChunkCoord);
+	if (Applied.BaseRevision != Base->BaseRevision)
+	{
+		if (!AuthGrid.DecodeChunk(ChunkCoord, Base->Palette, Base->RLE))
+		{
+			UE_LOG(LogGF, Warning, TEXT("Voxel: malformed base for chunk %s"), *ChunkCoord.ToString());
+		}
+		Applied.BaseRevision = Base->BaseRevision;
+		Applied.EditsApplied = 0;
+	}
+	if (const FGFChunkDeltaItem* Delta = FindDelta(ChunkCoord))
+	{
+		if (Delta->BaseRevision == Applied.BaseRevision)
+		{
+			if (Delta->Edits.Num() < Applied.EditsApplied)
+			{
+				// Should not happen (deltas only grow per base); rebuild from the base to be safe.
+				AuthGrid.DecodeChunk(ChunkCoord, Base->Palette, Base->RLE);
+				Applied.EditsApplied = 0;
+			}
+			for (int32 i = Applied.EditsApplied; i < Delta->Edits.Num(); ++i)
+			{
+				const FGFVoxelEdit& E = Delta->Edits[i];
+				AuthGrid.Set(FGFVoxelGrid::ChunkLocalToCell(ChunkCoord, E.LocalIndex), E.BlockId);
+			}
+			Applied.EditsApplied = Delta->Edits.Num();
+		}
+		// Delta for a newer base: keep showing what we have until that base arrives.
+	}
+	RefreshDisplayedChunk(ChunkCoord);
+}
+
+void AGFVoxelWorld::RefreshDisplayedChunk(const FIntVector& ChunkCoord)
+{
+	if (HasAuthority())
+	{
+		MarkChunkDirty(ChunkCoord);
+		return;
+	}
+	const int32 Revision = GetChunkRevision(ChunkCoord);
+	Grid.CopyChunkFrom(AuthGrid, ChunkCoord);
+	for (auto It = Predictions.CreateIterator(); It; ++It)
+	{
+		const FPrediction& P = It->Value;
+		if (FGFVoxelGrid::CellToChunk(P.Cell) != ChunkCoord)
+		{
+			continue;
+		}
+		if (P.bAcked && Revision >= P.AckRevision)
+		{
+			It.RemoveCurrent(); // the server state now includes it
+			continue;
+		}
+		Grid.Set(P.Cell, P.BlockId);
+	}
+	MarkChunkDirty(ChunkCoord);
+}
+
+void AGFVoxelWorld::PredictEdit(int32 EditId, const FIntVector& Cell, FName BlockId)
+{
+	if (HasAuthority() || !Grid.IsInBounds(Cell))
+	{
+		return;
+	}
+	EnsureGridSize();
+	FPrediction& P = Predictions.Add(EditId);
+	P.Cell = Cell;
+	P.BlockId = BlockId;
+	Grid.Set(Cell, BlockId);
+	MarkChunkDirty(FGFVoxelGrid::CellToChunk(Cell));
+	OnBlockChanged.Broadcast(Cell, BlockId);
+}
+
+void AGFVoxelWorld::ResolvePrediction(int32 EditId, bool bAccepted, int32 ServerChunkRevision)
+{
+	FPrediction* P = Predictions.Find(EditId);
+	if (!P)
+	{
+		return;
+	}
+	const FIntVector ChunkCoord = FGFVoxelGrid::CellToChunk(P->Cell);
+	if (bAccepted)
+	{
+		P->bAcked = true;
+		P->AckRevision = ServerChunkRevision;
+	}
+	else
+	{
+		Predictions.Remove(EditId);
+	}
+	RefreshDisplayedChunk(ChunkCoord);
+}
+
+// ---------------- Rendering ----------------
+
+void AGFVoxelWorld::MarkChunkDirty(const FIntVector& ChunkCoord)
+{
+	DirtyChunks.Add(ChunkCoord);
+}
+
+void AGFVoxelWorld::RebuildDirtyChunks()
+{
+	if (DirtyChunks.Num() == 0 || !HasActorBegunPlay())
+	{
+		return;
+	}
+	const TSet<FIntVector> ToBuild = MoveTemp(DirtyChunks);
+	DirtyChunks.Reset();
+	if (GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	for (const FIntVector& C : ToBuild)
+	{
+		RebuildChunkMeshes(C);
+	}
+}
+
+UMaterialInterface* AGFVoxelWorld::GetBlockMaterial(FName BlockId)
+{
+	if (TObjectPtr<UMaterialInterface>* Found = MaterialByBlock.Find(BlockId))
+	{
+		return *Found;
+	}
+	const FGFBlockRow* Row = FindBlockRow(BlockId);
+	UMaterialInterface* Mat = (Row && !Row->Mesh.IsNull()) ? Row->MaterialOverride.LoadSynchronous() : nullptr;
+	if (!Mat && !(Row && !Row->Mesh.IsNull()))
+	{
+		// Placeholder until the SM_Block_* art lands: engine cube tinted with the row's debug colour.
+		Mat = FGFAssetMap::MakeTint(this, Row ? Row->DebugColor : FLinearColor(0.3f, 0.7f, 0.3f));
+	}
+	MaterialByBlock.Add(BlockId, Mat);
+	return Mat;
+}
+
+UInstancedStaticMeshComponent* AGFVoxelWorld::GetOrCreateIsm(const FIntVector& ChunkCoord, FName BlockId)
+{
+	const TTuple<FIntVector, FName> Key(ChunkCoord, BlockId);
+	if (UInstancedStaticMeshComponent** Found = IsmIndex.Find(Key))
+	{
+		return *Found;
+	}
+	// Same name on server and clients, so movement bases on blocks resolve over the network.
+	const FName IsmName(*FString::Printf(TEXT("Ism_%d_%d_%d_%s"), ChunkCoord.X, ChunkCoord.Y, ChunkCoord.Z, *BlockId.ToString()));
+	const bool bNameFree = FindObjectFast<UObject>(this, IsmName) == nullptr;
+	UInstancedStaticMeshComponent* Ism = NewObject<UInstancedStaticMeshComponent>(this, bNameFree ? IsmName : NAME_None);
+	if (bNameFree)
+	{
+		Ism->SetNetAddressable();
+	}
+	Ism->SetupAttachment(Root);
+	Ism->SetCollisionProfileName(TEXT("BlockAll"));
+	Ism->SetMobility(EComponentMobility::Static);
+	const FGFBlockRow* Row = FindBlockRow(BlockId);
+	UStaticMesh* Mesh = Row ? Row->Mesh.LoadSynchronous() : nullptr;
+	Ism->SetStaticMesh(Mesh ? Mesh : FGFAssetMap::PlaceholderMesh(EGFPlaceholderShape::Cube));
+	if (UMaterialInterface* Mat = GetBlockMaterial(BlockId))
+	{
+		Ism->SetMaterial(0, Mat);
+	}
+	Ism->RegisterComponent();
+	AllIsms.Add(Ism);
+	IsmIndex.Add(Key, Ism);
+	return Ism;
+}
+
+void AGFVoxelWorld::RebuildChunkMeshes(const FIntVector& ChunkCoord)
+{
+	TMap<FName, TArray<FTransform>> ByType;
+	const FIntVector Origin = ChunkCoord * GFChunkSize;
+	if (Grid.HasChunk(ChunkCoord))
+	{
+		for (int32 i = 0; i < GFChunkVolume; ++i)
+		{
+			const FIntVector Cell = Origin + FIntVector(i % GFChunkSize, (i / GFChunkSize) % GFChunkSize, i / (GFChunkSize * GFChunkSize));
+			const FName Id = Grid.Get(Cell);
+			if (Id.IsNone())
+			{
+				continue;
+			}
+			const FGFBlockRow* Row = FindBlockRow(Id);
+			const bool bBottomPivot = Row && !Row->Mesh.IsNull() && Row->bPivotIsBottomCenter;
+			const FVector MeshPivotOffset = bBottomPivot ? FVector::ZeroVector : FVector(0, 0, GFBlockSize * 0.5f);
+			ByType.FindOrAdd(Id).Emplace(FRotator::ZeroRotator, FVector(Cell.X + 0.5f, Cell.Y + 0.5f, Cell.Z) * GFBlockSize + MeshPivotOffset);
+		}
+	}
+	for (TPair<TTuple<FIntVector, FName>, UInstancedStaticMeshComponent*>& Pair : IsmIndex)
+	{
+		if (Pair.Key.Get<0>() == ChunkCoord && !ByType.Contains(Pair.Key.Get<1>()) && Pair.Value->GetInstanceCount() > 0)
+		{
+			Pair.Value->ClearInstances();
+		}
+	}
+	for (TPair<FName, TArray<FTransform>>& Pair : ByType)
+	{
+		UInstancedStaticMeshComponent* Ism = GetOrCreateIsm(ChunkCoord, Pair.Key);
+		Ism->ClearInstances();
+		Ism->AddInstances(Pair.Value, /*bShouldReturnIndices*/ false, /*bWorldSpace*/ false);
+	}
+}

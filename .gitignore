@@ -1,0 +1,92 @@
+# Unreal build output
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+Build/
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+
+# Art handoff from Blender (large; artist inbox/imported/rejected/style live outside git)
+handoff/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Blender sources for art (kept local, not in git)
+blender/
+
+# More Unreal / build output
+DerivedDataCache/
+*/DerivedDataCache/
+Plugins/*/Saved/
+Plugins/*/DerivedDataCache/
+*.pdb
+*.ipch
+*.VC.db-*
+*.log
+crashinfo-*
+*.dmp
+.ue/
+*.slnx
+*.code-workspace
+*.xcworkspace
+*.xcodeproj
+
+# Secrets and credentials (public repo)
+.env
+.env.*
+*.env
+!*.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+*.keystore
+*.ppk
+*.gpg
+*.asc
+id_rsa*
+id_ed25519*
+id_ecdsa*
+id_dsa*
+*_rsa
+*_ed25519
+.ssh/
+ssh_config
+known_hosts
+authorized_keys
+.netrc
+_netrc
+.git-credentials
+credentials.json
+*credentials*.json
+service-account*.json
+secrets.*
+*.secret
+*.secrets
+*.token
+.npmrc
+.pypirc
+
+# Local-only tooling / envs
+.bpyenv/
+__pycache__/
+*.pyc
+.venv/
+venv/

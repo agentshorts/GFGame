@@ -1,0 +1,6 @@
+---,Species,Accepted,Favourites,FavouriteMultiplier,AggroRadius,Fullness,OfferCooldown,ThreatSeconds,BondDecayPerSec,bPack
+Nipper,Nipper,"((Food=""Berry"",BondGain=20.0),(Food=""Glowgrub"",BondGain=25.0),(Food=""WildEgg"",BondGain=25.0),(Food=""Fizzberry"",BondGain=25.0),(Food=""DinoTreat"",BondGain=12.0))","(""GrubJelly"",""PetitCake"")",3.0,600.0,6,2.5,2.0,1.0,True
+Raptor,Raptor,"((Food=""Steakroot"",BondGain=15.0),(Food=""Fish"",BondGain=12.0),(Food=""DinoTreat"",BondGain=10.0))","(""JerkyBites"",""WildEgg"")",3.0,1200.0,8,2.5,2.0,1.0,False
+Sailback,Sailback,"((Food=""Fish"",BondGain=12.0),(Food=""WildEgg"",BondGain=10.0),(Food=""DinoTreat"",BondGain=8.0))","(""FishSkewer"",""GoldenCarp"")",3.0,1600.0,8,2.5,2.0,1.0,False
+Rex,Rex,"((Food=""Steakroot"",BondGain=10.0),(Food=""SmokedHaunch"",BondGain=15.0),(Food=""DinoTreat"",BondGain=8.0))","(""EmberRoast"",""Emberpepper"")",3.0,2000.0,10,2.5,2.0,0.5,False
+Hornback,Hornback,"((Food=""Steakroot"",BondGain=12.0),(Food=""Berry"",BondGain=10.0),(Food=""SmokedHaunch"",BondGain=15.0),(Food=""Fizzberry"",BondGain=12.0),(Food=""DinoTreat"",BondGain=10.0))","(""Thornmelon"",""EmberRoast"")",3.0,1400.0,8,2.5,2.0,1.0,False
