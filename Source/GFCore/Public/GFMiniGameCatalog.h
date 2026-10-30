@@ -3,6 +3,7 @@
 // Hub gates and the pads for mini-games that have no map of their own.
 // Map gates travel with UGFMiniGameGateSubsystem::EnterMiniGame.
 // Sim pads are offsets from the Rime anchor so those modes are not stacked on the hub.
+// Those pads sit outside the voxel floor, so each pad marker carries its own slab.
 // Numbers are the layout locked in by the gate tests. See issue 158 for why.
 
 #include "CoreMinimal.h"
@@ -49,6 +50,8 @@ struct GFCORE_API FGFMiniGameCatalog
 	/** Player stand in front of a pad marker (cm). */
 	static constexpr float SimStandForwardCm = 400.f;
 	static constexpr float SimStandUpCm = 120.f;
+	/** Solid slab under a sim pad (cm). The voxel overworld only covers about ±5400 in Y. */
+	static constexpr float PadFloorThicknessCm = 100.f;
 
 	static const TArray<FGFMiniGameEntry>& All();
 	static const FGFMiniGameEntry* Find(FName Id);

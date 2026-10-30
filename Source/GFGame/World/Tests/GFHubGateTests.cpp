@@ -58,7 +58,7 @@ namespace GFHubGateTests
 		int32 Count = 0;
 		for (TActorIterator<AGFMiniGameGate> It(World); It; ++It)
 		{
-			Count += It->Role == Role ? 1 : 0;
+			Count += It->GateRole == Role ? 1 : 0;
 		}
 		return Count;
 	}
@@ -67,7 +67,7 @@ namespace GFHubGateTests
 	{
 		for (TActorIterator<AGFMiniGameGate> It(World); It; ++It)
 		{
-			if (It->EntryId == Id && It->Role == Role)
+			if (It->EntryId == Id && It->GateRole == Role)
 			{
 				return *It;
 			}
@@ -102,6 +102,35 @@ namespace GFHubGateTests
 		const float Dx = FMath::Max(0.f, FMath::Abs(Center.X - DiscCenter.X) - Half.X);
 		const float Dy = FMath::Max(0.f, FMath::Abs(Center.Y - DiscCenter.Y) - Half.Y);
 		return FMath::Sqrt(Dx * Dx + Dy * Dy);
+	}
+
+	static bool FloorBlocks(const UStaticMeshComponent* Floor)
+	{
+		if (!Floor || Floor->GetCollisionEnabled() != ECollisionEnabled::QueryAndPhysics)
+		{
+			return false;
+		}
+		return Floor->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Block
+			&& Floor->GetCollisionResponseToChannel(ECC_WorldStatic) == ECR_Block;
+	}
+
+	/** Engine cube is 100 cm and centred. The slab top sits on the marker origin and covers the pad. */
+	static bool FloorCoversPad(const UStaticMeshComponent* Floor, const FGFMiniGameEntry& Entry)
+	{
+		if (!FloorBlocks(Floor) || !Floor->GetStaticMesh() || Floor->bHiddenInGame)
+		{
+			return false;
+		}
+		const FVector Scale = Floor->GetRelativeScale3D();
+		const float HalfX = Scale.X * 50.f;
+		const float HalfY = Scale.Y * 50.f;
+		const float Thickness = Scale.Z * 100.f;
+		const float TopZ = Floor->GetRelativeLocation().Z + Thickness * 0.5f;
+		return HalfX + 0.5f >= Entry.PadHalfExtent.X
+			&& HalfY + 0.5f >= Entry.PadHalfExtent.Y
+			&& Thickness + 0.5f >= FGFMiniGameCatalog::PadFloorThicknessCm
+			&& FMath::IsNearlyEqual(TopZ, 0.f, 1.f)
+			&& !Floor->CanEverAffectNavigation();
 	}
 }
 
@@ -214,7 +243,8 @@ bool FGFHubGatePadTest::RunTest(const FString&)
 		}
 	}
 
-	// Locked stand-in until the Decision issue is overruled. A shifted anchor must move the pad with it.
+	// Locked stand-in until the Decision issue is overruled. These Y values sit outside the
+	// voxel floor (about ±5400), so each pad marker carries its own slab. A shifted anchor moves the pad with it.
 	const FGFMiniGameEntry* Arena = FGFMiniGameCatalog::Find(TEXT("Arena"));
 	const FGFMiniGameEntry* Depths = FGFMiniGameCatalog::Find(TEXT("Depths"));
 	const FGFMiniGameEntry* Mine = FGFMiniGameCatalog::Find(TEXT("Mine"));
@@ -276,7 +306,7 @@ bool FGFHubGateActorTest::RunTest(const FString&)
 			continue;
 		}
 		Gate->EntryId = Entry.Id;
-		Gate->Role = EGFMiniGameGateRole::Portal;
+		Gate->GateRole = EGFMiniGameGateRole::Portal;
 		Gate->RimeCenter = FVector::ZeroVector;
 		Gate->FinishSpawning(Xform);
 		TestEqual(*FString::Printf(TEXT("%s label"), *Entry.Id.ToString()), Gate->GetLabel(), Entry.Label);
@@ -284,6 +314,7 @@ bool FGFHubGateActorTest::RunTest(const FString&)
 		const bool bArt = !Entry.ArtObject.IsEmpty() && FPackageName::DoesPackageExist(FGFMiniGameCatalog::ArtPackage(Entry));
 		TestEqual(*FString::Printf(TEXT("%s placeholder matches missing art"), *Entry.Id.ToString()), Gate->IsUsingPlaceholder(), !bArt);
 		TestNotNull(*FString::Printf(TEXT("%s mesh"), *Entry.Id.ToString()), Gate->GetGateMesh() ? Gate->GetGateMesh()->GetStaticMesh() : nullptr);
+		TestFalse(*FString::Printf(TEXT("%s portal has no solid floor"), *Entry.Id.ToString()), FloorBlocks(Gate->GetPadFloor()));
 		if (Entry.bExpectArt)
 		{
 			TestFalse(*FString::Printf(TEXT("%s uses its gate mesh"), *Entry.Id.ToString()), Gate->IsUsingPlaceholder());
@@ -300,7 +331,7 @@ bool FGFHubGateActorTest::RunTest(const FString&)
 		return false;
 	}
 	DepthsGate->EntryId = TEXT("Depths");
-	DepthsGate->Role = EGFMiniGameGateRole::Portal;
+	DepthsGate->GateRole = EGFMiniGameGateRole::Portal;
 	DepthsGate->RimeCenter = Rime;
 	DepthsGate->FinishSpawning(DepthsXform);
 	TestTrue(TEXT("Depths portal moves the pawn onto its pad"), DepthsGate->EnterFrom(Pawn));
@@ -313,7 +344,7 @@ bool FGFHubGateActorTest::RunTest(const FString&)
 		return false;
 	}
 	BeatGate->EntryId = TEXT("BeatHop");
-	BeatGate->Role = EGFMiniGameGateRole::Portal;
+	BeatGate->GateRole = EGFMiniGameGateRole::Portal;
 	BeatGate->FinishSpawning(BeatXform);
 	const FVector Before = Pawn->GetActorLocation();
 	TestFalse(TEXT("Beat Hop does not drag the pawn onto a pad"), BeatGate->EnterFrom(Pawn));
@@ -325,11 +356,12 @@ bool FGFHubGateActorTest::RunTest(const FString&)
 		return false;
 	}
 	Marker->EntryId = TEXT("Depths");
-	Marker->Role = EGFMiniGameGateRole::Marker;
+	Marker->GateRole = EGFMiniGameGateRole::Marker;
 	Marker->FinishSpawning(BeatXform);
 	TestEqual(TEXT("Pad marker says Depths"), Marker->GetLabel(), FString(TEXT("Depths")));
 	TestEqual(TEXT("Pad marker sign says Depths"), Marker->GetSignText().ToString(), FString(TEXT("Depths")));
 	TestFalse(TEXT("A marker is not a door"), Marker->EnterFrom(Pawn));
+	TestTrue(TEXT("Depths pad has a solid floor"), FloorCoversPad(Marker->GetPadFloor(), *DepthsRow));
 	return true;
 }
 
@@ -363,6 +395,7 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 		TestEqual(*FString::Printf(TEXT("%s portal name"), *Entry.Id.ToString()), Portal->GetLabel(), Entry.Label);
 		const FVector Want = FGFMiniGameCatalog::GateLocation(Rime, Entry.RingIndex, FGFMiniGameCatalog::All().Num());
 		TestTrue(*FString::Printf(TEXT("%s on the ring"), *Entry.Id.ToString()), Portal->GetActorLocation().Equals(Want, 1.f));
+		TestFalse(*FString::Printf(TEXT("%s portal floor stays open"), *Entry.Id.ToString()), FloorBlocks(Portal->GetPadFloor()));
 		if (Entry.bHasPad)
 		{
 			AGFMiniGameGate* Marker = FindGate(Scope.World, Entry.Id, EGFMiniGameGateRole::Marker);
@@ -371,6 +404,7 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 			{
 				TestEqual(*FString::Printf(TEXT("%s pad name"), *Entry.Id.ToString()), Marker->GetLabel(), Entry.Label);
 				TestTrue(*FString::Printf(TEXT("%s marker on the pad"), *Entry.Id.ToString()), Marker->GetActorLocation().Equals(FGFMiniGameCatalog::PadOrigin(Entry, Rime), 1.f));
+				TestTrue(*FString::Printf(TEXT("%s pad floor"), *Entry.Id.ToString()), FloorCoversPad(Marker->GetPadFloor(), Entry));
 			}
 			TestEqual(*FString::Printf(TEXT("%s director"), *Entry.Id.ToString()), CountClass(Scope.World, Entry.DirectorClass), 1);
 		}
@@ -400,6 +434,7 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 		{
 			TestEqual(TEXT("Beat Hop map shows Beat Hop"), Sign->GetLabel(), FString(TEXT("Beat Hop")));
 			TestEqual(TEXT("Beat Hop map sign text"), Sign->GetSignText().ToString(), FString(TEXT("Beat Hop")));
+			TestFalse(TEXT("Beat Hop map marker has no pad floor"), FloorBlocks(Sign->GetPadFloor()));
 		}
 		TestEqual(TEXT("Course is on the Beat Hop map"), CountClass(BeatWorld.World, Beat->PlacedClass), 1);
 		TestNull(TEXT("Depths is not written on the Beat Hop map"), FindGate(BeatWorld.World, TEXT("Depths"), EGFMiniGameGateRole::Marker));
@@ -422,6 +457,7 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 		if (TestNotNull(TEXT("Runway sign actor"), Sign))
 		{
 			TestEqual(TEXT("Runway sign"), Sign->GetLabel(), FString(TEXT("Runway")));
+			TestFalse(TEXT("Runway map marker has no pad floor"), FloorBlocks(Sign->GetPadFloor()));
 		}
 	}
 
@@ -442,6 +478,7 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 		{
 			TestEqual(TEXT("MOBA map shows MOBA"), Sign->GetLabel(), FString(TEXT("MOBA")));
 			TestEqual(TEXT("MOBA map sign text"), Sign->GetSignText().ToString(), FString(TEXT("MOBA")));
+			TestFalse(TEXT("MOBA map marker has no pad floor"), FloorBlocks(Sign->GetPadFloor()));
 		}
 		TestNull(TEXT("MOBA map has no Depths sign"), FindGate(MobaWorld.World, TEXT("Depths"), EGFMiniGameGateRole::Marker));
 	}

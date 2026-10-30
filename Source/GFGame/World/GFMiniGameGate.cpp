@@ -74,13 +74,20 @@ AGFMiniGameGate::AGFMiniGameGate()
 	Trigger->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 	Trigger->SetGenerateOverlapEvents(true);
 	Trigger->OnComponentBeginOverlap.AddDynamic(this, &AGFMiniGameGate::OnTriggerBegin);
+
+	PadFloor = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PadFloor"));
+	PadFloor->SetupAttachment(Root);
+	PadFloor->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	PadFloor->SetCanEverAffectNavigation(false);
+	PadFloor->SetHiddenInGame(true);
+	PadFloor->SetVisibility(false);
 }
 
 void AGFMiniGameGate::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AGFMiniGameGate, EntryId);
-	DOREPLIFETIME(AGFMiniGameGate, Role);
+	DOREPLIFETIME(AGFMiniGameGate, GateRole);
 	DOREPLIFETIME(AGFMiniGameGate, RimeCenter);
 }
 
@@ -143,15 +150,42 @@ void AGFMiniGameGate::ApplyVisuals()
 
 	if (Trigger)
 	{
-		const bool bPortal = Role == EGFMiniGameGateRole::Portal;
+		const bool bPortal = GateRole == EGFMiniGameGateRole::Portal;
 		Trigger->SetGenerateOverlapEvents(bPortal);
 		Trigger->SetCollisionEnabled(bPortal ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+	}
+
+	if (PadFloor)
+	{
+		const bool bSolidPad = GateRole == EGFMiniGameGateRole::Marker && Entry && Entry->bHasPad;
+		PadFloor->SetHiddenInGame(!bSolidPad);
+		PadFloor->SetVisibility(bSolidPad);
+		if (!bSolidPad)
+		{
+			PadFloor->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
+		else
+		{
+			// Engine cube is 100 cm and centred. Top of the slab sits on the marker origin.
+			const float CubeCm = 100.f;
+			const float Thickness = FGFMiniGameCatalog::PadFloorThicknessCm;
+			PadFloor->SetStaticMesh(FGFAssetMap::PlaceholderMesh(EGFPlaceholderShape::Cube));
+			PadFloor->SetRelativeScale3D(FVector(
+				(Entry->PadHalfExtent.X * 2.f) / CubeCm,
+				(Entry->PadHalfExtent.Y * 2.f) / CubeCm,
+				Thickness / CubeCm));
+			PadFloor->SetRelativeLocation(FVector(0.f, 0.f, -Thickness * 0.5f));
+			PadFloor->SetCollisionProfileName(TEXT("BlockAll"));
+			PadFloor->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			PadFloor->SetCanEverAffectNavigation(false);
+			PadFloor->SetMaterial(0, FGFAssetMap::MakeTint(PadFloor, Entry->PlaceholderColor));
+		}
 	}
 }
 
 bool AGFMiniGameGate::EnterFrom(APawn* Pawn)
 {
-	if (!HasAuthority() || Role != EGFMiniGameGateRole::Portal || !Pawn)
+	if (!HasAuthority() || GateRole != EGFMiniGameGateRole::Portal || !Pawn)
 	{
 		return false;
 	}
