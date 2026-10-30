@@ -8,8 +8,9 @@ class UDataTable;
 class AGFVoxelWorld;
 
 /**
- * Hub game mode. Makes any map playable: spawns the voxel plot (64x64x32, centred on the origin,
- * ground top at Z=0) and a start point if the map has none, and hands the data tables to the systems.
+ * Hub game mode. On L_Hub the voxel plot is the territory overworld: faction ground, a wild skirt,
+ * surface top at world Z=0. Other maps keep the 64x64x32 starter plot centred on the origin.
+ * A start point is spawned when the map has none. Data tables are handed to the systems.
  * Listen-server ready (PLAN.md section 4.1): AGFGameState / AGFPlayerState, player keys and colours at login,
  * the server keeps a guest's character at logout.
  */
@@ -47,5 +48,8 @@ protected:
 	virtual void Logout(AController* Exiting) override;
 
 private:
+	/** L_Hub only. Live faction discs decide Own, Shared, Foreign, or Deny. */
+	void BindOverworldEditQuery();
+
 	UPROPERTY(Transient) TObjectPtr<AActor> FallbackStart;
 };

@@ -234,7 +234,7 @@ bool FGFOverworldCoversLayoutTest::RunTest(const FString&)
 
 	TestTrue(TEXT("Rime colour is configured"), HasColour(Ground->FactionColours, TEXT("Rime"), FLinearColor(0.75f, 0.88f, 0.96f, 1.f)));
 	TestTrue(TEXT("Verdant colour is configured"), HasColour(Ground->FactionColours, TEXT("Verdant"), FLinearColor(0.22f, 0.62f, 0.28f, 1.f)));
-	TestTrue(TEXT("Cinderwrights colour is configured"), HasColour(Ground->FactionColours, TEXT("Cinderwrights"), FLinearColor(0.55f, 0.52f, 0.48f, 1.f)));
+	TestTrue(TEXT("Cinderwrights colour is ember"), HasColour(Ground->FactionColours, TEXT("Cinderwrights"), FLinearColor(217.f / 255.f, 84.f / 255.f, 43.f / 255.f, 1.f)));
 	TestTrue(TEXT("LavaBridge colour is configured"), HasColour(Ground->HazardColours, TEXT("LavaBridge"), FLinearColor(0.95f, 0.40f, 0.08f, 1.f)));
 	TestTrue(TEXT("DeadlyForest colour is configured"), HasColour(Ground->HazardColours, TEXT("DeadlyForest"), FLinearColor(0.05f, 0.22f, 0.08f, 1.f)));
 

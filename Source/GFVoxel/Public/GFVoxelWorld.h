@@ -9,6 +9,7 @@
 class UDataTable;
 class UInstancedStaticMeshComponent;
 class UMaterialInterface;
+class UStaticMesh;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGFOnBlockChanged, FIntVector, Cell, FName, BlockId);
 
@@ -66,6 +67,12 @@ public:
 	/** Server: fills the bottom NumLayers layers with BlockId. OnBlockChanged fires for every block it replaces (not for filled air). */
 	UFUNCTION(BlueprintCallable, Category = "GF|Voxel")
 	void FillLayers(int32 NumLayers, FName BlockId);
+
+	/**
+	 * Server: replaces the grid with BlockAt (None = air). One rebase, then OnGridReset.
+	 * Used by the hub overworld so a full terrain does not emit one delta per cell.
+	 */
+	void ServerStamp(TFunctionRef<FName(const FIntVector& Cell)> BlockAt);
 
 	/** Server: removes every block in [Min, Max]. Returns how many were removed. */
 	int32 ClearRegion(const FIntVector& Min, const FIntVector& Max);
@@ -172,6 +179,8 @@ protected:
 	/** PaintKey 0 = unpainted; otherwise the packed sRGB colour with alpha 255 (see PaintKeyOf). */
 	UInstancedStaticMeshComponent* GetOrCreateIsm(const FIntVector& ChunkCoord, FName BlockId, uint32 PaintKey = 0);
 	UMaterialInterface* GetBlockMaterial(FName BlockId);
+	/** Row mesh, else a known art mesh, else the engine cube. Art meshes are bottom-centre. */
+	UStaticMesh* ResolveDrawMesh(FName BlockId, bool& bOutBottomPivot);
 	UMaterialInterface* GetPaintedMaterial(FName BlockId, uint32 PaintKey);
 	static uint32 PaintKeyOf(const FLinearColor& Color);
 	virtual void Tick(float DeltaSeconds) override;
@@ -205,6 +214,14 @@ protected:
 	FGFVoxelGrid Grid;
 	/** Client only: the server-confirmed state. */
 	FGFVoxelGrid AuthGrid;
+
+	struct FCachedBlockDraw
+	{
+		UStaticMesh* Mesh = nullptr;
+		bool bBottomPivot = false;
+		bool bReady = false;
+	};
+	TMap<FName, FCachedBlockDraw> DrawCache;
 
 	struct FChunkApplied
 	{
