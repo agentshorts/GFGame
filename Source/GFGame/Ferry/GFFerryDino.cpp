@@ -27,7 +27,7 @@ AGFFerryDino::AGFFerryDino()
 	AnimKey = PerchAnim;
 }
 
-float AGFFerryDino::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
+float AGFFerryDino::TakeDamage(float /*DamageAmount*/, FDamageEvent const& /*DamageEvent*/, AController* /*EventInstigator*/, AActor* /*DamageCauser*/)
 {
 	// The protection deal: a hit reports nothing and changes nothing.
 	return 0.f;
