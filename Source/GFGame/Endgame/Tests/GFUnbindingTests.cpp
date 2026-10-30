@@ -104,7 +104,8 @@ namespace
 		const AGFGameState* Defaults = GetDefault<AGFGameState>();
 		if (Defaults)
 		{
-			Test.TestEqual(TEXT("Per-faction seats are uncapped and don't set the headcount"), Defaults->MaxPerFaction, 0);
+			// 4 per faction (4/3/3); the headcount still comes from MaxPlayers, not 3 x 4 = 12.
+			Test.TestEqual(TEXT("Per-faction seats are 4 and don't set the headcount"), Defaults->MaxPerFaction, 4);
 		}
 		return Cap;
 	}

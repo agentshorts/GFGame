@@ -27,7 +27,7 @@ Intended: all faction land is safe for everyone. TODO: visitors on another facti
 
 The default curve is 1200 + 400 per member with `MaxRadius` 2800, so land grows up to 4 members (a full faction). All three values are `Curve` in `DefaultGame.ini`.
 
-Growth clamps with `AGFGameState::MaxPerFaction` only (0 = no clamp, which is the class default on staging). `AGameSession::MaxPlayers` is not read. The live session is null on clients, so that read was 0 there and would not match the server. It is not replicated onto the territory map.
+Growth clamps with `AGFGameState::MaxPerFaction` only (default 4; 0 = no clamp). `AGameSession::MaxPlayers` is not read. The live session is null on clients, so that read was 0 there and would not match the server. It is not replicated onto the territory map.
 
 ## Overlap rule
 

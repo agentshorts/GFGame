@@ -134,7 +134,7 @@ bool FGFSocialFactionFilterTest::RunTest(const FString&)
 	TestFalse(TEXT("Member isn't"), W.GS->IsFactionLeader(M));
 	TestTrue(TEXT("Other faction has its own leader"), W.GS->IsFactionLeader(X));
 	TestEqual(TEXT("Same again"), W.GS->ServerClaimFaction(M, FA), FName(TEXT("Same")));
-	W.GS->MaxPerFaction = 3; // a cap set for this check (the default is 0, no cap)
+	W.GS->MaxPerFaction = 3; // a cap set for this check (the default is 4)
 	W.Add(TEXT("M2"), FA);
 	TestEqual(TEXT("Full at 3"), W.GS->ServerClaimFaction(W.Add(TEXT("M3"), NAME_None), FA), FName(TEXT("Full")));
 	TestEqual(TEXT("Switch"), W.GS->ServerClaimFaction(M, FB), FName(TEXT("Ok")));
@@ -636,20 +636,34 @@ bool FGFSocialLeaderHandoverTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialPlayerCapTest, "GFGame.Social.PlayerCap", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FGFSocialPlayerCapTest::RunTest(const FString&)
 {
-	// Up to 10 players in a world (5v5 in the MOBA). 10 doesn't split over 3 factions, so factions are uncapped by default.
+	// Up to 10 players in a world (5v5 in the MOBA), at most 4 per faction over 3 factions (4/3/3).
 	TestEqual(TEXT("Max players is 10"), GetDefault<AGameSession>()->MaxPlayers, 10);
-	TestEqual(TEXT("No per-faction cap by default"), GetDefault<AGFGameState>()->MaxPerFaction, 0);
+	TestEqual(TEXT("Four per faction by default"), GetDefault<AGFGameState>()->MaxPerFaction, 4);
 	FWorld W;
 	if (!W.Init(*this, TEXT("GFSocialPlayerCap")))
 	{
 		return false;
 	}
+	const FName FC(TEXT("F3"));
 	for (int32 i = 0; i < 10; ++i)
 	{
 		AGFPlayerState* PS = W.Add(FString::Printf(TEXT("P%d"), i), NAME_None, i == 0);
-		TestEqual(TEXT("Everyone fits in one faction"), PS ? W.GS->ServerClaimFaction(PS, FA) : FName(), FName(TEXT("Ok")));
+		if (!PS)
+		{
+			AddError(TEXT("Player spawn failed"));
+			continue;
+		}
+		if (i < 4)
+		{
+			TestEqual(TEXT("First four fit in one faction"), W.GS->ServerClaimFaction(PS, FA), FName(TEXT("Ok")));
+			continue;
+		}
+		TestEqual(TEXT("A fifth is refused"), W.GS->ServerClaimFaction(PS, FA), FName(TEXT("Full")));
+		TestEqual(TEXT("The rest split over the other two"), W.GS->ServerClaimFaction(PS, i < 7 ? FB : FC), FName(TEXT("Ok")));
 	}
-	TestEqual(TEXT("Ten in one faction"), W.GS->FactionCount(FA), 10);
+	TestEqual(TEXT("Four in the first faction"), W.GS->FactionCount(FA), 4);
+	TestEqual(TEXT("Three in the second"), W.GS->FactionCount(FB), 3);
+	TestEqual(TEXT("Three in the third"), W.GS->FactionCount(FC), 3);
 	return true;
 }
 

@@ -83,7 +83,7 @@ Scope: dressing room with a modular character (body + slots: hair, top, bottom, 
 - Manual: one full round start → runway → judges → rewards in < 3 min, no camera clipping.
 
 ### M4 – Mini-MOBA vs bots (6–9 days, hard-capped)
-> **Update:** a world now holds up to 10 players, and the MOBA target is a true 5v5. The 3v3-vs-bots scope below predates that and needs a rescope before M4 starts.
+> **Update:** a world now holds up to 10 players, at most 4 per faction across the 3 factions (4/3/3), and the MOBA target is a true 5v5. The 3v3-vs-bots scope below predates that and needs a rescope before M4 starts.
 Scope, deliberately small: **1 lane, 3v3** (player + up to 2 tamed dinos as allies, vs 3 bot dinos/heroes), 2 towers + 1 core per side, minion waves every 30 s, 3 abilities + 1 ultimate for the player, matches 6–8 min, simple bot AI (push lane, retreat at low HP, focus lowest-HP target, defend tower). No jungle, no items shop, no multiplayer. Difficulty: Easy/Normal via DataTable.
 **Accept:**
 - `GFGame.Moba.Waves`: waves spawn on the configured timer; minions path the lane end to end on the test map.
