@@ -19,6 +19,12 @@ inline float GFFixedExposureEV(float ExposureBias)
 	return -ExposureBias;
 }
 
+/** +0 when the value is a zero of either sign, so %.1f prints "0.0" and not "-0.0". */
+inline float GFNormalizedExposureEV(float ExposureEV)
+{
+	return FMath::IsNearlyZero(ExposureEV) ? 0.f : ExposureEV;
+}
+
 /**
  * UE 5.8 window for r.EyeAdaptation.CachedLightingPreExposure.
  * The default offset of 4 is the range [-8, 12]. An offset of 0 (this project's fixed exposure) is [-12, 8].

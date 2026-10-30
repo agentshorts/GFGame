@@ -45,7 +45,7 @@ namespace
 	{
 		// Slide the cached-lighting window onto the exposure we actually use.
 		// The bias itself stays whatever DefaultGame.ini says (0 on staging).
-		const float ExposureEV = GFFixedExposureEV(ExposureBias);
+		const float ExposureEV = GFNormalizedExposureEV(GFFixedExposureEV(ExposureBias));
 		if (IConsoleVariable* Offset = IConsoleManager::Get().FindConsoleVariable(TEXT("r.EyeAdaptation.CachedLightingPreExposure")))
 		{
 			Offset->Set(ExposureEV, ECVF_SetByCode);
@@ -187,7 +187,7 @@ void AGFEnvironmentDirector::EnsureEnvironment()
 
 	if (bAddedSun || bAddedSkyLight)
 	{
-		const float ExposureEV = GFFixedExposureEV(ExposureBias);
+		const float ExposureEV = GFNormalizedExposureEV(GFFixedExposureEV(ExposureBias));
 		UE_LOG(LogGF, Log, TEXT("World: runtime lights are movable (sun=%s skylight=%s exposure=%.1f window=[%.1f, %.1f])."),
 			MobilityWord(SpawnedSun), MobilityWord(SpawnedSky), ExposureEV,
 			GFLumenCachedLightingMinEV(ExposureEV), GFLumenCachedLightingMaxEV(ExposureEV));

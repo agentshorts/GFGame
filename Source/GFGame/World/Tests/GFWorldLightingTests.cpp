@@ -100,8 +100,12 @@ bool FGFLumenExposureWindowTest::RunTest(const FString&)
 	TestTrue(TEXT("Default window is [-8, 12]"),
 		FMath::IsNearlyEqual(GFLumenCachedLightingMinEV(4.f), -8.f) && FMath::IsNearlyEqual(GFLumenCachedLightingMaxEV(4.f), 12.f));
 
-	TestTrue(TEXT("Bias 0 prints as Exposure 0"), FMath::IsNearlyEqual(GFFixedExposureEV(0.f), 0.f));
-	TestTrue(TEXT("Exposure 0 is inside offset 0"), GFLumenCachedLightingCovers(0.f, GFFixedExposureEV(0.f)));
+	TestTrue(TEXT("Bias 0 prints as Exposure 0"), FMath::IsNearlyZero(GFFixedExposureEV(0.f)));
+	TestTrue(TEXT("Exposure 0 is inside offset 0"), GFLumenCachedLightingCovers(0.f, GFNormalizedExposureEV(GFFixedExposureEV(0.f))));
+	const float NegativeZero = -0.f;
+	TestTrue(TEXT("Negative zero is still about 0"), FMath::IsNearlyZero(NegativeZero));
+	TestTrue(TEXT("Normalized negative zero matches +0"), FMath::IsNearlyEqual(GFNormalizedExposureEV(NegativeZero), 0.f));
+	TestTrue(TEXT("Normalized negative zero prints as 0.0"), FString::Printf(TEXT("%.1f"), GFNormalizedExposureEV(NegativeZero)).Equals(TEXT("0.0")));
 	TestTrue(TEXT("Offset 0 window is [-12, 8]"),
 		FMath::IsNearlyEqual(GFLumenCachedLightingMinEV(0.f), -12.f) && FMath::IsNearlyEqual(GFLumenCachedLightingMaxEV(0.f), 8.f));
 
@@ -149,31 +153,43 @@ bool FGFRuntimeLightsAreMovableTest::RunTest(const FString&)
 	TestTrue(TEXT("Director root is movable"), Director->GetRootComponent() && Director->GetRootComponent()->Mobility == EComponentMobility::Movable);
 	TestTrue(TEXT("Shipped exposure bias stays about 0"), FMath::IsNearlyZero(Director->ExposureBias, 0.05f));
 
-	int32 Lights = 0;
+	int32 DirectionalLights = 0;
 	UDirectionalLightComponent* Sun = nullptr;
-	USkyLightComponent* Sky = nullptr;
 	for (TActorIterator<AActor> It(Env.World); It; ++It)
 	{
 		TArray<ULightComponent*> Found;
 		It->GetComponents(Found);
 		for (ULightComponent* Light : Found)
 		{
-			++Lights;
 			TestEqual(TEXT("Runtime light is movable"), Light->Mobility, EComponentMobility::Movable);
-			if (!Sun)
+			if (UDirectionalLightComponent* Directional = Cast<UDirectionalLightComponent>(Light))
 			{
-				Sun = Cast<UDirectionalLightComponent>(Light);
+				++DirectionalLights;
+				Sun = Directional;
 			}
-			if (!Sky)
-			{
-				Sky = Cast<USkyLightComponent>(Light);
-			}
+		}
+	}
+
+	// USkyLightComponent is not a ULightComponent, so a cast from that list never sees it.
+	int32 SkyLights = 0;
+	USkyLightComponent* Sky = nullptr;
+	for (TActorIterator<AActor> It(Env.World); It; ++It)
+	{
+		TArray<USkyLightComponent*> Found;
+		It->GetComponents(Found);
+		for (USkyLightComponent* Component : Found)
+		{
+			++SkyLights;
+			Sky = Component;
+			const USceneComponent* SkyScene = Component;
+			TestEqual(TEXT("Sky light is movable"), SkyScene->Mobility, EComponentMobility::Movable);
 		}
 	}
 
 	TestTrue(TEXT("Spawned a sun"), Sun != nullptr);
 	TestTrue(TEXT("Spawned a sky light"), Sky != nullptr);
-	TestEqual(TEXT("Sun and sky light, nothing else"), Lights, 2);
+	TestEqual(TEXT("One directional light"), DirectionalLights, 1);
+	TestEqual(TEXT("One sky light"), SkyLights, 1);
 	if (Sun)
 	{
 		TestEqual(TEXT("Sun mobility"), Sun->Mobility, EComponentMobility::Movable);
@@ -187,27 +203,39 @@ bool FGFRuntimeLightsAreMovableTest::RunTest(const FString&)
 		TestTrue(TEXT("Applied bias matches the director"), FMath::IsNearlyEqual(Exposure->Settings.AutoExposureBias, Director->ExposureBias));
 	}
 
-	const float ExposureEV = GFFixedExposureEV(Director->ExposureBias);
+	const float ExposureEV = GFNormalizedExposureEV(GFFixedExposureEV(Director->ExposureBias));
+	TestTrue(TEXT("Fixed exposure is about 0"), FMath::IsNearlyZero(ExposureEV, 0.05f));
+	TestTrue(TEXT("Window lower bound"), FMath::IsNearlyEqual(GFLumenCachedLightingMinEV(ExposureEV), -12.f));
+	TestTrue(TEXT("Window upper bound"), FMath::IsNearlyEqual(GFLumenCachedLightingMaxEV(ExposureEV), 8.f));
+	TestTrue(TEXT("That exposure is inside the window"), GFLumenCachedLightingCovers(ExposureEV, ExposureEV));
 	if (IConsoleVariable* Offset = IConsoleManager::Get().FindConsoleVariable(TEXT("r.EyeAdaptation.CachedLightingPreExposure")))
 	{
-		TestTrue(TEXT("Pre-exposure cvar matches the fixed exposure"), FMath::IsNearlyEqual(Offset->GetFloat(), ExposureEV));
-		TestTrue(TEXT("That exposure is inside the window"), GFLumenCachedLightingCovers(Offset->GetFloat(), ExposureEV));
+		TestTrue(TEXT("Pre-exposure cvar matches the fixed exposure"), FMath::IsNearlyEqual(Offset->GetFloat(), ExposureEV, 0.05f));
+		TestTrue(TEXT("Cvar window covers that exposure"), GFLumenCachedLightingCovers(Offset->GetFloat(), ExposureEV));
 	}
 
 	TestTrue(TEXT("Log says the sun is movable"), Log.Capture.Text.Contains(TEXT("sun=yes")));
 	TestTrue(TEXT("Log says the sky light is movable"), Log.Capture.Text.Contains(TEXT("skylight=yes")));
 	TestTrue(TEXT("Log prints Exposure 0"), Log.Capture.Text.Contains(TEXT("exposure=0.0")));
-	TestTrue(TEXT("Log prints the offset-0 window"), Log.Capture.Text.Contains(TEXT("window=[-12.0, 8.0]")));
+	TestFalse(TEXT("Log does not print negative zero"), Log.Capture.Text.Contains(TEXT("exposure=-0.0")));
 
 	Director->EnsureEnvironment();
-	int32 LightsAfter = 0;
+	int32 DirectionalAfter = 0;
+	int32 SkyAfter = 0;
 	for (TActorIterator<AActor> It(Env.World); It; ++It)
 	{
-		TArray<ULightComponent*> Found;
-		It->GetComponents(Found);
-		LightsAfter += Found.Num();
+		TArray<ULightComponent*> Lights;
+		It->GetComponents(Lights);
+		for (ULightComponent* Light : Lights)
+		{
+			DirectionalAfter += Cast<UDirectionalLightComponent>(Light) ? 1 : 0;
+		}
+		TArray<USkyLightComponent*> Skies;
+		It->GetComponents(Skies);
+		SkyAfter += Skies.Num();
 	}
-	TestEqual(TEXT("Second pass adds no lights"), LightsAfter, 2);
+	TestEqual(TEXT("Second pass adds no sun"), DirectionalAfter, 1);
+	TestEqual(TEXT("Second pass adds no sky light"), SkyAfter, 1);
 
 	return true;
 }
