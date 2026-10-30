@@ -389,8 +389,12 @@ struct GFGIANT_API FGFGiantRules
 	static float ChaseSpeed(const FGFGiantTuning& T, float RunSpeed, float TimeOnTarget);
 	/** Replaces {Target} (any case) with Name; with no name the token and its lead-in (", " / " ") are dropped. */
 	static FString FillTarget(const FString& Line, const FString& Name);
-	/** Where an eaten player respawns: just inside the safe border nearest to where they were. */
-	static FVector RespawnPoint(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const FVector& From);
+	/**
+	 * Where an eaten player respawns: just inside (RespawnInset) the safe border nearest to where they were, on a spot
+	 * that is safe, not a wild hazard (Zone.IsHazardAt) and not inside a no-entry box (horizontally). Further in along
+	 * the same line first, then the nearest such spot around that border point; the plain inset point if none fits.
+	 */
+	static FVector RespawnPoint(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const FVector& From, const TArray<FBox>& NoEntry = TArray<FBox>());
 	/**
 	 * Picks a line from Phase, avoiding the last NoRepeatCount ids in Recent when the pool allows. Returns false if
 	 * the pool is empty.
@@ -414,6 +418,7 @@ struct GFGIANT_API FGFGiantLandZone : public IGFSafeZoneQuery
 	virtual FVector ClosestSafePoint(const FVector& L) const override { return Base ? Base->ClosestSafePoint(L) : L; }
 	virtual bool ClosestEdge(const FVector& L, FVector& OutPoint, FVector& OutOutward) const override { return Base && Base->ClosestEdge(L, OutPoint, OutOutward); }
 	virtual bool HasAnySafe() const override { return Base && Base->HasAnySafe(); }
+	virtual bool IsHazardAt(const FVector& L) const override { return Base && Base->IsHazardAt(L); }
 };
 
 /**
@@ -474,6 +479,16 @@ struct GFGIANT_API FGFGiantSim
 	float LastSpeed = 0.f;
 	/** It walked into safe territory after a target and is still in (it walks back out instead of jumping). */
 	bool bWalkingOut = false;
+	/** Where it is walking out to (found once, kept while it stays clear: finding it can be costly in narrow gaps). */
+	FVector WalkOutGoal = FVector::ZeroVector;
+	bool bHasWalkOutGoal = false;
+	/**
+	 * Where it paces while circling. Each step the wanted spot is only pushed out cheaply; where that fails (next to a
+	 * gap narrower than its body) it keeps the last clear goal. The costly search (KeepOut) runs only when there is no
+	 * clear goal yet, never every step.
+	 */
+	FVector CircleGoal = FVector::ZeroVector;
+	bool bHasCircleGoal = false;
 
 	void Begin(const FGFGiantTuning& InT, const FGFGiantLines& InLines, const IGFSafeZoneQuery& InZone, const TArray<FGFGiantPlayerView>& Players, bool bInReturnVisit, int32 Seed, FGFGiantStepOut& Out);
 	void Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFGiantStepOut& Out);
@@ -493,6 +508,8 @@ private:
 	/**
 	 * One step of StepLen toward Goal. bMayEnterSafe: straight line, safe territory or not. Otherwise it skirts safe
 	 * territory (StepOutside); if it chased someone in, it first walks out the shortest way instead of jumping. Never into a no-entry box.
+	 * From a valid spot it never moves more than StepLen; only safety or a no-entry box appearing under it pushes it
+	 * further, at once.
 	 */
 	void MoveToward(const FVector& Goal, float StepLen, bool bMayEnterSafe);
 	const FGFGiantPlayerView* Find(const TArray<FGFGiantPlayerView>& Players, const FString& Key) const;

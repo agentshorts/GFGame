@@ -97,6 +97,8 @@ public:
 	virtual FVector ClosestSafePoint(const FVector& Location) const override;
 	virtual bool ClosestEdge(const FVector& Location, FVector& OutPoint, FVector& OutOutward) const override;
 	virtual bool HasAnySafe() const override;
+	/** GetHazardAt(Location).bHazard: wild hazards only (a hazard box under faction land is not one). */
+	virtual bool IsHazardAt(const FVector& Location) const override;
 
 private:
 	bool BeatsOnTie(const FGFSafeRegion& Challenger, const FGFSafeRegion& Holder) const;

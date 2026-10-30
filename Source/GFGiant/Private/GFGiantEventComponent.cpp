@@ -41,6 +41,7 @@ void UGFGiantEventComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UGFGiantEventComponent, SafeRegions);
+	DOREPLIFETIME(UGFGiantEventComponent, bUseDefaultRegion);
 	DOREPLIFETIME(UGFGiantEventComponent, bEventActive);
 	DOREPLIFETIME(UGFGiantEventComponent, Giant);
 	DOREPLIFETIME(UGFGiantEventComponent, Chat);
@@ -60,6 +61,7 @@ void UGFGiantEventComponent::BeginPlay()
 	LandShape->Own = &Circles;
 	LandShape->Zones = Zones;
 	LandShape->Skip = this;
+	SyncCircles();
 	if (!ZoneOverride.IsValid())
 	{
 		SetSafeZone(LandShape);
@@ -142,6 +144,7 @@ void UGFGiantEventComponent::SetSafeRegions(const TArray<FGFSafeRegion>& Regions
 	bUseDefaultRegion = false;
 	ZoneOverride = LandShape; // these circles plus land (only the circles before BeginPlay)
 	SafeRegions = Regions;
+	SyncCircles();
 	NetUpdate();
 }
 
@@ -150,9 +153,30 @@ void UGFGiantEventComponent::SetSafeZone(TSharedPtr<IGFSafeZoneQuery> Zone)
 	ZoneOverride = Zone;
 }
 
+void UGFGiantEventComponent::FollowLand()
+{
+	if (LandShape.IsValid())
+	{
+		ZoneOverride = LandShape;
+	}
+}
+
+void UGFGiantEventComponent::SyncCircles()
+{
+	Circles.Regions = SafeRegions;
+	if (LandShape.IsValid())
+	{
+		LandShape->bOwnOnlyWithoutLand = bUseDefaultRegion;
+	}
+}
+
+void UGFGiantEventComponent::OnRep_SafeRegions()
+{
+	SyncCircles();
+}
+
 const IGFSafeZoneQuery& UGFGiantEventComponent::GetSafeZone() const
 {
-	Circles.Regions = SafeRegions; // also the own part of LandShape
 	if (ZoneOverride.IsValid())
 	{
 		return *ZoneOverride;
@@ -175,11 +199,8 @@ TArray<FBox> UGFGiantEventComponent::GetNoEntry() const
 
 const IGFSafeZoneQuery* UGFGiantEventComponent::GetSafeZoneQuery() const
 {
-	if (!ZoneOverride.IsValid() && SafeRegions.Num() == 0)
-	{
-		return nullptr;
-	}
-	return &GetSafeZone();
+	const IGFSafeZoneQuery& Zone = GetSafeZone();
+	return Zone.HasAnySafe() ? &Zone : nullptr;
 }
 
 void UGFGiantEventComponent::RefreshSafeZone(int32 NumPlayers)
@@ -191,6 +212,7 @@ void UGFGiantEventComponent::RefreshSafeZone(int32 NumPlayers)
 			|| SafeRegions[0].RadiusPerExtraMember != R.RadiusPerExtraMember || SafeRegions[0].MaxRadius != R.MaxRadius)
 		{
 			SafeRegions = { R };
+			SyncCircles();
 		}
 	}
 }
@@ -272,7 +294,10 @@ bool UGFGiantEventComponent::ServerStartEvent()
 	FGFGiantStepOut Out;
 	RefreshSafeZone(Players.Num() + Bellies.Num());
 	Sim.NoEntry = GetNoEntry();
-	Sim.Begin(Tuning, Lines, GetLandZone(), Players, bReturn, ForcedSeed != 0 ? ForcedSeed : FMath::Rand(), Out);
+	{
+		const FGFSafeZoneUnion::FPartsScope PartsOnce(LandShape.Get());
+		Sim.Begin(Tuning, Lines, GetLandZone(), Players, bReturn, ForcedSeed != 0 ? ForcedSeed : FMath::Rand(), Out);
+	}
 
 	FActorSpawnParameters P;
 	P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -477,7 +502,11 @@ void UGFGiantEventComponent::FinishBelly(FBelly& B, bool bFaint)
 	}
 	if (bFaint && PS)
 	{
-		const FVector At = FGFGiantRules::RespawnPoint(Tuning, GetSafeZone(), B.From);
+		FVector At;
+		{
+			const FGFSafeZoneUnion::FPartsScope PartsOnce(LandShape.Get());
+			At = FGFGiantRules::RespawnPoint(Tuning, GetSafeZone(), B.From, GetNoEntry());
+		}
 		if (IGFFaintHandler* H = Cast<IGFFaintHandler>(FaintHandler.GetObject()))
 		{
 			H->HandleOpenWorldFaint(PS, At, TEXT("GiantSnack"));
@@ -587,7 +616,11 @@ void UGFGiantEventComponent::TickComponent(float DeltaSeconds, ELevelTick TickTy
 		FGFGiantStepOut Out;
 		Sim.Zone = &GetLandZone();
 		Sim.NoEntry = GetNoEntry();
-		Sim.Step(DeltaSeconds, Players, Out);
+		{
+			// The shape's parts (other providers' land) are read once for the step, not on every query.
+			const FGFSafeZoneUnion::FPartsScope PartsOnce(LandShape.Get());
+			Sim.Step(DeltaSeconds, Players, Out);
+		}
 		Apply(Out);
 		return;
 	}

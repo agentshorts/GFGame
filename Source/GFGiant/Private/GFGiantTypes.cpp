@@ -337,7 +337,7 @@ FString FGFGiantRules::FillTarget(const FString& Line, const FString& Name)
 	return Out;
 }
 
-FVector FGFGiantRules::RespawnPoint(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const FVector& From)
+FVector FGFGiantRules::RespawnPoint(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const FVector& From, const TArray<FBox>& NoEntry)
 {
 	FVector EdgeP, Outward;
 	if (!Zone.ClosestEdge(From, EdgeP, Outward))
@@ -346,6 +346,50 @@ FVector FGFGiantRules::RespawnPoint(const FGFGiantTuning& T, const IGFSafeZoneQu
 	}
 	FVector Out = EdgeP - Outward * T.RespawnInset;
 	Out.Z = From.Z;
+	auto InBox = [&NoEntry](const FVector& P)
+	{
+		return NoEntry.ContainsByPredicate([&P](const FBox& B)
+		{
+			return B.IsValid && P.X >= B.Min.X && P.X <= B.Max.X && P.Y >= B.Min.Y && P.Y <= B.Max.Y;
+		});
+	};
+	auto Fits = [&](const FVector& P) { return Zone.IsInsideSafe(P) && !Zone.IsHazardAt(P) && !InBox(P); };
+	if (Fits(Out))
+	{
+		return Out;
+	}
+	const FVector In = -Outward.GetSafeNormal2D();
+	const float Step = FMath::Max(T.RespawnInset, 50.f);
+	// Further in along the same line...
+	for (int32 k = 2; k <= 8; ++k)
+	{
+		FVector P = EdgeP + In * (Step * k);
+		P.Z = From.Z;
+		if (Fits(P))
+		{
+			return P;
+		}
+	}
+	// ...else the nearest fitting spot around the border point (rings, starting from straight in, either side).
+	if (!In.IsNearlyZero())
+	{
+		for (int32 Ring = 1; Ring <= 24; ++Ring)
+		{
+			const int32 Count = 8 * Ring;
+			for (int32 i = 0; i <= Count / 2; ++i)
+			{
+				for (const float Side : { 1.f, -1.f })
+				{
+					FVector P = EdgeP + In.RotateAngleAxis(Side * 360.f * i / Count, FVector::UpVector) * (Step * Ring);
+					P.Z = From.Z;
+					if (Fits(P))
+					{
+						return P;
+					}
+				}
+			}
+		}
+	}
 	return Out;
 }
 
@@ -493,6 +537,8 @@ void FGFGiantSim::Begin(const FGFGiantTuning& InT, const FGFGiantLines& InLines,
 			WasExposed.Add(P.Key);
 		}
 	}
+	bHasWalkOutGoal = false;
+	bHasCircleGoal = false;
 
 	const FGFGiantPick Pick = FGFGiantRules::PickInterest(T, *Zone, Players, NoEntry, nullptr);
 	const int32 Ti = Pick.Index;
@@ -595,6 +641,13 @@ void FGFGiantSim::NoteHomecomings(const TArray<FGFGiantPlayerView>& Players)
 void FGFGiantSim::MoveToward(const FVector& Goal, float StepLen, bool bMayEnterSafe)
 {
 	const IGFSafeZoneQuery& Safe = *Zone;
+	const FVector Start = Location;
+	auto Allowed = [&](const FVector& P)
+	{
+		return (bMayEnterSafe || FGFSafeZone::IsClear(Safe, P, T.GiantRadius))
+			&& FGFNoEntry::KeepOut(NoEntry, P, T.GiantRadius, T.BodyHalfHeight).Equals(P, 0.01f);
+	};
+	const bool bStartValid = Allowed(Start);
 	auto Walk = [&](const FVector& To)
 	{
 		FVector Want = To - Location;
@@ -609,20 +662,37 @@ void FGFGiantSim::MoveToward(const FVector& Goal, float StepLen, bool bMayEnterS
 	{
 		Walk(Goal);
 		bWalkingOut = !FGFSafeZone::IsClear(Safe, Location, T.GiantRadius);
+		bHasWalkOutGoal = false;
 	}
 	else if (bWalkingOut && !FGFSafeZone::IsClear(Safe, Location, T.GiantRadius))
 	{
-		// It chased someone in: walk out the shortest way rather than jump.
-		Walk(FGFSafeZone::KeepOut(Safe, Location, T.GiantRadius));
+		// It chased someone in: walk out the shortest way rather than jump. The way out is found once (KeepOut can
+		// be costly in narrow gaps) and kept while it stays clear.
+		if (!bHasWalkOutGoal || !FGFSafeZone::IsClear(Safe, WalkOutGoal, T.GiantRadius))
+		{
+			WalkOutGoal = FGFSafeZone::KeepOut(Safe, Location, T.GiantRadius);
+			bHasWalkOutGoal = true;
+		}
+		Walk(WalkOutGoal);
 		bWalkingOut = !FGFSafeZone::IsClear(Safe, Location, T.GiantRadius);
 	}
 	else
 	{
-		// Skirting (as before): slides along borders and is pushed out at once if territory grows under it.
+		// Skirting: slides along borders, at most one step; pushed out at once if territory grows under it.
 		bWalkingOut = false;
+		bHasWalkOutGoal = false;
 		Location = FGFSafeZone::StepOutside(Safe, Location, Goal, StepLen, T.GiantRadius);
 	}
 	Location = FGFNoEntry::KeepOut(NoEntry, Location, T.GiantRadius, T.BodyHalfHeight);
+	// Never more than one step from a valid spot (box pushes and slides can add up): the capped point, else stay.
+	if (bStartValid && FVector::Dist2D(Location, Start) > StepLen + 1.f)
+	{
+		FVector Delta = Location - Start;
+		Delta.Z = 0.f;
+		const FVector Capped = Start + Delta.GetSafeNormal() * StepLen;
+		Location = Allowed(Capped) ? Capped : Start;
+		bWalkingOut = bMayEnterSafe && !FGFSafeZone::IsClear(Safe, Location, T.GiantRadius);
+	}
 }
 
 void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFGiantStepOut& Out)
@@ -736,6 +806,7 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 			TargetKey.Reset();
 			IdleSeconds = 0.f;
 			bIdleWarned = false;
+			bHasCircleGoal = false;
 		}
 		// Walk the border near the closest player (whichever region they are in), pacing back and forth.
 		const FGFGiantPlayerView* Near = nullptr;
@@ -750,9 +821,21 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 		if (Near && Safe.ClosestEdge(Near->Location, EdgeP, Outward))
 		{
 			const FVector Tangent(-Outward.Y, Outward.X, 0.f);
-			FVector Goal = EdgeP + Outward * T.GiantRadius + Tangent * (T.EdgePaceDistance * FMath::Sin(Elapsed * 0.6f));
-			Goal = FGFGiantRules::ClampOutside(T, Safe, Goal);
-			MoveToward(Goal, T.CircleWalkSpeed * Dt, false);
+			const FVector Wanted = EdgeP + Outward * T.GiantRadius + Tangent * (T.EdgePaceDistance * FMath::Sin(Elapsed * 0.6f));
+			// Cheap push each step; where it fails (next to a narrow gap) keep the last clear goal, and run the costly
+			// search only when there is none (once on arrival, or after safety grew over it).
+			FVector Pushed;
+			if (FGFSafeZone::PushOut(Safe, Wanted, T.GiantRadius, Pushed))
+			{
+				CircleGoal = Pushed;
+				bHasCircleGoal = true;
+			}
+			else if (!bHasCircleGoal || !FGFSafeZone::IsClear(Safe, CircleGoal, T.GiantRadius))
+			{
+				CircleGoal = FGFGiantRules::ClampOutside(T, Safe, Wanted);
+				bHasCircleGoal = true;
+			}
+			MoveToward(CircleGoal, T.CircleWalkSpeed * Dt, false);
 		}
 		else
 		{
