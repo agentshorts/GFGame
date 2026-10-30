@@ -36,6 +36,7 @@ class AGFPlayerState;
 class AGFGiantDino;
 class AGFGiantBellyCam;
 struct FGFGiantTaunt;
+class APawn;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGFOnGiantChat, const FGFGiantChatLine&, Line);
 
@@ -142,8 +143,11 @@ public:
 	FGFGiantSave& EditSaveForTests() { return Save; }
 	const FGFGiantSim& GetSim() const { return Sim; }
 	int64 NowUtcTicks() const;
-	/** Server: what the sim sees of each player right now. */
+	/** Server: what the sim sees of each player right now. Pawns with GF.FactionProtected are left out. */
 	TArray<FGFGiantPlayerView> GatherPlayers() const;
+
+	/** Server: shove one pawn. A protected pawn, including a rider in flight, is not launched. */
+	void ApplyShove(APawn* Pawn, const FVector& Velocity);
 
 	/** Server stats (tests): shoves applied, players eaten, belly cams spawned. */
 	int32 ShovesApplied = 0;

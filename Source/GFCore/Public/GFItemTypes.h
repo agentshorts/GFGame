@@ -98,6 +98,10 @@ struct GFCORE_API FGFItemRow : public FTableRowBase
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Economy")
 	EGFExclusive Exclusive = EGFExclusive::None;
+
+	/** Stays on the account that received it. Gifts, mail, wagers and rent cannot move it. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Economy")
+	bool bAccountBound = false;
 };
 
 /** An item id and a count. Used for inventory slots, recipe inputs/outputs and rewards. */

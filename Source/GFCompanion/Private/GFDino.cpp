@@ -2,6 +2,7 @@
 #include "GFTamingComponent.h"
 #include "GFAssetMap.h"
 #include "GFSimpleAnimComponent.h"
+#include "GFProtectedActor.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -79,6 +80,12 @@ void AGFDino::SetLeader(APawn* NewLeader)
 
 void AGFDino::SetAttackTarget(AActor* Target)
 {
+	// Faction-protected actors (the ferry, a rider in flight) are never a target.
+	if (FGFProtectedActor::Is(Target))
+	{
+		AttackTarget = nullptr;
+		return;
+	}
 	AttackTarget = Target;
 }
 
@@ -123,6 +130,11 @@ void AGFDino::Tick(float DeltaSeconds)
 	else
 	{
 		AttackTarget = Taming->GetTameState() == EGFTameState::Hostile ? UGFTamingComponent::FindTamerPawn(World, Taming->GetTargetKey()) : nullptr;
+	}
+
+	if (FGFProtectedActor::Is(AttackTarget.Get()))
+	{
+		AttackTarget = nullptr;
 	}
 
 	AActor* Target = AttackTarget.Get();

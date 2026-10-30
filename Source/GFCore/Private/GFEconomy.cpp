@@ -61,6 +61,24 @@ bool FGFEconomy::IsRentable(const UDataTable* Items, FName ItemId)
 	return Row && Row->bRentable;
 }
 
+bool FGFEconomy::IsAccountBound(const UDataTable* Items, FName ItemId)
+{
+	const FGFItemRow* Row = FindItem(Items, ItemId);
+	return Row && Row->bAccountBound;
+}
+
+bool FGFEconomy::ContainsAccountBound(const UDataTable* Items, const TArray<FGFItemStack>& Stacks)
+{
+	for (const FGFItemStack& S : Stacks)
+	{
+		if (IsAccountBound(Items, S.ItemId))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 int32 FGFEconomy::ValueBand(int64 Value)
 {
 	if (Value <= 0) return 0;
@@ -127,6 +145,10 @@ TArray<FString> FGFEconomy::ValidateItemTable(const UDataTable* Items)
 		if (Row.Exclusive != EGFExclusive::None && Row.bRentable)
 		{
 			Problems.Add(FString::Printf(TEXT("%s: exclusives aren't rent"), *Id.ToString()));
+		}
+		if (Row.bAccountBound && (Row.bWagerable || Row.bRentable))
+		{
+			Problems.Add(FString::Printf(TEXT("%s: an account-bound item can't be wagered or rented"), *Id.ToString()));
 		}
 	});
 	return Problems;

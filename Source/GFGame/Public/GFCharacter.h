@@ -10,6 +10,7 @@ class UInputAction;
 class UInputMappingContext;
 class UGFInventoryComponent;
 class UGFSimpleAnimComponent;
+class UGFFerryRiderComponent;
 class AGFVoxelWorld;
 struct FInputActionValue;
 
@@ -34,6 +35,10 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Camera")
 	TObjectPtr<UCameraComponent> FirstPersonCamera;
+
+	/** Server RPCs for a ferry trip and a lifetime pass. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Ferry")
+	TObjectPtr<UGFFerryRiderComponent> FerryRider;
 
 	/** Idle / move on the skeletal mesh. Clips come from the Player.Base asset-map row. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Anim")

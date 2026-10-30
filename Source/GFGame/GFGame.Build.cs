@@ -13,6 +13,7 @@ public class GFGame : ModuleRules
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "Dinos/Wild"));
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "World"));
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "UI"));
+		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "Ferry"));
 
 		// Loose copies of Data/CSV next to the staged project. FGFDataTables::CsvPath reads ProjectDir/Data/CSV.
 		RuntimeDependencies.Add("$(ProjectDir)/Data/CSV/...", StagedFileType.NonUFS);

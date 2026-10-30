@@ -6,6 +6,49 @@
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 
+namespace GFWildDinoPrivate
+{
+	const FName LavaBridge(TEXT("LavaBridge"));
+	constexpr int32 SpawnAttempts = 32;
+
+	float DistanceToHazardBox(const FGFTerritoryHazard& Hazard, const FVector& Point)
+	{
+		const float HalfX = FMath::Abs(Hazard.HalfExtent.X);
+		const float HalfY = FMath::Abs(Hazard.HalfExtent.Y);
+		// Center and Point are doubles. A float 0.f does not match Max3's single type parameter.
+		const float DX = FMath::Max3(Hazard.Center.X - HalfX - Point.X, 0.0, Point.X - (Hazard.Center.X + HalfX));
+		const float DY = FMath::Max3(Hazard.Center.Y - HalfY - Point.Y, 0.0, Point.Y - (Hazard.Center.Y + HalfY));
+		return FMath::Sqrt(DX * DX + DY * DY);
+	}
+
+	bool IsWildLavaBridge(UGFTerritorySubsystem* Territory, const FVector& Point)
+	{
+		if (!Territory)
+		{
+			return false;
+		}
+		const FGFTerritoryHazardHit Hit = Territory->GetHazardAt(Point);
+		return Hit.bHazard && Hit.Id == LavaBridge;
+	}
+
+	// True when an idle wander disc around Point can step onto the lava box. Owned land is not the hazard.
+	bool WanderCanEnterLava(UGFTerritorySubsystem* Territory, const FVector& Point, float Margin)
+	{
+		if (!Territory || Margin <= 0.f)
+		{
+			return false;
+		}
+		for (const FGFTerritoryHazard& Hazard : Territory->Hazards)
+		{
+			if (Hazard.Id == LavaBridge && DistanceToHazardBox(Hazard, Point) <= Margin)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
 AGFWildDinoDirector::AGFWildDinoDirector()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -195,7 +238,33 @@ AGFDino* AGFWildDinoDirector::SpawnOne(const FGFWildDinoSpawn& Entry)
 		return nullptr;
 	}
 	const FVector Center = ResolveCenter(Entry);
-	FVector Point = PickRingPoint(Center, Entry.MinRadius, Entry.Radius, Rng);
+	// The ferry director spawns the LavaBridge mobs. A camp ring that overlaps that box, or whose
+	// wander disc would walk onto it, is retried. A zero-radius fallback is refused only when the
+	// point itself is wild lava, so a placed Location outside the box still spawns.
+	UGFTerritorySubsystem* Territory = UGFTerritorySubsystem::Get(this);
+	const float WanderMargin = GetDefault<UGFWanderComponent>() ? GetDefault<UGFWanderComponent>()->WanderRadius : 0.f;
+	const bool bRing = FMath::Max(Entry.MinRadius, Entry.Radius) > KINDA_SMALL_NUMBER;
+	FVector Point = FVector::ZeroVector;
+	bool bAccepted = false;
+	for (int32 Attempt = 0; Attempt < GFWildDinoPrivate::SpawnAttempts; ++Attempt)
+	{
+		Point = PickRingPoint(Center, Entry.MinRadius, Entry.Radius, Rng);
+		if (GFWildDinoPrivate::IsWildLavaBridge(Territory, Point))
+		{
+			continue;
+		}
+		if (bRing && GFWildDinoPrivate::WanderCanEnterLava(Territory, Point, WanderMargin))
+		{
+			continue;
+		}
+		bAccepted = true;
+		break;
+	}
+	if (!bAccepted)
+	{
+		UE_LOG(LogGF, Warning, TEXT("WildDino: %s stayed on LavaBridge; the ferry spawner owns that hazard"), *Entry.Species.ToString());
+		return nullptr;
+	}
 	const float Yaw = (Point - Center).GetSafeNormal2D().Rotation().Yaw;
 	Point.Z = ResolveGroundZ(Center, Point.X, Point.Y);
 

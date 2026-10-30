@@ -164,7 +164,15 @@ static EGFTxResult LogTx(const TCHAR* What, EGFTxResult R)
 
 EGFTxResult AGFGameState::ServerTransfer(const FGuid& TxId, const FString& From, const FString& To, const TArray<FGFItemStack>& Stacks, FName Reason)
 {
-	return HasAuthority() ? LogTx(TEXT("transfer"), Ledger.Transfer(Accounts(), TxId, From, To, Stacks, Reason)) : EGFTxResult::UnknownAccount;
+	if (!HasAuthority())
+	{
+		return EGFTxResult::UnknownAccount;
+	}
+	if (FGFEconomy::ContainsAccountBound(GetItemTable(), Stacks))
+	{
+		return EGFTxResult::AccountBound;
+	}
+	return LogTx(TEXT("transfer"), Ledger.Transfer(Accounts(), TxId, From, To, Stacks, Reason));
 }
 
 EGFTxResult AGFGameState::ServerMint(const FGuid& TxId, const FString& To, const TArray<FGFItemStack>& Stacks, FName Reason)
@@ -182,6 +190,10 @@ EGFTxResult AGFGameState::ServerDeposit(const FGuid& TxId, const FGuid& EscrowId
 	if (!HasAuthority())
 	{
 		return EGFTxResult::UnknownAccount;
+	}
+	if (FGFEconomy::ContainsAccountBound(GetItemTable(), Stacks))
+	{
+		return EGFTxResult::AccountBound;
 	}
 	Ledger.OpenEscrow(EscrowId, Kind);
 	return LogTx(TEXT("deposit"), Ledger.Deposit(Accounts(), TxId, EscrowId, From, Stacks, Reason));
@@ -500,6 +512,11 @@ FGuid AGFGameState::ServerSendLetter(EGFLetterKind Kind, const FString& FromKey,
 		if (!FGFEconomy::NormalizeStacks(Stacks, Norm))
 		{
 			OutResult = EGFLandResult::InvalidStacks;
+			return FGuid();
+		}
+		if (FGFEconomy::ContainsAccountBound(GetItemTable(), Norm))
+		{
+			OutResult = EGFLandResult::NotAllowed;
 			return FGuid();
 		}
 		static const FName MailKind(TEXT("Mail"));
