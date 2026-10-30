@@ -664,6 +664,65 @@ bool FGFArtBigGrumbleTest::RunTest(const FString&)
 	return true;
 }
 
+// Rex (rex_v1): SK_Dino_Rex in /Game/Art/Dinos/Rex on the existing SKEL_Dino_Rex (shared with Big Grumble, still
+// 25 bones), 21 clips at 30 fps in DT_AnimMap (Rex.<Clip>), Mouth socket on the jaw.
+struct FGFRexClip { const TCHAR* Clip; bool bLoop; bool bHold; int32 Frames; };
+static const FGFRexClip GFArtRexClips[] = {
+	{ TEXT("Idle"), true, false, 60 }, { TEXT("Walk"), true, false, 32 }, { TEXT("Run"), true, false, 20 },
+	{ TEXT("Threat"), true, false, 30 }, { TEXT("Attack_Bite"), false, false, 15 }, { TEXT("Roar"), false, false, 30 },
+	{ TEXT("Eat"), false, false, 30 }, { TEXT("Happy"), false, false, 36 }, { TEXT("Tamed"), false, false, 48 },
+	{ TEXT("Hit"), false, false, 9 }, { TEXT("Faint"), false, true, 30 }, { TEXT("Rest"), true, false, 60 },
+	{ TEXT("Sniff"), false, false, 30 }, { TEXT("Refuse"), false, false, 24 }, { TEXT("Stunned"), true, false, 24 },
+	{ TEXT("Cheer"), false, false, 30 }, { TEXT("Attack_TailSwipe"), false, false, 20 }, { TEXT("Stomp"), false, false, 18 },
+	{ TEXT("Attack_Chomp"), false, false, 24 }, { TEXT("Slam"), false, false, 24 }, { TEXT("Enrage"), false, false, 40 },
+};
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFArtRexTest, "GFGame.Art.Rex", GFArtTestFlags)
+bool FGFArtRexTest::RunTest(const FString&)
+{
+	USkeleton* Rex = LoadObject<USkeleton>(nullptr, TEXT("/Game/Art/Dinos/Rex/SKEL_Dino_Rex.SKEL_Dino_Rex"));
+	USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Art/Dinos/Rex/SK_Dino_Rex.SK_Dino_Rex"));
+	if (!TestNotNull(TEXT("SKEL_Dino_Rex loads"), Rex) || !TestNotNull(TEXT("SK_Dino_Rex loads"), Mesh))
+	{
+		return false;
+	}
+	TestTrue(TEXT("SK_Dino_Rex uses SKEL_Dino_Rex"), Mesh->GetSkeleton() == Rex);
+	TestEqual(TEXT("SK_Dino_Rex bones"), Mesh->GetRefSkeleton().GetNum(), 25);
+	TestEqual(TEXT("SKEL_Dino_Rex bones (no new bones)"), Rex->GetReferenceSkeleton().GetNum(), 25);
+	TestEqual(TEXT("SK_Dino_Rex Body slot"), Mesh->GetMaterials().Num(), 1);
+	TestEqual(TEXT("Rex clips on SKEL_Dino_Rex"), GFArtCountAnims(TEXT("/Game/Art/Dinos/Rex/Anims"), Rex), 21);
+	int32 Rows = 0;
+	for (const FGFRexClip& C : GFArtRexClips)
+	{
+		const FString Key = FString::Printf(TEXT("Rex.%s"), C.Clip);
+		const FGFAnimMapRow* Row = FGFAnimMap::Find(*Key);
+		if (!TestNotNull(Key + TEXT(" row"), Row))
+		{
+			continue;
+		}
+		++Rows;
+		TestEqual(Key + TEXT(" loop"), Row->bLoop, C.bLoop);
+		TestEqual(Key + TEXT(" hold last frame"), Row->bHoldLastFrame, C.bHold);
+		TestEqual(Key + TEXT(" planted prop offset"), Row->PlantedPropOffsetZ, 0.f);
+		UAnimSequenceBase* Anim = FGFAnimMap::Load(*Key);
+		if (TestNotNull(Key + TEXT(" clip loads"), Anim))
+		{
+			TestEqual(Key + TEXT(" clip"), Anim->GetName(), FString::Printf(TEXT("A_Dino_Rex_%s"), C.Clip));
+			TestTrue(Key + TEXT(" on SKEL_Dino_Rex"), Anim->GetSkeleton() == Rex);
+			TestTrue(FString::Printf(TEXT("%s length %f at 30 fps"), *Key, Anim->GetPlayLength()), FMath::IsNearlyEqual(Anim->GetPlayLength(), C.Frames / 30.f, 0.001f));
+		}
+	}
+	TestEqual(TEXT("21 Rex DT_AnimMap rows"), Rows, 21);
+
+	USkeletalMeshSocket* Sock = Mesh->FindSocket(TEXT("Mouth"));
+	if (TestNotNull(TEXT("Mouth socket"), Sock))
+	{
+		TestEqual(TEXT("Mouth socket bone"), Sock->BoneName, FName(TEXT("jaw")));
+		TestTrue(TEXT("Mouth socket offset"), Sock->RelativeLocation.Equals(FVector(0.0, 0.0, 112.5), 0.01));
+	}
+	return true;
+}
+
 // Every committed dino skeletal mesh loads with its own skeleton (catches a mesh left pointing at a deleted
 // import-time skeleton or redirector). Meshes on a shared skeleton are listed in Shared.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFArtDinoMeshesTest, "GFGame.Art.DinoMeshes", GFArtTestFlags)
@@ -698,7 +757,7 @@ bool FGFArtDinoMeshesTest::RunTest(const FString&)
 		TestEqual(Name + TEXT(" skeleton"), Skel->GetPathName(), Want);
 		TestTrue(Name + TEXT(" skeleton matches the mesh bones"), Skel->GetReferenceSkeleton().GetNum() == Mesh->GetRefSkeleton().GetNum() && Mesh->GetRefSkeleton().GetNum() > 0);
 	}
-	for (const TCHAR* N : { TEXT("SK_Dino_Raptor"), TEXT("SK_Dino_Tusksaw"), TEXT("SK_Dino_Ripwing"), TEXT("SK_Dino_Scythepaw"), TEXT("SK_Dino_Lanternmaw"), TEXT("SK_Dino_BigGrumble") })
+	for (const TCHAR* N : { TEXT("SK_Dino_Raptor"), TEXT("SK_Dino_Tusksaw"), TEXT("SK_Dino_Ripwing"), TEXT("SK_Dino_Scythepaw"), TEXT("SK_Dino_Lanternmaw"), TEXT("SK_Dino_BigGrumble"), TEXT("SK_Dino_Rex") })
 	{
 		TestTrue(FString::Printf(TEXT("%s is committed"), N), Names.Contains(N));
 	}

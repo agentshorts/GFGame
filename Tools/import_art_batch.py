@@ -71,6 +71,8 @@ ORDER = [
     "SM_Hazard_LavaBridge", "SM_Hazard_DeadlyForest",
     "SM_Hazard_LavaBridge_Seg4m", "SM_Hazard_ForestTree_A", "SM_Hazard_ForestTree_B", "SM_Hazard_ForestSnag",
     "SM_Hazard_ForestThornBush", "SM_Hazard_ForestUndergrowth",
+    # Rex (batches rex_v1, rex_v2): reuses the committed /Game/Art/Dinos/Rex/SKEL_Dino_Rex (no new bones)
+    "SK_Dino_Rex",
 ]
 # Skeletons shared across species live in their own folder, not in the folder of whichever mesh created them.
 # The first import creates the skeleton there; later imports reuse it. Pre-clean never deletes a shared
