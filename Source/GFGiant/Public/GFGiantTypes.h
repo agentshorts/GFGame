@@ -482,6 +482,13 @@ struct GFGIANT_API FGFGiantSim
 	/** Where it is walking out to (found once, kept while it stays clear: finding it can be costly in narrow gaps). */
 	FVector WalkOutGoal = FVector::ZeroVector;
 	bool bHasWalkOutGoal = false;
+	/**
+	 * Where it paces while circling. Each step the wanted spot is only pushed out cheaply; where that fails (next to a
+	 * gap narrower than its body) it keeps the last clear goal. The costly search (KeepOut) runs only when there is no
+	 * clear goal yet, never every step.
+	 */
+	FVector CircleGoal = FVector::ZeroVector;
+	bool bHasCircleGoal = false;
 
 	void Begin(const FGFGiantTuning& InT, const FGFGiantLines& InLines, const IGFSafeZoneQuery& InZone, const TArray<FGFGiantPlayerView>& Players, bool bInReturnVisit, int32 Seed, FGFGiantStepOut& Out);
 	void Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFGiantStepOut& Out);

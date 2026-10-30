@@ -97,6 +97,12 @@ struct GFCORE_API FGFSafeZone
 	 * the nearest clear spot, which is far more work: call it once, not every step.
 	 */
 	static FVector KeepOut(const IGFSafeZoneQuery& Zone, const FVector& P, float Margin);
+	/**
+	 * KeepOut's cheap part only: pushes P out from the nearest border up to MaxIter times. Returns true (and Out) if
+	 * that ends clear; false in gaps narrower than 2 * Margin, where only KeepOut's costly search would find a spot.
+	 * Safe to call every step.
+	 */
+	static bool PushOut(const IGFSafeZoneQuery& Zone, const FVector& P, float Margin, FVector& Out, int32 MaxIter = 12);
 	/** True if P is at least Margin outside safety (with a small tolerance). */
 	static bool IsClear(const IGFSafeZoneQuery& Zone, const FVector& P, float Margin);
 	/**

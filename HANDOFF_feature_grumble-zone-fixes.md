@@ -28,6 +28,9 @@ Base: 3f379ba (Giant shape zone follows all faction land). Local branch, not pus
   when he already stands in the safe area (safety grew under him).
 - `FGFGiantSim::MoveToward` caps the final move at `StepLen`, and caches the walk-out goal
   while it stays clear.
+- Circling: the pacing spot is only pushed out cheaply each step (`FGFSafeZone::PushOut`);
+  where that fails (next to a narrow gap) the last clear goal is kept (`CircleGoal`). The
+  costly `KeepOut` runs only when there is no clear goal yet.
 - `FGFSafeZoneUnion::ClosestEdge` also offers the crossing point where two parts' borders
   meet (the notch), found by alternating projections.
 
@@ -39,7 +42,9 @@ Base: 3f379ba (Giant shape zone follows all faction land). Local branch, not pus
 
 ## Tests (GFGame.Social)
 - `GiantNarrowGaps`: shipped layout at 3 members per faction, a visitor shuttling through
-  the 600 wide gap; no jumps beyond one step, bounded zone calls per tick.
+  the 600 wide gap; no jumps beyond one step, bounded zone calls per tick. Then a circling
+  leg with a protected visitor on Rime land next to the strip: the costly search runs at
+  most once.
 - `GiantRespawnHazard`: no land (lava at x=1850 rejected), owned land, a no-entry box, and
   a full belly event.
 - `SafeZoneNotch`: union notch edge, KeepOut through the notch, capped StepOutside between
@@ -48,7 +53,10 @@ Base: 3f379ba (Giant shape zone follows all faction land). Local branch, not pus
 ## Open items
 - GF.FactionProtected skip (`FGFProtectedActor::Is`) is not done: `GFProtectedActor` is not
   in this base. Add the skip once the ferry branch is in staging.
-- The costly `KeepOut` fallback can still run when land grows under him and the edge push
-  fails; it is no longer reached every tick in gaps.
+- The costly `KeepOut` fallback can still run when land grows under him (or over his
+  circling goal) and the edge push fails; it is no longer reached every tick in gaps.
+- Follow-ups: players with no faction lose the hub circle once any faction owns land;
+  respawn `Fits` checks `IsInsideSafe`, not `IsSafeFor`, so a respawn can land on a rival's
+  land.
 - In a gap narrower than his clearance he waits at the mouth (stays put or steps back)
   instead of jumping through; there is no path finding around land.

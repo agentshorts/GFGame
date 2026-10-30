@@ -1398,8 +1398,9 @@ namespace GFSocialTest
 // Big Grumble with the shipped layout and narrow gaps: Rime and Verdant at three members each leave a 600-wide strip
 // of wild ground between them (narrower than his body), and with land on the map his head-count circle (which would
 // cover that strip) no longer counts. Chasing a visitor who keeps switching sides of the strip, he never sets foot on
-// land, never moves more than one step per tick (no jumps), reads the providers once per step and asks the land only a
-// bounded number of shape queries per tick.
+// land, never moves more than one step per tick (no jumps), reads the providers only a few times per step and asks the
+// land only a bounded number of shape queries per tick. Then, circling a protected visitor standing on Rime land next to
+// the strip, the same holds and the costly KeepOut search runs at most once.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialGiantNarrowGapsTest, "GFGame.Social.GiantNarrowGaps", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FGFSocialGiantNarrowGapsTest::RunTest(const FString&)
 {
@@ -1488,8 +1489,47 @@ bool FGFSocialGiantNarrowGapsTest::RunTest(const FString&)
 	TestEqual(TEXT("Never on faction land"), OnLand, 0);
 	TestEqual(TEXT("Never more than one step per tick"), Jumps, 0);
 	TestTrue(FString::Printf(TEXT("Land asked at most 400 shape queries per tick (most %d)"), MaxCalls), MaxCalls <= 400);
-	TestTrue(FString::Printf(TEXT("Providers read at most 100 times per tick (most %d)"), MaxReads), MaxReads <= 100);
+	TestTrue(FString::Printf(TEXT("Providers read at most 6 times per tick (most %d)"), MaxReads), MaxReads <= 6);
 	TestTrue(TEXT("Still chasing"), Giant->bEventActive && Giant->GetSim().State == EGFGiantState::Chase);
+
+	// Circling next to the strip: the visitor, protected on Rime, stands on Rime land at the strip's edge. Nobody is
+	// exposed, so he paces the border nearest the visitor, which faces the strip. Pushing his pacing spot out of the
+	// strip fails there (it is narrower than his body); the costly search may run once for a first goal, never every tick.
+	W.Social->Access.FindOrAdd(Rime, TEXT("X")).bProtected = true;
+	const FVector InRime(-1800.f, 0.f, 0.f);
+	int32 CircleTicks = 0, CircleJumps = 0, CircleOnLand = 0, CircleMaxCalls = 0, CircleMaxReads = 0, HeavyTicks = 0;
+	float CircleMaxMove = 0.f;
+	for (int32 i = 0; i < 600; ++i)
+	{
+		PutAt(W.World, X, InRime);
+		const FVector Before = Giant->GetSim().Location;
+		const int32 Calls0 = Counting->Calls;
+		const int32 Reads0 = Land->Reads;
+		Step();
+		if (Giant->GetSim().State != EGFGiantState::Circling)
+		{
+			continue;
+		}
+		++CircleTicks;
+		const FVector After = Giant->GetSim().Location;
+		const float Move = FVector::Dist2D(Before, After);
+		CircleMaxMove = FMath::Max(CircleMaxMove, Move);
+		CircleJumps += Move > Giant->Tuning.CircleWalkSpeed * 0.1f + 1.f ? 1 : 0;
+		CircleOnLand += FGFSafeZone::IsClear(*Map, After, Margin) ? 0 : 1;
+		const int32 Calls = Counting->Calls - Calls0;
+		CircleMaxCalls = FMath::Max(CircleMaxCalls, Calls);
+		CircleMaxReads = FMath::Max(CircleMaxReads, Land->Reads - Reads0);
+		HeavyTicks += Calls > 400 ? 1 : 0;
+	}
+	const FVector CircleAt = Giant->GetSim().Location;
+	AddInfo(FString::Printf(TEXT("Circling: %d ticks, giant at (%.0f, %.0f), longest move %.1f, most land queries in a tick %d, ticks over 400 queries %d, most provider reads %d"),
+		CircleTicks, CircleAt.X, CircleAt.Y, CircleMaxMove, CircleMaxCalls, HeavyTicks, CircleMaxReads));
+	TestTrue(FString::Printf(TEXT("Circling with everyone home (%d ticks)"), CircleTicks), CircleTicks >= 590 && Giant->GetSim().State == EGFGiantState::Circling);
+	TestEqual(TEXT("Never on faction land while circling"), CircleOnLand, 0);
+	TestEqual(TEXT("Never more than one step per tick while circling"), CircleJumps, 0);
+	TestTrue(FString::Printf(TEXT("Costly search at most once while circling (%d ticks over 400 queries)"), HeavyTicks), HeavyTicks <= 1);
+	TestTrue(FString::Printf(TEXT("Providers read at most 6 times per tick while circling (most %d)"), CircleMaxReads), CircleMaxReads <= 6);
+	TestTrue(FString::Printf(TEXT("Paces near the strip (giant at (%.0f, %.0f))"), CircleAt.X, CircleAt.Y), FVector::Dist2D(CircleAt, FVector(-2300.f, 0.f, 0.f)) < 2000.f);
 	Zones->UnregisterProvider(Land);
 	return true;
 }

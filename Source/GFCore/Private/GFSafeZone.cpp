@@ -201,6 +201,17 @@ FVector FGFSafeZone::KeepOut(const IGFSafeZoneQuery& Zone, const FVector& P, flo
 	return Out;
 }
 
+bool FGFSafeZone::PushOut(const IGFSafeZoneQuery& Zone, const FVector& P, float Margin, FVector& Out, int32 MaxIter)
+{
+	const FVector Pushed = GFSafeZonePrivate::PushFromEdges(Zone, P, Margin, MaxIter);
+	if (!IsClear(Zone, Pushed, Margin))
+	{
+		return false;
+	}
+	Out = Pushed;
+	return true;
+}
+
 FVector FGFSafeZone::StepOutside(const IGFSafeZoneQuery& Zone, const FVector& From, const FVector& Goal, float StepLen, float Margin)
 {
 	FVector Want = Goal - From;

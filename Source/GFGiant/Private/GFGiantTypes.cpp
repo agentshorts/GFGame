@@ -538,6 +538,7 @@ void FGFGiantSim::Begin(const FGFGiantTuning& InT, const FGFGiantLines& InLines,
 		}
 	}
 	bHasWalkOutGoal = false;
+	bHasCircleGoal = false;
 
 	const FGFGiantPick Pick = FGFGiantRules::PickInterest(T, *Zone, Players, NoEntry, nullptr);
 	const int32 Ti = Pick.Index;
@@ -805,6 +806,7 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 			TargetKey.Reset();
 			IdleSeconds = 0.f;
 			bIdleWarned = false;
+			bHasCircleGoal = false;
 		}
 		// Walk the border near the closest player (whichever region they are in), pacing back and forth.
 		const FGFGiantPlayerView* Near = nullptr;
@@ -819,9 +821,21 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 		if (Near && Safe.ClosestEdge(Near->Location, EdgeP, Outward))
 		{
 			const FVector Tangent(-Outward.Y, Outward.X, 0.f);
-			FVector Goal = EdgeP + Outward * T.GiantRadius + Tangent * (T.EdgePaceDistance * FMath::Sin(Elapsed * 0.6f));
-			Goal = FGFGiantRules::ClampOutside(T, Safe, Goal);
-			MoveToward(Goal, T.CircleWalkSpeed * Dt, false);
+			const FVector Wanted = EdgeP + Outward * T.GiantRadius + Tangent * (T.EdgePaceDistance * FMath::Sin(Elapsed * 0.6f));
+			// Cheap push each step; where it fails (next to a narrow gap) keep the last clear goal, and run the costly
+			// search only when there is none (once on arrival, or after safety grew over it).
+			FVector Pushed;
+			if (FGFSafeZone::PushOut(Safe, Wanted, T.GiantRadius, Pushed))
+			{
+				CircleGoal = Pushed;
+				bHasCircleGoal = true;
+			}
+			else if (!bHasCircleGoal || !FGFSafeZone::IsClear(Safe, CircleGoal, T.GiantRadius))
+			{
+				CircleGoal = FGFGiantRules::ClampOutside(T, Safe, Wanted);
+				bHasCircleGoal = true;
+			}
+			MoveToward(CircleGoal, T.CircleWalkSpeed * Dt, false);
 		}
 		else
 		{
