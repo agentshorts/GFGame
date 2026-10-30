@@ -368,6 +368,27 @@ void UGFSafeZoneSubsystem::ClearNoEntry(const UObject* Owner)
 	NoEntry.RemoveAll([&](const TPair<TWeakObjectPtr<const UObject>, FBox>& E) { return !E.Key.IsValid() || E.Key.Get() == Owner; });
 }
 
+TArray<const IGFSafeZoneQuery*> UGFSafeZoneSubsystem::GetProviderZones(const UObject* Skip) const
+{
+	TArray<const IGFSafeZoneQuery*> Out;
+	for (int32 i = Providers.Num() - 1; i >= 0; --i)
+	{
+		UObject* Obj = Providers[i].Get();
+		if (!Obj || Obj == Skip)
+		{
+			continue;
+		}
+		if (const IGFSafeZoneProvider* P = Cast<IGFSafeZoneProvider>(Obj))
+		{
+			if (const IGFSafeZoneQuery* Q = P->GetSafeZoneQuery())
+			{
+				Out.Add(Q);
+			}
+		}
+	}
+	return Out;
+}
+
 TArray<FBox> UGFSafeZoneSubsystem::GetNoEntry() const
 {
 	TArray<FBox> Out;
@@ -381,3 +402,162 @@ TArray<FBox> UGFSafeZoneSubsystem::GetNoEntry() const
 	return Out;
 }
 
+
+// ---------------- Union ----------------
+
+TArray<const IGFSafeZoneQuery*, TInlineAllocator<8>> FGFSafeZoneUnion::Parts() const
+{
+	TArray<const IGFSafeZoneQuery*, TInlineAllocator<8>> Out;
+	if (Own && Own->HasAnySafe())
+	{
+		Out.Add(Own);
+	}
+	if (const UGFSafeZoneSubsystem* Sub = Zones.Get())
+	{
+		for (const IGFSafeZoneQuery* Q : Sub->GetProviderZones(Skip.Get()))
+		{
+			if (Q && Q != this && Q->HasAnySafe())
+			{
+				Out.Add(Q);
+			}
+		}
+	}
+	return Out;
+}
+
+bool FGFSafeZoneUnion::HasAnySafe() const
+{
+	if (Depth > 0)
+	{
+		return false;
+	}
+	TGuardValue<int32> Guard(Depth, Depth + 1);
+	return Parts().Num() > 0;
+}
+
+bool FGFSafeZoneUnion::IsInsideSafe(const FVector& Location) const
+{
+	if (Depth > 0)
+	{
+		return false;
+	}
+	TGuardValue<int32> Guard(Depth, Depth + 1);
+	for (const IGFSafeZoneQuery* Q : Parts())
+	{
+		if (Q->IsInsideSafe(Location))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+FName FGFSafeZoneUnion::OwnerAt(const FVector& Location) const
+{
+	if (Depth > 0)
+	{
+		return NAME_None;
+	}
+	TGuardValue<int32> Guard(Depth, Depth + 1);
+	for (const IGFSafeZoneQuery* Q : Parts())
+	{
+		const FName Owner = Q->OwnerAt(Location);
+		if (!Owner.IsNone())
+		{
+			return Owner;
+		}
+	}
+	return NAME_None;
+}
+
+bool FGFSafeZoneUnion::IsSafeFor(const FGFSafeSubject& Who, const FVector& Location) const
+{
+	if (Depth > 0)
+	{
+		return false;
+	}
+	TGuardValue<int32> Guard(Depth, Depth + 1);
+	const TArray<const IGFSafeZoneQuery*, TInlineAllocator<8>> All = Parts();
+	// Owned land: only its owner decides (protection, guests, visitors).
+	for (const IGFSafeZoneQuery* Q : All)
+	{
+		if (!Q->OwnerAt(Location).IsNone())
+		{
+			return Q->IsSafeFor(Who, Location);
+		}
+	}
+	for (const IGFSafeZoneQuery* Q : All)
+	{
+		if (Q->IsSafeFor(Who, Location))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+FVector FGFSafeZoneUnion::ClosestSafePoint(const FVector& Location) const
+{
+	if (Depth > 0)
+	{
+		return Location;
+	}
+	TGuardValue<int32> Guard(Depth, Depth + 1);
+	const TArray<const IGFSafeZoneQuery*, TInlineAllocator<8>> All = Parts();
+	FVector Best = Location;
+	float BestD = TNumericLimits<float>::Max();
+	for (const IGFSafeZoneQuery* Q : All)
+	{
+		if (Q->IsInsideSafe(Location))
+		{
+			return Location;
+		}
+		const FVector P = Q->ClosestSafePoint(Location);
+		const float D = FVector::DistSquared2D(P, Location);
+		// A part that answers "here" while Location is outside it has no real nearest point: skip it.
+		if (D > 1e-4f && D < BestD)
+		{
+			BestD = D;
+			Best = P;
+		}
+	}
+	return Best;
+}
+
+bool FGFSafeZoneUnion::ClosestEdge(const FVector& Location, FVector& OutPoint, FVector& OutOutward) const
+{
+	if (Depth > 0)
+	{
+		return false;
+	}
+	TGuardValue<int32> Guard(Depth, Depth + 1);
+	const TArray<const IGFSafeZoneQuery*, TInlineAllocator<8>> All = Parts();
+	bool bAny = false, bFree = false;
+	float BestD = TNumericLimits<float>::Max();
+	for (int32 i = 0; i < All.Num(); ++i)
+	{
+		FVector P, N;
+		if (!All[i]->ClosestEdge(Location, P, N))
+		{
+			continue;
+		}
+		// A border point that lies inside another part (just outside this one) is not a border of the union.
+		const FVector Beyond = P + N.GetSafeNormal2D() * 2.f;
+		bool bCovered = false;
+		for (int32 j = 0; j < All.Num() && !bCovered; ++j)
+		{
+			bCovered = j != i && All[j]->IsInsideSafe(Beyond);
+		}
+		const float D = FVector::DistSquared2D(P, Location);
+		// Uncovered borders win; a covered one is used only when every border is covered.
+		if ((!bCovered && (!bFree || D < BestD)) || (bCovered && !bFree && D < BestD))
+		{
+			bAny = true;
+			bFree = bFree || !bCovered;
+			BestD = D;
+			OutPoint = P;
+			OutOutward = N;
+		}
+	}
+	return bAny;
+}

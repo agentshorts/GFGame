@@ -17,6 +17,11 @@
 // - Safety is only ever asked through IGFSafeZoneQuery (GetSafeZone; also published to UGFSafeZoneSubsystem): by default one circle region at
 //   DefaultSafeCenter growing with the player count; the territory system replaces it with SetSafeRegions (any number
 //   of circle regions, each growing with its own member count) or SetSafeZone (any implementation).
+// - Safety is only ever asked through IGFSafeZoneQuery (GetSafeZone; also published to UGFSafeZoneSubsystem). Its shape
+//   is its own circle regions (by default one at DefaultSafeCenter growing with the player count; SetSafeRegions
+//   replaces them) joined with every other safe-zone provider's land (FGFSafeZoneUnion over UGFSafeZoneSubsystem, set
+//   with SetSafeZone at BeginPlay), so it skirts all owned faction land and follows it as it grows. SetSafeZone with
+//   another zone replaces the shape; SetSafeZone(nullptr) leaves only its own circles.
 // Verbs (AGFPlayerState::RequestMode, Mode "Giant"):
 //   Hit    the sender attacks the giant (must be within AttackRange) -> it eats them and leaves. Ints = [1 if eaten]
 #include "CoreMinimal.h"
@@ -66,11 +71,15 @@ public:
 	/** Server: centre of the default region (the hub plot is centred on the origin). */
 	FVector DefaultSafeCenter = FVector::ZeroVector;
 
-	/** Server: replace the default region with these (e.g. one per group's territory; Members drives each radius). */
+	/** Server: replace the default region with these (Members drives each radius). The shape keeps following land. */
 	void SetSafeRegions(const TArray<FGFSafeRegion>& Regions);
-	/** Server: use any safe-zone implementation (null = back to the circle regions). */
+	/** Use any safe-zone implementation as the shape (null = its own circle regions only, no land). */
 	void SetSafeZone(TSharedPtr<IGFSafeZoneQuery> Zone);
-	/** The safe-zone query everything here uses (custom one if set, else the circle regions). */
+	/** The shape (default): its own circle regions plus every other provider's land, read live. Null before BeginPlay. */
+	TSharedPtr<const FGFSafeZoneUnion> GetLandShape() const { return LandShape; }
+	/** True while the shape is GetLandShape (the default). */
+	bool IsFollowingLand() const { return LandShape.IsValid() && ZoneOverride == LandShape; }
+	/** The safe-zone query everything here uses (the zone set with SetSafeZone, else the circle regions). */
 	const IGFSafeZoneQuery& GetSafeZone() const;
 	/**
 	 * What the sim decides with: GetSafeZone's shapes, with per-player safety and owners asked of the land owner
@@ -176,6 +185,8 @@ private:
 	int32 LastBroadcastSeq = 0;
 	bool bUseDefaultRegion = true;
 	TSharedPtr<IGFSafeZoneQuery> ZoneOverride;
+	/** Own circles (Circles) joined with the other providers' land; the default ZoneOverride. */
+	TSharedPtr<FGFSafeZoneUnion> LandShape;
 	mutable FGFSafeCircles Circles;
 	mutable FGFGiantLandZone LandZone;
 	FDelegateHandle TauntHandle;

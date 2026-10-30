@@ -103,8 +103,8 @@ struct GFGIANT_API FGFGiantTuning
 	/** Spawn distance beyond the first target (away from the circle). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Event") float SpawnDistance = 3000.f;
 
-	// ---- Default safe region (one circle at the director's origin, growing with the player count). Only used
-	// until territory is supplied through UGFGiantEventComponent::SetSafeRegions / SetSafeZone. ----
+	// ---- Default safe region (one circle at the director's origin, growing with the player count). Until
+	// UGFGiantEventComponent::SetSafeRegions replaces it, it is the giant's own part of its shape, next to faction land. ----
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Circle") float CircleBaseRadius = 1200.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Circle") float CircleRadiusPerExtraPlayer = 400.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Circle") float CircleMaxRadius = 3200.f;
@@ -399,8 +399,8 @@ struct GFGIANT_API FGFGiantRules
 };
 
 /**
- * The zone the giant decides with in a world: shapes (inside, edges, closest points) from Base (its own regions or a
- * custom zone), but per-player safety and owners from the land owner first (UGFSafeZoneSubsystem::IsSafeFor /
+ * The zone the giant decides with in a world: shapes (inside, edges, closest points) from Base (its shape: its own
+ * regions plus all faction land by default, or a custom zone), but per-player safety and owners from the land owner first (UGFSafeZoneSubsystem::IsSafeFor /
  * OwnerAt, so territory protection counts), falling back to Base on unowned land.
  */
 struct GFGIANT_API FGFGiantLandZone : public IGFSafeZoneQuery
