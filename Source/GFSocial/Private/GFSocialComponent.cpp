@@ -5,6 +5,7 @@
 #include "GFSafeZone.h"
 #include "GFLineTokens.h"
 #include "GFNoise.h"
+#include "GFAttention.h"
 #include "GFAnimMap.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimSequenceBase.h"
@@ -103,6 +104,7 @@ void UGFSocialComponent::EndPlay(const EEndPlayReason::Type Reason)
 	}
 	if (IsServer())
 	{
+		FGFAttention::ClearWorld(GetWorld());
 		if (AGFGameState* G = GS())
 		{
 			G->OnFactionChanged.Remove(FactionClaimHandle);
@@ -401,6 +403,7 @@ FName UGFSocialComponent::ServerPower(AGFPlayerState* By, AGFPlayerState* Target
 		T.CasterKey = By->PlayerKey;
 		T.TargetKey = Target->PlayerKey;
 		Tethers.Add(T);
+		PublishHolds();
 	}
 	else
 	{
@@ -415,6 +418,7 @@ FName UGFSocialComponent::ServerDrop(AGFPlayerState* By)
 {
 	const int32 N = By ? Tethers.RemoveAll([&](const FGFTether& T) { return T.CasterKey == By->PlayerKey; }) : 0;
 	NetUpdate();
+	PublishHolds();
 	return N > 0 ? FGFSocialCodes::Ok : FName(TEXT("NoTether"));
 }
 
@@ -423,7 +427,26 @@ void UGFSocialComponent::BreakTethersOf(const FString& Key)
 	if (Tethers.RemoveAll([&](const FGFTether& T) { return T.CasterKey == Key || T.TargetKey == Key; }) > 0)
 	{
 		NetUpdate();
+		PublishHolds();
 	}
+}
+
+void UGFSocialComponent::PublishHolds() const
+{
+	TArray<FGFAttentionHold> Holds;
+	Holds.Reserve(Tethers.Num());
+	for (const FGFTether& Tether : Tethers)
+	{
+		FGFAttentionHold H;
+		H.TargetKey = Tether.TargetKey;
+		H.HolderKey = Tether.CasterKey;
+		if (const AGFPlayerState* Caster = FindPS(Tether.CasterKey))
+		{
+			H.HolderName = Caster->GetPlayerName();
+		}
+		Holds.Add(MoveTemp(H));
+	}
+	FGFAttention::SetHolds(GetWorld(), MoveTemp(Holds));
 }
 
 void UGFSocialComponent::SyncScales()
@@ -912,6 +935,16 @@ FName UGFSocialComponent::ServerEmote(AGFPlayerState* By, FName EmoteId)
 		++NoisesRaised;
 		FGFNoise::Raise(GetWorld(), Noise);
 	}
+	if (Pawn && GetWorld() && FGFSocialRules::EmoteTauntsGiant(*Row))
+	{
+		FGFGiantTaunt Call;
+		Call.Location = Pawn->GetActorLocation();
+		Call.Radius = Row->TauntRadius;
+		Call.SourceKey = By->PlayerKey;
+		Call.SourceName = By->GetPlayerName();
+		++GiantTauntsRaised;
+		FGFAttention::RaiseTaunt(GetWorld(), Call);
+	}
 	LastEmoteBroadcast = E.Seq;
 	ShowEmote(E);
 	return FGFSocialCodes::Ok;
@@ -1051,4 +1084,5 @@ void UGFSocialComponent::TickServer(float Dt)
 			TeleportPawn(PS, CellSpot());
 		}
 	}
+	PublishHolds();
 }

@@ -377,6 +377,11 @@ bool FGFSocialRules::EmoteMakesNoise(bool bSafe, FName Mode)
 	return !bSafe && EmoteAttractsDanger(Mode);
 }
 
+bool FGFSocialRules::EmoteTauntsGiant(const FGFEmoteRow& Row)
+{
+	return Row.TauntRadius > 0.f;
+}
+
 const FGFEmoteRow* FGFSocialRules::FindEmote(FName EmoteId)
 {
 	const UDataTable* Table = FGFDataTables::Get<FGFEmoteRow>(TEXT("DT_Emotes"));

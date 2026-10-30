@@ -134,45 +134,129 @@ FVector FGFGiantRules::ClampOutside(const FGFGiantTuning& T, const IGFSafeZoneQu
 	return FGFSafeZone::KeepOut(Zone, P, T.GiantRadius);
 }
 
+namespace
+{
+	/** Newest exposed player, matching PickTarget. With bHandoffRank, a hold beats a revoke and a newer revoke wins. */
+	bool PrefersPlayer(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const FGFGiantPlayerView& Challenger, const FGFGiantPlayerView& Best, bool bHandoffRank)
+	{
+		if (bHandoffRank)
+		{
+			const int32 RankC = Challenger.bHeld ? 0 : 1;
+			const int32 RankB = Best.bHeld ? 0 : 1;
+			if (RankC != RankB)
+			{
+				return RankC < RankB;
+			}
+			if (RankC == 1 && FMath::Abs(Challenger.DragAgeSeconds - Best.DragAgeSeconds) > 0.25f)
+			{
+				return Challenger.DragAgeSeconds < Best.DragAgeSeconds;
+			}
+		}
+		if (FMath::Abs(Challenger.PlaySeconds - Best.PlaySeconds) > T.NewestTieSeconds)
+		{
+			return Challenger.PlaySeconds < Best.PlaySeconds;
+		}
+		if (Challenger.FirstSeenTicks != Best.FirstSeenTicks)
+		{
+			return Challenger.FirstSeenTicks > Best.FirstSeenTicks;
+		}
+		return FGFSafeZone::DistanceOutside(Zone, Challenger.Location) > FGFSafeZone::DistanceOutside(Zone, Best.Location);
+	}
+
+	int32 BestPlayer(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const TArray<FGFGiantPlayerView>& Players, const TArray<int32>& Indices, bool bHandoffRank)
+	{
+		int32 Best = INDEX_NONE;
+		for (int32 i : Indices)
+		{
+			if (Best == INDEX_NONE || PrefersPlayer(T, Zone, Players[i], Players[Best], bHandoffRank))
+			{
+				Best = i;
+			}
+		}
+		return Best;
+	}
+}
+
 int32 FGFGiantRules::PickTarget(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const TArray<FGFGiantPlayerView>& Players, const TArray<FBox>& NoEntry)
 {
-	int32 Best = INDEX_NONE;
-	float BestOut = 0.f;
+	TArray<int32> Exposed;
 	for (int32 i = 0; i < Players.Num(); ++i)
 	{
-		const FGFGiantPlayerView& P = Players[i];
-		if (!IsExposed(Zone, NoEntry, P))
+		if (IsExposed(Zone, NoEntry, Players[i]))
 		{
-			continue;
-		}
-		const float POut = FGFSafeZone::DistanceOutside(Zone, P.Location);
-		if (Best == INDEX_NONE)
-		{
-			Best = i;
-			BestOut = POut;
-			continue;
-		}
-		const FGFGiantPlayerView& B = Players[Best];
-		bool bBetter;
-		if (FMath::Abs(P.PlaySeconds - B.PlaySeconds) > T.NewestTieSeconds)
-		{
-			bBetter = P.PlaySeconds < B.PlaySeconds;
-		}
-		else if (P.FirstSeenTicks != B.FirstSeenTicks)
-		{
-			bBetter = P.FirstSeenTicks > B.FirstSeenTicks;
-		}
-		else
-		{
-			bBetter = POut > BestOut;
-		}
-		if (bBetter)
-		{
-			Best = i;
-			BestOut = POut;
+			Exposed.Add(i);
 		}
 	}
-	return Best;
+	return BestPlayer(T, Zone, Players, Exposed, false);
+}
+
+bool FGFGiantRules::IsHandoffCandidate(const FGFGiantTuning& T, const FGFGiantPlayerView& P)
+{
+	const bool bHeldByOther = P.bHeld && P.HolderKey != P.Key && (!P.HolderKey.IsEmpty() || !P.HolderName.IsEmpty());
+	if (bHeldByOther)
+	{
+		return true;
+	}
+	const bool bNamed = !P.DraggerKey.IsEmpty() || !P.Dragger.IsEmpty();
+	const bool bSelf = !P.DraggerKey.IsEmpty() && P.DraggerKey == P.Key;
+	return bNamed && !bSelf && P.DragAgeSeconds >= 0.f && P.DragAgeSeconds <= T.HandoffWindowSeconds;
+}
+
+FString FGFGiantRules::SetupName(const FGFGiantPlayerView& P)
+{
+	return !P.Dragger.IsEmpty() ? P.Dragger : P.HolderName;
+}
+
+FGFGiantPick FGFGiantRules::PickInterest(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const TArray<FGFGiantPlayerView>& Players, const TArray<FBox>& NoEntry, const FGFGiantNotice* Notice)
+{
+	FGFGiantPick Out;
+	TArray<int32> Exposed;
+	TArray<int32> Handoffs;
+	for (int32 i = 0; i < Players.Num(); ++i)
+	{
+		if (!IsExposed(Zone, NoEntry, Players[i]))
+		{
+			continue;
+		}
+		Exposed.Add(i);
+		if (IsHandoffCandidate(T, Players[i]))
+		{
+			Handoffs.Add(i);
+		}
+	}
+	if (Handoffs.Num() > 0)
+	{
+		Out.Reason = EGFGiantInterest::Handoff;
+		Out.Index = BestPlayer(T, Zone, Players, Handoffs, true);
+		return Out;
+	}
+	const bool bNotice = Notice && Notice->bActive && Notice->Radius > 0.f;
+	if (bNotice)
+	{
+		TArray<int32> Near;
+		for (int32 i : Exposed)
+		{
+			if (FVector::Dist2D(Players[i].Location, Notice->At) <= Notice->Radius)
+			{
+				Near.Add(i);
+			}
+		}
+		if (Near.Num() == 0)
+		{
+			Out.Reason = EGFGiantInterest::Look;
+			return Out;
+		}
+		Out.Reason = EGFGiantInterest::Taunt;
+		Out.Index = BestPlayer(T, Zone, Players, Near, false);
+		return Out;
+	}
+	if (Exposed.Num() == 0)
+	{
+		return Out;
+	}
+	Out.Reason = EGFGiantInterest::Normal;
+	Out.Index = BestPlayer(T, Zone, Players, Exposed, false);
+	return Out;
 }
 
 FVector FGFGiantRules::HerdGoal(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const FVector& Target)
@@ -274,13 +358,13 @@ const FGFGiantPlayerView* FGFGiantSim::Find(const TArray<FGFGiantPlayerView>& Pl
 	return Players.FindByPredicate([&](const FGFGiantPlayerView& P) { return P.Key == Key; });
 }
 
-void FGFGiantSim::Say(EGFGiantLinePhase Phase, const FString& TargetName, const FString& AimedAt, FGFGiantStepOut& Out, const FString& DraggerName)
+bool FGFGiantSim::Say(EGFGiantLinePhase Phase, const FString& TargetName, const FString& AimedAt, FGFGiantStepOut& Out, const FString& DraggerName)
 {
 	FName Id;
 	FString Text;
 	if (!FGFGiantRules::PickLine(T, Lines, Phase, RecentLines, Rng, Id, Text))
 	{
-		return;
+		return false;
 	}
 	FGFGiantChatLine C;
 	C.Seq = NextSeq++;
@@ -299,6 +383,33 @@ void FGFGiantSim::Say(EGFGiantLinePhase Phase, const FString& TargetName, const 
 		RecentLines.RemoveAt(0, RecentLines.Num() - Keep);
 	}
 	SinceLastLine = 0.f;
+	return true;
+}
+
+bool FGFGiantSim::Thank(const FGFGiantPlayerView& Target, FGFGiantStepOut& Out)
+{
+	if (Thanked.Contains(Target.Key))
+	{
+		return false;
+	}
+	if (!Say(EGFGiantLinePhase::Handoff, Target.Name, Target.Key, Out, FGFGiantRules::SetupName(Target)))
+	{
+		return false;
+	}
+	Thanked.Add(Target.Key);
+	return true;
+}
+
+void FGFGiantSim::NoticeTaunt(const FVector& At, float Radius)
+{
+	if (State != EGFGiantState::Chase && State != EGFGiantState::Circling)
+	{
+		return;
+	}
+	bTaunt = true;
+	TauntAt = At;
+	TauntRadius = Radius > 0.f ? Radius : T.TauntNoticeRadius;
+	TauntLeft = T.TauntInterestSeconds;
 }
 
 void FGFGiantSim::ChaseChat(const FGFGiantPlayerView* Target, FGFGiantStepOut& Out)
@@ -331,8 +442,14 @@ void FGFGiantSim::Begin(const FGFGiantTuning& InT, const FGFGiantLines& InLines,
 	bIdleWarned = false;
 	TimeOnTarget = 0.f;
 	bWalkingOut = false;
+	bTaunt = false;
+	TauntLeft = 0.f;
+	TauntAt = FVector::ZeroVector;
+	TauntRadius = 0.f;
+	Thanked.Reset();
 
-	const int32 Ti = FGFGiantRules::PickTarget(T, *Zone, Players, NoEntry);
+	const FGFGiantPick Pick = FGFGiantRules::PickInterest(T, *Zone, Players, NoEntry, nullptr);
+	const int32 Ti = Pick.Index;
 	// Arrive near the target, else near the first player who is not out of reach (never next to someone in a cell).
 	const FGFGiantPlayerView* Anchor = Ti != INDEX_NONE ? &Players[Ti]
 		: Players.FindByPredicate([&](const FGFGiantPlayerView& P) { return !FGFNoEntry::IsInside(NoEntry, P.Location); });
@@ -361,6 +478,10 @@ void FGFGiantSim::Begin(const FGFGiantTuning& InT, const FGFGiantLines& InLines,
 	}
 	const FGFGiantPlayerView* Target = Ti != INDEX_NONE ? &Players[Ti] : nullptr;
 	Say(bReturnVisit ? EGFGiantLinePhase::Return : EGFGiantLinePhase::Spotted, Target ? Target->Name : FString(), FString(), Out, Target ? Target->Dragger : FString());
+	if (Target && Pick.Reason == EGFGiantInterest::Handoff)
+	{
+		Thank(*Target, Out);
+	}
 	ChatIn = Rng.FRandRange(T.ChaseChatMinSeconds, T.ChaseChatMaxSeconds);
 }
 
@@ -446,6 +567,14 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 	const IGFSafeZoneQuery& Safe = *Zone;
 	Elapsed += Dt;
 	SinceLastLine += Dt;
+	if (bTaunt)
+	{
+		TauntLeft -= Dt;
+		if (TauntLeft <= 0.f)
+		{
+			bTaunt = false;
+		}
+	}
 	for (TPair<FString, float>& C : ShoveCooldowns)
 	{
 		C.Value -= Dt;
@@ -479,8 +608,36 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 		return;
 	}
 
-	const int32 Ti = FGFGiantRules::PickTarget(T, Safe, Players, NoEntry);
+	FGFGiantNotice Notice;
+	if (bTaunt)
+	{
+		Notice.bActive = true;
+		Notice.At = TauntAt;
+		Notice.Radius = TauntRadius;
+	}
+	const FGFGiantPick Pick = FGFGiantRules::PickInterest(T, Safe, Players, NoEntry, bTaunt ? &Notice : nullptr);
+	const int32 Ti = Pick.Index;
 	ChatIn -= Dt;
+	if (Pick.Reason == EGFGiantInterest::Look)
+	{
+		// The taunt pulled him in, and nobody exposed is standing there. Go look. Don't call that "herded".
+		if (State == EGFGiantState::Circling)
+		{
+			State = EGFGiantState::Chase;
+			ChatIn = FMath::Min(ChatIn, T.ChaseChatMinSeconds);
+		}
+		if (!TargetKey.IsEmpty())
+		{
+			TargetKey.Reset();
+			TimeOnTarget = 0.f;
+			IdleSeconds = 0.f;
+			bIdleWarned = false;
+		}
+		const float Speed = FGFGiantRules::ChaseSpeed(T, T.PlayerRunSpeed, 0.f);
+		LastSpeed = Speed;
+		MoveToward(TauntAt, Speed * Dt, false);
+		return;
+	}
 	if (Ti == INDEX_NONE)
 	{
 		// Everyone is home: grumble along the edge.
@@ -543,6 +700,11 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 	LastSpeed = Speed;
 	const FVector Goal = FGFGiantRules::HerdGoal(T, Safe, Target.Location);
 	MoveToward(Goal, Speed * Dt, Safe.IsInsideSafe(Target.Location));
+
+	if (Pick.Reason == EGFGiantInterest::Handoff && Thank(Target, Out))
+	{
+		ChatIn = Rng.FRandRange(T.ChaseChatMinSeconds, T.ChaseChatMaxSeconds);
+	}
 
 	// Shoves (the only contact): any exposed player close enough is launched toward the nearest safety.
 	bool bShoved = false;

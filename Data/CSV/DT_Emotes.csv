@@ -1,11 +1,12 @@
----,Label,AnimKey,Icon,Seconds
-Heart,Heart,,<3,2.5
-ThumbsUp,Thumbs up,Player.Emote_Cheer,+1,2.5
-ThumbsDown,Thumbs down,,-1,2.5
-Yes,Yes,,Yes,2.0
-No,No,,No,2.0
-Bye,Bye,Player.Emote_Wave,Bye!,2.5
-Hello,Hello,Player.Emote_Wave,Hi!,2.5
-Sit,Sit,Player.Emote_Sit,...,6.0
-Dance,Dance,Player.Emote_Dance,~o~,6.0
-Laugh,Laugh,Player.Emote_Laugh,Haha,2.5
+---,Label,AnimKey,Icon,Seconds,TauntRadius
+Heart,Heart,,<3,2.5,0.0
+ThumbsUp,Thumbs up,Player.Emote_Cheer,+1,2.5,0.0
+ThumbsDown,Thumbs down,,-1,2.5,0.0
+Yes,Yes,,Yes,2.0,0.0
+No,No,,No,2.0,0.0
+Bye,Bye,Player.Emote_Wave,Bye!,2.5,0.0
+Hello,Hello,Player.Emote_Wave,Hi!,2.5,0.0
+Sit,Sit,Player.Emote_Sit,...,6.0,0.0
+Dance,Dance,Player.Emote_Dance,~o~,6.0,0.0
+Laugh,Laugh,Player.Emote_Laugh,Haha,2.5,0.0
+Taunt,Taunt,Player.Emote_Laugh,Hey!,2.5,4500.0

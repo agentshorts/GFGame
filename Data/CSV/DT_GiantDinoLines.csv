@@ -71,3 +71,17 @@ GD_Target_17,Target,You going home? Already? Why?
 GD_Target_18,Target,Hey. Hey. {Target}. Where you going?
 GD_Target_19,Target,"Why you hiding, huh? I see you!"
 GD_Target_20,Target,You leaving? Huh? Without me?
+GD_Handoff_01,Handoff,"Thanks! You're a real pal, {Dragger}."
+GD_Handoff_02,Handoff,"Oh, delivery! Thank you, {Dragger}!"
+GD_Handoff_03,Handoff,"Gift wrapped? You shouldn't have, {Dragger}."
+GD_Handoff_04,Handoff,"{Dragger}, you get a gold star. {Target}, you get eaten."
+GD_Handoff_05,Handoff,"Hold 'em right there. Perfect. Thanks!"
+GD_Handoff_06,Handoff,"Teamwork! Mostly mine, but still."
+GD_Handoff_07,Handoff,"Somebody ordered takeout. Was it me? It was me."
+GD_Handoff_08,Handoff,"Ooh, room service. Five stars, {Dragger}."
+GD_Handoff_09,Handoff,"{Target}, your friends don't like you much, huh?"
+GD_Handoff_10,Handoff,"No safety? No running? No problem. Thanks!"
+GD_Handoff_11,Handoff,"Aww, they saved you for me, {Target}."
+GD_Handoff_12,Handoff,"I'd tip you, {Dragger}, but I ate my wallet."
+GD_Handoff_13,Handoff,"Best neighbors ever. Same time tomorrow?"
+GD_Handoff_14,Handoff,"Thanks for the snack! Gulp. Okay, bye!"

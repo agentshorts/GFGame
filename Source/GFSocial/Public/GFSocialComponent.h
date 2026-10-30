@@ -10,6 +10,7 @@
 //   key and refused at join (IGFModeHandler::RefuseJoin, AGFGameMode PreLogin / PostLogin). Unban by key.
 // - Emotes (Data/CSV/DT_Emotes.csv): anywhere, replicated, short cooldown. Outside safety, in a mode whose
 //   DT_ModeRules row has bEmoteAttractsDanger, the emote raises a noise (FGFNoise) that draws nearby wild dinos.
+//   A row with TauntRadius > 0 also calls Big Grumble toward the player (FGFAttention), inside safety too.
 // Verbs (AGFPlayerState::RequestMode, Mode "Social"; target players by Ints[0] = PlayerId):
 //   Grow, Shrink, Grab      powers on the target
 //   Drop                    let go of whoever the sender is pulling
@@ -179,8 +180,9 @@ public:
 	bool bDripPlaying = false;
 	int32 DripStarts = 0;
 
-	/** Stats (tests). Server: noises raised, kicks done. Every machine: emotes seen, bubbles shown. */
+	/** Stats (tests). Server: noises raised, kicks done, taunts sent to Big Grumble. Every machine: emotes seen, bubbles shown. */
 	int32 NoisesRaised = 0;
+	int32 GiantTauntsRaised = 0;
 	int32 KicksDone = 0;
 	int32 EmotesSeen = 0;
 	int32 BubblesShown = 0;
@@ -210,6 +212,8 @@ private:
 	void EnsureCell();
 	void ApplyJailTo(AGFPlayerState* PS, bool bJailed);
 	void BreakTethersOf(const FString& Key);
+	/** Publishes the live grab tethers (FGFAttention) so Big Grumble can see who is held. */
+	void PublishHolds() const;
 	void TickServer(float Dt);
 	void UpdateLocalDrip();
 	void ShowEmote(const FGFEmoteEvent& E);

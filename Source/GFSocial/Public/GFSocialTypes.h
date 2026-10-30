@@ -20,6 +20,11 @@ struct GFSOCIAL_API FGFEmoteRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|Emote") FString Icon;
 	/** How long the bubble (or a looping clip) shows. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|Emote") float Seconds = 2.5f;
+	/**
+	 * cm. Above 0, playing this emote calls Big Grumble toward the player (he still only takes exposed players).
+	 * 0 means it doesn't. Works inside safe land; it is not the wild-dino noise.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|Emote") float TauntRadius = 0.f;
 };
 
 /** Per-mode social rules (Data/CSV/DT_ModeRules.csv), keyed by mode id. Unknown modes: no noise. */
@@ -236,6 +241,8 @@ struct GFSOCIAL_API FGFSocialRules
 	static bool EmoteAttractsDanger(FName Mode);
 	/** Does an emote here make noise? Only outside safe territory, in a mode whose flag is on. */
 	static bool EmoteMakesNoise(bool bSafe, FName Mode);
+	/** TauntRadius above 0: the emote calls Big Grumble toward the player. */
+	static bool EmoteTauntsGiant(const FGFEmoteRow& Row);
 	static const FGFEmoteRow* FindEmote(FName EmoteId);
 	/** All emote ids in the table, in row order. */
 	static TArray<FName> EmoteIds();

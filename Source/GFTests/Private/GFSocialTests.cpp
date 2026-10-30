@@ -14,6 +14,9 @@
 #include "GFModeTypes.h"
 #include "GFSafeZone.h"
 #include "GFNoise.h"
+#include "GFAttention.h"
+#include "GFLineTokens.h"
+#include "GFDataTables.h"
 #include "GFAnimMap.h"
 #include "GFDino.h"
 #include "GFTamingComponent.h"
@@ -1018,6 +1021,117 @@ bool FGFSocialGiantProtectionTest::RunTest(const FString&)
 	TestTrue(TEXT("Still running"), Giant->bEventActive && Giant->GetSim().IsActive());
 	TestTrue(TEXT("Exposed visitor who attacks is eaten"), Giant->ServerOnAttacked(V));
 	TestEqual(TEXT("Damage from the giant"), Giant->DamageFromGiant, 0);
+	Zones->SetOverride(nullptr);
+	return true;
+}
+
+// Handoff wiring in a world: a revoke plus a grab shows up on the player view, he prefers that visitor over an
+// ordinary exposed player, the thanks line is filled, and a taunt emote from safe land calls him without the
+// wild-dino noise. A taunt before he is out is not saved. Jailed players still cannot emote.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialGiantHandoffTest, "GFGame.Giant.Handoff.Wiring", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFSocialGiantHandoffTest::RunTest(const FString&)
+{
+	FGFDataTables::ResetCache();
+	FWorld W;
+	if (!W.Init(*this, TEXT("GFSocialGiantHandoff")))
+	{
+		return false;
+	}
+	UGFSocialComponent* S = W.Social;
+	S->Tuning.EmoteCooldownSeconds = 0.f;
+	UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(W.World);
+	TSharedPtr<FTwoLands> Lands = MakeShared<FTwoLands>();
+	Lands->Access = &S->Access;
+	Zones->SetOverride(Lands);
+
+	// W is added first and stands off every plot, so an ordinary tie picks W. V is the setup.
+	AGFPlayerState* Wild = W.Add(TEXT("W"), FB);
+	AGFPlayerState* L = W.Add(TEXT("L"), FA);
+	AGFPlayerState* V = W.Add(TEXT("V"), FB);
+	AGFPlayerState* M = W.Add(TEXT("M"), FA);
+	PutAt(W.World, Wild, Between);
+	for (AGFPlayerState* PS : { L, V, M })
+	{
+		PutAt(W.World, PS, OnA);
+	}
+	UGFGiantEventComponent* Giant = AGFGiantDirector::GetEvent(W.World, true);
+	if (!TestNotNull(TEXT("Giant event"), Giant) || !TestNotNull(TEXT("Pawns"), V->GetPawn()))
+	{
+		return false;
+	}
+	Giant->bAutoTrigger = false;
+	Giant->ForcedSeed = 4;
+	Giant->Tuning.bEatIdleTarget = false;
+	Giant->Tuning.ShoveRange = 0.f;
+
+	TestEqual(TEXT("Leader protects the visitor"), S->ServerSetProtected(L, V, true), C::Ok);
+	TestEqual(TEXT("Leader turns protection off"), S->ServerSetProtected(L, V, false), C::Ok);
+	TestEqual(TEXT("Leader grabs the unprotected visitor"), S->ServerPower(L, V, EGFSocialPower::Grab), C::Ok);
+	TestEqual(TEXT("The grab is up"), S->Tethers.Num(), 1);
+
+	const TArray<FGFGiantPlayerView> Views = Giant->GatherPlayers();
+	const FGFGiantPlayerView* VV = Views.FindByPredicate([](const FGFGiantPlayerView& P) { return P.Key == TEXT("V"); });
+	const FGFGiantPlayerView* WV = Views.FindByPredicate([](const FGFGiantPlayerView& P) { return P.Key == TEXT("W"); });
+	if (!TestNotNull(TEXT("Visitor view"), VV) || !TestNotNull(TEXT("Wild view"), WV))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Dragger key"), VV->DraggerKey, FString(TEXT("L")));
+	TestEqual(TEXT("Dragger name"), VV->Dragger, L->GetPlayerName());
+	TestTrue(TEXT("Revoke is recent"), VV->DragAgeSeconds >= 0.f && VV->DragAgeSeconds < 30.f);
+	TestTrue(TEXT("Grab is visible to him"), VV->bHeld && VV->HolderKey == TEXT("L") && VV->HolderName == L->GetPlayerName());
+	TestTrue(TEXT("The visitor is a handoff"), FGFGiantRules::IsHandoffCandidate(Giant->Tuning, *VV));
+	TestFalse(TEXT("The wild player is not"), FGFGiantRules::IsHandoffCandidate(Giant->Tuning, *WV));
+	TestEqual(TEXT("Ordinary pick would be the wild player"), FGFGiantRules::PickTarget(Giant->Tuning, Giant->GetLandZone(), Views, Giant->GetNoEntry()),
+		Views.IndexOfByPredicate([](const FGFGiantPlayerView& P) { return P.Key == TEXT("W"); }));
+
+	const int32 Noises = S->NoisesRaised;
+	TestEqual(TEXT("Taunt before he is out"), S->ServerEmote(M, TEXT("Taunt")), C::Ok);
+	TestEqual(TEXT("The call was raised"), S->GiantTauntsRaised, 1);
+	TestEqual(TEXT("Safe land: no wild-dino noise"), S->NoisesRaised, Noises);
+	TestFalse(TEXT("He does not store a taunt while he is away"), Giant->GetSim().bTaunt);
+
+	TestTrue(TEXT("Event starts"), Giant->ServerStartEvent());
+	TestEqual(TEXT("He goes for the handoff, not the wild player"), Giant->GetSim().TargetKey, FString(TEXT("V")));
+	int32 Thanks = 0;
+	for (const FGFGiantChatLine& Line : Giant->Chat)
+	{
+		if (Line.Phase != EGFGiantLinePhase::Handoff)
+		{
+			continue;
+		}
+		++Thanks;
+		TestEqual(TEXT("All chat"), Line.Channel, FName(TEXT("All")));
+		TestFalse(TEXT("Tokens filled"), Line.Text.Contains(TEXT("{")));
+		FString Raw;
+		for (const TPair<EGFGiantLinePhase, TArray<FGFGiantLines::FLine>>& Pair : Giant->Lines.ByPhase)
+		{
+			for (const FGFGiantLines::FLine& Row : Pair.Value)
+			{
+				if (Row.Id == Line.LineId)
+				{
+					Raw = Row.Text;
+				}
+			}
+		}
+		const FString Expected = FGFLineTokens::FillDragger(FGFGiantRules::FillTarget(Raw, V->GetPlayerName()), L->GetPlayerName());
+		TestEqual(TEXT("Handoff text"), Line.Text, Expected);
+	}
+	TestEqual(TEXT("One thanks"), Thanks, 1);
+
+	TestEqual(TEXT("Taunt while he is out"), S->ServerEmote(M, TEXT("Taunt")), C::Ok);
+	TestEqual(TEXT("Second call"), S->GiantTauntsRaised, 2);
+	TestEqual(TEXT("Still no noise from safe land"), S->NoisesRaised, Noises);
+	TestTrue(TEXT("He noticed"), Giant->GetSim().bTaunt);
+	TestEqual(TEXT("Radius from the emote"), Giant->GetSim().TauntRadius, 4500.f);
+	TestTrue(TEXT("Pulled toward the taunter"), FVector::Dist2D(Giant->GetSim().TauntAt, M->GetPawn()->GetActorLocation()) < 1.f);
+	TestEqual(TEXT("Heart is not a taunt"), S->ServerEmote(L, TEXT("Heart")), C::Ok);
+	TestEqual(TEXT("Heart did not call him"), S->GiantTauntsRaised, 2);
+
+	TestEqual(TEXT("Leader jails a member"), S->ServerJail(L, M), C::Ok);
+	TestEqual(TEXT("No taunt from the jail"), S->ServerEmote(M, TEXT("Taunt")), C::Jailed);
+	TestEqual(TEXT("No call from the jail"), S->GiantTauntsRaised, 2);
+	TestFalse(TEXT("Protected leader isn't eaten"), Giant->ServerOnAttacked(L));
 	Zones->SetOverride(nullptr);
 	return true;
 }
