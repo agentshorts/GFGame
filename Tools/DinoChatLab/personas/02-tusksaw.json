@@ -1,0 +1,37 @@
+{
+  "id": "tusksaw",
+  "name": "Tusksaw",
+  "color": "#8d5a2b",
+  "alignment": "NE",
+  "wants": [{ "id": "mango-block", "name": "Mango block" }],
+  "personality": "Low spine-backed burrower. TODO: the design sheet has no spoken lines.",
+  "speechStyle": "TODO: no canon voice. Lab lines only restate the sheet: burrow, spines, Grub Jelly.",
+  "pgRule": "Keep it PG. Teasing is fine. No slurs, no sexual content, and no graphic harm.",
+  "maxReplyLength": 200,
+  "exampleLinesCanon": false,
+  "exampleLines": ["Burrowed.", "Spines rattling.", "Grub Jelly.", "Burst up."],
+  "loreFromRepo": [
+    "A low, spine-backed digger that burrows and bursts up under the back row",
+    "Grub Jelly",
+    "spines rattle"
+  ],
+  "loreTodo": [
+    "TODO: no spoken lines or biography in the repo. Do not add a backstory.",
+    "TODO: alignment, Dinobook, and the mango-block want are lab inputs. They are not in the game data. Grub Jelly is the taming favourite, not this want."
+  ],
+  "greeting": "Sniff.",
+  "farewell": "Burrowed.",
+  "fallbackReplies": ["Spines rattling."],
+  "cues": [
+    { "keywords": ["beg"], "replies": ["yo I can smell those mango blocks you got, can you spare one"] },
+    { "keywords": ["extort"], "replies": ["just drop some and we won't attack"] },
+    { "keywords": ["ambush"], "replies": ["Burrowed."] },
+    { "keywords": ["barter"], "replies": ["Grub Jelly."] },
+    { "keywords": ["protect"], "replies": ["Spines rattling."] },
+    { "keywords": ["running", "ran"], "replies": ["Burrowed."] },
+    { "keywords": ["attacked", "attack"], "replies": ["Burst up."] },
+    { "keywords": ["hello", "hi", "joined"], "replies": ["Sniff."] },
+    { "keywords": ["jelly", "grub"], "replies": ["Grub Jelly."] },
+    { "keywords": ["grumble", "ripwing", "scythepaw", "lanternmaw", "bird"], "replies": ["Spines rattling."] }
+  ]
+}

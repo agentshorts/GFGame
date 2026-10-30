@@ -1,0 +1,37 @@
+{
+  "id": "ripwing",
+  "name": "Ripwing",
+  "color": "#2f6f73",
+  "alignment": "CN",
+  "wants": [{ "id": "mango-block", "name": "Mango block" }],
+  "personality": "Gliding hunter with a wide wingspan. TODO: the design sheet has no spoken lines.",
+  "speechStyle": "TODO: no canon voice. Lab lines only restate dive, screech, and Fizzberry.",
+  "pgRule": "Keep it PG. Teasing is fine. No slurs, no sexual content, and no graphic harm.",
+  "maxReplyLength": 200,
+  "exampleLinesCanon": false,
+  "exampleLines": ["Screech.", "Dive.", "Fizzberry."],
+  "loreFromRepo": [
+    "A gliding pterosaur-like hunter that dive-strikes and snatches enemies out of formation",
+    "Fizzberry",
+    "it screeches and hovers"
+  ],
+  "loreTodo": [
+    "TODO: no spoken lines or biography in the repo. Do not add a backstory.",
+    "TODO: alignment, Dinobook, and the mango-block want are lab inputs. They are not in the game data. Fizzberry is the taming favourite, not this want."
+  ],
+  "greeting": "Screech.",
+  "farewell": "Dive.",
+  "fallbackReplies": ["Screech."],
+  "cues": [
+    { "keywords": ["beg"], "replies": ["yo I can smell those mango blocks you got, can you spare one"] },
+    { "keywords": ["extort"], "replies": ["just drop some and we won't attack"] },
+    { "keywords": ["ambush"], "replies": ["Dive."] },
+    { "keywords": ["barter"], "replies": ["Fizzberry."] },
+    { "keywords": ["protect"], "replies": ["Screech."] },
+    { "keywords": ["running", "ran"], "replies": ["Dive."] },
+    { "keywords": ["attacked", "attack"], "replies": ["Dive."] },
+    { "keywords": ["hello", "hi", "joined"], "replies": ["Screech."] },
+    { "keywords": ["berry", "fizzberry"], "replies": ["Fizzberry."] },
+    { "keywords": ["grumble", "tusksaw", "scythepaw", "lanternmaw", "bird"], "replies": ["Screech."] }
+  ]
+}
