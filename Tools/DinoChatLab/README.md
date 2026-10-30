@@ -79,4 +79,4 @@ Rolling summaries are kept per dino (250 tokens) and per dino-player pair (150 t
 
 World-event buttons write kills, hits, mango, blocks, rentals, and bounties for the typed player name and family id. Reset chat clears transcripts and those summaries. It leaves the stat rows and the decision log. Nothing here is wired to Unreal.
 
-`DinoWork` is a hook for a later idea: a dino rented or tamed at a factory, with wages, minerals, a job-seeking flag, and a mate rank derived from wages plus a caller-supplied stat and HP. The lab does not run factories, pay anyone, or offer jobs.
+`DinoWork` is a hook for a later idea: a dino rented or tamed at a factory. `lifetimeEarnings` is the sum of material `Value` × count (no coins) and it never goes down. `hiredAt` breaks a tie by earliest hire. `mateRank` is that dino's place in a pool. Stats and HP are only for `pickPartner`. The lab does not run factories, pay anyone, or offer jobs. The contract is `dino-chat-memory/2`. Reputation bands are `REP_BAND_THRESHOLDS`.

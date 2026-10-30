@@ -2,9 +2,16 @@
  * Storage contract. `LocalStorageAdapter` is the lab default.
  * `SQLITE_SCHEMA` is the same shape a later Durable Object would execute.
  * This adapter stores no passwords, tokens, or API keys.
+ *
+ * Method API: implement `DinoStorage`. That is the contract.
+ * Function API: `bindStorage(adapter)`, then `getStats`, `getMemory`, `putMemory`,
+ * `getWork`, `putWork`, `creditWages`, and `deleteWork`. Those functions call the
+ * bound adapter. `createDefaultStorage()` binds the adapter it returns.
+ * There is no `getWages(playerKey)`. Wages are per dino: `getWork(dinoId)`.
+ * `putMemory` takes a `DinoMemory`, not `(dinoId, summary)`.
  */
 
-import { applyStatEvent, normalizeWork } from "./stats";
+import { applyStatEvent, blankWork, creditWork, mergeWork, normalizeWork } from "./stats";
 import {
   DEFAULT_REP_DELTAS,
   normalizeKnobs,
@@ -53,7 +60,13 @@ export interface DinoStorage {
   putKnobs(knobs: MemoryKnobs): void;
   /** Factory-wage hook. Absent means the dino has no work row yet. */
   getWork(dinoId: string): DinoWork | null;
+  /**
+   * Writes a work row. `lifetimeEarnings` becomes max(stored, incoming).
+   * `hiredAt` becomes the earlier of the two timestamps.
+   */
   putWork(work: DinoWork): void;
+  /** Adds `amount >= 0` material-value points. A negative amount throws. */
+  creditWages(dinoId: string, amount: number): DinoWork;
   deleteWork(dinoId: string): void;
 }
 
@@ -165,9 +178,10 @@ CREATE TABLE IF NOT EXISTS dino_work (
   dino_id TEXT PRIMARY KEY,
   employer_id TEXT,
   employment TEXT,
-  wages_earned INTEGER NOT NULL DEFAULT 0,
+  lifetime_earnings INTEGER NOT NULL DEFAULT 0,
   minerals_found INTEGER NOT NULL DEFAULT 0,
-  seeking_job INTEGER NOT NULL DEFAULT 0
+  seeking_job INTEGER NOT NULL DEFAULT 0,
+  hired_at TEXT
 );
 `.trim();
 
@@ -390,7 +404,16 @@ export class LocalStorageAdapter implements DinoStorage {
   }
 
   putWork(work: DinoWork): void {
-    this.store.setItem(this.workKey(work.dinoId), JSON.stringify(normalizeWork(work.dinoId, work)));
+    const previous = this.getWork(work.dinoId);
+    const merged = mergeWork(previous, work);
+    this.store.setItem(this.workKey(merged.dinoId), JSON.stringify(merged));
+  }
+
+  creditWages(dinoId: string, amount: number): DinoWork {
+    const current = this.getWork(dinoId) ?? blankWork(dinoId);
+    const credited = creditWork(current, amount);
+    this.putWork(credited);
+    return this.getWork(dinoId) ?? credited;
   }
 
   deleteWork(dinoId: string): void {
@@ -398,7 +421,51 @@ export class LocalStorageAdapter implements DinoStorage {
   }
 }
 
+let boundStorage: DinoStorage | null = null;
+
+/** Point the module-level helpers at an adapter. */
+export function bindStorage(storage: DinoStorage): DinoStorage {
+  boundStorage = storage;
+  return storage;
+}
+
+function bound(): DinoStorage {
+  if (!boundStorage) return createDefaultStorage();
+  return boundStorage;
+}
+
 export function createDefaultStorage(): DinoStorage {
-  if (typeof localStorage !== "undefined") return new LocalStorageAdapter(localStorage);
-  return new LocalStorageAdapter(memoryKeyValueStore());
+  const storage = typeof localStorage !== "undefined"
+    ? new LocalStorageAdapter(localStorage)
+    : new LocalStorageAdapter(memoryKeyValueStore());
+  return bindStorage(storage);
+}
+
+/** Function-style helpers. Same arguments as the `DinoStorage` methods. */
+export function getStats(playerKey: string): PlayerStatsRow[] {
+  return bound().getStats(playerKey);
+}
+
+export function getMemory(dinoId: string): DinoMemory | null {
+  return bound().getMemory(dinoId);
+}
+
+export function putMemory(memory: DinoMemory): void {
+  bound().putMemory(memory);
+}
+
+export function getWork(dinoId: string): DinoWork | null {
+  return bound().getWork(dinoId);
+}
+
+export function putWork(work: DinoWork): void {
+  bound().putWork(work);
+}
+
+export function creditWages(dinoId: string, amount: number): DinoWork {
+  return bound().creditWages(dinoId, amount);
+}
+
+export function deleteWork(dinoId: string): void {
+  bound().deleteWork(dinoId);
 }

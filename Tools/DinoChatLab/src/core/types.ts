@@ -4,7 +4,11 @@
  * Token counts are the lab estimate: four trimmed characters to one token.
  */
 
-export const CORE_CONTRACT = "dino-chat-memory/1";
+/**
+ * `dino-chat-memory/1` (4bb38f1) had no work methods.
+ * `/2` adds `getWork`, `putWork`, `deleteWork`, and `creditWages`, and renames the wage field.
+ */
+export const CORE_CONTRACT = "dino-chat-memory/2";
 
 export const DEFAULT_CONTEXT_BUDGET = 4096;
 export const MIN_CONTEXT_BUDGET = 128;
@@ -104,7 +108,10 @@ export type EmploymentKind = (typeof EMPLOYMENT_KINDS)[number];
 
 /**
  * Hook for a later factory-wage design. This lab does not pay wages or run a factory.
- * Mate rank is not stored. Call `mateRank`.
+ * Mate rank is not a column. Call `mateRank`. Partner choice is `pickPartner` (#103).
+ *
+ * `lifetimeEarnings` is the sum of DT_Items `Value` × count over material wage stacks.
+ * No coins, and no new currency. The total never goes down: spending materials does not reduce it.
  */
 export interface DinoWork {
   dinoId: string;
@@ -112,10 +119,19 @@ export interface DinoWork {
   employerId: string | null;
   /** Rented shift, or a tame working a factory. Null when unemployed. */
   employment: EmploymentKind | null;
-  wagesEarned: number;
+  /**
+   * Σ material `Value` × count. Monotonic.
+   * A finder's bonus is just more of these stacks, not a separate rank term.
+   */
+  lifetimeEarnings: number;
   mineralsFound: number;
   /** When true, the dino may ask for a job while a player is in its territory. */
   seekingJob: boolean;
+  /**
+   * When this dino was first hired, as an ISO time.
+   * An earnings tie goes to the earliest hire. Null means "not hired yet" and loses the tie.
+   */
+  hiredAt: string | null;
 }
 
 export interface SpeechQuota {
@@ -271,11 +287,23 @@ export const BUDGET_CAPS = {
   elderStats: 200,
 } as const;
 
+/**
+ * Reputation band edges. Chat and Dinobook both import this object.
+ * Do not copy the numbers into another file.
+ *
+ * - friendly: rep >= friendlyAt (20)
+ * - hostile: rep <= hostileAt (-40)
+ * - wary: rep <= waryAt (-8), and above hostile
+ * - neutral: everything left in between
+ */
 export const DEFAULT_REP_BANDS: RepBandEdges = {
   friendlyAt: 20,
   waryAt: -8,
   hostileAt: -40,
 };
+
+/** Same edges as `DEFAULT_REP_BANDS`. The name Dinobook should import. */
+export const REP_BAND_THRESHOLDS: RepBandEdges = DEFAULT_REP_BANDS;
 
 /**
  * Rep change per event. Counts use `amount`; rep uses `delta * amount`, then clamps.

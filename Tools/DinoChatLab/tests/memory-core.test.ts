@@ -21,20 +21,35 @@ import {
   applyStatEvent,
   asksForPlayerRecord,
   blankWork,
+  creditWork,
   mateRank,
+  normalizeWork,
+  orderByMateRank,
+  pickPartner,
   seekingWorkInTerritory,
+  statScore,
   statsDigest,
+  WageCreditError,
 } from "../src/core/stats";
 import {
   LocalStorageAdapter,
   SQLITE_SCHEMA,
   StorageConflictError,
+  bindStorage,
+  creditWages,
+  getMemory,
+  getStats,
+  getWork,
   memoryKeyValueStore,
+  putMemory,
 } from "../src/core/storage";
 import {
+  CORE_CONTRACT,
   DEFAULT_CONTEXT_BUDGET,
+  REP_BAND_THRESHOLDS,
   defaultKnobs,
   estimateTokens,
+  repBand,
   type PlayerStatsRow,
   type RelationshipKind,
   type StatEvent,
@@ -433,26 +448,154 @@ describe("local storage", () => {
     expect(SQLITE_SCHEMA).toContain("CREATE TABLE IF NOT EXISTS decision_log");
     expect(SQLITE_SCHEMA).toContain("PRIMARY KEY (player_key, family_id)");
     expect(SQLITE_SCHEMA).toContain("CREATE TABLE IF NOT EXISTS dino_work");
+    expect(SQLITE_SCHEMA).toContain("lifetime_earnings");
+    expect(SQLITE_SCHEMA).toContain("hired_at");
+    expect(SQLITE_SCHEMA).not.toContain("wages_earned");
     expect(SQLITE_SCHEMA).not.toContain("mate_rank");
+    expect(CORE_CONTRACT).toBe("dino-chat-memory/2");
   });
 
-  it("keeps a factory-work hook and derives mate rank", () => {
-    const seeking = { ...blankWork("tusksaw"), seekingJob: true, wagesEarned: 500, mineralsFound: 4 };
+  it("publishes the rep band edges and fails if those edges move", () => {
+    expect(REP_BAND_THRESHOLDS).toEqual({ friendlyAt: 20, waryAt: -8, hostileAt: -40 });
+    expect(repBand(20)).toBe("friendly");
+    expect(repBand(19)).toBe("neutral");
+    expect(repBand(-7)).toBe("neutral");
+    expect(repBand(-8)).toBe("wary");
+    expect(repBand(-39)).toBe("wary");
+    expect(repBand(-40)).toBe("hostile");
+    expect(repBand(100)).toBe("friendly");
+    expect(repBand(-100)).toBe("hostile");
+  });
+
+  it("keeps a factory-work hook and ranks by lifetime earnings", () => {
+    const early = "2020-01-01T00:00:00.000Z";
+    const late = "2024-06-01T00:00:00.000Z";
+    const seeking = {
+      ...blankWork("tusksaw"),
+      seekingJob: true,
+      lifetimeEarnings: 0,
+      mineralsFound: 4,
+    };
     expect(seekingWorkInTerritory(seeking, true)).toBe(true);
     expect(seekingWorkInTerritory(seeking, false)).toBe(false);
     expect(seekingWorkInTerritory({
       ...seeking,
       employerId: "kiln",
       employment: "rented",
+      hiredAt: early,
     }, true)).toBe(false);
-    expect(mateRank({ wagesEarned: 500, statScore: 0, hp: 100, maxHp: 100 })).toBe(3);
-    expect(mateRank({ wagesEarned: 9_999, statScore: 80, hp: 100, maxHp: 100 })).toBe(10);
-    expect(mateRank({ wagesEarned: 0, statScore: 0, hp: 0, maxHp: 0 })).toBe(0);
+
+    expect(normalizeWork("tusksaw", { lifetimeEarnings: -20, mineralsFound: -3 }).lifetimeEarnings).toBe(0);
+    expect(normalizeWork("tusksaw", { mineralsFound: -3 }).mineralsFound).toBe(0);
+    expect(normalizeWork("tusksaw", { wagesEarned: 12 }).lifetimeEarnings).toBe(12);
+
+    const richerLater = {
+      ...blankWork("rich"),
+      lifetimeEarnings: 50,
+      hiredAt: late,
+      hp: 1,
+      statScore: 0,
+    };
+    const poorerEarlier = {
+      ...blankWork("poor"),
+      lifetimeEarnings: 40,
+      hiredAt: early,
+      hp: 999,
+      statScore: 80,
+    };
+    // 40 and 50 collapse together under a divisor of 40, and the old `/ 50` blend
+    // then lets the earlier hire outrank the richer dino. Raw earnings must not.
+    expect(orderByMateRank([poorerEarlier, richerLater]).map((row) => row.dinoId)).toEqual(["rich", "poor"]);
+    expect(mateRank([poorerEarlier, richerLater], "rich")).toBe(1);
+    expect(mateRank([poorerEarlier, richerLater], "poor")).toBe(2);
+    expect(mateRank([poorerEarlier, richerLater], "missing")).toBe(0);
+    const fortyNine = { ...blankWork("forty-nine"), lifetimeEarnings: 49, hiredAt: late };
+    const one = { ...blankWork("one"), lifetimeEarnings: 1, hiredAt: early };
+    expect(mateRank([one, fortyNine], "forty-nine")).toBe(1);
+    expect(mateRank([one, fortyNine], "one")).toBe(2);
+
+    const tiedEarly = { ...blankWork("early"), lifetimeEarnings: 80, hiredAt: early, hp: 1 };
+    const tiedLate = { ...blankWork("late"), lifetimeEarnings: 80, hiredAt: late, hp: 999 };
+    expect(mateRank([tiedLate, tiedEarly], "early")).toBe(1);
+    expect(mateRank([tiedLate, tiedEarly], "late")).toBe(2);
+
     const adapter = new LocalStorageAdapter(memoryKeyValueStore());
+    bindStorage(adapter);
     adapter.putWork(seeking);
-    expect(adapter.getWork("tusksaw")).toMatchObject({ wagesEarned: 500, mineralsFound: 4, seekingJob: true });
+    expect(adapter.getWork("tusksaw")).toMatchObject({
+      lifetimeEarnings: 0,
+      mineralsFound: 4,
+      seekingJob: true,
+      hiredAt: null,
+    });
     expect(adapter.getWork("ripwing")).toBeNull();
-    adapter.putWork({ ...seeking, employerId: "kiln", employment: "tamed" });
+    adapter.putWork({ ...seeking, employerId: "kiln", employment: "tamed", hiredAt: late, lifetimeEarnings: 50 });
     expect(adapter.getWork("tusksaw")?.employment).toBe("tamed");
+    expect(adapter.getWork("tusksaw")?.lifetimeEarnings).toBe(50);
+
+    adapter.putWork({ ...seeking, employerId: "kiln", employment: "tamed", hiredAt: late, lifetimeEarnings: 20 });
+    expect(adapter.getWork("tusksaw")?.lifetimeEarnings).toBe(50);
+    expect(mateRank([adapter.getWork("tusksaw")!, poorerEarlier], "tusksaw")).toBe(1);
+    adapter.putWork({ ...seeking, employerId: "kiln", employment: "tamed", hiredAt: "2026-01-01T00:00:00.000Z", lifetimeEarnings: 50 });
+    expect(adapter.getWork("tusksaw")?.hiredAt).toBe(late);
+    adapter.putWork({ ...seeking, employerId: "kiln", employment: "tamed", hiredAt: early, lifetimeEarnings: 50 });
+    expect(adapter.getWork("tusksaw")?.hiredAt).toBe(early);
+
+    expect(() => adapter.creditWages("tusksaw", -1)).toThrow(WageCreditError);
+    expect(() => creditWages("tusksaw", Number.NaN)).toThrow(WageCreditError);
+    expect(adapter.getWork("tusksaw")?.lifetimeEarnings).toBe(50);
+    expect(creditWork(adapter.getWork("tusksaw")!, 0).lifetimeEarnings).toBe(50);
+    expect(adapter.creditWages("tusksaw", 2.9).lifetimeEarnings).toBe(52);
+
+    const pool = () => [adapter.getWork("tusksaw")!, poorerEarlier];
+    const before = mateRank(pool(), "tusksaw");
+    creditWages("tusksaw", 100);
+    expect(adapter.getWork("tusksaw")?.lifetimeEarnings).toBe(152);
+    expect(mateRank(pool(), "tusksaw")).toBeLessThanOrEqual(before);
+
+    expect(getWork("tusksaw")?.lifetimeEarnings).toBe(152);
+    adapter.bumpStats(event({ kind: "mango_given" }));
+    expect(getStats("pip").find((row) => row.familyId === "pack")?.mangoGiven).toBe(1);
+    putMemory({ dinoId: "tusksaw", summary: "paid in moonstone", updatedAt: early, turnsSinceSummary: 1 });
+    expect(getMemory("tusksaw")?.summary).toBe("paid in moonstone");
+
+    adapter.savePersona({ id: "tusksaw", owner: "local", version: 0, json: "{}" });
+    adapter.deletePersona("tusksaw");
+    expect(adapter.getWork("tusksaw")).toBeNull();
+    expect(adapter.getMemory("tusksaw")).toBeNull();
+  });
+
+  it("picks a partner by stats, then HP, then age", () => {
+    const chooser = { dinoId: "chooser", sex: "female" as const };
+    const bruised = {
+      dinoId: "bruised",
+      sex: "male" as const,
+      maxHp: 40,
+      strength: 10,
+      speed: 10,
+      hp: 1,
+      age: 2,
+    };
+    const healthy = {
+      dinoId: "healthy",
+      sex: "male" as const,
+      maxHp: 10,
+      strength: 10,
+      speed: 10,
+      hp: 100,
+      age: 9,
+    };
+    expect(statScore(bruised)).toBe(60);
+    expect(statScore(healthy)).toBe(30);
+    expect(pickPartner(chooser, [healthy, bruised])?.dinoId).toBe("bruised");
+
+    const young = { ...healthy, dinoId: "young", hp: 10, age: 1 };
+    const old = { ...healthy, dinoId: "old", hp: 10, age: 8 };
+    expect(pickPartner(chooser, [young, old])?.dinoId).toBe("old");
+
+    const lowHp = { ...healthy, dinoId: "low", hp: 3, age: 8 };
+    const highHp = { ...healthy, dinoId: "high", hp: 9, age: 1 };
+    expect(pickPartner(chooser, [lowHp, highHp])?.dinoId).toBe("high");
+    expect(pickPartner(chooser, [{ ...bruised, sex: "female" }])).toBeNull();
   });
 });
