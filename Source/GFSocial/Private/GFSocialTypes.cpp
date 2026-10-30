@@ -377,6 +377,20 @@ bool FGFSocialRules::EmoteMakesNoise(bool bSafe, FName Mode)
 	return !bSafe && EmoteAttractsDanger(Mode);
 }
 
+bool FGFSocialRules::EmoteTauntsGiant(const FGFEmoteRow& Row)
+{
+	return Row.TauntRadius > 0.f;
+}
+
+float FGFSocialRules::EmoteReuseSeconds(const FGFEmoteRow& Row, float SharedSeconds)
+{
+	if (!EmoteTauntsGiant(Row))
+	{
+		return SharedSeconds;
+	}
+	return FMath::Max(Row.TauntCooldown, MinTauntCooldownSeconds);
+}
+
 const FGFEmoteRow* FGFSocialRules::FindEmote(FName EmoteId)
 {
 	const UDataTable* Table = FGFDataTables::Get<FGFEmoteRow>(TEXT("DT_Emotes"));

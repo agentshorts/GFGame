@@ -8,8 +8,12 @@
 //   the jailed player's client (stub cue). Release teleports them back. Kept for the whole session (also on rejoin).
 // - Kick / ban (FGFSocialRules::CanKickOrBan, host only today). Bans are saved with the host's world by stable player
 //   key and refused at join (IGFModeHandler::RefuseJoin, AGFGameMode PreLogin / PostLogin). Unban by key.
-// - Emotes (Data/CSV/DT_Emotes.csv): anywhere, replicated, short cooldown. Outside safety, in a mode whose
+// - Emotes (Data/CSV/DT_Emotes.csv): anywhere, replicated, short cooldown. Off safe land, in a mode whose
 //   DT_ModeRules row has bEmoteAttractsDanger, the emote raises a noise (FGFNoise) that draws nearby wild dinos.
+//   Safe land means inside a safe area or on owned land. Giant protection is separate: an unprotected visitor
+//   on a plot stays quiet for wild dinos and can still be exposed to Big Grumble.
+//   A row with TauntRadius > 0 also calls Big Grumble toward the player (FGFAttention), inside safety too.
+//   That call has its own per-player cooldown (the row's TauntCooldown, at least 15s) so re-taunting cannot park him.
 // Verbs (AGFPlayerState::RequestMode, Mode "Social"; target players by Ints[0] = PlayerId):
 //   Grow, Shrink, Grab      powers on the target
 //   Drop                    let go of whoever the sender is pulling
@@ -179,8 +183,9 @@ public:
 	bool bDripPlaying = false;
 	int32 DripStarts = 0;
 
-	/** Stats (tests). Server: noises raised, kicks done. Every machine: emotes seen, bubbles shown. */
+	/** Stats (tests). Server: noises raised, kicks done, taunts sent to Big Grumble. Every machine: emotes seen, bubbles shown. */
 	int32 NoisesRaised = 0;
+	int32 GiantTauntsRaised = 0;
 	int32 KicksDone = 0;
 	int32 EmotesSeen = 0;
 	int32 BubblesShown = 0;
@@ -210,6 +215,8 @@ private:
 	void EnsureCell();
 	void ApplyJailTo(AGFPlayerState* PS, bool bJailed);
 	void BreakTethersOf(const FString& Key);
+	/** Publishes the live grab tethers (FGFAttention) so Big Grumble can see who is held. */
+	void PublishHolds() const;
 	void TickServer(float Dt);
 	void UpdateLocalDrip();
 	void ShowEmote(const FGFEmoteEvent& E);

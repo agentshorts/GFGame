@@ -1,7 +1,7 @@
-// Big Grumble and faction protection, no world: who it may take (IGFSafeZoneQuery::IsSafeFor, so protection counts,
-// and never anyone inside a no-entry box), the trigger, targets, shoves and eating by protection, walking into land
-// after an unprotected visitor (never otherwise), protected attackers never eaten, no-entry boxes (it comes up to one
-// but never into it; boxes above or below its body don't block), and {Dragger} for an unprotected target on land.
+// Big Grumble and faction protection, no world: who it may take (IGFSafeZoneQuery::IsSafeFor, so protection counts).
+// A player inside a no-entry box can be a target; he still cannot shove or eat them, and he never enters the box.
+// Also the trigger, shoves and eating by protection, walking into land after an unprotected visitor (never otherwise),
+// protected attackers never eaten, boxes above or below its body don't block, and {Dragger} for an unprotected target.
 #include "GFGiantTypes.h"
 #include "GFSafeZone.h"
 #include "Misc/AutomationTest.h"
@@ -95,11 +95,12 @@ bool FGFGiantProtectionRulesTest::RunTest(const FString&)
 	TestEqual(TEXT("No target among protected players"), FGFGiantRules::PickTarget(T, Zone, InLand), int32(INDEX_NONE));
 	TestEqual(TEXT("Falls back to the player in the wild"), FGFGiantRules::PickTarget(T, Zone, P), IndexOf(P, TEXT("W")));
 
-	// No-entry boxes: anyone inside is out of reach, whatever their protection.
+	// No-entry boxes do not hide a player. The box blocks the bite, not the target.
 	const TArray<FBox> Cell = { FBox(FVector(2700.f, -300.f, -100.f), FVector(3300.f, 300.f, 500.f)) };
-	TestFalse(TEXT("A player inside a no-entry box is not exposed"), FGFGiantRules::IsExposed(Zone, Cell, P[3]));
-	TestEqual(TEXT("Nobody to target: everyone protected or in the box"), FGFGiantRules::PickTarget(T, Zone, P, Cell), int32(INDEX_NONE));
-	TestFalse(TEXT("Trigger ignores a player in the box"), FGFGiantRules::AnyoneOutside(Zone, P, Cell));
+	TestTrue(TEXT("A player inside a no-entry box is exposed"), FGFGiantRules::IsExposed(Zone, Cell, P[3]));
+	TestFalse(TEXT("A player inside a no-entry box cannot be touched"), FGFGiantRules::CanTouch(Zone, Cell, P[3]));
+	TestEqual(TEXT("The boxed player can be targeted"), FGFGiantRules::PickTarget(T, Zone, P, Cell), IndexOf(P, TEXT("W")));
+	TestTrue(TEXT("Trigger counts a player in the box"), FGFGiantRules::AnyoneOutside(Zone, P, Cell));
 	return true;
 }
 
@@ -204,15 +205,16 @@ bool FGFGiantProtectionNoEntryTest::RunTest(const FString&)
 	const TArray<FBox> Deep = { Box.ShiftBy(FVector(0.f, 0.f, -5000.f)) };
 	TestEqual(TEXT("A box far below the body doesn't block"), FGFNoEntry::KeepOut(Deep, FVector(10.f, 10.f, 0.f), 350.f, 600.f), FVector(10.f, 10.f, 0.f));
 
-	// The jailed player (inside the box) is the newest; a free player circles the box. It goes for the free one, comes
-	// up to the box but never into it, and never touches the jailed one. No safe land at all (everyone unprotected).
+	// The jailed player (inside the box) is the newest, so he goes for them first: up to the box, never into it, and
+	// never a shove or a bite through it. Then he takes the free player, who circles the box. No safe land at all.
 	FProtLand Wild; // no regions: nobody is safe anywhere
 	TArray<FGFGiantPlayerView> P = { Who(TEXT("J"), FVector(0.f, 0.f, 100.f), LandB, 1.0, 9), Who(TEXT("F"), FVector(900.f, 0.f, 0.f), LandB, 500.0, 1) };
 	FGFGiantSim Sim;
 	Sim.NoEntry = Boxes;
 	FGFGiantStepOut Out;
 	Sim.Begin(T, FGFGiantLines::Load(), Wild, P, false, 13, Out);
-	TestEqual(TEXT("Targets the free player, not the jailed newbie"), Sim.TargetKey, FString(TEXT("F")));
+	TestEqual(TEXT("Targets the jailed newbie first"), Sim.TargetKey, FString(TEXT("J")));
+	TestFalse(TEXT("Cannot touch the jailed player"), FGFGiantRules::CanTouch(Wild, Boxes, P[0]));
 	int32 Violations = 0, JailedTouched = 0;
 	float Closest = TNumericLimits<float>::Max();
 	for (int32 Step = 0; Step < 1200 && Sim.IsActive(); ++Step)
@@ -236,8 +238,12 @@ bool FGFGiantProtectionNoEntryTest::RunTest(const FString&)
 	TestEqual(TEXT("Never inside the no-entry box (incl. its body radius)"), Violations, 0);
 	TestTrue(TEXT("Came up to the box"), Closest < T.GiantRadius + 300.f);
 	TestEqual(TEXT("Never shoved or ate the jailed player"), JailedTouched, 0);
+	TestEqual(TEXT("After the wait he hunts the free player"), Sim.TargetKey, FString(TEXT("F")));
+	TestTrue(TEXT("Still running"), Sim.IsActive());
 	FGFGiantStepOut O;
-	TestFalse(TEXT("A jailed attacker is out of reach"), Sim.IsActive() && Sim.Attacked(TEXT("J"), P, O));
+	TestFalse(TEXT("A jailed attacker is out of reach"), Sim.Attacked(TEXT("J"), P, O));
+	TestTrue(TEXT("The event is still running"), Sim.IsActive());
+	TestTrue(TEXT("The hit ate nobody"), O.Eaten.IsEmpty());
 	AddInfo(FString::Printf(TEXT("Closest approach to the box: %.1f cm"), Closest));
 	return true;
 }

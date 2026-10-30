@@ -5,6 +5,7 @@
 #include "GFSafeZone.h"
 #include "GFLineTokens.h"
 #include "GFNoise.h"
+#include "GFAttention.h"
 #include "GFAnimMap.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimSequenceBase.h"
@@ -103,6 +104,7 @@ void UGFSocialComponent::EndPlay(const EEndPlayReason::Type Reason)
 	}
 	if (IsServer())
 	{
+		FGFAttention::ClearWorld(GetWorld());
 		if (AGFGameState* G = GS())
 		{
 			G->OnFactionChanged.Remove(FactionClaimHandle);
@@ -401,6 +403,7 @@ FName UGFSocialComponent::ServerPower(AGFPlayerState* By, AGFPlayerState* Target
 		T.CasterKey = By->PlayerKey;
 		T.TargetKey = Target->PlayerKey;
 		Tethers.Add(T);
+		PublishHolds();
 	}
 	else
 	{
@@ -415,6 +418,7 @@ FName UGFSocialComponent::ServerDrop(AGFPlayerState* By)
 {
 	const int32 N = By ? Tethers.RemoveAll([&](const FGFTether& T) { return T.CasterKey == By->PlayerKey; }) : 0;
 	NetUpdate();
+	PublishHolds();
 	return N > 0 ? FGFSocialCodes::Ok : FName(TEXT("NoTether"));
 }
 
@@ -423,7 +427,26 @@ void UGFSocialComponent::BreakTethersOf(const FString& Key)
 	if (Tethers.RemoveAll([&](const FGFTether& T) { return T.CasterKey == Key || T.TargetKey == Key; }) > 0)
 	{
 		NetUpdate();
+		PublishHolds();
 	}
+}
+
+void UGFSocialComponent::PublishHolds() const
+{
+	TArray<FGFAttentionHold> Holds;
+	Holds.Reserve(Tethers.Num());
+	for (const FGFTether& Tether : Tethers)
+	{
+		FGFAttentionHold H;
+		H.TargetKey = Tether.TargetKey;
+		H.HolderKey = Tether.CasterKey;
+		if (const AGFPlayerState* Caster = FindPS(Tether.CasterKey))
+		{
+			H.HolderName = Caster->GetPlayerName();
+		}
+		Holds.Add(MoveTemp(H));
+	}
+	FGFAttention::SetHolds(GetWorld(), MoveTemp(Holds));
 }
 
 void UGFSocialComponent::SyncScales()
@@ -876,13 +899,16 @@ FName UGFSocialComponent::ServerEmote(AGFPlayerState* By, FName EmoteId)
 	{
 		return FGFSocialCodes::UnknownEmote;
 	}
-	static const FName Action(TEXT("Emote"));
+	const bool bTaunt = FGFSocialRules::EmoteTauntsGiant(*Row);
+	// A taunt has its own per-player clock, so a Heart is not stuck behind it and a re-taunt cannot refresh the look.
+	// The noise tag stays Emote: wild dinos already listen for that.
+	const FName Action = bTaunt ? FName(TEXT("Taunt")) : GFSocialVerbs::Emote;
 	const double Now = GetWorld()->GetTimeSeconds();
 	if (Cooldowns.IsCooling(By->PlayerKey, Action, Now))
 	{
 		return FGFSocialCodes::Cooldown;
 	}
-	Cooldowns.Start(By->PlayerKey, Action, Now, Tuning.EmoteCooldownSeconds);
+	Cooldowns.Start(By->PlayerKey, Action, Now, FGFSocialRules::EmoteReuseSeconds(*Row, Tuning.EmoteCooldownSeconds));
 
 	FGFEmoteEvent E;
 	E.Seq = NextEmoteSeq++;
@@ -893,7 +919,9 @@ FName UGFSocialComponent::ServerEmote(AGFPlayerState* By, FName EmoteId)
 	E.Seconds = Row->Seconds;
 	const APawn* Pawn = By->GetPawn();
 	const FName Mode = GetPlayerMode(By->PlayerKey);
-	E.bNoise = Pawn && FGFSocialRules::EmoteMakesNoise(IsPlayerSafe(By), Mode);
+	// Wild dinos listen for the ground, not for giant protection. Owned land and a safe circle are quiet,
+	// so an unprotected visitor on a plot can still taunt him without calling the wilds.
+	E.bNoise = Pawn && FGFSocialRules::EmoteMakesNoise(IsOnSafeLand(By), Mode);
 	Emotes.Add(E);
 	if (Emotes.Num() > MaxEmotes)
 	{
@@ -908,9 +936,19 @@ FName UGFSocialComponent::ServerEmote(AGFPlayerState* By, FName EmoteId)
 		Noise.Location = Pawn->GetActorLocation();
 		Noise.Radius = Rules ? Rules->NoiseRadius : 0.f;
 		Noise.SourceKey = By->PlayerKey;
-		Noise.Tag = Action;
+		Noise.Tag = GFSocialVerbs::Emote;
 		++NoisesRaised;
 		FGFNoise::Raise(GetWorld(), Noise);
+	}
+	if (Pawn && GetWorld() && FGFSocialRules::EmoteTauntsGiant(*Row))
+	{
+		FGFGiantTaunt Call;
+		Call.Location = Pawn->GetActorLocation();
+		Call.Radius = Row->TauntRadius;
+		Call.SourceKey = By->PlayerKey;
+		Call.SourceName = By->GetPlayerName();
+		++GiantTauntsRaised;
+		FGFAttention::RaiseTaunt(GetWorld(), Call);
 	}
 	LastEmoteBroadcast = E.Seq;
 	ShowEmote(E);
@@ -1051,4 +1089,5 @@ void UGFSocialComponent::TickServer(float Dt)
 			TeleportPawn(PS, CellSpot());
 		}
 	}
+	PublishHolds();
 }

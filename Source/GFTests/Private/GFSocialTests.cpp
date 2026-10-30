@@ -14,6 +14,9 @@
 #include "GFModeTypes.h"
 #include "GFSafeZone.h"
 #include "GFNoise.h"
+#include "GFAttention.h"
+#include "GFLineTokens.h"
+#include "GFDataTables.h"
 #include "GFAnimMap.h"
 #include "GFDino.h"
 #include "GFTamingComponent.h"
@@ -933,8 +936,8 @@ bool FGFSocialProtectionProvidersTest::RunTest(const FString&)
 
 // Big Grumble in a world with faction land: the event's land zone answers protection through the land owner (so an
 // unprotected visitor on faction land is exposed, a member or a protected visitor isn't), the player views carry the
-// faction and host flag, the event goes for the exposed visitor, a protected attacker isn't eaten, and the jail cell is
-// a no-entry box (registered at spawn, gone with the cell) that puts a jailed player out of reach.
+// faction and host flag, a protected attacker isn't eaten, and the jail cell is a no-entry box (registered at spawn,
+// gone with the cell). A jailed player is exposed and can be the target; the box still blocks the bite.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialGiantProtectionTest, "GFGame.Social.GiantProtection", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FGFSocialGiantProtectionTest::RunTest(const FString&)
 {
@@ -992,13 +995,17 @@ bool FGFSocialGiantProtectionTest::RunTest(const FString&)
 	TestTrue(TEXT("Trigger: the visitor is exposed again"), FGFGiantRules::AnyoneOutside(Zone, Giant->GatherPlayers(), Giant->GetNoEntry()));
 
 	// The jail cell: a no-entry box from spawn; the jailed member is out of reach.
+	// His hub circle is centred on the origin and ignores height, so the default cell at (0, 0, -5000) sits inside
+	// it and would count as safe. Park the cell on the unowned strip, past CircleMaxRadius (3200).
 	TestEqual(TEXT("No cell yet"), Giant->GetNoEntry().Num(), 0);
+	S->Tuning.JailCellLocation = FVector(0.f, 5000.f, -5000.f);
 	TestEqual(TEXT("Leader jails a member"), S->ServerJail(L, M), C::Ok);
 	const TArray<FBox> Boxes = Giant->GetNoEntry();
 	TestEqual(TEXT("The cell is a no-entry box"), Boxes.Num(), 1);
 	const FGFGiantPlayerView Jailed = View(TEXT("M"));
 	TestTrue(TEXT("The jailed member stands inside it"), FGFNoEntry::IsInside(Boxes, Jailed.Location));
-	TestFalse(TEXT("The jailed member is out of reach"), FGFGiantRules::IsExposed(Zone, Boxes, Jailed));
+	TestTrue(TEXT("The jailed member is exposed"), FGFGiantRules::IsExposed(Zone, Boxes, Jailed));
+	TestFalse(TEXT("The box still blocks a bite"), FGFGiantRules::CanTouch(Zone, Boxes, Jailed));
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	AGFJailCell* Extra = W.World->SpawnActor<AGFJailCell>(AGFJailCell::StaticClass(), FTransform(FVector(9000.f, 0.f, 0.f)), Params);
@@ -1010,9 +1017,10 @@ bool FGFSocialGiantProtectionTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("A destroyed cell drops its box"), Giant->GetNoEntry().Num(), 1);
 
-	// The event goes for the exposed visitor; the protected leader hitting it isn't eaten, the visitor is.
+	// The jailed member is exposed too, and with equal newness they come first in the player list. The visitor is
+	// still eaten if they attack. The box blocks the bite on the member.
 	TestTrue(TEXT("Event starts"), Giant->ServerStartEvent());
-	TestEqual(TEXT("Targets the unprotected visitor on faction land"), Giant->GetSim().TargetKey, FString(TEXT("V")));
+	TestEqual(TEXT("Targets the jailed member"), Giant->GetSim().TargetKey, FString(TEXT("M")));
 	TestFalse(TEXT("Protected leader isn't eaten"), Giant->ServerOnAttacked(L));
 	TestFalse(TEXT("Jailed member isn't eaten"), Giant->ServerOnAttacked(M));
 	TestTrue(TEXT("Still running"), Giant->bEventActive && Giant->GetSim().IsActive());
@@ -1183,6 +1191,163 @@ bool FGFSocialGiantLandShapeTest::RunTest(const FString&)
 	TestEqual(TEXT("Nobody eaten"), Giant->EatenKeys.Num(), 0);
 	TestEqual(TEXT("Damage from the giant"), Giant->DamageFromGiant, 0);
 	Zones->UnregisterProvider(LandProvider);
+	return true;
+}
+
+// Handoff wiring in a world: a revoke plus a grab shows up on the player view, he prefers that visitor over an
+// ordinary exposed player, the thanks line is filled, and a taunt emote from safe land calls him without the
+// wild-dino noise. A taunt before he is out is not saved. Jailed players still cannot emote.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialGiantHandoffTest, "GFGame.Giant.Handoff.Wiring", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFSocialGiantHandoffTest::RunTest(const FString&)
+{
+	FGFDataTables::ResetCache();
+	FWorld W;
+	if (!W.Init(*this, TEXT("GFSocialGiantHandoff")))
+	{
+		return false;
+	}
+	UGFSocialComponent* S = W.Social;
+	S->Tuning.EmoteCooldownSeconds = 0.f;
+	UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(W.World);
+	TSharedPtr<FTwoLands> Lands = MakeShared<FTwoLands>();
+	Lands->Access = &S->Access;
+	Zones->SetOverride(Lands);
+
+	// W is added first and stands off every plot, so an ordinary tie picks W. V is the setup.
+	// Between (0, 0, 0) is the hub circle's centre, and that circle is part of his shape, so it is safe.
+	// The unowned strip is |X| <= 50. Y = 5000 is past CircleMaxRadius (3200) and still unowned.
+	AGFPlayerState* Wild = W.Add(TEXT("W"), FB);
+	AGFPlayerState* L = W.Add(TEXT("L"), FA);
+	AGFPlayerState* V = W.Add(TEXT("V"), FB);
+	AGFPlayerState* M = W.Add(TEXT("M"), FA);
+	const FVector OffHub(0.f, 5000.f, 0.f);
+	PutAt(W.World, Wild, OffHub);
+	for (AGFPlayerState* PS : { L, V, M })
+	{
+		PutAt(W.World, PS, OnA);
+	}
+	UGFGiantEventComponent* Giant = AGFGiantDirector::GetEvent(W.World, true);
+	if (!TestNotNull(TEXT("Giant event"), Giant) || !TestNotNull(TEXT("Pawns"), V->GetPawn()))
+	{
+		return false;
+	}
+	Giant->bAutoTrigger = false;
+	Giant->ForcedSeed = 4;
+	Giant->Tuning.bEatIdleTarget = false;
+	Giant->Tuning.ShoveRange = 0.f;
+
+	TestEqual(TEXT("Leader protects the visitor"), S->ServerSetProtected(L, V, true), C::Ok);
+	TestEqual(TEXT("Leader turns protection off"), S->ServerSetProtected(L, V, false), C::Ok);
+	TestEqual(TEXT("Leader grabs the unprotected visitor"), S->ServerPower(L, V, EGFSocialPower::Grab), C::Ok);
+	TestEqual(TEXT("The grab is up"), S->Tethers.Num(), 1);
+
+	const TArray<FGFGiantPlayerView> Views = Giant->GatherPlayers();
+	const FGFGiantPlayerView* VV = Views.FindByPredicate([](const FGFGiantPlayerView& P) { return P.Key == TEXT("V"); });
+	const FGFGiantPlayerView* WV = Views.FindByPredicate([](const FGFGiantPlayerView& P) { return P.Key == TEXT("W"); });
+	if (!TestNotNull(TEXT("Visitor view"), VV) || !TestNotNull(TEXT("Wild view"), WV))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Dragger key"), VV->DraggerKey, FString(TEXT("L")));
+	TestEqual(TEXT("Dragger name"), VV->Dragger, L->GetPlayerName());
+	TestTrue(TEXT("Revoke is recent"), VV->DragAgeSeconds >= 0.f && VV->DragAgeSeconds < 30.f);
+	TestTrue(TEXT("Grab is visible to him"), VV->bHeld && VV->HolderKey == TEXT("L") && VV->HolderName == L->GetPlayerName());
+	TestTrue(TEXT("The visitor is a handoff"), FGFGiantRules::IsHandoffCandidate(Giant->Tuning, *VV));
+	TestEqual(TEXT("Leader drops the grab"), S->ServerDrop(L), C::Ok);
+	{
+		const TArray<FGFGiantPlayerView> Dropped = Giant->GatherPlayers();
+		const FGFGiantPlayerView* DroppedV = Dropped.FindByPredicate([](const FGFGiantPlayerView& P) { return P.Key == TEXT("V"); });
+		if (!TestNotNull(TEXT("Visitor view after the drop"), DroppedV))
+		{
+			return false;
+		}
+		TestFalse(TEXT("Dropping the grab clears the held flag"), DroppedV->bHeld);
+		TestTrue(TEXT("Holder key is cleared"), DroppedV->HolderKey.IsEmpty());
+		TestTrue(TEXT("The revoke still counts"), FGFGiantRules::IsHandoffCandidate(Giant->Tuning, *DroppedV));
+	}
+	TestFalse(TEXT("The wild player is not"), FGFGiantRules::IsHandoffCandidate(Giant->Tuning, *WV));
+	TestEqual(TEXT("Ordinary pick would be the wild player"), FGFGiantRules::PickTarget(Giant->Tuning, Giant->GetLandZone(), Views, Giant->GetNoEntry()),
+		Views.IndexOfByPredicate([](const FGFGiantPlayerView& P) { return P.Key == TEXT("W"); }));
+
+	const int32 Noises = S->NoisesRaised;
+	TestEqual(TEXT("Taunt before he is out"), S->ServerEmote(M, TEXT("Taunt")), C::Ok);
+	TestEqual(TEXT("The call was raised"), S->GiantTauntsRaised, 1);
+	TestEqual(TEXT("Safe land: no wild-dino noise"), S->NoisesRaised, Noises);
+	TestFalse(TEXT("He does not store a taunt while he is away"), Giant->GetSim().bTaunt);
+	TestEqual(TEXT("Same player cannot re-taunt yet"), S->ServerEmote(M, TEXT("Taunt")), C::Cooldown);
+	TestEqual(TEXT("A rejected taunt does not call him"), S->GiantTauntsRaised, 1);
+	TestEqual(TEXT("Another player on safe land can taunt"), S->ServerEmote(V, TEXT("Taunt")), C::Ok);
+	TestEqual(TEXT("The other call was raised"), S->GiantTauntsRaised, 2);
+	TestEqual(TEXT("Still no noise from safe land"), S->NoisesRaised, Noises);
+
+	TestTrue(TEXT("Event starts"), Giant->ServerStartEvent());
+	TestEqual(TEXT("He goes for the handoff, not the wild player"), Giant->GetSim().TargetKey, FString(TEXT("V")));
+	int32 Thanks = 0;
+	for (const FGFGiantChatLine& Line : Giant->Chat)
+	{
+		if (Line.Phase != EGFGiantLinePhase::Handoff)
+		{
+			continue;
+		}
+		++Thanks;
+		TestEqual(TEXT("All chat"), Line.Channel, FName(TEXT("All")));
+		TestFalse(TEXT("Tokens filled"), Line.Text.Contains(TEXT("{")));
+		FString Raw;
+		for (const TPair<EGFGiantLinePhase, TArray<FGFGiantLines::FLine>>& Pair : Giant->Lines.ByPhase)
+		{
+			for (const FGFGiantLines::FLine& Row : Pair.Value)
+			{
+				if (Row.Id == Line.LineId)
+				{
+					Raw = Row.Text;
+				}
+			}
+		}
+		const FString Expected = FGFLineTokens::FillDragger(FGFGiantRules::FillTarget(Raw, V->GetPlayerName()), L->GetPlayerName());
+		TestEqual(TEXT("Handoff text"), Line.Text, Expected);
+	}
+	TestEqual(TEXT("One thanks"), Thanks, 1);
+
+	TestEqual(TEXT("Taunt while he is out"), S->ServerEmote(L, TEXT("Taunt")), C::Ok);
+	TestEqual(TEXT("Third call"), S->GiantTauntsRaised, 3);
+	TestEqual(TEXT("Still no noise from safe land"), S->NoisesRaised, Noises);
+	TestTrue(TEXT("He noticed"), Giant->GetSim().bTaunt);
+	TestEqual(TEXT("Radius from the emote"), Giant->GetSim().TauntRadius, 4500.f);
+	TestTrue(TEXT("Pulled toward the taunter"), FVector::Dist2D(Giant->GetSim().TauntAt, L->GetPawn()->GetActorLocation()) < 1.f);
+	TestEqual(TEXT("The first player is still cooling"), S->ServerEmote(M, TEXT("Taunt")), C::Cooldown);
+	TestEqual(TEXT("Heart is not a taunt"), S->ServerEmote(L, TEXT("Heart")), C::Ok);
+	TestEqual(TEXT("Heart did not call him"), S->GiantTauntsRaised, 3);
+	{
+		const FGFEmoteRow* TauntRow = FGFSocialRules::FindEmote(TEXT("Taunt"));
+		const float Cooldown = TauntRow ? FGFSocialRules::EmoteReuseSeconds(*TauntRow, S->Tuning.EmoteCooldownSeconds) : 30.f;
+		// ServerEmote reads GetTimeSeconds. A 1s Tick is clamped to MaxUndilatedFrameTime (0.4s by default),
+		// so 31 of those steps never reach a 30s cooldown. Step under that cap, and raise the cap too.
+#if WITH_EDITOR
+		W.World->bDebugPauseExecution = false;
+#endif
+		if (AWorldSettings* Settings = W.World->GetWorldSettings())
+		{
+			Settings->SetPauserPlayerState(nullptr);
+			Settings->MaxUndilatedFrameTime = FMath::Max(Settings->MaxUndilatedFrameTime, 1.f);
+		}
+		const double Started = W.World->GetTimeSeconds();
+		const double Goal = Started + Cooldown + 0.05;
+		const float Step = 0.25f;
+		const int32 Limit = FMath::CeilToInt((Cooldown + 1.f) / Step) + 4;
+		for (int32 i = 0; i < Limit && W.World->GetTimeSeconds() < Goal; ++i)
+		{
+			W.World->Tick(LEVELTICK_All, Step);
+		}
+		TestTrue(TEXT("World time passed the taunt cooldown"), W.World->GetTimeSeconds() + KINDA_SMALL_NUMBER >= Started + Cooldown);
+		TestEqual(TEXT("After the cooldown the same player can taunt"), S->ServerEmote(M, TEXT("Taunt")), C::Ok);
+		TestEqual(TEXT("That call was raised"), S->GiantTauntsRaised, 4);
+	}
+
+	TestEqual(TEXT("Leader jails a member"), S->ServerJail(L, M), C::Ok);
+	TestEqual(TEXT("No taunt from the jail"), S->ServerEmote(M, TEXT("Taunt")), C::Jailed);
+	TestEqual(TEXT("No call from the jail"), S->GiantTauntsRaised, 4);
+	TestFalse(TEXT("Protected leader isn't eaten"), Giant->ServerOnAttacked(L));
+	Zones->SetOverride(nullptr);
 	return true;
 }
 

@@ -4,6 +4,7 @@
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFDataTables.h"
+#include "GFAttention.h"
 #include "GFLog.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
@@ -72,6 +73,7 @@ void UGFGiantEventComponent::BeginPlay()
 	{
 		return;
 	}
+	TauntHandle = FGFAttention::OnTaunt().AddUObject(this, &UGFGiantEventComponent::OnTaunt);
 	if (!TunablesAsset.IsNull())
 	{
 		if (const UGFGiantTunables* Asset = TunablesAsset.LoadSynchronous())
@@ -94,6 +96,11 @@ void UGFGiantEventComponent::BeginPlay()
 
 void UGFGiantEventComponent::EndPlay(const EEndPlayReason::Type Reason)
 {
+	if (TauntHandle.IsValid())
+	{
+		FGFAttention::OnTaunt().Remove(TauntHandle);
+		TauntHandle.Reset();
+	}
 	if (UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(this))
 	{
 		Zones->UnregisterProvider(this);
@@ -216,7 +223,20 @@ TArray<FGFGiantPlayerView> UGFGiantEventComponent::GatherPlayers() const
 		V.FirstSeenTicks = Save.FirstSeenOf(PS->PlayerKey);
 		V.bBusy = BusyKeys.Contains(PS->PlayerKey);
 		V.Dragger = PS->LastDrag.DraggerName;
+		V.DraggerKey = PS->LastDrag.DraggerKey;
 		V.DraggedAtUtcTicks = PS->LastDrag.AtUtcTicks;
+		if (PS->LastDrag.IsSet())
+		{
+			const double Age = double(NowUtcTicks() - PS->LastDrag.AtUtcTicks) / FGFGiantRules::TicksPerSecond;
+			V.DragAgeSeconds = FMath::Max(0.f, static_cast<float>(Age));
+		}
+		FGFAttentionHold Hold;
+		if (FGFAttention::FindHold(GetWorld(), PS->PlayerKey, Hold))
+		{
+			V.bHeld = true;
+			V.HolderKey = Hold.HolderKey;
+			V.HolderName = Hold.HolderName;
+		}
 		V.GroupId = PS->FactionId;
 		V.bHost = PS->bIsHost;
 		if (const ACharacter* C = Cast<ACharacter>(Pawn))
@@ -273,6 +293,15 @@ void UGFGiantEventComponent::OnGiantAttacked(AGFGiantDino* Dino, AGFPlayerState*
 	{
 		ServerOnAttacked(By);
 	}
+}
+
+void UGFGiantEventComponent::OnTaunt(UWorld* World, const FGFGiantTaunt& Taunt)
+{
+	if (World != GetWorld() || !IsServer() || !bEventActive || !Sim.IsActive())
+	{
+		return;
+	}
+	Sim.NoticeTaunt(Taunt.Location, Taunt.Radius);
 }
 
 bool UGFGiantEventComponent::ServerOnAttacked(AGFPlayerState* By)

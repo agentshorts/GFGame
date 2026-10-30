@@ -4,6 +4,7 @@
 #include "GFGiantTypes.h"
 #include "GFModeTypes.h"
 #include "GFDataTables.h"
+#include "GFLineTokens.h"
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -89,8 +90,8 @@ bool FGFGiantLinesTest::RunTest(const FString&)
 {
 	FGFDataTables::ResetCache();
 	const FGFGiantLines L = FGFGiantLines::Load();
-	// v5 is 73 file lines = header + 72 chat lines (6+8+6+6+8+6+6+6+20); v5 adds {Target} to 7 of them.
-	TestEqual(TEXT("72 lines"), L.Total(), 72);
+	// 72 earlier lines plus GD_Handoff_01..14. {Target} is on 7 of the earlier lines and 3 handoff lines.
+	TestEqual(TEXT("86 lines"), L.Total(), 86);
 	TestEqual(TEXT("Spotted"), L.Num(EGFGiantLinePhase::Spotted), 6);
 	TestEqual(TEXT("Chase"), L.Num(EGFGiantLinePhase::Chase), 8);
 	TestEqual(TEXT("CloseCall"), L.Num(EGFGiantLinePhase::CloseCall), 6);
@@ -100,6 +101,7 @@ bool FGFGiantLinesTest::RunTest(const FString&)
 	TestEqual(TEXT("Return"), L.Num(EGFGiantLinePhase::Return), 6);
 	TestEqual(TEXT("Snacked"), L.Num(EGFGiantLinePhase::Snacked), 6);
 	TestEqual(TEXT("Target"), L.Num(EGFGiantLinePhase::Target), 20);
+	TestEqual(TEXT("Handoff"), L.Num(EGFGiantLinePhase::Handoff), 14);
 
 	bool bNamedLine = false, bWhyRunning = false, bRumble = false, bIdsMatchPhase = true;
 	TArray<FString> Tokened;
@@ -117,9 +119,9 @@ bool FGFGiantLinesTest::RunTest(const FString&)
 			{
 				Tokened.Add(Line.Id.ToString());
 			}
-			// The only token is exactly {Target}: no other braces, and filling leaves none behind.
-			const FString Filled = FGFGiantRules::FillTarget(Line.Text, TEXT("Pip"));
-			const FString Unnamed = FGFGiantRules::FillTarget(Line.Text, FString());
+			// Tokens are {Target} and {Dragger} only. Filling both leaves no braces behind.
+			const FString Filled = FGFLineTokens::FillDragger(FGFGiantRules::FillTarget(Line.Text, TEXT("Pip")), TEXT("Rex"));
+			const FString Unnamed = FGFLineTokens::FillDragger(FGFGiantRules::FillTarget(Line.Text, FString()), FString());
 			if (Filled.Contains(TEXT("{")) || Filled.Contains(TEXT("}")) || Unnamed.Contains(TEXT("{")) || Unnamed.Contains(TEXT("}"))
 				|| Unnamed.Contains(TEXT(" ,")) || Unnamed.Contains(TEXT(" ?")) || Unnamed.Contains(TEXT(" .")) || Unnamed.Contains(TEXT(",?"))
 				|| Unnamed.Contains(TEXT(",.")))
@@ -132,9 +134,9 @@ bool FGFGiantLinesTest::RunTest(const FString&)
 	TestTrue(TEXT("The named-target line is in (with the target's name)"), bNamedLine);
 	TestTrue(TEXT("\"Why you running, {Target}?\" is in"), bWhyRunning);
 	Tokened.Sort();
-	TestEqual(TEXT("7 lines name the target"), Tokened.Num(), 7);
-	TestEqual(TEXT("The 7 v5 lines"), FString::Join(Tokened, TEXT(",")),
-		FString(TEXT("GD_CloseCall_01,GD_CloseCall_05,GD_Target_01,GD_Target_02,GD_Target_09,GD_Target_12,GD_Target_18")));
+	TestEqual(TEXT("10 lines name the target"), Tokened.Num(), 10);
+	TestEqual(TEXT("The lines that name the target"), FString::Join(Tokened, TEXT(",")),
+		FString(TEXT("GD_CloseCall_01,GD_CloseCall_05,GD_Handoff_04,GD_Handoff_09,GD_Handoff_11,GD_Target_01,GD_Target_02,GD_Target_09,GD_Target_12,GD_Target_18")));
 	TestEqual(TEXT("Every line fills cleanly"), BadBraces, 0);
 	TestFalse(TEXT("No old placeholder name"), bRumble);
 	TestTrue(TEXT("Every id matches its phase"), bIdsMatchPhase);
@@ -168,7 +170,8 @@ bool FGFGiantLinesTest::RunTest(const FString&)
 	FRandomStream Rng(7);
 	TArray<FName> Recent;
 	for (EGFGiantLinePhase Phase : { EGFGiantLinePhase::Spotted, EGFGiantLinePhase::Chase, EGFGiantLinePhase::CloseCall, EGFGiantLinePhase::Herded,
-		EGFGiantLinePhase::Circling, EGFGiantLinePhase::Leaving, EGFGiantLinePhase::Return, EGFGiantLinePhase::Snacked, EGFGiantLinePhase::Target })
+		EGFGiantLinePhase::Circling, EGFGiantLinePhase::Leaving, EGFGiantLinePhase::Return, EGFGiantLinePhase::Snacked, EGFGiantLinePhase::Target,
+		EGFGiantLinePhase::Handoff })
 	{
 		const FString Prefix = FString(TEXT("GD_")) + StaticEnum<EGFGiantLinePhase>()->GetNameStringByValue(int64(Phase)) + TEXT("_");
 		for (int32 i = 0; i < 20; ++i)
@@ -507,11 +510,12 @@ bool FGFGiantSafeZoneTest::RunTest(const FString&)
 	FGFGiantStepOut Out;
 	Sim.Begin(TC, FGFGiantLines::Load(), Z, P, false, 17, Out);
 	float MaxEdgeGap = 0.f;
-	int32 Inside = 0;
+	int32 Inside = 0, HerdedLines = 0;
 	for (int32 Step = 0; Step < 600; ++Step)
 	{
 		FGFGiantStepOut S;
 		Sim.Step(0.1f, P, S);
+		HerdedLines += CountPhase(S.Chat, EGFGiantLinePhase::Herded);
 		Inside += Z.IsInsideSafe(Sim.Location) || !FGFSafeZone::IsClear(Z, Sim.Location, TC.GiantRadius) ? 1 : 0;
 		if (Step > 300)
 		{
@@ -519,6 +523,7 @@ bool FGFGiantSafeZoneTest::RunTest(const FString&)
 		}
 	}
 	TestTrue(TEXT("Circling with everyone home"), Sim.State == EGFGiantState::Circling);
+	TestEqual(TEXT("Already home: no Herded line"), HerdedLines, 0);
 	TestEqual(TEXT("Edge-walking never enters a region"), Inside, 0);
 	TestTrue(TEXT("Edge-walking hugs a border"), MaxEdgeGap <= TC.GiantRadius + 200.f);
 	return true;
