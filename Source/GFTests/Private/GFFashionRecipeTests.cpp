@@ -34,7 +34,10 @@ namespace GFFashionRecipeTest
 		return -1;
 	}
 
-	/** Item id -> item type, read from the brand list. Empty map on failure (with OutError set). */
+	/** Every item type in the brand list, cheapest first. */
+	static const TCHAR* const AllTypes[] = { TEXT("cosmetic"), TEXT("accessory"), TEXT("hat/mask"), TEXT("shoes"), TEXT("bottoms"), TEXT("top"), TEXT("bag/purse"), TEXT("full suit") };
+
+	/** Item id -> item type, read from the brand list. On any malformed entry OutError is set. */
 	static TMap<FName, FString> LoadFashionItems(FString& OutError)
 	{
 		TMap<FName, FString> Out;
@@ -52,18 +55,36 @@ namespace GFFashionRecipeTest
 			OutError = TEXT("brand list is not valid JSON");
 			return Out;
 		}
-		for (const TSharedPtr<FJsonValue>& BrandV : Root->GetArrayField(TEXT("brands")))
+		const TArray<TSharedPtr<FJsonValue>>* Brands = nullptr;
+		if (!Root->TryGetArrayField(TEXT("brands"), Brands) || !Brands)
 		{
-			const TSharedPtr<FJsonObject> Brand = BrandV->AsObject();
-			for (const TSharedPtr<FJsonValue>& ItemV : Brand->GetArrayField(TEXT("items")))
+			OutError = TEXT("brand list has no brands array");
+			return Out;
+		}
+		for (int32 b = 0; b < Brands->Num(); ++b)
+		{
+			const TSharedPtr<FJsonObject>* Brand = nullptr;
+			const TArray<TSharedPtr<FJsonValue>>* BrandItems = nullptr;
+			if (!(*Brands)[b].IsValid() || !(*Brands)[b]->TryGetObject(Brand) || !Brand || !Brand->IsValid() || !(*Brand)->TryGetArrayField(TEXT("items"), BrandItems) || !BrandItems)
 			{
-				const TSharedPtr<FJsonObject> Item = ItemV->AsObject();
-				const FName Id(*Item->GetStringField(TEXT("id")));
-				if (Out.Contains(Id))
+				OutError = FString::Printf(TEXT("brand %d is not an object with an items array"), b);
+				continue;
+			}
+			for (int32 i = 0; i < BrandItems->Num(); ++i)
+			{
+				const TSharedPtr<FJsonObject>* Item = nullptr;
+				FString Id, Type;
+				if (!(*BrandItems)[i].IsValid() || !(*BrandItems)[i]->TryGetObject(Item) || !Item || !Item->IsValid()
+					|| !(*Item)->TryGetStringField(TEXT("id"), Id) || !(*Item)->TryGetStringField(TEXT("type"), Type) || Id.IsEmpty())
 				{
-					OutError = TEXT("duplicate fashion item id ") + Id.ToString();
+					OutError = FString::Printf(TEXT("brand %d item %d has no id/type"), b, i);
+					continue;
 				}
-				Out.Add(Id, Item->GetStringField(TEXT("type")));
+				if (Out.Contains(FName(*Id)))
+				{
+					OutError = TEXT("duplicate fashion item id ") + Id;
+				}
+				Out.Add(FName(*Id), Type);
 			}
 		}
 		return Out;
@@ -93,19 +114,23 @@ bool FGFFashionRecipeCoverageTest::RunTest(const FString&)
 	Recipes->ForeachRow<FGFRecipeRow>(TEXT("Test"), [&](const FName& Id, const FGFRecipeRow& R)
 	{
 		const bool bFashionOutput = Fashion.Contains(R.Output.ItemId);
-		if (R.Station != Atelier)
+		if (!bFashionOutput)
 		{
-			TestFalse(*FString::Printf(TEXT("%s: fashion items are made only at the Atelier"), *Id.ToString()), bFashionOutput);
-			return;
+			return; // not a fashion recipe (hand-made Atelier rows are allowed)
 		}
-		TestTrue(*FString::Printf(TEXT("%s: Atelier output is a fashion item"), *Id.ToString()), bFashionOutput);
+		TestTrue(*FString::Printf(TEXT("%s: fashion items are made only at the Atelier"), *Id.ToString()), R.Station == Atelier);
 		TestTrue(*FString::Printf(TEXT("%s: recipe id is the item id"), *Id.ToString()), Id == R.Output.ItemId);
 		TestEqual(*FString::Printf(TEXT("%s: makes one piece"), *Id.ToString()), R.Output.Count, 1);
 		TestFalse(*FString::Printf(TEXT("%s: unlocked from the start"), *Id.ToString()), R.UnlockTag.IsValid());
 		TestTrue(*FString::Printf(TEXT("%s: has inputs"), *Id.ToString()), R.Inputs.Num() > 0);
 		RecipesPerItem.FindOrAdd(R.Output.ItemId)++;
 
+		const FString& Type = Fashion.FindChecked(R.Output.ItemId);
+		const bool bSuit = Type == TEXT("full suit");
 		int32 Units = 0;
+		int32 PriceyUnits = 0;
+		int32 PriceyInputs = 0;
+		bool bHasCommon = false;
 		TSet<FName> Seen;
 		for (const FGFItemStack& In : R.Inputs)
 		{
@@ -121,13 +146,36 @@ bool FGFFashionRecipeCoverageTest::RunTest(const FString&)
 			}
 			TestTrue(*(What + TEXT(" is a tiered material")), Row->Tier > 0 && Row->MaterialCategory != EGFMaterialCategory::None);
 			TestTrue(*(What + TEXT(" is evergreen (no event or lab exclusive)")), Row->Exclusive == EGFExclusive::None);
+			if (Row->Tier >= 3)
+			{
+				++PriceyInputs;
+				PriceyUnits += In.Count;
+				TestEqual(*(What + TEXT(" tier 3+ costs 1 (2 in a full suit)")), In.Count, bSuit ? 2 : 1);
+			}
+			else
+			{
+				bHasCommon = true;
+			}
 		}
-		if (const FString* Type = Fashion.Find(R.Output.ItemId))
+		// Budgets count material units, not value.
+		const int32 Budget = UnitBudget(Type);
+		if (!TestTrue(*FString::Printf(TEXT("%s: known item type %s"), *Id.ToString(), *Type), Budget > 0))
 		{
-			const int32 Budget = UnitBudget(*Type);
-			TestTrue(*FString::Printf(TEXT("%s: known item type %s"), *Id.ToString(), **Type), Budget > 0);
-			const int32 Allowed = Budget + (*Type == TEXT("full suit") ? R.Inputs.Num() : 0); // suits pay 2 per tier-3 input
-			TestTrue(*FString::Printf(TEXT("%s: %d units within the %s budget"), *Id.ToString(), Units, **Type), Units <= Allowed);
+			return;
+		}
+		if (bHasCommon)
+		{
+			TestEqual(*FString::Printf(TEXT("%s: uses exactly the %s budget"), *Id.ToString(), *Type), Units, Budget);
+		}
+		else
+		{
+			// Every input is tier 3+: the rare inputs are the price, so the row sits under budget on purpose.
+			TestEqual(*FString::Printf(TEXT("%s: all tier 3+, pays only those"), *Id.ToString()), Units, PriceyUnits);
+			TestTrue(*FString::Printf(TEXT("%s: all tier 3+ stays within the %s budget"), *Id.ToString(), *Type), Units <= Budget);
+			if (Units < Budget)
+			{
+				AddInfo(FString::Printf(TEXT("%s (%s) under budget on purpose: %d of %d units, %d tier 3+ inputs"), *Id.ToString(), *Type, Units, Budget, PriceyInputs));
+			}
 		}
 	});
 
@@ -168,6 +216,12 @@ bool FGFFashionRecipeTiersTest::RunTest(const FString&)
 	};
 	AddInfo(FString::Printf(TEXT("Avg input value: cosmetic %.1f, accessory %.1f, top %.1f, bag %.1f, full suit %.1f"),
 		Avg(TEXT("cosmetic")), Avg(TEXT("accessory")), Avg(TEXT("top")), Avg(TEXT("bag/purse")), Avg(TEXT("full suit"))));
+	for (const TCHAR* Type : AllTypes)
+	{
+		const TPair<int64, int32>* Acc = ByType.Find(Type);
+		TestTrue(*FString::Printf(TEXT("Type %s has at least one recipe"), Type), Acc && Acc->Value > 0);
+	}
+	TestEqual(TEXT("No unknown item types"), ByType.Num(), static_cast<int32>(UE_ARRAY_COUNT(AllTypes)));
 	TestTrue(TEXT("Full suits cost more than any other type on average"), Avg(TEXT("full suit")) > Avg(TEXT("bag/purse")) && Avg(TEXT("full suit")) > Avg(TEXT("top")));
 	TestTrue(TEXT("Bags cost more than cosmetics on average"), Avg(TEXT("bag/purse")) > Avg(TEXT("cosmetic")));
 	TestTrue(TEXT("Full suits stay under 60 value (generous economy)"), Avg(TEXT("full suit")) < 60.0);

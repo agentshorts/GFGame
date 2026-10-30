@@ -9,14 +9,18 @@ Rules (see the Decision issues linked from #88):
   * Station = Atelier. UnlockTag empty (unlocked from the start).
   * Inputs are existing, evergreen DT_Items materials only (Exclusive=None). Placeholder
     material names are mapped through MATERIAL_MAP below.
-  * Each item type has a unit budget (TYPE_UNITS). Tier 3+ inputs cost 1 each (2 for a
-    full suit); the remaining units are split over the tier 1-2 inputs.
-Non-fashion rows (anything whose Station is not Atelier) are kept untouched and in order.
+  * Each item type has a unit budget (TYPE_UNITS), counted in material units, not value.
+    Tier 3+ inputs cost 1 each (2 for a full suit); the tier 1-2 inputs split the rest, so a
+    recipe with any tier 1-2 input uses exactly its budget. A recipe whose inputs are all
+    tier 3+ costs only those inputs and lands under budget on purpose (it is printed).
+Every row whose output is not a fashion item (including any hand-made Atelier rows) is kept
+untouched and in order. Rows whose output is a fashion item are regenerated.
 """
 import csv
 import io
 import json
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,7 +37,7 @@ MATERIAL_MAP = {
     "crystal": "Crystal",
     "fur": "Fiber",
     "gold dust": "Glitter",
-    "rubber sap": "Clay",
+    "rubber sap": "Fiber",      # fresh plant latex, a bulk sole material; tier 1 like the other commons
     "moss thread": "Ribbon",
     "scales": "Scales",
     "berry dye": "RoseDye",
@@ -42,13 +46,13 @@ MATERIAL_MAP = {
     "frost thread": "Ribbon",
     "bone": "Bone",
     "glacier water": "SkyDye",
-    "obsidian": "Stone",
+    "obsidian": "Glass",        # obsidian is volcanic glass
     "ember core": "Amber",       # EmberCore is HallowNight-only; Amber keeps it year-round
     "mud clay": "Clay",
     "junk scrap": "ScrapWire",
     "amber": "Amber",
-    "feathers": "Flowers",
-    "sap": "Amber",
+    "feathers": "Ribbon",       # plumes are trim, and Ribbon is the trim material
+    "sap": "Amber",             # precious resin in balms and gels; rubber sap above is the bulk kind
     "ash": "Coalnut",
     "tar": "Coalnut",
 }
@@ -77,6 +81,27 @@ def load_items():
     return out
 
 
+def load_recipes():
+    """Header + body rows of DT_Recipes.csv. Blank lines are dropped; short rows stop the run."""
+    with open(RECIPES, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    if not rows or rows[0][:5] != ["---", "Inputs", "Output", "Station", "UnlockTag"]:
+        raise SystemExit("DT_Recipes.csv header changed; update the generator")
+    body = []
+    for n, r in enumerate(rows[1:], start=2):
+        if not any(c.strip() for c in r):
+            continue
+        if len(r) < 5:
+            raise SystemExit("DT_Recipes.csv line %d has %d columns, expected 5: %r" % (n, len(r), r))
+        body.append(r)
+    return rows[0], body
+
+
+def output_id(cell):
+    m = re.search(r'ItemId="([^"]*)"', cell)
+    return m.group(1) if m else ""
+
+
 def recipe_for(item, items):
     t = item["type"]
     if t not in TYPE_UNITS:
@@ -101,11 +126,9 @@ def recipe_for(item, items):
         else:
             commons.append(mid)
     left = budget - sum(counts.values())
-    if not commons:
-        # All-pricey recipe: the tier-3 inputs already make it dear; nothing else to add.
-        pass
-    else:
-        left = max(left, len(commons))
+    if commons:
+        if left < len(commons):
+            raise SystemExit("%s: %s budget %d cannot give every common input at least 1" % (item["id"], t, budget))
         base, extra = divmod(left, len(commons))
         for i, mid in enumerate(commons):
             counts[mid] = base + (1 if i < extra else 0)
@@ -120,18 +143,34 @@ def build():
     items = load_items()
     with open(BRANDS, encoding="utf-8") as f:
         data = json.load(f)
-    with open(RECIPES, newline="", encoding="utf-8") as f:
-        rows = list(csv.reader(f))
-    head, body = rows[0], rows[1:]
-    kept = [r for r in body if r[3] != STATION]
+    fashion_ids = [it["id"] for b in data["brands"] for it in b["items"]]
+    if len(set(fashion_ids)) != len(fashion_ids):
+        raise SystemExit("duplicate fashion item ids in " + BRANDS)
+    fashion_set = set(fashion_ids)
+    head, body = load_recipes()
+    kept = []
+    for r in body:
+        out = output_id(r[2])
+        if out in fashion_set:
+            continue  # regenerated below
+        if r[3] == STATION:
+            print("note: keeping hand-made Atelier row %s (output %s is not a fashion item)" % (r[0], out))
+        kept.append(r)
     taken = {r[0] for r in kept}
     fashion = []
+    under = []
     for b in data["brands"]:
         for it in b["items"]:
             if it["id"] in taken:
                 raise SystemExit("recipe id clash: " + it["id"])
             taken.add(it["id"])
-            fashion.append([it["id"], fmt_inputs(recipe_for(it, items)), '(ItemId="%s",Count=1)' % it["id"], STATION, ""])
+            stacks = recipe_for(it, items)
+            units = sum(c for _, c in stacks)
+            if units < TYPE_UNITS[it["type"]]:
+                under.append("%s (%s, %d/%d units, all tier 3+)" % (it["id"], it["type"], units, TYPE_UNITS[it["type"]]))
+            fashion.append([it["id"], fmt_inputs(stacks), '(ItemId="%s",Count=1)' % it["id"], STATION, ""])
+    if under and "--quiet" not in sys.argv:
+        print("under budget on purpose (%d): %s" % (len(under), ", ".join(under)))
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\r\n", quoting=csv.QUOTE_MINIMAL)
     for r in [head] + kept + fashion:
