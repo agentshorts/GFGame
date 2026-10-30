@@ -233,6 +233,8 @@ bool FGFEndgameRecipientTest::RunTest(const FString&)
 	FGFUnbinding AbsentGathering;
 	AbsentGathering.Tuning.RecipientRule = EGFUnbindingRecipient::Explicit;
 	AbsentGathering.Tuning.ExplicitRecipientKey = Guest;
+	// One player is away, so lower the headcount by one: this checks the recipient rule, not TooFewPlayers.
+	AbsentGathering.Tuning.RequiredPlayers = Cap - 1;
 	TArray<FGFUnbindingPlayer> Away = Roster(Cap);
 	Away[1].bLoggedOut = true;
 	Away[1].bPresent = false;

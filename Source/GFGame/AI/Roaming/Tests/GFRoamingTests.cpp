@@ -9,6 +9,7 @@
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFDino.h"
+#include "GFTamingComponent.h"
 #include "GFMobaGateSubsystem.h"
 #include "GFBeatHopGateSubsystem.h"
 #include "GFTamingGateSubsystem.h"
@@ -434,7 +435,7 @@ bool FGFRoamingBindTest::RunTest(const FString&)
 	};
 
 	AGFDino* Dino = SpawnDino(SpawnAt);
-	if (!TestNotNull(TEXT("Raptor"), Dino) || !TestNotNull(TEXT("Taming"), Dino->Taming))
+	if (!TestNotNull(TEXT("Raptor"), Dino) || !TestNotNull(TEXT("Taming"), Dino->Taming.Get()))
 	{
 		return false;
 	}
