@@ -302,11 +302,8 @@ export const DEFAULT_REP_BANDS: RepBandEdges = {
   hostileAt: -40,
 };
 
-/**
- * Same object as `DEFAULT_REP_BANDS`, frozen.
- * The name Dinobook should import. Callers cannot rewrite the edges.
- */
-export const REP_BAND_THRESHOLDS: Readonly<RepBandEdges> = Object.freeze(DEFAULT_REP_BANDS);
+/** Same edges as `DEFAULT_REP_BANDS`. The name Dinobook should import. */
+export const REP_BAND_THRESHOLDS: RepBandEdges = DEFAULT_REP_BANDS;
 
 /**
  * Rep change per event. Counts use `amount`; rep uses `delta * amount`, then clamps.

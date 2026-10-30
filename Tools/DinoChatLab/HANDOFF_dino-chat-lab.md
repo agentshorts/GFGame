@@ -28,7 +28,9 @@ Player all-chat and the giant's lines are different logs.
 
 WebLLM downloads multi-hundred-megabyte weights into the browser cache and needs WebGPU. Do not call it from the dedicated server, a listen server, or the shipping client. Designers can export the lab transcript (JSON, version 2) and copy a line they like into `Data/CSV/DT_GiantDinoLines.csv` by hand. The export is a conversation, not a data-table row.
 
-Alignment, Dinobook, smell range, win odds, and mango blocks are lab inputs. They are not columns on `DT_GiantDino`, not items in `DT_Items`, and not a social system in the repo. `decide()` in `src/logic/alignment.ts` is the whole rule set. It is pure TypeScript and covered by Vitest. A game version would be a new design, not a port of this file.
+Alignment, the Dinobook checkbox, smell range, win odds, and mango blocks are lab inputs. They are not columns on `DT_GiantDino`, not items in `DT_Items`, and not a social system in the repo. `decide()` in `src/logic/alignment.ts` is the whole rule set. It is pure TypeScript and covered by Vitest. A game version would be a new design, not a port of this file.
+
+The Dinobook feed under the columns (`src/dinobook/`) is a separate lab simulator: an elder-to-family thread, side links for friends, event buttons, a speaker cap, and a thin all-chat budget. Big Grumble's summon reads elder replies about rep, kills, bounties, and rentals. Payday posts brag about pay, mineral finds, work complaints, and "looking for a job at" a lab factory. Shift pay is `creditWages(dinoId, shiftPay)` on top of `getWork().lifetimeEarnings`. A bound panel does not invent seed rows; Seed lab crew writes those. Mate rank is `mateRank(pool, id)`, a place in the crew, not a stored score. Rep bands are `REP_BAND_THRESHOLDS`. None of this writes `ChatLog`. The Swamp / Sickle / Roost tree is a posting order for the lab, not lore.
 
 The other dinos have no spoken rows. Their lab lines only echo `docs/NewDinos_v1.md`. Chatty Bird has an empty `loreFromRepo` on purpose.
 

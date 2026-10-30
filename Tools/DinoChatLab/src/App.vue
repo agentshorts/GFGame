@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useLab } from "./composables/useLab";
+import DinobookPanel from "./dinobook/DinobookPanel.vue";
 
 const {
   personas,
@@ -449,6 +450,7 @@ function onPromptInput(event: Event) {
           <button v-for="kind in statKinds" :key="kind" type="button" @click="recordWorld(kind)">{{ kind.replaceAll('_', ' ') }}</button>
         </div>
       </aside>
+      <DinobookPanel />
     </div>
   </div>
 </template>

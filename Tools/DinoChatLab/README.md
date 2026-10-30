@@ -78,6 +78,16 @@ A neutral-evil dino that smells a wanted material within 30 ft attacks when it t
 
 The chat demo starts with an empty pack and the player 40 ft away, so "why you running" stays a chat cue.
 
+## Dinobook feed
+
+The band under the three columns is a lab simulator. It is not a social system in the game. Elders post first, family members reply under their elder, and friendly dinos attach as side links. Event buttons are player joined, attacked, refused mango, rental downed, and summon Big Grumble.
+
+On an event the dinos post and read the feed before all-chat. A leader picks a plan from alignment and family (a toll, a cover, a welcome, or a rental demand). Other dinos take a turn at a role such as blocking the path or taking a hit. All-chat is budgeted and, by default, only the leader's demand is spoken. Identical lines are dropped, each event caps the number of speakers, and a later post names someone who already spoke.
+
+Summoning Big Grumble polls every elder. Each reply quotes that family's rep, kills, bounties, and rentals. His all-chat line follows those replies. The numbers start as a local stand-in. If `src/core` from the memory work is in the tree, the panel reads it. The family tree (Swamp, Sickle, Roost) is a lab posting order, not a biography.
+
+Payday is the shift bell. Dinos work lab factories named for materials in `DT_Items` (Fossil pit, Amber kiln, Scales yard, Bone works). Each shift is `creditWages(dinoId, shiftPay)`. The core keeps the higher lifetime, so the panel does not `putWork` a new total. Mate rank is `mateRank(pool, id)`: 1 is first pick in the crew, and it is not stored. The feed can brag about pay, post a mineral find, complain about the work, or say "looking for a job at" a factory. While `src/core` is bound, the panel reads only that storage. Seed family stats and seed payroll stay behind the Seed lab crew button, which writes them in. A dino can be rented or tamed. Lifetime is read-only. Rep bands are the imported `REP_BAND_THRESHOLDS` (friendly at 20, wary at -8, hostile at -40).
+
 ## Modes and controls
 
 - 1:1 chat with the focused dino.
@@ -96,4 +106,4 @@ Rolling summaries are kept per dino (250 tokens) and per dino-player pair (150 t
 
 World-event buttons write kills, hits, mango, blocks, rentals, and bounties for the typed player name and family id. Reset chat clears transcripts and those summaries. It leaves the stat rows and the decision log. Nothing here is wired to Unreal.
 
-`DinoWork` is a hook for a later idea: a dino rented or tamed at a factory. `lifetimeEarnings` is the sum of material `Value` × count (no coins) and it never goes down. `hiredAt` breaks a tie by earliest hire. `mateRank` is that dino's place in a pool. Stats and HP are only for `pickPartner`. The lab does not run factories, pay anyone, or offer jobs. The contract is `dino-chat-memory/2`. Reputation bands are `REP_BAND_THRESHOLDS`.
+`DinoWork` is a dino rented or tamed at a factory. `lifetimeEarnings` is the sum of material `Value` × count (no coins) and it never goes down. `hiredAt` breaks a tie by earliest hire. `mateRank(pool, id)` is that dino's place in a pool. Stats and HP are only for `pickPartner`. The Dinobook payday button is the lab's factory shift: it reads `getWork().lifetimeEarnings` and adds the shift with `creditWages`. Nothing here pays a factory in the game. The contract is `dino-chat-memory/2`. Reputation bands are `REP_BAND_THRESHOLDS`.
