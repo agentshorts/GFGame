@@ -71,4 +71,15 @@ public:
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "GF|World")
 	float ExposureBias;
+
+	/**
+	 * Manual exposure brightness, applied only when this director creates the sun.
+	 * Min and max stay equal (default 1) so eye adaptation cannot reopen and blow a pale floor out.
+	 * Raise both together if the hub looks dark. Leave the bias at 0.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "GF|World", meta = (ClampMin = "0.01"))
+	float ExposureMinBrightness;
+
+	UPROPERTY(Config, EditAnywhere, Category = "GF|World", meta = (ClampMin = "0.01"))
+	float ExposureMaxBrightness;
 };

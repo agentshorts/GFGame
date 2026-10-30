@@ -6,6 +6,7 @@
 #include "Engine/DataTable.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "Materials/MaterialInstance.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Net/UnrealNetwork.h"
 
@@ -633,6 +634,47 @@ namespace
 		}
 		return FLinearColor(0.3f, 0.7f, 0.3f, 1.f);
 	}
+
+	/** Null, or the engine grid material (including a material instance parented to it). */
+	bool MaterialIsEngineGrid(const UMaterialInterface* Material)
+	{
+		const UMaterialInterface* Cursor = Material;
+		for (int32 Depth = 0; Cursor && Depth < 8; ++Depth)
+		{
+			if (Cursor->GetName().Contains(TEXT("WorldGridMaterial")))
+			{
+				return true;
+			}
+			const UMaterialInstance* Instance = Cast<UMaterialInstance>(Cursor);
+			if (!Instance)
+			{
+				return false;
+			}
+			Cursor = Instance->Parent;
+		}
+		return Material == nullptr;
+	}
+
+	bool MeshUsesEngineGrid(const UStaticMesh* Mesh)
+	{
+		if (!Mesh)
+		{
+			return true;
+		}
+		const int32 SlotCount = Mesh->GetStaticMaterials().Num();
+		if (SlotCount <= 0)
+		{
+			return true;
+		}
+		for (int32 Slot = 0; Slot < SlotCount; ++Slot)
+		{
+			if (!MaterialIsEngineGrid(Mesh->GetMaterial(Slot)))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
 }
 
 UStaticMesh* AGFVoxelWorld::ResolveDrawMesh(FName BlockId, bool& bOutBottomPivot)
@@ -687,10 +729,17 @@ UMaterialInterface* AGFVoxelWorld::GetBlockMaterial(FName BlockId)
 	const UStaticMesh* Mesh = ResolveDrawMesh(BlockId, bBottomPivot);
 	const UStaticMesh* Cube = FGFAssetMap::PlaceholderMesh(EGFPlaceholderShape::Cube);
 	const bool bArtMesh = Mesh && Mesh != Cube;
-	if (!Mat && !bArtMesh)
+	// Art meshes were imported with every slot on WorldGridMaterial, which is near white.
+	// A real MaterialOverride is left alone. Otherwise tint the debug colour into a mid albedo.
+	if (!Mat && (!bArtMesh || MeshUsesEngineGrid(Mesh)))
 	{
-		// Ice and lava have no art mesh: engine cube tinted with the row colour.
-		Mat = FGFAssetMap::MakeTint(this, BlockTint(BlockId, Row));
+		const FLinearColor Albedo = GFClampBlockAlbedo(BlockTint(BlockId, Row));
+		if (bArtMesh)
+		{
+			UE_LOG(LogGF, Log, TEXT("World: %s was on the engine grid material. Albedo is now (%.2f, %.2f, %.2f)."),
+				*BlockId.ToString(), Albedo.R, Albedo.G, Albedo.B);
+		}
+		Mat = FGFAssetMap::MakeTint(this, Albedo);
 	}
 	MaterialByBlock.Add(BlockId, Mat);
 	return Mat;
@@ -726,7 +775,21 @@ UInstancedStaticMeshComponent* AGFVoxelWorld::GetOrCreateIsm(const FIntVector& C
 	(void)bBottomPivot;
 	if (UMaterialInterface* Mat = PaintKey != 0 ? GetPaintedMaterial(BlockId, PaintKey) : GetBlockMaterial(BlockId))
 	{
-		Ism->SetMaterial(0, Mat);
+		// Slot 0 always. Other faces stay on the mesh unless they are still the white grid,
+		// or this block is painted (the paint colour replaces every face).
+		int32 SlotCount = Ism->GetNumMaterials();
+		if (Mesh)
+		{
+			SlotCount = FMath::Max(SlotCount, Mesh->GetStaticMaterials().Num());
+		}
+		SlotCount = FMath::Max(SlotCount, 1);
+		for (int32 Slot = 0; Slot < SlotCount; ++Slot)
+		{
+			if (Slot == 0 || PaintKey != 0 || MaterialIsEngineGrid(Ism->GetMaterial(Slot)))
+			{
+				Ism->SetMaterial(Slot, Mat);
+			}
+		}
 	}
 	Ism->RegisterComponent();
 	AllIsms.Add(Ism);
