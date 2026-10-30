@@ -66,7 +66,7 @@ function setNumber(brief: FamilyBrief, field: keyof FamilyBrief, raw: string) {
   syncBriefs();
 }
 
-function setWage(card: WageCard, field: "wage" | "mateRank" | "factoryId", raw: string) {
+function setWage(card: WageCard, field: "shiftPay" | "lifetimeEarnings" | "factoryId", raw: string) {
   const next = { ...card, [field]: field === "factoryId" ? raw : Number(raw) };
   core.value.setWage(playerName.value, next);
   syncBriefs();
@@ -244,12 +244,12 @@ const lastSummary = computed(() => {
         <p class="hint">Default is one line, the leader's demand. Posts stay at about 80 tokens.</p>
 
         <h3>Wages</h3>
-        <p class="hint">Payday adds the wage to mate rank. A zero wage means they are looking. These fields are a stub until src/core grows them.</p>
+        <p class="hint">Payday adds the shift to lifetime earnings. Mate rank is the crew place from mateRank: 1 is first pick. Earnings only go up. A blank factory means they are looking.</p>
         <div v-for="card in wages" :key="card.dinoId" class="stat-card">
-          <p class="who">{{ dinoName(card.dinoId) }} · mate {{ card.mateRank }}</p>
+          <p class="who">{{ dinoName(card.dinoId) }} · mate rank {{ card.mateRank }}</p>
           <div class="stat-grid">
-            <label>Wage <input :value="card.wage" type="number" min="0" max="99" @change="setWage(card, 'wage', ($event.target as HTMLInputElement).value)" /></label>
-            <label>Mate rank <input :value="card.mateRank" type="number" min="0" max="100" @change="setWage(card, 'mateRank', ($event.target as HTMLInputElement).value)" /></label>
+            <label>Shift <input :value="card.shiftPay" type="number" min="0" max="10000" @change="setWage(card, 'shiftPay', ($event.target as HTMLInputElement).value)" /></label>
+            <label>Lifetime <input :value="card.lifetimeEarnings" type="number" min="0" max="100000" @change="setWage(card, 'lifetimeEarnings', ($event.target as HTMLInputElement).value)" /></label>
             <label class="span-2">Factory
               <select :value="card.factoryId" @change="setWage(card, 'factoryId', ($event.target as HTMLSelectElement).value)">
                 <option value="">Looking</option>
@@ -277,7 +277,7 @@ const lastSummary = computed(() => {
           <button type="button" @click="resetFeed">Clear feed</button>
           <button type="button" @click="resetStats">Reset stats</button>
         </div>
-        <p class="hint">Stats are the local stand-in until src/core is present. {{ core.source === "src/core" ? "Reading src/core." : "No src/core in this build." }}</p>
+        <p class="hint">Rep bands come from REP_BAND_THRESHOLDS: friendly at 20, wary at -8, hostile at -40. {{ core.source === "src/core" ? "Storage methods are bound. A ledger row replaces the lab seed for that family, and the ledger starts at zero." : "No src/core in this build." }}</p>
       </div>
 
       <div class="book-feed">

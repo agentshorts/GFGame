@@ -51,15 +51,25 @@ export interface RosterDino {
   color: string;
 }
 
-/** One dino's factory wage. Mate rank climbs by the wage on payday. */
+/**
+ * One dino's factory shift.
+ * `lifetimeEarnings` is the core total on `getWork()`.
+ * `mateRank` is `mateRank(pool, id)`: 1 is first pick, and it is not stored.
+ * `shiftPay` is the lab amount added to the lifetime on Payday.
+ */
 export interface WageCard {
   dinoId: string;
   factoryId: string;
   factoryName: string;
-  /** Materials this payday. Zero means they are looking for a job. */
-  wage: number;
-  /** 0..100. */
+  /** This shift. Zero means they are looking for a job. Not a core column. */
+  shiftPay: number;
+  /** Lifetime total from `getWork().lifetimeEarnings`. Not this shift's pay. */
+  lifetimeEarnings: number;
+  /** Place in the crew. 1 is first pick. 0 means this card is not in a pool yet. */
   mateRank: number;
+  /** When they were hired. Null while they are looking. */
+  hiredAt: string | null;
+  mineralsFound: number;
 }
 
 /** Per-family slice of the player record elders quote on Dinobook. */
@@ -169,7 +179,7 @@ export interface RunInput {
   chat?: Partial<ChatBudget>;
   priorTexts?: readonly string[];
   memory?: Readonly<Record<string, string>>;
-  /** Current wage cards. Payday pays them and raises mate rank. Omit to use the lab stub. */
+  /** Current wage cards. Payday adds shift pay to lifetime earnings. Omit to use the lab seed. */
   wages?: readonly WageCard[];
   at?: string;
   idStart?: number;

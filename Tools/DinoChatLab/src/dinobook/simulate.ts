@@ -530,6 +530,7 @@ function runPayday(ctx: {
       parentId: link.parentId,
       familyId: home?.familyId ?? null,
     });
+    if (post && seat.role === "mineral-find") seat.card.mineralsFound += 1;
     if (post && seat.role === "brag-pay") {
       leaderId = dino.id;
       leaderCard = seat.card;

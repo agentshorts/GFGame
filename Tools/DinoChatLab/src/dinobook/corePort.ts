@@ -1,26 +1,22 @@
+import type { DinoWork, StatKind } from "../core/types";
+import { clampRep, REP_BAND_THRESHOLDS, repBand as coreRepBand } from "../core/types";
 import type { DinobookEventId, FamilyBrief, RepBand, WageCard } from "./types";
 import { LAB_TREE, type FamilyTree } from "./tree";
-import { finishWage, seedWageCards, wageFromUnknown } from "./wages";
+import { finishWage, seedWageCards, wageFromUnknown, withMateRanks } from "./wages";
+
+export { clampRep, REP_BAND_THRESHOLDS };
+
+/** Core edges. The numbers live in `REP_BAND_THRESHOLDS`, not in this file. */
+export function repBand(rep: number): RepBand {
+  return coreRepBand(rep, REP_BAND_THRESHOLDS);
+}
 
 /**
- * Thin stand-in for `src/core` on feature/dino-chat-memory.
- * That contract (dino-chat-memory/1, 4bb38f1) has player stats and dino memory,
- * and no wage or mate-rank fields. Wages stay on this stub until a core row
- * grows `wage` / `mateRank` (or `getWages`). `loadCorePort` still binds the
- * real modules when they are in the tree.
+ * Binds Dinobook to `src/core` storage methods (`getStats`, `bumpStats`,
+ * `getMemory`, `putMemory`, `getWork`, `putWork`). Wages are per dino:
+ * `getWork(dinoId).lifetimeEarnings`, not `getWages`. `putMemory` takes a
+ * `DinoMemory` object.
  */
-
-export function repBand(rep: number): RepBand {
-  if (rep <= -40) return "hostile";
-  if (rep <= -10) return "wary";
-  if (rep >= 25) return "friendly";
-  return "neutral";
-}
-
-export function clampRep(rep: number): number {
-  if (!Number.isFinite(rep)) return 0;
-  return Math.max(-100, Math.min(100, Math.round(rep)));
-}
 
 function num(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
@@ -161,7 +157,7 @@ export function createLocalCore(tree: FamilyTree = LAB_TREE): DinobookCorePort {
       memory.set(dinoId, line);
     },
     wages(playerKey) {
-      return payRows(playerKey).map((card) => ({ ...card }));
+      return withMateRanks(payRows(playerKey));
     },
     setWage(playerKey, card) {
       const list = payRows(playerKey);
@@ -228,10 +224,10 @@ export function briefFromCoreStats(row: CoreStatsRow, fallbackFamilyId = "*"): F
 }
 
 export interface CoreModuleBag {
-  stats?: Record<string, unknown>;
-  memory?: Record<string, unknown>;
-  storage?: Record<string, unknown>;
-  types?: Record<string, unknown>;
+  stats?: unknown;
+  memory?: unknown;
+  storage?: unknown;
+  types?: unknown;
 }
 
 function asRows(value: unknown): CoreStatsRow[] {
@@ -239,96 +235,177 @@ function asRows(value: unknown): CoreStatsRow[] {
   return value.filter((row): row is CoreStatsRow => !!row && typeof row === "object");
 }
 
-function overlayWages(
-  storage: Record<string, unknown>,
-  memoryMod: Record<string, unknown>,
-  local: DinobookCorePort,
-  playerKey: string,
-): WageCard[] {
-  const base = local.wages(playerKey);
-  const patches = new Map<string, Partial<WageCard>>();
-  const apply = (raw: unknown, fallbackId: string) => {
-    const parsed = wageFromUnknown(raw, fallbackId);
-    if (!parsed?.dinoId) return;
-    patches.set(parsed.dinoId, { ...patches.get(parsed.dinoId), ...parsed, dinoId: parsed.dinoId });
+const LEDGER_KIND: Partial<Record<DinobookEventId, StatKind>> = {
+  attacked: "kill",
+  "refused-mango": "mango_refused",
+  "rental-downed": "rental_downed",
+};
+
+interface StorageMethods {
+  getStats?: (playerKey: string) => unknown;
+  bumpStats?: (event: unknown, deltas?: unknown) => unknown;
+  getMemory?: (dinoId: string) => unknown;
+  putMemory?: (memory: unknown) => void;
+  getWork?: (dinoId: string) => unknown;
+  putWork?: (work: unknown) => void;
+}
+
+function bindFn<T>(row: Record<string, unknown>, name: string): T | undefined {
+  const fn = row[name];
+  if (typeof fn !== "function") return undefined;
+  return fn.bind(row) as T;
+}
+
+function methodBag(value: unknown): StorageMethods | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const bag: StorageMethods = {};
+  const getStats = bindFn<NonNullable<StorageMethods["getStats"]>>(row, "getStats");
+  const bumpStats = bindFn<NonNullable<StorageMethods["bumpStats"]>>(row, "bumpStats");
+  const getMemory = bindFn<NonNullable<StorageMethods["getMemory"]>>(row, "getMemory");
+  const putMemory = bindFn<NonNullable<StorageMethods["putMemory"]>>(row, "putMemory");
+  const getWork = bindFn<NonNullable<StorageMethods["getWork"]>>(row, "getWork");
+  const putWork = bindFn<NonNullable<StorageMethods["putWork"]>>(row, "putWork");
+  if (getStats) bag.getStats = getStats;
+  if (bumpStats) bag.bumpStats = bumpStats;
+  if (getMemory) bag.getMemory = getMemory;
+  if (putMemory) bag.putMemory = putMemory;
+  if (getWork) bag.getWork = getWork;
+  if (putWork) bag.putWork = putWork;
+  if (!bag.getStats && !bag.bumpStats && !bag.getMemory && !bag.putMemory && !bag.getWork && !bag.putWork) {
+    return null;
+  }
+  return bag;
+}
+
+/** An instance, `createDefaultStorage()`, or `new LocalStorageAdapter(memoryKeyValueStore())`. */
+export function storageFromModule(value: unknown): StorageMethods | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.createDefaultStorage === "function") {
+    const created = methodBag((row.createDefaultStorage as () => unknown)());
+    if (created) return created;
+  }
+  if (typeof row.LocalStorageAdapter === "function" && typeof row.memoryKeyValueStore === "function") {
+    const Adapter = row.LocalStorageAdapter as new (store: unknown) => unknown;
+    const created = methodBag(new Adapter((row.memoryKeyValueStore as () => unknown)()));
+    if (created) return created;
+  }
+  return methodBag(value);
+}
+
+function bindStorage(modules: CoreModuleBag): StorageMethods | null {
+  const primary = storageFromModule(modules.storage);
+  const extra = storageFromModule(modules.memory);
+  if (!primary && !extra) return null;
+  return { ...extra, ...primary };
+}
+
+function workRecord(card: WageCard): DinoWork {
+  const employed = card.factoryId.length > 0;
+  return {
+    dinoId: card.dinoId,
+    employerId: employed ? card.factoryId : null,
+    employment: employed ? "tamed" : null,
+    lifetimeEarnings: card.lifetimeEarnings,
+    hiredAt: card.hiredAt,
+    mineralsFound: card.mineralsFound,
+    seekingJob: !employed,
   };
-  const getWages = storage.getWages ?? storage.listWages ?? memoryMod.getWages;
-  if (typeof getWages === "function") {
-    const raw = (getWages as (key: string) => unknown)(playerKey);
-    if (Array.isArray(raw)) {
-      for (const row of raw) apply(row, "");
-    }
+}
+
+function overlayWork(raw: unknown, base: WageCard): WageCard {
+  const parsed = wageFromUnknown(raw, base.dinoId);
+  if (!parsed) return base;
+  return finishWage({ ...base, ...parsed, dinoId: parsed.dinoId || base.dinoId });
+}
+
+function memorySummary(raw: unknown): string | null {
+  if (typeof raw === "string") return raw;
+  if (raw && typeof raw === "object" && "summary" in raw && typeof (raw as { summary: unknown }).summary === "string") {
+    return (raw as { summary: string }).summary;
   }
-  const getMemory = memoryMod.getMemory ?? storage.getMemory;
-  if (typeof getMemory === "function") {
-    for (const card of base) {
-      apply((getMemory as (id: string) => unknown)(card.dinoId), card.dinoId);
-    }
-  }
-  if (patches.size === 0) return base;
-  return base.map((card) => finishWage({ ...card, ...patches.get(card.dinoId), dinoId: card.dinoId }));
+  return null;
 }
 
 /**
- * Adapt whatever `src/core` exported. Unknown shapes fall back to the local port
- * method by method, so a partial landing of the other branch still runs.
+ * Bind a storage instance, or a module that can build one.
+ * A bag with no storage methods returns null.
  */
 export function portFromCore(modules: CoreModuleBag, tree: FamilyTree = LAB_TREE): DinobookCorePort | null {
-  const storage = modules.storage ?? {};
-  const memoryMod = modules.memory ?? {};
-  const getStats = storage.getStats ?? storage.getPlayerStats;
-  const getMemory = memoryMod.getMemory ?? storage.getMemory;
-  const getWages = storage.getWages ?? storage.listWages ?? memoryMod.getWages;
-  const putMemory = memoryMod.putMemory ?? memoryMod.remember ?? storage.putMemory;
-  if (typeof getStats !== "function" && typeof getMemory !== "function" && typeof getWages !== "function") return null;
+  const bound = bindStorage(modules);
+  if (!bound) return null;
 
   const local = createLocalCore(tree);
-  const primed = new Set<string>();
+  const pinned = new Set<string>();
+  const pinKey = (playerKey: string, familyId: string) => `${playerKey.trim() || "local"}:${familyId}`;
+
   return {
     source: "src/core",
     briefs(playerKey) {
-      if (typeof getStats !== "function") return local.briefs(playerKey);
-      const raw = (getStats as (key: string) => unknown)(playerKey);
-      const rows = asRows(raw).map((row) => briefFromCoreStats(row));
-      const usable = rows.filter((row) => row.familyId !== "*");
-      return usable.length > 0 ? usable : local.briefs(playerKey);
+      const base = local.briefs(playerKey);
+      if (typeof bound.getStats !== "function") return base;
+      const stored = asRows(bound.getStats(playerKey))
+        .map((row) => briefFromCoreStats(row))
+        .filter((row) => row.familyId !== "*");
+      if (stored.length === 0) return base;
+      const known = new Set(base.map((row) => row.familyId));
+      const merged = base.map((row) => {
+        if (pinned.has(pinKey(playerKey, row.familyId))) return row;
+        return stored.find((item) => item.familyId === row.familyId) ?? row;
+      });
+      for (const extra of stored) {
+        if (!known.has(extra.familyId)) merged.push(extra);
+      }
+      return merged;
     },
     apply(playerKey, familyId, event) {
       local.apply(playerKey, familyId, event);
+      pinned.delete(pinKey(playerKey, familyId));
+      const kind = LEDGER_KIND[event];
+      if (!kind || typeof bound.bumpStats !== "function") return;
+      bound.bumpStats({
+        at: new Date().toISOString(),
+        playerKey: playerKey.trim() || "local",
+        familyId,
+        dinoId: "",
+        kind,
+        amount: 1,
+        note: event,
+      });
     },
     setBrief(playerKey, brief) {
       local.setBrief(playerKey, brief);
+      pinned.add(pinKey(playerKey, brief.familyId));
     },
     wages(playerKey) {
-      if (!primed.has(playerKey)) {
-        for (const card of overlayWages(storage, memoryMod, local, playerKey)) {
-          local.setWage(playerKey, card);
-        }
-        primed.add(playerKey);
-      }
-      return local.wages(playerKey);
+      const cards = local.wages(playerKey);
+      if (typeof bound.getWork !== "function") return cards;
+      return withMateRanks(cards.map((card) => overlayWork(bound.getWork!(card.dinoId), card)));
     },
     setWage(playerKey, card) {
-      local.setWage(playerKey, card);
-      const putWages = storage.putWages ?? storage.setWages ?? memoryMod.putWages;
-      if (typeof putWages === "function") {
-        (putWages as (key: string, cards: WageCard[]) => void)(playerKey, local.wages(playerKey));
-      }
+      const next = finishWage(card);
+      local.setWage(playerKey, next);
+      if (typeof bound.putWork === "function") bound.putWork(workRecord(next));
     },
     recall(dinoId) {
-      if (typeof getMemory !== "function") return local.recall(dinoId);
-      const raw = (getMemory as (id: string) => unknown)(dinoId);
-      if (typeof raw === "string") return raw;
-      if (raw && typeof raw === "object" && "summary" in raw && typeof raw.summary === "string") {
-        return raw.summary;
-      }
-      return local.recall(dinoId);
+      if (typeof bound.getMemory !== "function") return local.recall(dinoId);
+      return memorySummary(bound.getMemory(dinoId)) ?? local.recall(dinoId);
     },
     remember(dinoId, line) {
       local.remember(dinoId, line);
-      if (typeof putMemory === "function") {
-        (putMemory as (id: string, summary: string) => void)(dinoId, line);
-      }
+      if (typeof bound.putMemory !== "function") return;
+      const previous = typeof bound.getMemory === "function" ? bound.getMemory(dinoId) : null;
+      const turns = previous && typeof previous === "object" && "turnsSinceSummary" in previous
+        && typeof (previous as { turnsSinceSummary: unknown }).turnsSinceSummary === "number"
+        ? (previous as { turnsSinceSummary: number }).turnsSinceSummary + 1
+        : 0;
+      bound.putMemory({
+        dinoId,
+        summary: line,
+        updatedAt: new Date().toISOString(),
+        turnsSinceSummary: turns,
+      });
     },
   };
 }

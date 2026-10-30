@@ -69,7 +69,7 @@ On an event the dinos post and read the feed before all-chat. A leader picks a p
 
 Summoning Big Grumble polls every elder. Each reply quotes that family's rep, kills, bounties, and rentals. His all-chat line follows those replies. The numbers start as a local stand-in. If `src/core` from the memory work is in the tree, the panel reads it. The family tree (Swamp, Sickle, Roost) is a lab posting order, not a biography.
 
-Payday is the shift bell. Dinos work lab factories named for materials in `DT_Items` (Fossil pit, Amber kiln, Scales yard, Bone works). The wage is added to mate rank. The feed can brag about pay, post a mineral find, complain about the work, or say "looking for a job at" a factory. `src/core` on `feature/dino-chat-memory` does not have wage or mate-rank fields yet, so the panel keeps a stub and will read those fields if a later core row grows them.
+Payday is the shift bell. Dinos work lab factories named for materials in `DT_Items` (Fossil pit, Amber kiln, Scales yard, Bone works). The shift pay is added to `lifetimeEarnings`. Mate rank is `mateRank(pool, id)`: 1 is first pick in the crew, and it is not stored. The feed can brag about pay, post a mineral find, complain about the work, or say "looking for a job at" a factory. The panel binds the storage methods (`getWork`, `putWork`, `putMemory`, `getStats`, `bumpStats`) and reads `getWork().lifetimeEarnings`. Rep bands are the imported `REP_BAND_THRESHOLDS` (friendly at 20, wary at -8, hostile at -40).
 
 ## Modes and controls
 
@@ -89,4 +89,4 @@ Rolling summaries are kept per dino (250 tokens) and per dino-player pair (150 t
 
 World-event buttons write kills, hits, mango, blocks, rentals, and bounties for the typed player name and family id. Reset chat clears transcripts and those summaries. It leaves the stat rows and the decision log. Nothing here is wired to Unreal.
 
-`DinoWork` is a hook for a later idea: a dino rented or tamed at a factory. `lifetimeEarnings` is the sum of material `Value` × count (no coins) and it never goes down. `hiredAt` breaks a tie by earliest hire. `mateRank` is that dino's place in a pool. Stats and HP are only for `pickPartner`. The lab does not run factories, pay anyone, or offer jobs. The contract is `dino-chat-memory/2`. Reputation bands are `REP_BAND_THRESHOLDS`.
+`DinoWork` is a dino rented or tamed at a factory. `lifetimeEarnings` is the sum of material `Value` × count (no coins) and it never goes down. `hiredAt` breaks a tie by earliest hire. `mateRank(pool, id)` is that dino's place in a pool. Stats and HP are only for `pickPartner`. The Dinobook payday button is the lab's factory shift: it reads `getWork().lifetimeEarnings` and writes the row through the storage methods. Nothing here pays a factory in the game. The contract is `dino-chat-memory/2`. Reputation bands are `REP_BAND_THRESHOLDS`.

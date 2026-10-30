@@ -5,6 +5,8 @@ import ripwingJson from "../personas/03-ripwing.json";
 import scythepawJson from "../personas/04-scythepaw.json";
 import lanternJson from "../personas/05-lanternmaw.json";
 import birdJson from "../personas/06-chatty-bird.json";
+import { mateRank } from "../src/core/stats";
+import { getWork } from "../src/core/storage";
 import { BEG_MANGO, EXTORT_LINE } from "../src/logic/alignment";
 import { estimateTokens } from "../src/logic/context";
 import { parsePersona } from "../src/logic/persona";
@@ -24,6 +26,8 @@ import {
   pickLeader,
   portFromCore,
   POST_TOKEN_CAP,
+  REP_BAND_THRESHOLDS,
+  repBand,
   runDinobookEvent,
   seedBrief,
   withReference,
@@ -356,31 +360,56 @@ describe("core port", () => {
       hitsDealt: 6,
     });
 
-    let stored = "";
+    let stored: unknown = null;
     const port = portFromCore({
       storage: {
         getStats: () => [{ family_id: "sickle", rep: 30, kills: 0 }],
       },
       memory: {
         getMemory: () => ({ summary: "claws folded" }),
-        putMemory: (_id: string, summary: string) => {
-          stored = summary;
+        putMemory: (memory: unknown) => {
+          stored = memory;
         },
       },
     });
     expect(port?.source).toBe("src/core");
-    expect(port?.briefs("Pip")[0]?.familyId).toBe("sickle");
-    expect(port?.briefs("Pip")[0]?.band).toBe("friendly");
+    const rows = port?.briefs("Pip") ?? [];
+    expect(rows.map((row) => row.familyId)).toEqual(["swamp", "sickle", "roost"]);
+    expect(rows.find((row) => row.familyId === "sickle")).toMatchObject({ rep: 30, band: "friendly" });
+    expect(rows.find((row) => row.familyId === "swamp")?.rep).toBe(-50);
     expect(port?.recall("scythepaw")).toBe("claws folded");
     port?.remember("scythepaw", "Petit Cake.");
-    expect(stored).toBe("Petit Cake.");
+    expect(stored).toMatchObject({
+      dinoId: "scythepaw",
+      summary: "Petit Cake.",
+      turnsSinceSummary: 0,
+    });
     expect(portFromCore({})).toBeNull();
   });
 
-  it("stays on the local port when src/core is absent", async () => {
+  it("binds src/core instead of staying local when the core is in the tree", async () => {
     const port = await loadCorePort();
-    expect(port.source).toBe("local");
+    expect(port.source).toBe("src/core");
     expect(port.briefs("Pip").map((row) => row.familyId)).toEqual(["swamp", "sickle", "roost"]);
+    expect(REP_BAND_THRESHOLDS).toEqual({ friendlyAt: 20, waryAt: -8, hostileAt: -40 });
+    expect(repBand(24)).toBe("friendly");
+    expect(repBand(19)).toBe("neutral");
+    expect(repBand(-7)).toBe("neutral");
+    expect(repBand(-9)).toBe("wary");
+    expect(repBand(-40)).toBe("hostile");
+    port.setWage("Pip", finishWage({
+      dinoId: "scythepaw",
+      factoryId: "bone-works",
+      factoryName: "Bone works",
+      shiftPay: 500,
+      lifetimeEarnings: 500,
+      hiredAt: "2026-01-01T00:00:00.000Z",
+      mineralsFound: 0,
+      mateRank: 0,
+    }));
+    expect(getWork("scythepaw")?.lifetimeEarnings).toBe(500);
+    const crew = port.wages("Pip");
+    expect(crew.find((card) => card.dinoId === "scythepaw")?.mateRank).toBe(mateRank(crew, "scythepaw"));
   });
 });
 
@@ -397,8 +426,9 @@ describe("payday", () => {
     ]);
     const brag = result.posts[0]!;
     expect(brag.link).toBe("root");
-    expect(brag.content).toContain("paid 9");
-    expect(brag.content).toContain("Mate rank is 27");
+    expect(brag.content).toContain("paid 500");
+    expect(brag.content).toContain("Lifetime earnings 500");
+    expect(brag.content).toContain("Mate rank is 1");
     const complain = result.posts[1]!;
     expect(complain.authorId).toBe("ripwing");
     expect(complain.link).toBe("child");
@@ -414,10 +444,19 @@ describe("payday", () => {
     expect(job.content).toContain("looking for a job at Bone works");
     expect(result.allChat).toHaveLength(1);
     expect(result.allChat[0]?.speakerId).toBe("scythepaw");
-    expect(result.allChat[0]?.text).toContain("Mate rank 27");
-    expect(result.wages.find((card) => card.dinoId === "scythepaw")?.mateRank).toBe(27);
-    expect(result.wages.find((card) => card.dinoId === "lanternmaw")?.mateRank).toBe(18);
-    expect(result.wages.find((card) => card.dinoId === "chatty-bird")?.mateRank).toBe(2);
+    expect(result.allChat[0]?.text).toContain("Mate rank 1");
+    expect(result.wages.find((card) => card.dinoId === "scythepaw")).toMatchObject({
+      lifetimeEarnings: 500,
+      mateRank: mateRank(result.wages, "scythepaw"),
+    });
+    expect(result.wages.find((card) => card.dinoId === "lanternmaw")?.mateRank).toBe(2);
+    expect(result.wages.find((card) => card.dinoId === "chatty-bird")).toMatchObject({
+      shiftPay: 0,
+      lifetimeEarnings: 0,
+      mateRank: 5,
+      hiredAt: null,
+    });
+    expect(result.wages.find((card) => card.dinoId === "tusksaw")?.mineralsFound).toBe(1);
     for (const [index, post] of result.posts.entries()) {
       if (index === 0) continue;
       const earlier = result.posts.slice(0, index).map((row) => row.authorName);
@@ -425,44 +464,61 @@ describe("payday", () => {
     }
   });
 
-  it("raises mate rank by the wage and leaves a zero wage alone", () => {
+  it("adds the shift to lifetime earnings and leaves a job seeker alone", () => {
     const first = run("payday");
     const second = run("payday", { wages: first.wages });
-    expect(second.wages.find((card) => card.dinoId === "scythepaw")?.mateRank).toBe(36);
-    expect(second.posts[0]?.content).toContain("Mate rank is 36");
-    expect(second.wages.find((card) => card.dinoId === "chatty-bird")?.mateRank).toBe(2);
-    const looking = finishWage({ dinoId: "chatty-bird", factoryId: "", factoryName: "", wage: 12, mateRank: 4 });
-    expect(looking.wage).toBe(0);
-    expect(looking.mateRank).toBe(4);
+    expect(second.wages.find((card) => card.dinoId === "scythepaw")).toMatchObject({
+      lifetimeEarnings: 1000,
+      mateRank: 1,
+    });
+    expect(second.posts[0]?.content).toContain("Mate rank is 1");
+    expect(second.wages.find((card) => card.dinoId === "chatty-bird")?.mateRank).toBe(mateRank(second.wages, "chatty-bird"));
+    const looking = finishWage({
+      dinoId: "chatty-bird",
+      factoryId: "",
+      factoryName: "",
+      shiftPay: 12,
+      lifetimeEarnings: 4,
+      hiredAt: "2026-01-01T00:00:00.000Z",
+      mineralsFound: 0,
+      mateRank: 9,
+    });
+    expect(looking.shiftPay).toBe(0);
+    expect(looking.hiredAt).toBeNull();
+    expect(looking.lifetimeEarnings).toBe(4);
+    expect(looking.mateRank).toBe(0);
   });
 
-  it("reads wage and mate rank from a core module when those fields exist", () => {
+  it("reads lifetime earnings from a work row and ignores a stored mate rank", () => {
     const port = portFromCore({
       storage: {
         getStats: () => [{ familyId: "swamp", rep: 0 }],
-        getWages: () => [{ dinoId: "scythepaw", wage: 20, mateRank: 1, factoryId: "bone-works" }],
+        getWork: (id: string) => id === "scythepaw"
+          ? {
+            dinoId: "scythepaw",
+            employerId: "bone-works",
+            wagesEarned: 20,
+            lifetimeEarnings: 500,
+            hiredAt: "2024-05-01T00:00:00.000Z",
+            mineralsFound: 2,
+          }
+          : null,
       },
     });
     expect(port?.wages("Pip").find((card) => card.dinoId === "scythepaw")).toMatchObject({
-      wage: 20,
+      lifetimeEarnings: 500,
       mateRank: 1,
       factoryName: "Bone works",
+      hiredAt: "2024-05-01T00:00:00.000Z",
+      mineralsFound: 2,
+      shiftPay: 500,
     });
     const paid = run("payday", { wages: port!.wages("Pip") });
-    expect(paid.posts.find((post) => post.role === "brag-pay")?.content).toContain("paid 20");
-    expect(paid.wages.find((card) => card.dinoId === "scythepaw")?.mateRank).toBe(21);
-
-    const memoryPort = portFromCore({
-      memory: {
-        getMemory: (id: string) => id === "ripwing" ? { summary: "dive", mateRank: 40, wage: 2 } : { summary: "" },
-      },
+    expect(paid.posts.find((post) => post.role === "brag-pay")?.content).toContain("paid 500");
+    expect(paid.wages.find((card) => card.dinoId === "scythepaw")).toMatchObject({
+      lifetimeEarnings: 1000,
+      mateRank: mateRank(paid.wages, "scythepaw"),
     });
-    expect(memoryPort?.wages("Pip").find((card) => card.dinoId === "ripwing")).toMatchObject({
-      wage: 2,
-      mateRank: 40,
-    });
-    memoryPort?.setWage("Pip", { dinoId: "ripwing", factoryId: "amber-kiln", factoryName: "Amber kiln", wage: 2, mateRank: 41 });
-    expect(memoryPort?.wages("Pip").find((card) => card.dinoId === "ripwing")?.mateRank).toBe(41);
   });
 });
 
