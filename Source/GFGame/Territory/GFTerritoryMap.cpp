@@ -269,7 +269,36 @@ bool FGFTerritoryMap::IsSafeFor(const FGFSocialPlayer& Who, const FVector& Locat
 
 bool FGFTerritoryMap::IsSafeFor(const FGFSafeSubject& Who, const FVector& Location) const
 {
+	// #136 option 1: the hub circle counts for someone with no faction, including on another faction's land.
+	// Faction members do not get it. IsInsideSafe does not grow, so the giant's pathing shape is unchanged.
+	if (Who.GroupId.IsNone() && HubRadius > 0.f && FVector::DistSquared2D(Location, HubCenter) <= FMath::Square(HubRadius))
+	{
+		return true;
+	}
 	return FGFProtectionRules::IsProtectedOn(Who.Key, Who.GroupId, Who.bHost, OwnerAt(Location), GetAccess());
+}
+
+bool FGFTerritoryMap::IsHazardAt(const FVector& Location) const
+{
+	return GetHazardAt(Location).bHazard;
+}
+
+int32 FGFTerritoryMap::SafeRegionCount() const
+{
+	return CopySafeRegions().Num();
+}
+
+bool FGFTerritoryMap::SafeRegionAt(int32 Index, FName& OutId, FVector& OutCenter, float& OutRadius) const
+{
+	const TArray<FGFSafeRegion> Regions = CopySafeRegions();
+	if (!Regions.IsValidIndex(Index))
+	{
+		return false;
+	}
+	OutId = Regions[Index].Id;
+	OutCenter = Regions[Index].Center;
+	OutRadius = Regions[Index].Radius();
+	return OutRadius > 0.f;
 }
 
 FName FGFTerritoryMap::OwnerAt(const FVector& Location) const

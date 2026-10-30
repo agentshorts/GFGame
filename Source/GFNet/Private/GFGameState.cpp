@@ -13,6 +13,7 @@
 AGFGameState::AGFGameState()
 {
 	HostWorldId = FGuid::NewGuid().ToString(EGuidFormats::Digits);
+	StarterFaction = TEXT("Rime");
 }
 
 void AGFGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -1289,12 +1290,22 @@ FGFModeResult AGFGameState::ServerHandleModeRequest(AGFPlayerState* By, const FG
 void AGFGameState::NotifyModesPlayerReady(AGFPlayerState* PS)
 {
 	// A rejoin within the session gets its faction back (leadership is by key, so it comes back too).
+	// A brand-new player, with no session record, joins the starter faction (Rime). A record of None
+	// means they left, and they stay out. A full starter faction leaves them unaffiliated.
 	if (HasAuthority() && PS && PS->FactionId.IsNone())
 	{
 		if (const FName* Faction = SessionFactions.Find(PS->PlayerKey); Faction && !Faction->IsNone())
 		{
 			PS->FactionId = *Faction;
 			PS->ForceNetUpdate();
+		}
+		else if (!SessionFactions.Contains(PS->PlayerKey) && !StarterFaction.IsNone())
+		{
+			const FName Code = ServerClaimFaction(PS, StarterFaction);
+			if (Code != FName(TEXT("Ok")) && Code != FName(TEXT("Same")))
+			{
+				UE_LOG(LogGF, Log, TEXT("Starter faction %s did not take %s (%s)."), *StarterFaction.ToString(), *PS->PlayerKey, *Code.ToString());
+			}
 		}
 	}
 	TArray<TWeakObjectPtr<UObject>> Handlers;

@@ -7,11 +7,12 @@
 #include "GFVoxelWorld.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
+#include "GFSpawnDefaults.h"
+#include "GFTerritorySubsystem.h"
 #include "GFDataTables.h"
 #include "GFOverworldBuild.h"
 #include "GFOverworldGround.h"
 #include "GFRecipeTypes.h"
-#include "GFTerritorySubsystem.h"
 #include "GFLog.h"
 #include "Engine/DataTable.h"
 #include "Engine/GameInstance.h"
@@ -23,6 +24,7 @@
 
 AGFGameMode::AGFGameMode()
 {
+	StarterFaction = FGFSpawnDefaults::StarterFactionId();
 	DefaultPawnClass = AGFCharacter::StaticClass();
 	PlayerControllerClass = AGFPlayerController::StaticClass();
 	HUDClass = AGFHUD::StaticClass();
@@ -37,6 +39,10 @@ AGFGameMode::AGFGameMode()
 void AGFGameMode::InitGameState()
 {
 	Super::InitGameState();
+	if (AGFGameState* GS = GetGameState<AGFGameState>())
+	{
+		GS->StarterFaction = StarterFaction;
+	}
 	for (const FSoftClassPath& Path : StartupDirectorClasses)
 	{
 		UClass* Class = Path.TryLoadClass<AActor>();
@@ -258,8 +264,8 @@ AActor* AGFGameMode::ChoosePlayerStart_Implementation(AController* Player)
 		return Starts[Index];
 	}
 
-	// No PlayerStart. #151 item 5: this is FGFSpawnDefaults::StarterFallback, the starter anchor
-	// centre plus 120 cm. DefaultSpawnAnchor stays Rime, the same id as StarterFaction.
+	// No PlayerStart. This is the starter anchor centre plus 120 cm, the same point as
+	// FGFSpawnDefaults::StarterFallback. DefaultSpawnAnchor stays Rime, the same id as StarterFaction.
 	// The ferry perch (EmptyMapStart, (0, -300, 100), yaw 36) stays off this path.
 	TArray<FGFTerritoryFaction> Layout;
 	if (const UGFTerritorySubsystem* Live = UGFTerritorySubsystem::Get(this))

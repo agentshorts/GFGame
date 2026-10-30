@@ -393,6 +393,85 @@ FVector FGFGiantRules::RespawnPoint(const FGFGiantTuning& T, const IGFSafeZoneQu
 	return Out;
 }
 
+FVector FGFGiantRules::RespawnPoint(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const FVector& From, const FGFRespawnAim& Aim)
+{
+	struct FCand
+	{
+		FVector Point = FVector::ZeroVector;
+		int32 Rank = 2;
+		float DistSq = 0.f;
+	};
+
+	auto Blocked = [&](const FVector& P)
+	{
+		return Zone.IsHazardAt(P) || FGFNoEntry::IsInside(Aim.Blocked, P);
+	};
+	TArray<FCand> Cands;
+	auto Consider = [&](const FVector& P)
+	{
+		if (Blocked(P) || !Zone.IsSafeFor(Aim.Who, P))
+		{
+			return;
+		}
+		const FName Owner = Zone.OwnerAt(P);
+		FCand Cand;
+		Cand.Point = P;
+		Cand.DistSq = FVector::DistSquared2D(P, From);
+		if (!Aim.OwnFaction.IsNone() && Owner == Aim.OwnFaction)
+		{
+			Cand.Rank = 0;
+		}
+		else if (!Aim.StarterFaction.IsNone() && Owner == Aim.StarterFaction)
+		{
+			Cand.Rank = 1;
+		}
+		Cands.Add(Cand);
+	};
+
+	Consider(RespawnPoint(T, Zone, From, Aim.Blocked));
+
+	const int32 RegionCount = Zone.SafeRegionCount();
+	for (int32 Index = 0; Index < RegionCount; ++Index)
+	{
+		FName Id;
+		FVector Center = FVector::ZeroVector;
+		float Radius = 0.f;
+		if (!Zone.SafeRegionAt(Index, Id, Center, Radius) || Radius <= 1.f)
+		{
+			continue;
+		}
+		FVector2D Dir(From.X - Center.X, From.Y - Center.Y);
+		if (Dir.SizeSquared() < 1.f)
+		{
+			Dir = FVector2D(1.f, 0.f);
+		}
+		else
+		{
+			Dir.Normalize();
+		}
+		const float Insets[] = { T.RespawnInset, T.RespawnInset * 2.f, T.RespawnInset * 4.f, Radius * 0.5f, Radius };
+		for (const float Inset : Insets)
+		{
+			const float Dist = FMath::Clamp(Radius - Inset, 0.f, Radius);
+			Consider(FVector(Center.X + Dir.X * Dist, Center.Y + Dir.Y * Dist, From.Z));
+		}
+	}
+
+	if (Cands.Num() == 0)
+	{
+		return RespawnPoint(T, Zone, From, Aim.Blocked);
+	}
+	Cands.Sort([](const FCand& A, const FCand& B)
+	{
+		if (A.Rank != B.Rank)
+		{
+			return A.Rank < B.Rank;
+		}
+		return A.DistSq < B.DistSq;
+	});
+	return Cands[0].Point;
+}
+
 bool FGFGiantRules::PickLine(const FGFGiantTuning& T, const FGFGiantLines& Lines, EGFGiantLinePhase Phase, const TArray<FName>& Recent, FRandomStream& Rng, FName& OutId, FString& OutText)
 {
 	const TArray<FGFGiantLines::FLine>* Pool = Lines.ByPhase.Find(Phase);
@@ -960,6 +1039,67 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 }
 
 // ---------------- Land zone ----------------
+
+bool FGFGiantLandZone::IsHazardAt(const FVector& L) const
+{
+	if (Base && Base->IsHazardAt(L))
+	{
+		return true;
+	}
+	if (const UGFSafeZoneSubsystem* Sub = Lands.Get())
+	{
+		for (const IGFSafeZoneQuery* Q : Sub->GetProviderZones())
+		{
+			if (Q && Q != Base && Q->IsHazardAt(L))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+int32 FGFGiantLandZone::SafeRegionCount() const
+{
+	if (Base && Base->SafeRegionCount() > 0)
+	{
+		return Base->SafeRegionCount();
+	}
+	int32 Count = 0;
+	if (const UGFSafeZoneSubsystem* Sub = Lands.Get())
+	{
+		for (const IGFSafeZoneQuery* Q : Sub->GetProviderZones())
+		{
+			Count += Q ? Q->SafeRegionCount() : 0;
+		}
+	}
+	return Count;
+}
+
+bool FGFGiantLandZone::SafeRegionAt(int32 Index, FName& OutId, FVector& OutCenter, float& OutRadius) const
+{
+	if (Base && Base->SafeRegionCount() > 0)
+	{
+		return Base->SafeRegionAt(Index, OutId, OutCenter, OutRadius);
+	}
+	if (const UGFSafeZoneSubsystem* Sub = Lands.Get())
+	{
+		for (const IGFSafeZoneQuery* Q : Sub->GetProviderZones())
+		{
+			if (!Q)
+			{
+				continue;
+			}
+			const int32 Count = Q->SafeRegionCount();
+			if (Index < Count)
+			{
+				return Q->SafeRegionAt(Index, OutId, OutCenter, OutRadius);
+			}
+			Index -= Count;
+		}
+	}
+	return false;
+}
 
 bool FGFGiantLandZone::IsSafeFor(const FGFSafeSubject& Who, const FVector& L) const
 {

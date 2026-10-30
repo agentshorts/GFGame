@@ -206,6 +206,13 @@ public:
 	 *  DefaultGame.ini) over 3 factions, so the fullest split is 4/3/3. */
 	UPROPERTY(EditAnywhere, Category = "GF|Faction")
 	int32 MaxPerFaction = 4;
+	/**
+	 * Faction a new player joins when they have no session record. None skips that.
+	 * A session record of None means they left, and they are not pulled back.
+	 * The game mode copies its config value over this in InitGameState. Default Rime.
+	 */
+	UPROPERTY(EditAnywhere, Category = "GF|Faction")
+	FName StarterFaction;
 	/** Server: PS joins FactionId (None = leaves). "Ok", "Full", "Same". The first claimer becomes its leader. */
 	FName ServerClaimFaction(AGFPlayerState* PS, FName FactionId);
 	FString FactionLeaderOf(FName FactionId) const;

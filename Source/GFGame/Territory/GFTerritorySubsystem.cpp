@@ -81,6 +81,30 @@ void UGFTerritorySubsystem::RefreshFromWorld()
 		}
 	}
 	Map.Factions = Next;
+
+	// Hub shelter (#136 option 1). Same radius rule as the giant's default circle. Not a pathing disc.
+	const FName Starter = (GS && !GS->StarterFaction.IsNone()) ? GS->StarterFaction : FName(TEXT("Rime"));
+	Map.HubCenter = FVector::ZeroVector;
+	for (const FGFTerritoryFaction& Slot : Next)
+	{
+		if (Slot.Id == Starter)
+		{
+			Map.HubCenter = Slot.Center;
+			break;
+		}
+	}
+	int32 Online = 0;
+	if (GS)
+	{
+		for (const APlayerState* Player : GS->PlayerArray)
+		{
+			const AGFPlayerState* PS = Cast<AGFPlayerState>(Player);
+			Online += (PS && !PS->bLoggedOut) ? 1 : 0;
+		}
+	}
+	const int32 Headcount = FMath::Max(1, Online);
+	Map.HubRadius = FMath::Min(3200.f, 1200.f + 400.f * static_cast<float>(Headcount - 1));
+
 	BindAccess();
 }
 

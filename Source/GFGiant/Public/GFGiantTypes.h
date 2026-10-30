@@ -330,6 +330,18 @@ struct GFGIANT_API FGFGiantPick
 	EGFGiantInterest Reason = EGFGiantInterest::None;
 };
 
+/** Who a belly-respawn is for, and which faction to prefer after their own. */
+struct GFGIANT_API FGFRespawnAim
+{
+	FGFSafeSubject Who;
+	/** Own faction. None skips that rank. */
+	FName OwnFaction = NAME_None;
+	/** Starter faction (Rime). None skips that rank. */
+	FName StarterFaction = NAME_None;
+	/** No-entry boxes. Hazards come from Zone.IsHazardAt. */
+	TArray<FBox> Blocked;
+};
+
 /** Pure rules (no world). */
 struct GFGIANT_API FGFGiantRules
 {
@@ -396,6 +408,12 @@ struct GFGIANT_API FGFGiantRules
 	 */
 	static FVector RespawnPoint(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const FVector& From, const TArray<FBox>& NoEntry = TArray<FBox>());
 	/**
+	 * Same search, for one player (#137). A point has to be safe for Aim.Who, not a hazard, and outside Aim.Blocked.
+	 * Preference: own faction land, then the starter faction (Rime), then any other safe ground.
+	 * When nothing fits, returns RespawnPoint with Aim.Blocked so the hazard-aware nearest border stays available.
+	 */
+	static FVector RespawnPoint(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const FVector& From, const FGFRespawnAim& Aim);
+	/**
 	 * Picks a line from Phase, avoiding the last NoRepeatCount ids in Recent when the pool allows. Returns false if
 	 * the pool is empty.
 	 */
@@ -418,7 +436,9 @@ struct GFGIANT_API FGFGiantLandZone : public IGFSafeZoneQuery
 	virtual FVector ClosestSafePoint(const FVector& L) const override { return Base ? Base->ClosestSafePoint(L) : L; }
 	virtual bool ClosestEdge(const FVector& L, FVector& OutPoint, FVector& OutOutward) const override { return Base && Base->ClosestEdge(L, OutPoint, OutOutward); }
 	virtual bool HasAnySafe() const override { return Base && Base->HasAnySafe(); }
-	virtual bool IsHazardAt(const FVector& L) const override { return Base && Base->IsHazardAt(L); }
+	virtual bool IsHazardAt(const FVector& L) const override;
+	virtual int32 SafeRegionCount() const override;
+	virtual bool SafeRegionAt(int32 Index, FName& OutId, FVector& OutCenter, float& OutRadius) const override;
 };
 
 /**

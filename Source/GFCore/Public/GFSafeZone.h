@@ -51,6 +51,16 @@ public:
 	 * Used to keep respawn points off hazards.
 	 */
 	virtual bool IsHazardAt(const FVector& Location) const { return false; }
+	/**
+	 * How many discs this zone can place a respawn on. 0 when it has none to list.
+	 * SafeRegionAt walks them. A union lists every part.
+	 */
+	virtual int32 SafeRegionCount() const { return 0; }
+	/** Disc Index in 0 .. SafeRegionCount()-1. Radius is the horizontal radius in centimetres. */
+	virtual bool SafeRegionAt(int32 /*Index*/, FName& /*OutId*/, FVector& /*OutCenter*/, float& /*OutRadius*/) const
+	{
+		return false;
+	}
 };
 
 /** One circular safe region: grows with its member count up to a cap. Id is an opaque key (no names in code). */
@@ -82,6 +92,8 @@ struct GFCORE_API FGFSafeCircles : public IGFSafeZoneQuery
 	virtual FVector ClosestSafePoint(const FVector& Location) const override;
 	virtual bool ClosestEdge(const FVector& Location, FVector& OutPoint, FVector& OutOutward) const override;
 	virtual bool HasAnySafe() const override { return Regions.Num() > 0; }
+	virtual int32 SafeRegionCount() const override { return Regions.Num(); }
+	virtual bool SafeRegionAt(int32 Index, FName& OutId, FVector& OutCenter, float& OutRadius) const override;
 };
 
 /** Helpers built only on the interface. */
@@ -233,6 +245,8 @@ struct GFCORE_API FGFSafeZoneUnion : public IGFSafeZoneQuery
 	virtual bool ClosestEdge(const FVector& Location, FVector& OutPoint, FVector& OutOutward) const override;
 	virtual bool HasAnySafe() const override;
 	virtual bool IsHazardAt(const FVector& Location) const override;
+	virtual int32 SafeRegionCount() const override;
+	virtual bool SafeRegionAt(int32 Index, FName& OutId, FVector& OutCenter, float& OutRadius) const override;
 
 	/**
 	 * While one is alive, the parts are read once and reused by every query (e.g. for one sim step), instead of
