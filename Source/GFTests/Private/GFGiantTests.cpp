@@ -146,6 +146,20 @@ bool FGFGiantLinesTest::RunTest(const FString&)
 		TestEqual(TEXT("Name lives in data"), Row->DisplayName, FString(TEXT("Big Grumble")));
 		TestEqual(TEXT("T. rex placeholder"), Row->AssetKey, FName(TEXT("Dino.Rex")));
 		TestEqual(TEXT("3.5x"), Row->MeshScale, 3.5f);
+		TestEqual(TEXT("Art mesh scale lives in data (4x, about 38 m)"), Row->ArtMeshScale, 4.f);
+		TestEqual(TEXT("Art mesh scale default"), FGFGiantInfoRow().ArtMeshScale, 4.f);
+		TestEqual(TEXT("Greybox body uses MeshScale"), Row->BodyScale(false), Row->MeshScale);
+		TestEqual(TEXT("Art body uses ArtMeshScale"), Row->BodyScale(true), Row->ArtMeshScale);
+		TestEqual(TEXT("Prowl speed at 1x lives in data"), Row->ProwlSpeed, 254.f);
+		TestEqual(TEXT("Waddle speed at 1x lives in data"), Row->WaddleSpeed, 143.f);
+		TestEqual(TEXT("Speed defaults"), FGFGiantInfoRow().ProwlSpeed + FGFGiantInfoRow().WaddleSpeed, 397.f);
+		TestEqual(TEXT("Greybox prowl speed unscaled"), Row->ProwlSpeedFor(false), Row->ProwlSpeed);
+		TestEqual(TEXT("Greybox waddle speed unscaled"), Row->WaddleSpeedFor(false), Row->WaddleSpeed);
+		TestTrue(TEXT("Art prowl speed x ArtMeshScale"), FMath::IsNearlyEqual(Row->ProwlSpeedFor(true), Row->ProwlSpeed * Row->ArtMeshScale));
+		TestTrue(TEXT("Art waddle speed x ArtMeshScale"), FMath::IsNearlyEqual(Row->WaddleSpeedFor(true), Row->WaddleSpeed * Row->ArtMeshScale));
+		FGFGiantInfoRow Bigger = *Row;
+		Bigger.ArtMeshScale = 2.f;
+		TestTrue(TEXT("Art speeds follow the scale"), FMath::IsNearlyEqual(Bigger.ProwlSpeedFor(true), 508.f) && FMath::IsNearlyEqual(Bigger.WaddleSpeedFor(true), 286.f));
 		TestEqual(TEXT("All chat"), Row->ChatChannel, FName(TEXT("All")));
 	}
 

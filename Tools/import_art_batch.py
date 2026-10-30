@@ -5,6 +5,8 @@ Run:
 Env: GFART_BATCH=3b,7 (comma list) and/or GFART_ONLY=SM_Plot_ClaimFlag,... select the union of both; skeleton dependents follow.
      GFART_PROBE=<json from Tools/art_foot_probe.py> is required for skeletal assets with clips: every clip's posed-mesh min Z
      must stay >= -5 cm and the lowest clip must match the manifest's min_ground_z_cm (UE also checks foot/toe bone Z >= -5).
+     Frames the manifest lists under "Intentionally below ground" (burrow, swim, perch clips) are exempt from both checks.
+Skeletal manifests with skeleton.sockets get USkeletalMeshSocket entries (bone + offset_cm, Blender bone space -> UE bone space).
 Batches 3b and 7 get materials: M_GF_Prop (Diffuse, DyeMask R, Emissive mask _E) instances per mesh, M_GF_TeamTint for TeamTint slots. Translucent blocks (manifest unreal_material_hint, e.g. SM_Block_Water) get M_GF_Water (Opacity, PanSpeedU/V).
 Writes Saved/ArtImport/ue_report.json. Manifest types: static_mesh, skeletal_mesh, texture_set (UI PNGs, batch 8+). Settings: Force Front X Axis, convert scene + scene units,
 uniform scale 1, no redundant-key removal (scale tracks kept), no materials (slots keep names).
@@ -60,7 +62,15 @@ ORDER = [
     "SM_VFX_RoarRing", "SM_VFX_SwipeArc", "SM_VFX_SprayCone", "SM_VFX_ChargeDust",
     "SM_Block_ArenaSand",
     "UI_Batch7_Arena_v2",  # v2 is the complete set (v1 folder left in the inbox, not imported)
+    # new dinos v1 (batch newdinos_v1): each on its own skeleton
+    "SK_Dino_Tusksaw", "SK_Dino_Ripwing", "SK_Dino_Scythepaw", "SK_Dino_Lanternmaw",
+    # Big Grumble (batch big_grumble_v1): on the shared SKEL_Dino_Rex (see SHARED_SKELETONS)
+    "SK_Dino_BigGrumble",
 ]
+# Skeletons shared across species live in their own folder, not in the folder of whichever mesh created them.
+# The first import creates the skeleton there; later imports reuse it. Pre-clean never deletes a shared
+# skeleton, because other meshes (e.g. a future SK_Dino_Rex) depend on it.
+SHARED_SKELETONS = {"SKEL_Dino_Rex": "/Game/Art/Dinos/Rex"}
 _ALL = list(ORDER)
 _only = [a.strip() for a in os.environ.get("GFART_ONLY", "").split(",") if a.strip()]
 _batches = [b.strip() for b in os.environ.get("GFART_BATCH", "").split(",") if b.strip()]
@@ -312,6 +322,78 @@ def tdiff(a, b):
     ds = (a.scale3d - b.scale3d).length()
     return dt, ang, ds
 
+def parse_exempt(notes):
+    """Manifest "Intentionally below ground (...): Burrow_In f6-f19, Burrowed_Loop all frames; ..." ->
+    {clip: None (every frame) or [(first, last)] authored frames, 1-based}. Missing section = no exemptions."""
+    m = re.search(r"Intentionally below ground \([^)]*\): ([^;]*)", notes)
+    out = {}
+    if not m:
+        return out
+    for item in m.group(1).split(","):
+        item = item.strip()
+        mm = re.match(r"([A-Za-z_]+) (?:all frames|f(\d+)-f(\d+))$", item)
+        if not mm:
+            raise RuntimeError("cannot parse ground exemption: " + item)
+        if mm.group(2):
+            out.setdefault(mm.group(1), []).append((int(mm.group(2)), int(mm.group(3))))
+        else:
+            out[mm.group(1)] = None
+    return out
+
+def exempt_frame(ex, short, i):
+    """i = 0-based frame index (UE frame i, probe per_frame[i] = authored frame i + 1)."""
+    if short not in ex:
+        return False
+    rng = ex[short]
+    return rng is None or any(a - 1 <= i <= b - 1 for a, b in rng)
+
+# Blender bone space has Y along the bone; after the FBX import the same along-bone direction is the
+# UE bone's local +Z (checked against the ref-pose world position of lure_bulb and talon_l). Only
+# along-bone offsets are verified, so any X/Z component is refused rather than guessed.
+def socket_offset_ue(off):
+    if abs(float(off[0])) > 1e-6 or abs(float(off[2])) > 1e-6:
+        raise ValueError("socket offset_cm with X/Z components is not supported: " + str(off))
+    return unreal.Vector(0.0, 0.0, float(off[1]))
+
+def socket_dict(sockets):
+    """skeleton.sockets as {name: {bone, offset_cm}} or as a list of {name, bone, loc_cm, rot}."""
+    if isinstance(sockets, dict):
+        return sockets
+    out = {}
+    for sd in sockets:
+        if any(abs(float(a)) > 1e-6 for a in sd.get("rot", [0, 0, 0])):
+            raise ValueError("socket rot is not supported: " + str(sd))
+        out[sd["name"]] = {"bone": sd["bone"], "offset_cm": sd.get("loc_cm", [0, 0, 0])}
+    return out
+
+def add_skel_sockets(m, sockets, r):
+    sockets = socket_dict(sockets)
+    got = {}
+    for sname, sd in sockets.items():
+        # SocketName and BoneName are read-only from Python: parent via set_socket_parent,
+        # add the unnamed socket, then rename it.
+        if m.find_socket(sname) is not None:
+            m.remove_socket(sname)
+        sock = unreal.SkeletalMeshSocket(m)
+        sock.set_socket_parent(m, sd["bone"])
+        sock.set_editor_property("relative_location", socket_offset_ue(sd.get("offset_cm", [0, 0, 0])))
+        m.add_socket(sock, False)
+        if not m.rename_socket(sock.get_editor_property("socket_name"), sname):
+            log("socket rename failed for " + sname)
+    EAL.save_loaded_asset(m)
+    for sname, sd in sockets.items():
+        s2 = m.find_socket(sname)
+        got[sname] = None if s2 is None else {"bone": str(s2.get_editor_property("bone_name")), "loc": vec(s2.get_editor_property("relative_location"))}
+        if s2 is not None:
+            try:
+                pose = unreal.AnimPoseExtensions.get_reference_pose(m.skeleton)
+                bt = unreal.AnimPoseExtensions.get_bone_pose(pose, sd["bone"], unreal.AnimPoseSpaces.WORLD)
+                got[sname]["ref_world"] = vec(bt.transform_location(s2.get_editor_property("relative_location")))
+            except Exception as e:
+                log("info: socket ref_world " + str(e))
+    r["sockets"] = got
+    r["checks"]["sockets"] = all(got.get(n) is not None and got[n]["bone"] == sd["bone"] for n, sd in sockets.items())
+
 def parse_clips(notes):
     clips = {}
     for m in re.finditer(r"(?:^|; )([A-Za-z_]+) (\d+)f (loop|one-shot)", notes):
@@ -391,10 +473,18 @@ def do_skel(name, man, folder, r):
     dest = man["unreal_target"].rsplit("/", 1)[0]
     sk = man["skeleton"]
     reuse = sk.get("reuse_existing")
+    # reuse_existing is a skeleton name imported earlier in this run, or a full UE path to a committed skeleton.
+    reuse_path = reuse if reuse and reuse.startswith("/Game/") else None
+    if reuse_path:
+        reuse = reuse_path.rsplit("/", 1)[1]
     skel_name = reuse or sk["skeleton_name"]
     existing = skeletons.get(skel_name)
+    if existing is None and reuse_path and EAL.does_asset_exist(reuse_path):
+        existing = unreal.load_asset(reuse_path)
+    shared_dir = SHARED_SKELETONS.get(skel_name)
+    skel_dir = shared_dir or dest
     if existing is None:
-        for cand in ["/Game/Art/Characters/" + skel_name, dest + "/" + skel_name]:
+        for cand in ["/Game/Art/Characters/" + skel_name, skel_dir + "/" + skel_name]:
             if EAL.does_asset_exist(cand):
                 existing = unreal.load_asset(cand); break
     if reuse and existing is None:
@@ -403,11 +493,13 @@ def do_skel(name, man, folder, r):
     skel = m.skeleton
     if existing is None:
         old = skel.get_path_name().split(".")[0]
-        new = dest + "/" + skel_name
+        new = skel_dir + "/" + skel_name
         if old != new:
             if not EAL.rename_asset(old, new):
                 raise RuntimeError("rename skeleton failed " + old + " -> " + new)
-            EAL.save_loaded_asset(m)
+            # The rename does not dirty the mesh, so force the save; otherwise the mesh keeps pointing
+            # at the redirector deleted below and loads without a skeleton.
+            EAL.save_loaded_asset(m, False)
             delete_redirectors()
         skel = unreal.load_asset(new)
     skeletons[skel_name] = skel
@@ -433,8 +525,19 @@ def do_skel(name, man, folder, r):
     chk["slots"] = r["material_slots"] == man["material_slots"] if r["material_slots"] is not None else "n/a"
     if reuse:
         chk["shares_skeleton"] = skel.get_path_name() == skeletons[reuse].get_path_name()
+    if reuse_path:
+        chk["reuse_path"] = skel.get_path_name().split(".")[0] == reuse_path
+    if shared_dir:
+        chk["shared_skeleton_path"] = skel.get_path_name().split(".")[0] == shared_dir + "/" + skel_name
 
+    if sk.get("sockets"):
+        add_skel_sockets(m, sk["sockets"], r)
     clips_expected = parse_clips(man["qa"]["notes"])
+    exempt = parse_exempt(man["qa"]["notes"])
+    if exempt:
+        r["ground_exempt"] = {k: ("all frames" if v is None else v) for k, v in exempt.items()}
+        unknown = [k for k in exempt if k not in clips_expected]
+        chk["ground_exempt_clips_known"] = not unknown
     r["clips"] = {}
     for af in man["files"]["animations"]:
         aname = os.path.splitext(af)[0]
@@ -465,13 +568,19 @@ def do_skel(name, man, folder, r):
                 per.append({"f": f, "feet_z": {b: round(z, 3) for b, z in ws.items()}})
             cr["root_scale_max_dev"] = round(max_root_scale_dev, 6)
             cr["per_frame"] = per
+            if short in exempt:
+                cr["ground_exempt"] = "all frames" if exempt[short] is None else exempt[short]
             fz = [z for p in per for z in p["feet_z"].values()]
             cr["min_feet_bone_z"] = round(min(fz), 3) if fz else None
-            cr["feet_above_limit"] = (min(fz) >= CLIP_LIMIT_Z) if fz else "n/a"
+            fzc = [z for i, p in enumerate(per) if not exempt_frame(exempt, short, i) for z in p["feet_z"].values()]
+            cr["min_feet_bone_z_checked"] = round(min(fzc), 3) if fzc else None
+            cr["feet_above_limit"] = (min(fzc) >= CLIP_LIMIT_Z) if fzc else "n/a"
             pr = PROBE.get(name, {}).get(aname)
             if pr is not None:
                 cr["probe_min_z"] = pr["worst_min_z_cm"]
-                cr["probe_above_limit"] = pr["worst_min_z_cm"] >= CLIP_LIMIT_Z
+                pc = [f["mesh_min_z"] for i, f in enumerate(pr["per_frame"]) if not exempt_frame(exempt, short, i)]
+                cr["probe_min_z_checked"] = min(pc) if pc else None
+                cr["probe_above_limit"] = (min(pc) >= CLIP_LIMIT_Z) if pc else True
             # loop closure
             p0 = pose_at(anim, 0); pn = pose_at(anim, nf)
             worst = (0.0, 0.0, 0.0, None)
@@ -493,7 +602,11 @@ def do_skel(name, man, folder, r):
     # min Z per manifest: the lowest posed-mesh point over all clips (Blender foot probe) must match min_ground_z_cm
     if man["files"]["animations"] and man["qa"].get("min_ground_z_cm") is not None:
         r["min_z_expected"] = float(man["qa"]["min_ground_z_cm"])
-        pz = [cr.get("probe_min_z") for cr in r["clips"].values()]
+        if any("probe_min_z" not in cr for cr in r["clips"].values()):
+            pz = [None]
+        else:
+            # exempt frames left out; a clip that is exempt on every frame has no checked minimum
+            pz = [cr["probe_min_z_checked"] for cr in r["clips"].values() if cr["probe_min_z_checked"] is not None]
         if pz and None not in pz:
             r["probe_min_z"] = min(pz)
             chk["min_z"] = abs(min(pz) - r["min_z_expected"]) <= DIM_TOL
@@ -588,7 +701,7 @@ def owned_assets(man):
     else:
         out.append(man["unreal_target"])
     sk = man.get("skeleton") or {}
-    if sk and not sk.get("reuse_existing"):
+    if sk and not sk.get("reuse_existing") and sk["skeleton_name"] not in SHARED_SKELETONS:
         out.append(dest + "/" + sk["skeleton_name"])
         out.append(man["unreal_target"] + "_Skeleton")
     return out

@@ -21,6 +21,12 @@ struct GFCORE_API FGFAnimMapRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Anim") bool bLoop = false;
 	/** One-shot that holds its last frame instead of blending out (Cheer ends in a V pose). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Anim") bool bHoldLastFrame = false;
+	/**
+	 * cm, along Z. Where a clip leaves a prop in the world (Plant_Flag drives the claim flag into the ground and lets go
+	 * after its impact frame), the gameplay code that detaches the prop adds this to its world Z so it ends up planted.
+	 * Plant_Flag: -10 (the pole foot only reaches the ground in the clip). 0 for clips that leave nothing behind.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Anim") float PlantedPropOffsetZ = 0.f;
 };
 
 struct GFCORE_API FGFAnimMap

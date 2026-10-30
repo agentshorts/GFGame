@@ -2,6 +2,7 @@
 
 Run (no render, CPU only):
   blender.exe -b --factory-startup -P Tools/art_foot_probe.py -- <inbox dir> <out json>
+  (env GFPROBE_ASSETS=SK_Dino_Tusksaw,SK_Dino_Ripwing selects the assets; default SK_Player_Base,SK_Dino_Raptor)
 For every clip: imports the asset's mesh FBX + the clip FBX, puts the clip action on the mesh armature,
 and records min world Z (cm) of the deformed mesh and the foot/toe bone heads for every frame.
 """
@@ -9,7 +10,8 @@ import bpy, json, os, re, sys
 
 args = sys.argv[sys.argv.index("--") + 1:]
 INBOX, OUT = args[0], args[1]
-ASSETS = ["SK_Player_Base", "SK_Dino_Raptor"]
+# GFPROBE_ASSETS=SK_Dino_Tusksaw,... picks the assets to probe (default: the batch-1 skeletal assets).
+ASSETS = [a.strip() for a in os.environ.get("GFPROBE_ASSETS", "SK_Player_Base,SK_Dino_Raptor").split(",") if a.strip()]
 
 def clear():
     bpy.ops.wm.read_factory_settings(use_empty=True)

@@ -464,6 +464,8 @@ bool FGFSocialEmotesTest::RunTest(const FString&)
 	TestEqual(TEXT("Bye waves"), Anim(TEXT("Bye")), FName(TEXT("Player.Emote_Wave")));
 	TestEqual(TEXT("Thumbs up cheers"), Anim(TEXT("ThumbsUp")), FName(TEXT("Player.Emote_Cheer")));
 	TestEqual(TEXT("Sit sits"), Anim(TEXT("Sit")), FName(TEXT("Player.Emote_Sit")));
+	TestEqual(TEXT("Dance dances"), Anim(TEXT("Dance")), FName(TEXT("Player.Emote_Dance")));
+	TestEqual(TEXT("Laugh laughs"), Anim(TEXT("Laugh")), FName(TEXT("Player.Emote_Laugh")));
 	TestEqual(TEXT("Heart: bubble"), Anim(TEXT("Heart")), FName());
 	TestEqual(TEXT("Yes: bubble"), Anim(TEXT("Yes")), FName());
 	FGFEmoteRow Missing;

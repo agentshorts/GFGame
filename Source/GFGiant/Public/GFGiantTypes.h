@@ -52,8 +52,24 @@ struct GFGIANT_API FGFGiantInfoRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Giant") FString DisplayName;
 	/** DT_AssetMap key for the body (greybox placeholder until the new skin lands). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Giant") FName AssetKey;
+	/** Uniform scale of the greybox placeholder body. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Giant") float MeshScale = 3.5f;
+	/**
+	 * Uniform scale of the imported art mesh (SK_Dino_BigGrumble, authored at T. rex size on SKEL_Dino_Rex).
+	 * 4x gives about 38 m long (4x the T. rex); it stays a CSV value so the size can be tuned without code.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Giant") float ArtMeshScale = 4.f;
+	/** Prowl_Circle ground speed at 1x (cm/s), measured from the planted feet. Scaled by ArtMeshScale on the art mesh. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Giant") float ProwlSpeed = 254.f;
+	/** Waddle_Off ground speed at 1x (cm/s), measured from the planted feet. Scaled by ArtMeshScale on the art mesh. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Giant") float WaddleSpeed = 143.f;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Giant") FName ChatChannel = TEXT("All");
+
+	/** Scale for the body actually shown: ArtMeshScale once the art mesh is wired in, else the greybox MeshScale. */
+	float BodyScale(bool bArtMesh) const { return bArtMesh ? ArtMeshScale : MeshScale; }
+	/** Clip speeds for the body shown: x ArtMeshScale on the art mesh, the 1x values otherwise. */
+	float ProwlSpeedFor(bool bArtMesh) const { return bArtMesh ? ProwlSpeed * ArtMeshScale : ProwlSpeed; }
+	float WaddleSpeedFor(bool bArtMesh) const { return bArtMesh ? WaddleSpeed * ArtMeshScale : WaddleSpeed; }
 };
 
 /** All tunables. Distances in cm, times in seconds. */
