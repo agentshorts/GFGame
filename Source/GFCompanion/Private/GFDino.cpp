@@ -13,6 +13,7 @@ AGFDino::AGFDino()
 	bReplicates = true;
 	SetReplicateMovement(true);
 	Taming = CreateDefaultSubobject<UGFTamingComponent>(TEXT("Taming"));
+	Wander = CreateDefaultSubobject<UGFWanderComponent>(TEXT("Wander"));
 	Body = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Body"));
 	Body->SetupAttachment(GetCapsuleComponent());
 	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -131,6 +132,10 @@ void AGFDino::Tick(float DeltaSeconds)
 		}
 		break;
 	default:
+		if (Wander)
+		{
+			Wander->TickWander(DeltaSeconds);
+		}
 		break;
 	}
 }

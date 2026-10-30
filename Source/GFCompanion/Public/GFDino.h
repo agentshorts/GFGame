@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "GFDinoTypes.h"
+#include "GFWanderComponent.h"
 #include "GFDino.generated.h"
 
 class UGFTamingComponent;
@@ -23,6 +24,10 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Dino")
 	TObjectPtr<UGFTamingComponent> Taming;
+
+	/** Wild idle wander. Tamed follow and attack do not use it. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Dino")
+	TObjectPtr<UGFWanderComponent> Wander;
 
 	/** Placeholder / art mesh, resolved through the asset map. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Dino")

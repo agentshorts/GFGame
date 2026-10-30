@@ -10,6 +10,7 @@ public class GFGame : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] { "GFSocial" });
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "Territory"));
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "AI/Roaming"));
+		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "Dinos/Wild"));
 
 	}
 }
