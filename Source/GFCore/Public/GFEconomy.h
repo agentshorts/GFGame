@@ -19,6 +19,10 @@ struct GFCORE_API FGFEconomy
 	static int64 InventoryValue(const UDataTable* Items, const FGFInventory& Inventory);
 	static bool IsWagerable(const UDataTable* Items, FName ItemId);
 	static bool IsRentable(const UDataTable* Items, FName ItemId);
+	/** True when the row is marked account-bound (a lifetime ferry pass). Unknown ids are not. */
+	static bool IsAccountBound(const UDataTable* Items, FName ItemId);
+	/** True when any stack is account-bound. A missing table treats every stack as movable. */
+	static bool ContainsAccountBound(const UDataTable* Items, const TArray<FGFItemStack>& Stacks);
 	/** Wager value bands (PLAN.md M6): 0 none, 1 Small 1-15, 2 Medium 16-60, 3 Big 61-150, 4 Huge 151+. */
 	static int32 ValueBand(int64 Value);
 	/** Merges duplicate ids. False if any stack has no id or a count <= 0, or the list is empty. */
@@ -38,7 +42,9 @@ enum class EGFTxResult : uint8
 	UnknownAccount,
 	SameAccount,
 	UnknownEscrow,
-	EscrowClosed
+	EscrowClosed,
+	/** An account-bound item cannot be gifted, mailed, or otherwise transferred. */
+	AccountBound
 };
 
 UENUM(BlueprintType)
