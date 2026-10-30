@@ -27,6 +27,8 @@
 #include "GFGiantEventComponent.h"
 #include "GFJailCell.h"
 #include "GFTestZoneProvider.h"
+#include "GFFaintHandler.h"
+#include "Subsystems/WorldSubsystem.h"
 #include "GameFramework/DefaultPawn.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -924,8 +926,12 @@ bool FGFSocialProtectionProvidersTest::RunTest(const FString&)
 		TestTrue(FString::Printf(TEXT("%s: protected visitor safe"), When), Zones->IsSafeFor(Visitor, OnA));
 		S->Access.FindOrAdd(FA, TEXT("V")).bProtected = false;
 	};
-	TestTrue(TEXT("Giant is the newest provider and covers the test points"), Zones->GetZone() == Giant->GetSafeZoneQuery()
-		&& Zones->IsInsideSafe(OnA) && Zones->IsInsideSafe(Between));
+	// Land exists, so his default circle (sized by head count) no longer counts: the unowned middle isn't his.
+	TestTrue(TEXT("Giant is the newest provider; his default circle drops out once land exists"), Zones->GetZone() == Giant->GetSafeZoneQuery()
+		&& Giant->IsUsingDefaultRegion() && Zones->IsInsideSafe(OnA) && !Zones->IsInsideSafe(Between));
+	// Regions set on purpose (a hub) stay part of his shape next to the land.
+	Giant->SetSafeRegions({ FGFGiantRules::DefaultRegion(Giant->Tuning, FVector::ZeroVector, 1) });
+	TestTrue(TEXT("A set hub circle covers the test points"), Zones->IsInsideSafe(OnA) && Zones->IsInsideSafe(Between));
 	Check(TEXT("Giant newest"), true);
 	Zones->RegisterProvider(LandProvider);
 	TestTrue(TEXT("Land provider is now the newest"), Zones->GetZone() == Lands.Get());
@@ -1113,12 +1119,13 @@ bool FGFSocialGiantLandShapeTest::RunTest(const FString&)
 	Giant->Tuning.bEatIdleTarget = false;
 	Giant->Tuning.EventSeconds = 1000.f;
 
-	// The shape: his own circle plus both lands, read live from the providers.
+	// The shape: both lands, read live from the providers (his default circle only counts while there is no land).
 	const IGFSafeZoneQuery& Shape = Giant->GetSafeZone();
-	TestTrue(TEXT("The shape follows land by default"), Giant->IsFollowingLand() && &Shape == Giant->GetLandShape().Get());
+	TestTrue(TEXT("The shape follows land by default"), Giant->IsFollowingLand() && &Shape == Giant->GetLandShape());
 	TestTrue(TEXT("The subsystem's current zone is that shape"), Zones->GetZone() == &Shape);
 	const FGFSafeCircles Own(Giant->SafeRegions);
-	TestTrue(TEXT("His own circle is still part of the shape"), Own.IsInsideSafe(FVector::ZeroVector) && Shape.IsInsideSafe(FVector::ZeroVector));
+	TestTrue(TEXT("His default circle drops out of the shape once land exists"), Giant->IsUsingDefaultRegion()
+		&& Own.IsInsideSafe(FVector::ZeroVector) && !Shape.IsInsideSafe(FVector::ZeroVector));
 	TestFalse(TEXT("Both lands lie outside his own circle"), Own.IsInsideSafe(CenterA - FVector(LandRadius, 0.f, 0.f)) || Own.IsInsideSafe(CenterB + FVector(LandRadius, 0.f, 0.f)));
 	TestTrue(TEXT("The shape covers both lands"), Shape.IsInsideSafe(CenterA) && Shape.IsInsideSafe(CenterB));
 	TestFalse(TEXT("Open ground is not in the shape"), Shape.IsInsideSafe(Legs[0]));
@@ -1136,10 +1143,11 @@ bool FGFSocialGiantLandShapeTest::RunTest(const FString&)
 	Lands->Discs.Regions[0].BaseRadius = Lands->Discs.Regions[0].MaxRadius = LandRadius;
 	Giant->SetSafeZone(nullptr);
 	TestFalse(TEXT("SetSafeZone(nullptr): own circles only"), Giant->IsFollowingLand() || Giant->GetSafeZone().IsInsideSafe(CenterA));
-	Giant->SetSafeZone(ConstCastSharedPtr<FGFSafeZoneUnion>(Giant->GetLandShape()));
+	Giant->FollowLand();
 	TestTrue(TEXT("Back to following land"), Giant->IsFollowingLand());
 	Giant->SetSafeRegions({ Disc(TEXT("Hub"), FVector::ZeroVector, 1200.f) });
 	TestTrue(TEXT("SetSafeRegions keeps following land"), Giant->IsFollowingLand() && Giant->GetSafeZone().IsInsideSafe(CenterA));
+	TestTrue(TEXT("...and set regions count next to the land"), Giant->GetSafeZone().IsInsideSafe(FVector::ZeroVector));
 
 	// Skirting: the visitor runs the corners in the open; he chases without ever stepping on either land.
 	TestTrue(TEXT("Event starts"), Giant->ServerStartEvent());
@@ -1348,6 +1356,296 @@ bool FGFSocialGiantHandoffTest::RunTest(const FString&)
 	TestEqual(TEXT("No call from the jail"), S->GiantTauntsRaised, 4);
 	TestFalse(TEXT("Protected leader isn't eaten"), Giant->ServerOnAttacked(L));
 	Zones->SetOverride(nullptr);
+	return true;
+}
+
+namespace GFSocialTest
+{
+	/** The world's territory subsystem (GFGame; the shipped layout from DefaultGame.ini), through engine types only. */
+	static UTickableWorldSubsystem* Territory(UWorld* World)
+	{
+		UClass* Class = FindObject<UClass>(nullptr, TEXT("/Script/GFGame.GFTerritorySubsystem"));
+		return Class && World ? Cast<UTickableWorldSubsystem>(World->GetSubsystemBase(Class)) : nullptr;
+	}
+
+	/** Re-reads the factions' head counts from the game state (the subsystem does this every tick). */
+	static void RefreshTerritory(UWorld* World)
+	{
+		if (UTickableWorldSubsystem* Sub = Territory(World))
+		{
+			Sub->Tick(0.f);
+		}
+	}
+
+	/** A zone passed through, counting the shape queries asked of it. */
+	struct FCountingZone : public IGFSafeZoneQuery
+	{
+		const IGFSafeZoneQuery* Inner = nullptr;
+		mutable int32 Calls = 0;
+		virtual bool IsInsideSafe(const FVector& L) const override { ++Calls; return Inner->IsInsideSafe(L); }
+		virtual bool IsSafeFor(const FGFSafeSubject& Who, const FVector& L) const override { ++Calls; return Inner->IsSafeFor(Who, L); }
+		virtual FName OwnerAt(const FVector& L) const override { ++Calls; return Inner->OwnerAt(L); }
+		virtual FVector ClosestSafePoint(const FVector& L) const override { ++Calls; return Inner->ClosestSafePoint(L); }
+		virtual bool ClosestEdge(const FVector& L, FVector& OutPoint, FVector& OutOutward) const override { ++Calls; return Inner->ClosestEdge(L, OutPoint, OutOutward); }
+		virtual bool HasAnySafe() const override { return Inner->HasAnySafe(); }
+		virtual bool IsHazardAt(const FVector& L) const override { return Inner->IsHazardAt(L); }
+	};
+
+	static const FName Rime(TEXT("Rime"));
+	static const FName Verdant(TEXT("Verdant"));
+}
+
+// Big Grumble with the shipped layout and narrow gaps: Rime and Verdant at three members each leave a 600-wide strip
+// of wild ground between them (narrower than his body), and with land on the map his head-count circle (which would
+// cover that strip) no longer counts. Chasing a visitor who keeps switching sides of the strip, he never sets foot on
+// land, never moves more than one step per tick (no jumps), reads the providers once per step and asks the land only a
+// bounded number of shape queries per tick.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialGiantNarrowGapsTest, "GFGame.Social.GiantNarrowGaps", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFSocialGiantNarrowGapsTest::RunTest(const FString&)
+{
+	FWorld W;
+	if (!W.Init(*this, TEXT("GFSocialGiantNarrowGaps")))
+	{
+		return false;
+	}
+	UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(W.World);
+	UTickableWorldSubsystem* Terr = Territory(W.World);
+	const IGFSafeZoneProvider* TerrZone = Cast<IGFSafeZoneProvider>(Terr);
+	if (!TestNotNull(TEXT("Territory subsystem"), TerrZone))
+	{
+		return false;
+	}
+	for (int32 i = 0; i < 3; ++i)
+	{
+		PutAt(W.World, W.Add(FString::Printf(TEXT("R%d"), i), Rime), FVector::ZeroVector);
+		PutAt(W.World, W.Add(FString::Printf(TEXT("D%d"), i), Verdant), FVector(-4400.f, 0.f, 0.f));
+	}
+	AGFPlayerState* X = W.Add(TEXT("X"), NAME_None);
+	const FVector North(-2300.f, 2600.f, 0.f);
+	const FVector South(-2300.f, -2600.f, 0.f);
+	PutAt(W.World, X, North);
+	RefreshTerritory(W.World);
+	const IGFSafeZoneQuery* Map = TerrZone->GetSafeZoneQuery();
+	if (!TestNotNull(TEXT("Rime and Verdant hold land"), Map))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Shipped layout: a 600-wide wild strip between Rime and Verdant"), Map->IsInsideSafe(FVector(-1950.f, 0.f, 0.f))
+		&& Map->IsInsideSafe(FVector(-2650.f, 0.f, 0.f)) && !Map->IsInsideSafe(FVector(-2050.f, 0.f, 0.f)) && !Map->IsInsideSafe(FVector(-2550.f, 0.f, 0.f)));
+
+	// The land, counted, in place of the territory provider.
+	TSharedPtr<FCountingZone> Counting = MakeShared<FCountingZone>();
+	Counting->Inner = Map;
+	UGFTestZoneProvider* Land = NewObject<UGFTestZoneProvider>(W.World);
+	Land->Query = Counting;
+	Zones->UnregisterProvider(Terr);
+	Zones->RegisterProvider(Land);
+
+	UGFGiantEventComponent* Giant = AGFGiantDirector::GetEvent(W.World, true);
+	if (!TestNotNull(TEXT("Giant event"), Giant))
+	{
+		return false;
+	}
+	Giant->bAutoTrigger = false;
+	Giant->ForcedSeed = 11;
+	Giant->Tuning.bEatIdleTarget = false;
+	Giant->Tuning.EventSeconds = 1000.f;
+	auto Step = [Giant]() { Giant->TickComponent(0.1f, LEVELTICK_All, nullptr); };
+	Step(); // head count -> default circle
+	const FGFSafeCircles Own(Giant->SafeRegions);
+	TestTrue(TEXT("His head-count circle would cover the strip..."), Giant->IsUsingDefaultRegion() && Own.IsInsideSafe(FVector(-2300.f, 0.f, 0.f)));
+	TestFalse(TEXT("...but it no longer counts once land exists"), Giant->GetSafeZone().IsInsideSafe(FVector(-2300.f, 0.f, 0.f)));
+
+	TestTrue(TEXT("Event starts"), Giant->ServerStartEvent());
+	TestEqual(TEXT("Targets the visitor in the open"), Giant->GetSim().TargetKey, FString(TEXT("X")));
+	const float Margin = Giant->Tuning.GiantRadius;
+	int32 OnLand = 0, Jumps = 0, Ticks = 0, MaxCalls = 0, MaxReads = 0;
+	float MaxMove = 0.f;
+	for (int32 Leg = 0; Leg < 8; ++Leg)
+	{
+		const FVector At = (Leg % 2 == 0) ? South : North;
+		for (int32 i = 0; i < 300; ++i)
+		{
+			PutAt(W.World, X, At); // undo shoves: the visitor stays in the open
+			const FVector Before = Giant->GetSim().Location;
+			const int32 Calls0 = Counting->Calls;
+			const int32 Reads0 = Land->Reads;
+			Step();
+			++Ticks;
+			const FVector After = Giant->GetSim().Location;
+			const float Move = FVector::Dist2D(Before, After);
+			const float Bound = FMath::Max(Giant->GetSim().LastSpeed, Giant->Tuning.CircleWalkSpeed * 2.f) * 0.1f + 1.f;
+			MaxMove = FMath::Max(MaxMove, Move);
+			Jumps += Move > Bound ? 1 : 0;
+			OnLand += FGFSafeZone::IsClear(*Map, After, Margin) ? 0 : 1;
+			MaxCalls = FMath::Max(MaxCalls, Counting->Calls - Calls0);
+			MaxReads = FMath::Max(MaxReads, Land->Reads - Reads0);
+		}
+		const FVector G = Giant->GetSim().Location;
+		AddInfo(FString::Printf(TEXT("Leg %d: visitor at (%.0f, %.0f), giant at (%.0f, %.0f)"), Leg, At.X, At.Y, G.X, G.Y));
+	}
+	AddInfo(FString::Printf(TEXT("%d ticks: longest move %.1f, most land queries in a tick %d, most provider reads in a tick %d"), Ticks, MaxMove, MaxCalls, MaxReads));
+	TestEqual(TEXT("Never on faction land"), OnLand, 0);
+	TestEqual(TEXT("Never more than one step per tick"), Jumps, 0);
+	TestTrue(FString::Printf(TEXT("Land asked at most 400 shape queries per tick (most %d)"), MaxCalls), MaxCalls <= 400);
+	TestTrue(FString::Printf(TEXT("Providers read at most 100 times per tick (most %d)"), MaxReads), MaxReads <= 100);
+	TestTrue(TEXT("Still chasing"), Giant->bEventActive && Giant->GetSim().State == EGFGiantState::Chase);
+	Zones->UnregisterProvider(Land);
+	return true;
+}
+
+// Respawns stay off wild hazards and out of no-entry boxes, with the shipped layout. Before anyone holds land his
+// head-count circle (three players: radius 2000) reaches over the lava bridge (x from 1500), so the plain inset point
+// would be on lava: the respawn steps further in. Once Rime holds land with two members (radius 1800) his circle drops
+// out and a player eaten on the lava respawns just inside Rime's border; a no-entry box there pushes the respawn
+// further in, still on Rime land. The same holds through the event (eaten, belly cam, faint hook).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialGiantRespawnHazardTest, "GFGame.Social.GiantRespawnHazard", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFSocialGiantRespawnHazardTest::RunTest(const FString&)
+{
+	FWorld W;
+	if (!W.Init(*this, TEXT("GFSocialGiantRespawnHazard")))
+	{
+		return false;
+	}
+	UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(W.World);
+	if (!TestNotNull(TEXT("Territory subsystem"), Territory(W.World)))
+	{
+		return false;
+	}
+	AGFPlayerState* A = W.Add(TEXT("A"), NAME_None);
+	AGFPlayerState* B = W.Add(TEXT("B"), NAME_None);
+	AGFPlayerState* X = W.Add(TEXT("X"), NAME_None);
+	const FVector OnLava(4000.f, 0.f, 0.f);
+	PutAt(W.World, A, FVector::ZeroVector);
+	PutAt(W.World, B, FVector(0.f, 300.f, 0.f));
+	PutAt(W.World, X, OnLava);
+	RefreshTerritory(W.World);
+	UGFGiantEventComponent* Giant = AGFGiantDirector::GetEvent(W.World, true);
+	if (!TestNotNull(TEXT("Giant event"), Giant))
+	{
+		return false;
+	}
+	Giant->bAutoTrigger = false;
+	Giant->ForcedSeed = 3;
+	Giant->Tuning.bEatIdleTarget = false;
+	auto Step = [Giant]() { Giant->TickComponent(0.1f, LEVELTICK_All, nullptr); };
+	Step();
+	const FGFGiantTuning& T = Giant->Tuning;
+	TestTrue(TEXT("Three players: his circle has radius 2000"), Giant->SafeRegions.Num() == 1 && FMath::IsNearlyEqual(Giant->SafeRegions[0].Radius(), 2000.f));
+	TestTrue(TEXT("The lava bridge is a wild hazard"), Zones->IsHazardAt(OnLava) && Zones->IsHazardAt(FVector(1850.f, 0.f, 0.f)));
+
+	// No land yet: his circle is the shape, and it reaches over the lava.
+	const IGFSafeZoneQuery& Shape = Giant->GetSafeZone();
+	const FGFSafeCircles Own(Giant->SafeRegions);
+	const FVector Plain = FGFGiantRules::RespawnPoint(T, Own, OnLava);
+	TestTrue(TEXT("The plain inset point would be on the lava"), FVector::Dist2D(Plain, FVector(1850.f, 0.f, 0.f)) < 1.f && Zones->IsHazardAt(Plain));
+	const FVector NoLand = FGFGiantRules::RespawnPoint(T, Shape, OnLava, Giant->GetNoEntry());
+	TestTrue(FString::Printf(TEXT("No land yet: inside his circle, off the lava (%.0f, %.0f)"), NoLand.X, NoLand.Y),
+		Shape.IsInsideSafe(NoLand) && !Zones->IsHazardAt(NoLand) && FVector::Dist2D(NoLand, Plain) < 1000.f);
+
+	// Rime holds land with two members.
+	TestEqual(TEXT("A joins Rime"), W.GS->ServerClaimFaction(A, Rime), FName(TEXT("Ok")));
+	TestEqual(TEXT("B joins Rime"), W.GS->ServerClaimFaction(B, Rime), FName(TEXT("Ok")));
+	RefreshTerritory(W.World);
+	Step();
+	TestTrue(TEXT("Rime's land reaches x = 1800"), Zones->OwnerAt(FVector(1750.f, 0.f, 0.f)) == Rime && Zones->OwnerAt(FVector(1850.f, 0.f, 0.f)).IsNone());
+	TestFalse(TEXT("His circle no longer counts beyond Rime's border"), Shape.IsInsideSafe(FVector(1900.f, 0.f, 0.f)));
+	const FVector OnRime = FGFGiantRules::RespawnPoint(T, Shape, OnLava, Giant->GetNoEntry());
+	TestTrue(FString::Printf(TEXT("Respawn just inside Rime's border (%.0f, %.0f)"), OnRime.X, OnRime.Y),
+		FVector::Dist2D(OnRime, FVector(1800.f - T.RespawnInset, 0.f, 0.f)) < 1.f && Zones->OwnerAt(OnRime) == Rime && !Zones->IsHazardAt(OnRime));
+
+	// A no-entry box on that spot.
+	UGFTestZoneProvider* BoxOwner = NewObject<UGFTestZoneProvider>(W.World);
+	const FBox Box(FVector(1550.f, -100.f, -500.f), FVector(1750.f, 100.f, 500.f));
+	Zones->SetNoEntry(BoxOwner, Box);
+	auto InBox = [&Box](const FVector& P) { return P.X >= Box.Min.X && P.X <= Box.Max.X && P.Y >= Box.Min.Y && P.Y <= Box.Max.Y; };
+	const FVector Boxed = FGFGiantRules::RespawnPoint(T, Shape, OnLava, Giant->GetNoEntry());
+	TestTrue(FString::Printf(TEXT("With a box there: out of the box, still on Rime land near the border (%.0f, %.0f)"), Boxed.X, Boxed.Y),
+		!InBox(Boxed) && Zones->OwnerAt(Boxed) == Rime && !Zones->IsHazardAt(Boxed) && FVector::Dist2D(Boxed, FVector(1800.f, 0.f, 0.f)) < 600.f);
+
+	// Through the event: the visitor on the lava attacks, is eaten, and respawns there after the belly cam.
+	TestTrue(TEXT("Event starts"), Giant->ServerStartEvent());
+	TestEqual(TEXT("Targets the visitor on the lava"), Giant->GetSim().TargetKey, FString(TEXT("X")));
+	PutAt(W.World, X, OnLava);
+	TestTrue(TEXT("The exposed visitor who attacks is eaten"), Giant->ServerOnAttacked(X));
+	const int32 BellyTicks = FMath::CeilToInt(T.BellyCamSeconds / 0.1f) + 5;
+	for (int32 i = 0; i < BellyTicks; ++i)
+	{
+		Step();
+	}
+	const UGFFaintStub* Faint = Giant->DefaultFaint;
+	if (TestTrue(TEXT("Fainted once"), Faint && Faint->Calls.Num() == 1))
+	{
+		const FVector At = Faint->Calls[0].RespawnAt;
+		TestTrue(FString::Printf(TEXT("Event respawn on Rime land, off the lava, out of the box (%.0f, %.0f)"), At.X, At.Y),
+			Zones->OwnerAt(At) == Rime && !Zones->IsHazardAt(At) && !InBox(At));
+	}
+	Zones->ClearNoEntry(BoxOwner);
+	return true;
+}
+
+// The union's nearest border at the notch where two overlapping circles cross: from a point inside both, each
+// circle's own nearest border point lies inside the other, so the union's border there is the crossing point (with
+// the outward direction out of the notch). And next to a gap narrower than the margin, one step outside safety never
+// moves further than the step (no jump across or past the gap).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialSafeZoneNotchTest, "GFGame.Social.SafeZoneNotch", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFSocialSafeZoneNotchTest::RunTest(const FString&)
+{
+	FWorld W;
+	if (!W.Init(*this, TEXT("GFSocialSafeZoneNotch")))
+	{
+		return false;
+	}
+	UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(W.World);
+	FGFSafeCircles OwnCircle;
+	OwnCircle.Regions = { Disc(TEXT("A"), FVector::ZeroVector, 1000.f) };
+	TSharedPtr<FGFSafeCircles> Other = MakeShared<FGFSafeCircles>();
+	Other->Regions = { Disc(TEXT("B"), FVector(1500.f, 0.f, 0.f), 1000.f) };
+	UGFTestZoneProvider* OtherProvider = NewObject<UGFTestZoneProvider>(W.World);
+	OtherProvider->Query = Other;
+	Zones->RegisterProvider(OtherProvider);
+	FGFSafeZoneUnion Union;
+	Union.Own = &OwnCircle;
+	Union.Zones = Zones;
+
+	const FVector Inside(750.f, 400.f, 0.f);
+	const FVector Notch(750.f, FMath::Sqrt(1000.f * 1000.f - 750.f * 750.f), 0.f);
+	FVector EdgeP, Outward;
+	TestTrue(TEXT("Inside both circles"), Union.IsInsideSafe(Inside) && OwnCircle.IsInsideSafe(Inside) && Other->IsInsideSafe(Inside));
+	TestTrue(FString::Printf(TEXT("Nearest border is the notch (got %.1f, %.1f)"), EdgeP.X, EdgeP.Y),
+		Union.ClosestEdge(Inside, EdgeP, Outward) && FVector::Dist2D(EdgeP, Notch) < 2.f);
+	TestTrue(FString::Printf(TEXT("Outward points out of the notch (got %.2f, %.2f)"), Outward.X, Outward.Y), Outward.Y > 0.99f);
+	TestTrue(TEXT("From the other side too"), Union.ClosestEdge(FVector(750.f, -400.f, 0.f), EdgeP, Outward)
+		&& FVector::Dist2D(EdgeP, FVector(Notch.X, -Notch.Y, 0.f)) < 2.f && Outward.Y < -0.99f);
+	TestTrue(TEXT("Away from the notch, the plain border"), Union.ClosestEdge(FVector(-500.f, 0.f, 0.f), EdgeP, Outward)
+		&& FVector::Dist2D(EdgeP, FVector(-1000.f, 0.f, 0.f)) < 1.f && Outward.X < -0.99f);
+	const float Margin = 350.f;
+	const FVector Out = FGFSafeZone::KeepOut(Union, Inside, Margin);
+	TestTrue(FString::Printf(TEXT("Pushed out through the notch (%.0f, %.0f)"), Out.X, Out.Y), FGFSafeZone::IsClear(Union, Out, Margin) && Out.Y > Notch.Y);
+	Zones->UnregisterProvider(OtherProvider);
+	TestTrue(TEXT("The provider's circle leaves the union"), !Union.IsInsideSafe(FVector(2000.f, 0.f, 0.f)));
+
+	// A 600-wide gap (narrower than twice the margin): from either mouth, one step never jumps.
+	FGFSafeCircles Two;
+	Two.Regions = { Disc(TEXT("A"), FVector::ZeroVector, 1000.f), Disc(TEXT("B"), FVector(2600.f, 0.f, 0.f), 1000.f) };
+	const float StepLen = 66.f;
+	for (const float Y : { 900.f, -900.f })
+	{
+		FVector P(1300.f, Y, 0.f);
+		const FVector Goal(1300.f, -Y, 0.f);
+		float Longest = 0.f;
+		bool bAlwaysClear = true;
+		for (int32 i = 0; i < 60; ++i)
+		{
+			const FVector Next = FGFSafeZone::StepOutside(Two, P, Goal, StepLen, Margin);
+			Longest = FMath::Max(Longest, FVector::Dist2D(Next, P));
+			bAlwaysClear &= FGFSafeZone::IsClear(Two, Next, Margin);
+			P = Next;
+		}
+		TestTrue(FString::Printf(TEXT("Gap mouth at y %.0f: every step within the step length (longest %.1f), always clear"), Y, Longest),
+			Longest <= StepLen + 1.f && bAlwaysClear);
+		TestTrue(TEXT("...and never through the gap"), FMath::Sign(P.Y) == FMath::Sign(Y) || FMath::Abs(P.X - 1300.f) > 1300.f);
+	}
 	return true;
 }
 

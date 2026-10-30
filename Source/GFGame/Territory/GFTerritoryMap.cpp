@@ -319,3 +319,8 @@ bool FGFTerritoryMap::HasAnySafe() const
 {
 	return Circles().HasAnySafe();
 }
+
+bool FGFTerritoryMap::IsHazardAt(const FVector& Location) const
+{
+	return GetHazardAt(Location).bHazard;
+}

@@ -14,6 +14,12 @@ class UGFTestZoneProvider : public UObject, public IGFSafeZoneProvider
 
 public:
 	TSharedPtr<IGFSafeZoneQuery> Query;
+	/** How often the zone was asked for (tests check per-step costs). */
+	mutable int32 Reads = 0;
 
-	virtual const IGFSafeZoneQuery* GetSafeZoneQuery() const override { return Query.Get(); }
+	virtual const IGFSafeZoneQuery* GetSafeZoneQuery() const override
+	{
+		++Reads;
+		return Query.Get();
+	}
 };

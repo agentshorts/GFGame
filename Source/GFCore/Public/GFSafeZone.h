@@ -46,6 +46,11 @@ public:
 	 */
 	virtual bool ClosestEdge(const FVector& Location, FVector& OutPoint, FVector& OutOutward) const = 0;
 	virtual bool HasAnySafe() const = 0;
+	/**
+	 * True where nothing should be placed (wild hazards such as lava). Zones that know no hazards answer false.
+	 * Used to keep respawn points off hazards.
+	 */
+	virtual bool IsHazardAt(const FVector& Location) const { return false; }
 };
 
 /** One circular safe region: grows with its member count up to a cap. Id is an opaque key (no names in code). */
@@ -86,11 +91,20 @@ struct GFCORE_API FGFSafeZone
 	static float DistanceOutside(const IGFSafeZoneQuery& Zone, const FVector& P);
 	/** Horizontal unit direction toward safety from P (for a point inside: inward from the nearest border). */
 	static FVector DirToSafe(const IGFSafeZoneQuery& Zone, const FVector& P);
-	/** P pushed out (horizontally) until it's at least Margin outside every safe region. */
+	/**
+	 * P pushed out (horizontally) until it's at least Margin outside every safe region. Where pushing out from the
+	 * nearest border keeps landing in another region's margin (gaps narrower than 2 * Margin), it searches outward for
+	 * the nearest clear spot, which is far more work: call it once, not every step.
+	 */
 	static FVector KeepOut(const IGFSafeZoneQuery& Zone, const FVector& P, float Margin);
 	/** True if P is at least Margin outside safety (with a small tolerance). */
 	static bool IsClear(const IGFSafeZoneQuery& Zone, const FVector& P, float Margin);
-	/** One step of StepLen from From toward Goal that stays Margin outside safety (slides along borders). */
+	/**
+	 * One step toward Goal that stays Margin outside safety: straight, else sliding along the border, else the clear
+	 * direction closest to the wanted one. From a clear spot it never moves more than StepLen (it stays put when no
+	 * direction is clear, e.g. at the mouth of a gap too narrow to pass). From a spot that safety grew over, it is
+	 * pushed out at once (KeepOut), however far that is.
+	 */
 	static FVector StepOutside(const IGFSafeZoneQuery& Zone, const FVector& From, const FVector& Goal, float StepLen, float Margin);
 };
 
@@ -123,6 +137,11 @@ class GFCORE_API IGFSafeZoneProvider
 public:
 	/** The provider's current zone (null = it has none right now). */
 	virtual const IGFSafeZoneQuery* GetSafeZoneQuery() const = 0;
+	/**
+	 * What answers IsHazardAt for this provider, also while it has no safe area (wild hazards exist before anyone
+	 * holds land). Defaults to GetSafeZoneQuery.
+	 */
+	virtual const IGFSafeZoneQuery* GetHazardQuery() const { return GetSafeZoneQuery(); }
 };
 
 /**
@@ -156,6 +175,8 @@ public:
 	 * first and the first owner wins, so a newer provider without owners (the giant's circles) does not hide land.
 	 */
 	FName OwnerAt(const FVector& Location) const;
+	/** A wild hazard at Location (IGFSafeZoneQuery::IsHazardAt): the override, or any provider but Skip (GetHazardQuery). */
+	bool IsHazardAt(const FVector& Location, const UObject* Skip = nullptr) const;
 
 	/** Registers (or moves) Owner's no-entry box (FGFNoEntry). Works wherever Owner exists (server and clients). */
 	void SetNoEntry(const UObject* Owner, const FBox& Box);
@@ -169,6 +190,8 @@ public:
 	 * The override is a whole-world replacement, not a provider, so it is not in this list.
 	 */
 	TArray<const IGFSafeZoneQuery*> GetProviderZones(const UObject* Skip = nullptr) const;
+	/** GetProviderZones into a caller's buffer (appended; no allocation once the buffer has grown). */
+	void AppendProviderZones(TArray<const IGFSafeZoneQuery*>& Out, const UObject* Skip = nullptr) const;
 
 private:
 	/** The query that owns the land at Location (override alone when set, else providers newest first), or null. */
@@ -181,16 +204,21 @@ private:
 
 /**
  * Several zones' shapes as one: Own (optional) plus every provider zone in Zones except Skip
- * (UGFSafeZoneSubsystem::GetProviderZones). The list is read again on every query, so the union follows providers
- * as they appear, grow or go away. Inside is "inside any part". Edges are the parts' edges that no other part covers.
- * Owned land answers OwnerAt and IsSafeFor through the part that owns it. Elsewhere any part that says safe wins.
- * A query that re-enters the same union (two unions that see each other) gets an empty zone, so it can't loop.
+ * (UGFSafeZoneSubsystem::GetProviderZones). The list is read again on every query (or once per FPartsScope), so the
+ * union follows providers as they appear, grow or go away. Inside is "inside any part". Edges are the parts' borders
+ * that no other part covers, plus the points where two parts' borders cross (the notch between two overlapping
+ * parts). Owned land answers OwnerAt and IsSafeFor through the part that owns it. Elsewhere any part that says safe
+ * wins. Hazards: Own's, plus any provider's (UGFSafeZoneSubsystem::IsHazardAt, also providers without land). A query that re-enters the same union (two unions that see each other) gets
+ * an empty zone, so it can't loop.
+ * Own is not owned: the caller keeps it alive for as long as the union is queried.
  */
 struct GFCORE_API FGFSafeZoneUnion : public IGFSafeZoneQuery
 {
 	const IGFSafeZoneQuery* Own = nullptr;
 	TWeakObjectPtr<const UGFSafeZoneSubsystem> Zones;
 	TWeakObjectPtr<const UObject> Skip;
+	/** Own counts only while no provider has a safe area (a stand-in until real land exists). */
+	bool bOwnOnlyWithoutLand = false;
 
 	virtual bool IsInsideSafe(const FVector& Location) const override;
 	virtual bool IsSafeFor(const FGFSafeSubject& Who, const FVector& Location) const override;
@@ -198,9 +226,33 @@ struct GFCORE_API FGFSafeZoneUnion : public IGFSafeZoneQuery
 	virtual FVector ClosestSafePoint(const FVector& Location) const override;
 	virtual bool ClosestEdge(const FVector& Location, FVector& OutPoint, FVector& OutOutward) const override;
 	virtual bool HasAnySafe() const override;
+	virtual bool IsHazardAt(const FVector& Location) const override;
+
+	/**
+	 * While one is alive, the parts are read once and reused by every query (e.g. for one sim step), instead of
+	 * asking the subsystem each time. Providers must not come or go meanwhile. Nests; a null union is a no-op.
+	 */
+	struct GFCORE_API FPartsScope
+	{
+		explicit FPartsScope(const FGFSafeZoneUnion* InUnion);
+		~FPartsScope();
+		FPartsScope(const FPartsScope&) = delete;
+		FPartsScope& operator=(const FPartsScope&) = delete;
+
+	private:
+		const FGFSafeZoneUnion* Union = nullptr;
+	};
 
 private:
-	/** Own first, then providers newest first. Only parts with a safe area. */
-	TArray<const IGFSafeZoneQuery*, TInlineAllocator<8>> Parts() const;
+	/**
+	 * The parts with a safe area: Own first (unless bOwnOnlyWithoutLand and a provider has land), then providers
+	 * newest first. Filled into a reused buffer; only valid until the next call (the Depth guard keeps queries from
+	 * re-entering this union while one is iterating).
+	 */
+	const TArray<const IGFSafeZoneQuery*>& Parts() const;
 	mutable int32 Depth = 0;
+	mutable int32 ScopeDepth = 0;
+	mutable bool bPartsCached = false;
+	mutable TArray<const IGFSafeZoneQuery*> PartsBuffer;
+	mutable TArray<const IGFSafeZoneQuery*> ProviderBuffer;
 };

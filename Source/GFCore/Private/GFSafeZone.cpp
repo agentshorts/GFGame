@@ -154,19 +154,29 @@ bool FGFSafeZone::IsClear(const IGFSafeZoneQuery& Zone, const FVector& P, float 
 	return !Zone.IsInsideSafe(P) && DistanceOutside(Zone, P) >= Margin - 0.5f;
 }
 
+namespace GFSafeZonePrivate
+{
+	/** KeepOut's cheap part: push out from the nearest border, a few times. May end up still not clear. */
+	static FVector PushFromEdges(const IGFSafeZoneQuery& Zone, const FVector& P, float Margin, int32 MaxIter)
+	{
+		FVector Out = P;
+		for (int32 Iter = 0; Iter < MaxIter && !FGFSafeZone::IsClear(Zone, Out, Margin); ++Iter)
+		{
+			FVector EdgeP, Outward;
+			if (!Zone.ClosestEdge(Out, EdgeP, Outward))
+			{
+				break;
+			}
+			Out = EdgeP + Outward * (Margin + 0.5f);
+			Out.Z = P.Z;
+		}
+		return Out;
+	}
+}
+
 FVector FGFSafeZone::KeepOut(const IGFSafeZoneQuery& Zone, const FVector& P, float Margin)
 {
-	FVector Out = P;
-	for (int32 Iter = 0; Iter < 12 && !IsClear(Zone, Out, Margin); ++Iter)
-	{
-		FVector EdgeP, Outward;
-		if (!Zone.ClosestEdge(Out, EdgeP, Outward))
-		{
-			break;
-		}
-		Out = EdgeP + Outward * (Margin + 0.5f);
-		Out.Z = P.Z;
-	}
+	FVector Out = GFSafeZonePrivate::PushFromEdges(Zone, P, Margin, 12);
 	if (IsClear(Zone, Out, Margin))
 	{
 		return Out;
@@ -201,22 +211,50 @@ FVector FGFSafeZone::StepOutside(const IGFSafeZoneQuery& Zone, const FVector& Fr
 		return KeepOut(Zone, From, Margin);
 	}
 	const FVector Dir = Want.GetSafeNormal();
-	FVector Next = From + Dir * Len;
-	if (!IsClear(Zone, Next, Margin))
+	const FVector Next = From + Dir * Len;
+	if (IsClear(Zone, Next, Margin))
 	{
-		// Slide along the border instead of pushing into it.
-		FVector EdgeP, Outward;
-		if (Zone.ClosestEdge(From, EdgeP, Outward))
+		return Next;
+	}
+	// Slide along the border instead of pushing into it.
+	FVector EdgeP, Outward;
+	FVector Tangent = FVector::ZeroVector;
+	if (Zone.ClosestEdge(From, EdgeP, Outward))
+	{
+		Tangent = FVector(-Outward.Y, Outward.X, 0.f).GetSafeNormal();
+		if (FVector::DotProduct(Tangent, Dir) < 0.f)
 		{
-			FVector Tangent(-Outward.Y, Outward.X, 0.f);
-			if (FVector::DotProduct(Tangent, Dir) < 0.f)
-			{
-				Tangent = -Tangent;
-			}
-			Next = From + Tangent * Len;
+			Tangent = -Tangent;
 		}
 	}
-	return KeepOut(Zone, Next, Margin);
+	if (!IsClear(Zone, From, Margin))
+	{
+		// Safety grew under it: out at once, as far as it takes.
+		return KeepOut(Zone, Tangent.IsNearlyZero() ? Next : From + Tangent * Len, Margin);
+	}
+	// From a clear spot: at most one step. Slide (pushed back out from the border, the cheap way)...
+	if (!Tangent.IsNearlyZero())
+	{
+		const FVector Slid = GFSafeZonePrivate::PushFromEdges(Zone, From + Tangent * Len, Margin, 4);
+		if (IsClear(Zone, Slid, Margin) && FVector::Dist2D(Slid, From) <= Len + 1.f)
+		{
+			return Slid;
+		}
+	}
+	// ...else the clear direction nearest the wanted one (15 degree steps, either side), else stay put: never a jump
+	// across or past a gap too narrow to pass.
+	for (int32 k = 1; k <= 12; ++k)
+	{
+		for (const float Side : { 1.f, -1.f })
+		{
+			const FVector P = From + Dir.RotateAngleAxis(Side * 15.f * k, FVector::UpVector) * Len;
+			if (IsClear(Zone, P, Margin))
+			{
+				return P;
+			}
+		}
+	}
+	return From;
 }
 
 // ---------------- No-entry boxes ----------------
@@ -321,6 +359,33 @@ bool UGFSafeZoneSubsystem::IsSafeFor(const FGFSafeSubject& Who, const FVector& L
 	return Q && Q->HasAnySafe() && Q->IsSafeFor(Who, Location);
 }
 
+bool UGFSafeZoneSubsystem::IsHazardAt(const FVector& Location, const UObject* Skip) const
+{
+	if (Override.IsValid() && Override->IsHazardAt(Location))
+	{
+		return true;
+	}
+	for (int32 i = Providers.Num() - 1; i >= 0; --i)
+	{
+		const UObject* Obj = Providers[i].Get();
+		if (!Obj || Obj == Skip)
+		{
+			continue;
+		}
+		if (const IGFSafeZoneProvider* P = Cast<IGFSafeZoneProvider>(Obj))
+		{
+			if (const IGFSafeZoneQuery* Q = P->GetHazardQuery())
+			{
+				if (Q->IsHazardAt(Location))
+				{
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
 FName UGFSafeZoneSubsystem::OwnerAt(const FVector& Location) const
 {
 	FName Owner;
@@ -371,6 +436,12 @@ void UGFSafeZoneSubsystem::ClearNoEntry(const UObject* Owner)
 TArray<const IGFSafeZoneQuery*> UGFSafeZoneSubsystem::GetProviderZones(const UObject* Skip) const
 {
 	TArray<const IGFSafeZoneQuery*> Out;
+	AppendProviderZones(Out, Skip);
+	return Out;
+}
+
+void UGFSafeZoneSubsystem::AppendProviderZones(TArray<const IGFSafeZoneQuery*>& Out, const UObject* Skip) const
+{
 	for (int32 i = Providers.Num() - 1; i >= 0; --i)
 	{
 		UObject* Obj = Providers[i].Get();
@@ -386,7 +457,6 @@ TArray<const IGFSafeZoneQuery*> UGFSafeZoneSubsystem::GetProviderZones(const UOb
 			}
 		}
 	}
-	return Out;
 }
 
 TArray<FBox> UGFSafeZoneSubsystem::GetNoEntry() const
@@ -405,24 +475,49 @@ TArray<FBox> UGFSafeZoneSubsystem::GetNoEntry() const
 
 // ---------------- Union ----------------
 
-TArray<const IGFSafeZoneQuery*, TInlineAllocator<8>> FGFSafeZoneUnion::Parts() const
+FGFSafeZoneUnion::FPartsScope::FPartsScope(const FGFSafeZoneUnion* InUnion)
+	: Union(InUnion)
 {
-	TArray<const IGFSafeZoneQuery*, TInlineAllocator<8>> Out;
-	if (Own && Own->HasAnySafe())
+	if (Union)
 	{
-		Out.Add(Own);
+		++Union->ScopeDepth;
 	}
+}
+
+FGFSafeZoneUnion::FPartsScope::~FPartsScope()
+{
+	if (Union && --Union->ScopeDepth <= 0)
+	{
+		Union->ScopeDepth = 0;
+		Union->bPartsCached = false;
+	}
+}
+
+const TArray<const IGFSafeZoneQuery*>& FGFSafeZoneUnion::Parts() const
+{
+	if (ScopeDepth > 0 && bPartsCached)
+	{
+		return PartsBuffer;
+	}
+	PartsBuffer.Reset();
+	ProviderBuffer.Reset();
 	if (const UGFSafeZoneSubsystem* Sub = Zones.Get())
 	{
-		for (const IGFSafeZoneQuery* Q : Sub->GetProviderZones(Skip.Get()))
+		Sub->AppendProviderZones(ProviderBuffer, Skip.Get());
+	}
+	for (const IGFSafeZoneQuery* Q : ProviderBuffer)
+	{
+		if (Q && Q != this && Q != Own && Q->HasAnySafe())
 		{
-			if (Q && Q != this && Q->HasAnySafe())
-			{
-				Out.Add(Q);
-			}
+			PartsBuffer.Add(Q);
 		}
 	}
-	return Out;
+	if (Own && Own->HasAnySafe() && !(bOwnOnlyWithoutLand && PartsBuffer.Num() > 0))
+	{
+		PartsBuffer.Insert(Own, 0);
+	}
+	bPartsCached = ScopeDepth > 0;
+	return PartsBuffer;
 }
 
 bool FGFSafeZoneUnion::HasAnySafe() const
@@ -452,6 +547,21 @@ bool FGFSafeZoneUnion::IsInsideSafe(const FVector& Location) const
 	return false;
 }
 
+bool FGFSafeZoneUnion::IsHazardAt(const FVector& Location) const
+{
+	if (Depth > 0)
+	{
+		return false;
+	}
+	TGuardValue<int32> Guard(Depth, Depth + 1);
+	if (Own && Own->IsHazardAt(Location))
+	{
+		return true;
+	}
+	const UGFSafeZoneSubsystem* Sub = Zones.Get();
+	return Sub && Sub->IsHazardAt(Location, Skip.Get());
+}
+
 FName FGFSafeZoneUnion::OwnerAt(const FVector& Location) const
 {
 	if (Depth > 0)
@@ -477,7 +587,7 @@ bool FGFSafeZoneUnion::IsSafeFor(const FGFSafeSubject& Who, const FVector& Locat
 		return false;
 	}
 	TGuardValue<int32> Guard(Depth, Depth + 1);
-	const TArray<const IGFSafeZoneQuery*, TInlineAllocator<8>> All = Parts();
+	const TArray<const IGFSafeZoneQuery*>& All = Parts();
 	// Owned land: only its owner decides (protection, guests, visitors).
 	for (const IGFSafeZoneQuery* Q : All)
 	{
@@ -503,7 +613,7 @@ FVector FGFSafeZoneUnion::ClosestSafePoint(const FVector& Location) const
 		return Location;
 	}
 	TGuardValue<int32> Guard(Depth, Depth + 1);
-	const TArray<const IGFSafeZoneQuery*, TInlineAllocator<8>> All = Parts();
+	const TArray<const IGFSafeZoneQuery*>& All = Parts();
 	FVector Best = Location;
 	float BestD = TNumericLimits<float>::Max();
 	for (const IGFSafeZoneQuery* Q : All)
@@ -524,6 +634,50 @@ FVector FGFSafeZoneUnion::ClosestSafePoint(const FVector& Location) const
 	return Best;
 }
 
+namespace GFSafeZonePrivate
+{
+	/**
+	 * Where the borders of A and B cross, near Start (a point on A's border inside B): project back and forth between
+	 * the two borders until it settles. Outward is the mean of both outward directions (out of the notch). False if
+	 * the borders don't meet near Start.
+	 */
+	static bool CrossBorders(const IGFSafeZoneQuery& A, const IGFSafeZoneQuery& B, const FVector& Start, FVector& OutPoint, FVector& OutOutward)
+	{
+		FVector X = Start, Y = Start, NA = FVector::ZeroVector, NB = FVector::ZeroVector;
+		for (int32 It = 0; It < 64; ++It)
+		{
+			FVector Yb, Nb, Xa, Na;
+			if (!B.ClosestEdge(X, Yb, Nb) || !A.ClosestEdge(Yb, Xa, Na))
+			{
+				return false;
+			}
+			const float Moved = FVector::Dist2D(Xa, X);
+			X = Xa;
+			Y = Yb;
+			NA = Na;
+			NB = Nb;
+			if (Moved < 0.1f)
+			{
+				break;
+			}
+		}
+		if (FVector::Dist2D(X, Y) > 1.f)
+		{
+			return false;
+		}
+		FVector N = NA.GetSafeNormal2D() + NB.GetSafeNormal2D();
+		N.Z = 0.f;
+		N = N.GetSafeNormal();
+		if (N.IsNearlyZero())
+		{
+			return false;
+		}
+		OutPoint = FVector((X.X + Y.X) * 0.5f, (X.Y + Y.Y) * 0.5f, Start.Z);
+		OutOutward = N;
+		return true;
+	}
+}
+
 bool FGFSafeZoneUnion::ClosestEdge(const FVector& Location, FVector& OutPoint, FVector& OutOutward) const
 {
 	if (Depth > 0)
@@ -531,23 +685,23 @@ bool FGFSafeZoneUnion::ClosestEdge(const FVector& Location, FVector& OutPoint, F
 		return false;
 	}
 	TGuardValue<int32> Guard(Depth, Depth + 1);
-	const TArray<const IGFSafeZoneQuery*, TInlineAllocator<8>> All = Parts();
+	const TArray<const IGFSafeZoneQuery*>& All = Parts();
+	// The part (other than SkipA and SkipB) that has P inside, or INDEX_NONE.
+	auto CoveredBy = [&All](const FVector& P, int32 SkipA, int32 SkipB)
+	{
+		for (int32 j = 0; j < All.Num(); ++j)
+		{
+			if (j != SkipA && j != SkipB && All[j]->IsInsideSafe(P))
+			{
+				return j;
+			}
+		}
+		return int32(INDEX_NONE);
+	};
 	bool bAny = false, bFree = false;
 	float BestD = TNumericLimits<float>::Max();
-	for (int32 i = 0; i < All.Num(); ++i)
+	auto Offer = [&](const FVector& P, const FVector& N, bool bCovered)
 	{
-		FVector P, N;
-		if (!All[i]->ClosestEdge(Location, P, N))
-		{
-			continue;
-		}
-		// A border point that lies inside another part (just outside this one) is not a border of the union.
-		const FVector Beyond = P + N.GetSafeNormal2D() * 2.f;
-		bool bCovered = false;
-		for (int32 j = 0; j < All.Num() && !bCovered; ++j)
-		{
-			bCovered = j != i && All[j]->IsInsideSafe(Beyond);
-		}
 		const float D = FVector::DistSquared2D(P, Location);
 		// Uncovered borders win; a covered one is used only when every border is covered.
 		if ((!bCovered && (!bFree || D < BestD)) || (bCovered && !bFree && D < BestD))
@@ -557,6 +711,27 @@ bool FGFSafeZoneUnion::ClosestEdge(const FVector& Location, FVector& OutPoint, F
 			BestD = D;
 			OutPoint = P;
 			OutOutward = N;
+		}
+	};
+	for (int32 i = 0; i < All.Num(); ++i)
+	{
+		FVector P, N;
+		if (!All[i]->ClosestEdge(Location, P, N))
+		{
+			continue;
+		}
+		// A border point that lies inside another part (just outside this one) is not a border of the union...
+		const int32 j = CoveredBy(P + N.GetSafeNormal2D() * 2.f, i, INDEX_NONE);
+		Offer(P, N, j != INDEX_NONE);
+		if (j == INDEX_NONE)
+		{
+			continue;
+		}
+		// ...but where this border runs into part j, the two borders cross: that notch is a border of the union.
+		FVector Q, NQ;
+		if (GFSafeZonePrivate::CrossBorders(*All[i], *All[j], P, Q, NQ) && CoveredBy(Q + NQ * 2.f, INDEX_NONE, INDEX_NONE) == INDEX_NONE)
+		{
+			Offer(Q, NQ, false);
 		}
 	}
 	return bAny;

@@ -57,6 +57,8 @@ public:
 	const FGFTerritoryMap& GetMap() const { return Map; }
 
 	virtual const IGFSafeZoneQuery* GetSafeZoneQuery() const override;
+	/** The map, also before anyone holds land: wild hazards are known from the start. */
+	virtual const IGFSafeZoneQuery* GetHazardQuery() const override { return &Map; }
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
