@@ -234,6 +234,11 @@ FGFFerryPassPlan FGFFerryRules::PlanPass(
 	FGFFerryPassPlan Plan;
 	Plan.BurnTx = DeriveTxId(RequestId, PassBurnSalt);
 	Plan.MintTx = DeriveTxId(RequestId, PassMintSalt);
+	if (!bAuthority)
+	{
+		Plan.Result = Fail(FGFFerryCodes::NotAuthority);
+		return Plan;
+	}
 	if (HasPass(Inventory, Tuning) || bMintAlreadyApplied)
 	{
 		Plan.Result = Fail(FGFFerryCodes::AlreadyHasPass);
