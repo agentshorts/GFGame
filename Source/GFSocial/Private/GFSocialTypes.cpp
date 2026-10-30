@@ -118,6 +118,42 @@ FName FGFSocialRules::CanRelease(const FGFSocialPlayer& By, const FGFSocialPlaye
 	return JailPower(By, Target);
 }
 
+FString FGFSocialRules::ChooseLeader(const TArray<FGFSocialPlayer>& Online)
+{
+	const FGFSocialPlayer* BestFree = nullptr;
+	const FGFSocialPlayer* BestAny = nullptr;
+	auto Before = [](const FGFSocialPlayer& A, const FGFSocialPlayer& B)
+	{
+		const bool ALate = A.ClaimOrder <= 0;
+		const bool BLate = B.ClaimOrder <= 0;
+		if (ALate != BLate)
+		{
+			return BLate; // a recorded claim comes before "no order"
+		}
+		if (!ALate && A.ClaimOrder != B.ClaimOrder)
+		{
+			return A.ClaimOrder < B.ClaimOrder;
+		}
+		return A.Key.Compare(B.Key) < 0;
+	};
+	for (const FGFSocialPlayer& M : Online)
+	{
+		if (M.Key.IsEmpty())
+		{
+			continue;
+		}
+		if (!BestAny || Before(M, *BestAny))
+		{
+			BestAny = &M;
+		}
+		if (!M.bJailed && (!BestFree || Before(M, *BestFree)))
+		{
+			BestFree = &M;
+		}
+	}
+	return BestFree ? BestFree->Key : (BestAny ? BestAny->Key : FString());
+}
+
 FName FGFSocialRules::CanKickOrBan(const FGFSocialPlayer& By, const FGFSocialPlayer& Target)
 {
 	if (By.Key == Target.Key)

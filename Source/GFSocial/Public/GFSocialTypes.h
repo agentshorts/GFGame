@@ -79,6 +79,8 @@ struct GFSOCIAL_API FGFSocialPlayer
 	bool bJailed = false;
 	/** Leader of their own faction. */
 	bool bLeader = false;
+	/** First claim of Faction. 0 = not recorded, so ChooseLeader sorts them last. */
+	int32 ClaimOrder = 0;
 
 	FGFSocialPlayer() = default;
 	FGFSocialPlayer(const FString& InKey, FName InFaction, bool bInHost = false, bool bInSafe = true, bool bInLeader = false)
@@ -128,6 +130,11 @@ struct GFSOCIAL_API FGFSocialRules
 	 * prisoner stays jailed until someone with jail power releases them (or the session ends).
 	 */
 	static FName CanRelease(const FGFSocialPlayer& By, const FGFSocialPlayer& Target);
+	/**
+	 * Leader among online members of one faction (pass only those). Earliest ClaimOrder wins. Jailed members are
+	 * skipped unless every member is jailed. ClaimOrder <= 0 sorts last. Empty if Online is empty.
+	 */
+	static FString ChooseLeader(const TArray<FGFSocialPlayer>& Online);
 	/** Kick and ban (and unban: Target = the banned player). The one place to change who may do it: host only today. */
 	static FName CanKickOrBan(const FGFSocialPlayer& By, const FGFSocialPlayer& Target);
 
