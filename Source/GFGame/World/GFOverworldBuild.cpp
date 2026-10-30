@@ -1,4 +1,5 @@
 #include "GFOverworldBuild.h"
+#include "GFZoneTypes.h"
 
 namespace
 {
@@ -242,8 +243,16 @@ FName FGFOverworldLayout::BlockAt(const FIntVector& Cell) const
 		break;
 	case ETheme::Wild:
 	default:
-		Surface = ((Cell.X * 3 + Cell.Y) % 7) == 0 ? GFOverworldBlock::Stone() : GFOverworldBlock::Dirt();
-		Fill = GFOverworldBlock::Stone();
+		if (bKindleGrass)
+		{
+			Surface = GFOverworldBlock::Grass();
+			Fill = GFOverworldBlock::Dirt();
+		}
+		else
+		{
+			Surface = ((Cell.X * 3 + Cell.Y) % 7) == 0 ? GFOverworldBlock::Stone() : GFOverworldBlock::Dirt();
+			Fill = GFOverworldBlock::Stone();
+		}
 		break;
 	}
 
@@ -335,6 +344,21 @@ FGFOverworldLayout FGFOverworldBuild::Make(
 		FMath::Max(1, FMath::CeilToInt(Width / FGFOverworldLayout::BlockCm)),
 		FMath::Max(1, FMath::CeilToInt(Height / FGFOverworldLayout::BlockCm)),
 		FGFOverworldLayout::GridZ);
+	return Layout;
+}
+
+FGFOverworldLayout FGFOverworldBuild::MakeKindleRing(
+	const FGFTerritoryCurve& Curve,
+	const TArray<FGFTerritoryFaction>& Factions,
+	const TArray<FGFTerritoryHazard>& Hazards,
+	float MarginCm)
+{
+	FGFOverworldLayout Layout = Make(Curve, Factions, Hazards, MarginCm);
+	const float Half = FGFZoneConstants::KindleRadiusCm + FGFZoneConstants::StampMarginCm;
+	Layout.Origin = FVector(-Half, -Half, -static_cast<float>(FGFOverworldLayout::FillLayers) * FGFOverworldLayout::BlockCm);
+	Layout.SurfaceZ = FGFOverworldLayout::FillLayers - 1;
+	Layout.GridSize = FIntVector(FGFZoneConstants::KindleStampBlocks, FGFZoneConstants::KindleStampBlocks, FGFOverworldLayout::GridZ);
+	Layout.bKindleGrass = true;
 	return Layout;
 }
 

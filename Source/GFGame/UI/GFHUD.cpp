@@ -1,4 +1,7 @@
 #include "GFHUD.h"
+#include "GFZoneCatalog.h"
+#include "GFZoneLayout.h"
+#include "GFZoneSubsystem.h"
 #include "GFHUDFormat.h"
 #include "GFCharacter.h"
 #include "GFGameState.h"
@@ -158,6 +161,7 @@ void AGFHUD::DrawHUD()
 	}
 	PollToasts();
 	DrawCrosshair();
+	DrawCompass();
 	DrawZoneLabel();
 	DrawChat();
 	DrawToasts();
@@ -179,6 +183,47 @@ void AGFHUD::DrawCrosshair()
 	DrawLine(CX, CY + Gap, CX, CY + Arm, Color, Thick);
 }
 
+void AGFHUD::DrawCompass()
+{
+	const APawn* Pawn = GetOwningPawn();
+	const APlayerController* PC = GetOwningPlayerController();
+	if (!Pawn || !PC || Canvas->ClipX < 32.f)
+	{
+		return;
+	}
+	const FGFZoneCatalog& Catalog = FGFZoneCatalog::Get();
+	const AGFPlayerState* PS = PC->GetPlayerState<AGFPlayerState>();
+	const TArray<FName> Unlocked = PS ? PS->Progress.UnlockedShardstones : TArray<FName>();
+	const float ViewYaw = PC->GetControlRotation().Yaw;
+	const FVector At = Pawn->GetActorLocation();
+	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.35f), 8.f, 4.f, Canvas->ClipX - 16.f, 18.f);
+
+	auto Mark = [this, At, ViewYaw](const FVector& Target, const FLinearColor& Color, const FString& Letter)
+	{
+		const FVector Delta = Target - At;
+		const float Yaw = FMath::RadiansToDegrees(FMath::Atan2(Delta.Y, Delta.X));
+		const float Rel = FMath::FindDeltaAngleDegrees(ViewYaw, Yaw);
+		const float X = GFCompassIconX(Rel, Canvas->ClipX);
+		DrawRect(Color, X - 4.f, 8.f, 8.f, 8.f);
+		DrawText(Letter, FLinearColor::White, X - 3.f, 6.f, HudFont(), 0.7f, false);
+	};
+
+	if (const FGFShardstoneRow* Kindle = Catalog.FindStone(FName(TEXT("Stone.Kindle"))))
+	{
+		Mark(Kindle->Location, FLinearColor(0.95f, 0.78f, 0.35f, 1.f), TEXT("K"));
+	}
+	for (const FGFRegionSlot& Slot : FGFZoneLayout::Regions())
+	{
+		const FGFShardstoneRow* Stone = Catalog.FindStone(Slot.StoneId);
+		if (!Stone || !Catalog.IsUnlocked(*Stone, Unlocked))
+		{
+			continue;
+		}
+		const FString Letter = Slot.DisplayName.IsEmpty() ? FString(TEXT("*")) : Slot.DisplayName.Left(1);
+		Mark(Stone->Location, Slot.Color, Letter);
+	}
+}
+
 void AGFHUD::DrawZoneLabel()
 {
 	const APawn* Pawn = GetOwningPawn();
@@ -198,7 +243,29 @@ void AGFHUD::DrawZoneLabel()
 	const APlayerController* PC = GetOwningPlayerController();
 	const AGFPlayerState* PS = PC ? PC->GetPlayerState<AGFPlayerState>() : nullptr;
 	const FName HazardName = !Hazard.Id.IsNone() ? Hazard.Id : Hazard.Kind;
-	const FString Label = GFFormatZoneLabel(Zone.Zone, Zone.FactionId, Territory->IsSafeFor(PS, At), Hazard.bHazard, HazardName);
+	const bool bLegacy = Zone.Zone == EGFTerritoryZone::Faction
+		|| Zone.Zone == EGFTerritoryZone::Neutral
+		|| (Hazard.bHazard && Zone.Zone == EGFTerritoryZone::Wild);
+	FString Label;
+	if (bLegacy)
+	{
+		Label = GFFormatZoneLabel(Zone.Zone, Zone.FactionId, Territory->IsSafeFor(PS, At), Hazard.bHazard, HazardName);
+	}
+	else
+	{
+		const FGFZoneCatalog& Catalog = FGFZoneCatalog::Get();
+		FName ZoneId = PS ? PS->GetCurrentZoneId() : NAME_None;
+		FGFZoneHit Hit = ZoneId.IsNone() ? Catalog.ResolveAt(At, nullptr) : Catalog.Describe(ZoneId, nullptr);
+		if (const UGFZoneSubsystem* Zones = World->GetSubsystem<UGFZoneSubsystem>(); ZoneId.IsNone() && Zones)
+		{
+			Hit = Zones->ResolveAt(At);
+		}
+		Label = GFFormatWorldZoneLabel(Hit.DisplayName, Hit.DangerTier);
+		if (Label.IsEmpty())
+		{
+			Label = GFFormatZoneLabel(Zone.Zone, Zone.FactionId, Territory->IsSafeFor(PS, At), Hazard.bHazard, HazardName);
+		}
+	}
 	if (Label.IsEmpty())
 	{
 		return;
@@ -206,12 +273,13 @@ void AGFHUD::DrawZoneLabel()
 	UFont* Font = HudFont();
 	float XL = 0.f;
 	float YL = 0.f;
+	constexpr float LabelY = 28.f;
 	if (Font)
 	{
 		Canvas->TextSize(Font, Label, XL, YL);
-		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.45f), LabelX - 6.f, 12.f, XL + 12.f, FMath::Max(YL, 14.f) + 4.f);
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.45f), LabelX - 6.f, LabelY - 2.f, XL + 12.f, FMath::Max(YL, 14.f) + 4.f);
 	}
-	DrawText(Label, FLinearColor::White, LabelX, 14.f, Font, 1.f, false);
+	DrawText(Label, FLinearColor::White, LabelX, LabelY, Font, 1.f, false);
 }
 
 void AGFHUD::NoteChatLine(int32 Seq, double Now)

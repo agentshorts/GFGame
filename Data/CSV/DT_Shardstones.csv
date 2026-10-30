@@ -1,0 +1,10 @@
+---,Id,ZoneId,Location,ArrivalOffset,bStartsUnlocked,DisplayName
+Stone.Kindle,Stone.Kindle,Zone.Kindle,"(X=0.000,Y=0.000,Z=0.000)","(X=400.000,Y=0.000,Z=120.000)",True,"Kindle Spire"
+Stone.Arena,Stone.Arena,Zone.Porch.Arena,"(X=90000.000,Y=0.000,Z=0.000)","(X=400.000,Y=0.000,Z=120.000)",False,"Cinder Crucible"
+Stone.PebbleMine,Stone.PebbleMine,Zone.Porch.PebbleMine,"(X=63639.610,Y=63639.610,Z=0.000)","(X=400.000,Y=0.000,Z=120.000)",False,"Pebblefall Quarry"
+Stone.BeatHop,Stone.BeatHop,Zone.Porch.BeatHop,"(X=0.000,Y=90000.000,Z=0.000)","(X=400.000,Y=0.000,Z=120.000)",False,"Thrum Hollow"
+Stone.Fashion,Stone.Fashion,Zone.Porch.Fashion,"(X=-63639.610,Y=63639.610,Z=0.000)","(X=400.000,Y=0.000,Z=120.000)",False,"Glimmer Terrace"
+Stone.Valley,Stone.Valley,Zone.Porch.Valley,"(X=-90000.000,Y=0.000,Z=0.000)","(X=400.000,Y=0.000,Z=120.000)",False,"Wildgrass Valley"
+Stone.HallowNight,Stone.HallowNight,Zone.Porch.HallowNight,"(X=-63639.610,Y=-63639.610,Z=0.000)","(X=400.000,Y=0.000,Z=120.000)",False,"Hallow Mire"
+Stone.GrumbleDig,Stone.GrumbleDig,Zone.Porch.GrumbleDig,"(X=-0.000,Y=-90000.000,Z=0.000)","(X=400.000,Y=0.000,Z=120.000)",False,"Grumble Dig"
+Stone.Reserved1,Stone.Reserved1,Zone.Porch.Reserved1,"(X=63639.610,Y=-63639.610,Z=0.000)","(X=400.000,Y=0.000,Z=120.000)",False,"Splitcrystal Flats"

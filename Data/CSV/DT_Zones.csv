@@ -1,0 +1,33 @@
+---,Id,Tag,DisplayName,Shape,Center,Radius,InnerRadius,HalfExtent,Priority,DangerTier,bPvPAllowed,RegionId,AmbienceId,SpawnTableId,ResourceBias
+Zone.Kindle,Zone.Kindle,Zone.Kindle,"Kindle Ring",Circle,"(X=0.000,Y=0.000,Z=0.000)",15000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",80,0,False,None,Ambience.Kindle,None,1;1;1
+Zone.Fringe,Zone.Fringe,Zone.Fringe,"The Fringe",Ring,"(X=0.000,Y=0.000,Z=0.000)",17000.000,15000.000,"(X=0.000,Y=0.000,Z=0.000)",40,1,False,None,Ambience.Fringe,Spawn.Fringe,0.6;0.5;0.6
+Zone.Badlands,Zone.Badlands,Zone.Badlands,"Badlands",Circle,"(X=0.000,Y=0.000,Z=0.000)",120000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",10,2,True,None,Ambience.Badlands,Spawn.Badlands,0.4;0.3;0.8
+Zone.DeepBadlands,Zone.DeepBadlands,Zone.DeepBadlands,"Deep Badlands",Ring,"(X=0.000,Y=0.000,Z=0.000)",120000.000,105000.000,"(X=0.000,Y=0.000,Z=0.000)",30,3,True,None,Ambience.DeepBadlands,Spawn.DeepBadlands,0.2;0.2;1.0
+Zone.Hazard.LavaBridge,Zone.Hazard.LavaBridge,Zone.Hazard.LavaBridge,"Lava Bridge",Box,"(X=3700.000,Y=0.000,Z=0.000)",0.000,0.000,"(X=2200.000,Y=300.000,Z=500.000)",50,3,True,None,Ambience.Hazard.LavaBridge,Spawn.Hazard.LavaBridge,0.2;0.2;0.6
+Zone.Hazard.DeadlyForest,Zone.Hazard.DeadlyForest,Zone.Hazard.DeadlyForest,"Deadly Forest",Box,"(X=-2300.000,Y=0.000,Z=0.000)",0.000,0.000,"(X=700.000,Y=1500.000,Z=800.000)",50,3,True,None,Ambience.Hazard.DeadlyForest,Spawn.Hazard.DeadlyForest,0.3;0.2;0.7
+Zone.Porch.Arena,Zone.Porch.Arena,Zone.Porch.Arena,"Cinder Crucible",Circle,"(X=90000.000,Y=0.000,Z=0.000)",12000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",60,1,False,Region.Arena,Ambience.Porch.Arena,Spawn.Porch.Arena,0.2;0.9;0.2
+Zone.Porch.Arena.Core,Zone.Porch.Arena.Core,Zone.Porch.Arena.Core,"Cinder Crucible",Circle,"(X=90000.000,Y=0.000,Z=0.000)",3000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",70,0,False,Region.Arena,Ambience.Kindle,None,0.2;0.9;0.2
+Zone.Porch.PebbleMine,Zone.Porch.PebbleMine,Zone.Porch.PebbleMine,"Pebblefall Quarry",Circle,"(X=63639.610,Y=63639.610,Z=0.000)",12000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",60,1,False,Region.PebbleMine,Ambience.Porch.PebbleMine,Spawn.Porch.PebbleMine,1.0;0.2;0.3
+Zone.Porch.PebbleMine.Core,Zone.Porch.PebbleMine.Core,Zone.Porch.PebbleMine.Core,"Pebblefall Quarry",Circle,"(X=63639.610,Y=63639.610,Z=0.000)",3000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",70,0,False,Region.PebbleMine,Ambience.Kindle,None,1.0;0.2;0.3
+Zone.Porch.BeatHop,Zone.Porch.BeatHop,Zone.Porch.BeatHop,"Thrum Hollow",Circle,"(X=0.000,Y=90000.000,Z=0.000)",12000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",60,1,False,Region.BeatHop,Ambience.Porch.BeatHop,Spawn.Porch.BeatHop,0.3;0.4;0.6
+Zone.Porch.BeatHop.Core,Zone.Porch.BeatHop.Core,Zone.Porch.BeatHop.Core,"Thrum Hollow",Circle,"(X=0.000,Y=90000.000,Z=0.000)",3000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",70,0,False,Region.BeatHop,Ambience.Kindle,None,0.3;0.4;0.6
+Zone.Porch.Fashion,Zone.Porch.Fashion,Zone.Porch.Fashion,"Glimmer Terrace",Circle,"(X=-63639.610,Y=63639.610,Z=0.000)",12000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",60,1,False,Region.Fashion,Ambience.Porch.Fashion,Spawn.Porch.Fashion,0.2;0.3;0.5
+Zone.Porch.Fashion.Core,Zone.Porch.Fashion.Core,Zone.Porch.Fashion.Core,"Glimmer Terrace",Circle,"(X=-63639.610,Y=63639.610,Z=0.000)",3000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",70,0,False,Region.Fashion,Ambience.Kindle,None,0.2;0.3;0.5
+Zone.Porch.Valley,Zone.Porch.Valley,Zone.Porch.Valley,"Wildgrass Valley",Circle,"(X=-90000.000,Y=0.000,Z=0.000)",12000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",60,1,False,Region.Valley,Ambience.Porch.Valley,Spawn.Porch.Valley,0.4;0.8;0.4
+Zone.Porch.Valley.Core,Zone.Porch.Valley.Core,Zone.Porch.Valley.Core,"Wildgrass Valley",Circle,"(X=-90000.000,Y=0.000,Z=0.000)",3000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",70,0,False,Region.Valley,Ambience.Kindle,None,0.4;0.8;0.4
+Zone.Porch.HallowNight,Zone.Porch.HallowNight,Zone.Porch.HallowNight,"Hallow Mire",Circle,"(X=-63639.610,Y=-63639.610,Z=0.000)",12000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",60,1,False,Region.HallowNight,Ambience.Porch.HallowNight,Spawn.Porch.HallowNight,0.5;0.3;0.7
+Zone.Porch.HallowNight.Core,Zone.Porch.HallowNight.Core,Zone.Porch.HallowNight.Core,"Hallow Mire",Circle,"(X=-63639.610,Y=-63639.610,Z=0.000)",3000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",70,0,False,Region.HallowNight,Ambience.Kindle,None,0.5;0.3;0.7
+Zone.Porch.GrumbleDig,Zone.Porch.GrumbleDig,Zone.Porch.GrumbleDig,"Grumble Dig",Circle,"(X=-0.000,Y=-90000.000,Z=0.000)",12000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",60,1,False,Region.GrumbleDig,Ambience.Porch.GrumbleDig,Spawn.Porch.GrumbleDig,0.9;0.4;0.3
+Zone.Porch.GrumbleDig.Core,Zone.Porch.GrumbleDig.Core,Zone.Porch.GrumbleDig.Core,"Grumble Dig",Circle,"(X=-0.000,Y=-90000.000,Z=0.000)",3000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",70,0,False,Region.GrumbleDig,Ambience.Kindle,None,0.9;0.4;0.3
+Zone.Porch.Reserved1,Zone.Porch.Reserved1,Zone.Porch.Reserved1,"Splitcrystal Flats",Circle,"(X=63639.610,Y=-63639.610,Z=0.000)",12000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",60,1,False,Region.Reserved1,Ambience.Porch.Reserved1,Spawn.Porch.Reserved1,0.3;0.3;0.3
+Zone.Porch.Reserved1.Core,Zone.Porch.Reserved1.Core,Zone.Porch.Reserved1.Core,"Splitcrystal Flats",Circle,"(X=63639.610,Y=-63639.610,Z=0.000)",3000.000,0.000,"(X=0.000,Y=0.000,Z=0.000)",70,0,False,Region.Reserved1,Ambience.Kindle,None,0.3;0.3;0.3
+# Outer ring at 1.05 km, on hold, not built. Same 45 degree bearings as the porch ring. No stones, no gates.
+# Push the Cart, Tower Defense, Factory, Old West, and four reserved slots. Radius slot 80 m. Agents: do not uncomment.
+# Bearing 0, Region.PushTheCart, center (X=105000.000,Y=0.000,Z=0.000), slot radius 8000
+# Bearing 45, Region.TowerDefense, center (X=74246.212,Y=74246.212,Z=0.000), slot radius 8000
+# Bearing 90, Region.Factory, center (X=0.000,Y=105000.000,Z=0.000), slot radius 8000
+# Bearing 135, Region.OldWest, center (X=-74246.212,Y=74246.212,Z=0.000), slot radius 8000
+# Bearing 180, Region.Reserved2, center (X=-105000.000,Y=0.000,Z=0.000), slot radius 8000
+# Bearing 225, Region.Reserved3, center (X=-74246.212,Y=-74246.212,Z=0.000), slot radius 8000
+# Bearing 270, Region.Reserved4, center (X=-0.000,Y=-105000.000,Z=0.000), slot radius 8000
+# Bearing 315, Region.Reserved5, center (X=74246.212,Y=-74246.212,Z=0.000), slot radius 8000

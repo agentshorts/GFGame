@@ -47,6 +47,27 @@ UDataTable* FGFDataTables::FromCsv(const TCHAR* CsvName, UScriptStruct* RowStruc
 		UE_LOG(LogGF, Warning, TEXT("GFDataTables: no asset and no CSV at %s"), *CsvPath(CsvName));
 		return nullptr;
 	}
+	// Full-line # notes are for agents. The engine CSV parser has no comments.
+	{
+		TArray<FString> Lines;
+		Csv.ParseIntoArrayLines(Lines, false);
+		FString Kept;
+		for (const FString& Line : Lines)
+		{
+			int32 Index = 0;
+			while (Index < Line.Len() && FChar::IsWhitespace(Line[Index]))
+			{
+				++Index;
+			}
+			if (Index < Line.Len() && Line[Index] == TCHAR('#'))
+			{
+				continue;
+			}
+			Kept += Line;
+			Kept += LINE_TERMINATOR;
+		}
+		Csv = MoveTemp(Kept);
+	}
 	UDataTable* Table = NewObject<UDataTable>(GetTransientPackage(), MakeUniqueObjectName(GetTransientPackage(), UDataTable::StaticClass(), FName(CsvName)));
 	Table->RowStruct = RowStruct;
 	const TArray<FString> Problems = Table->CreateTableFromCSVString(Csv);

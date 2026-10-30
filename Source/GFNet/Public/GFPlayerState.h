@@ -7,6 +7,8 @@
 #include "GFTamer.h"
 #include "GFPlayerState.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGFOnZoneChanged, FName, OldZoneId, FName, NewZoneId);
+
 class UGFInventoryComponent;
 class AGFGameState;
 class AGFVoxelWorld;
@@ -78,6 +80,17 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Mode")
 	FGFPlayerProgress Progress;
 
+	/** World zone the server last resolved for this pawn. */
+	UPROPERTY(ReplicatedUsing = OnRep_CurrentZoneId, BlueprintReadOnly, Category = "GF|Zone")
+	FName CurrentZoneId;
+
+	/** Villain Mode. The toggle that sets this lives on another task. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Zone")
+	bool bVillainMode = false;
+
+	UPROPERTY(BlueprintAssignable, Category = "GF|Zone")
+	FGFOnZoneChanged OnZoneChanged;
+
 	/** Server copy of this player's plot blueprints (travels with the character, not replicated). */
 	TArray<FGFPlotBlueprint> Blueprints;
 
@@ -146,6 +159,20 @@ public:
 
 	/** Server: a toast for this player. */
 	void NotifyLand(const FString& Notice);
+
+	FName GetCurrentZoneId() const { return CurrentZoneId; }
+	bool IsVillainMode() const { return bVillainMode; }
+	int32 GetDamageSerial() const { return DamageSerial; }
+	double GetLastPvPDamageSeconds() const { return LastPvPDamageSeconds; }
+
+	/** Server. Broadcasts OnZoneChanged. The first write from None does not toast; the zone subsystem decides that. */
+	void SetCurrentZoneId(FName NewId);
+	/** Server. */
+	void SetVillainMode(bool bOn);
+	/** Server. Any hit bumps the serial. PvP-zone player damage also stamps the clock. */
+	void NotifyTookDamage(bool bFromPlayerInPvPZone);
+	/** Server. Remembers a Shardstone on the character. */
+	void UnlockShardstone(FName StoneId);
 
 	/** Any mini-game mode request (arena, Depths, mine, lab, or "Player" settings). Returns the request id. */
 	UFUNCTION(BlueprintCallable, Category = "GF|Mode")
@@ -244,7 +271,13 @@ public:
 protected:
 	UFUNCTION()
 	void HandleInventoryChanged(FName ItemId, int32 NewCount);
+	UFUNCTION()
+	void OnRep_CurrentZoneId();
 	void ScheduleWriteBack();
+
+	int32 DamageSerial = 0;
+	double LastPvPDamageSeconds = -100000.0;
+	FName ObservedZoneId;
 
 	int32 NextEditId = 1;
 	int32 CharacterRevision = 0;

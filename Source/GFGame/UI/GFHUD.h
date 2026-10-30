@@ -45,6 +45,7 @@ public:
 
 private:
 	void DrawCrosshair();
+	void DrawCompass();
 	void DrawZoneLabel();
 	void DrawChat();
 	void DrawToasts();

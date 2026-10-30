@@ -50,6 +50,9 @@ struct GFGAME_API FGFOverworldLayout
 	/** Cell Z of the walkable surface. Its top is world Z = 0. */
 	int32 SurfaceZ = FillLayers - 1;
 
+	/** Kindle Ring stamp: wild cells are grass on dirt. Make() leaves this false. */
+	bool bKindleGrass = false;
+
 	FGFTerritoryCurve Curve;
 	TArray<FGFTerritoryFaction> Factions;
 	TArray<FGFTerritoryHazard> Hazards;
@@ -67,6 +70,16 @@ struct GFGAME_API FGFOverworldBuild
 	static constexpr float DefaultMarginCm = 2000.f;
 
 	static FGFOverworldLayout Make(
+		const FGFTerritoryCurve& Curve,
+		const TArray<FGFTerritoryFaction>& Factions,
+		const TArray<FGFTerritoryHazard>& Hazards,
+		float MarginCm = DefaultMarginCm);
+
+	/**
+	 * Editable ground for the Kindle Ring only: 340x340x16, centred on the origin, with the 20 m margin.
+	 * Copies the theme inputs from Make, then replaces the grid. Make() itself is unchanged.
+	 */
+	static FGFOverworldLayout MakeKindleRing(
 		const FGFTerritoryCurve& Curve,
 		const TArray<FGFTerritoryFaction>& Factions,
 		const TArray<FGFTerritoryHazard>& Hazards,

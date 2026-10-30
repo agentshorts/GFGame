@@ -1,5 +1,6 @@
 #include "GFCharacter.h"
 #include "GFPlayerState.h"
+#include "GFZoneSubsystem.h"
 #include "GFLog.h"
 #include "GFAssetMap.h"
 #include "GFSimpleAnimComponent.h"
@@ -293,4 +294,32 @@ void AGFCharacter::CycleBlock(int32 Direction)
 	const int32 Current = Ids.IndexOfByKey(SelectedBlock);
 	const int32 Next = Current == INDEX_NONE ? 0 : (Current + Direction + Ids.Num()) % Ids.Num();
 	SelectedBlock = Ids[Next];
+}
+
+float AGFCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
+{
+	const float Applied = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+	if (!HasAuthority() || DamageAmount <= 0.f)
+	{
+		return Applied;
+	}
+	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	if (!PS)
+	{
+		return Applied;
+	}
+	bool bPvP = false;
+	const APawn* InstigatorPawn = EventInstigator ? EventInstigator->GetPawn() : nullptr;
+	if (InstigatorPawn && InstigatorPawn != this && InstigatorPawn->GetPlayerState())
+	{
+		if (const UWorld* World = GetWorld())
+		{
+			if (const UGFZoneSubsystem* Zones = World->GetSubsystem<UGFZoneSubsystem>())
+			{
+				bPvP = Zones->IsPvPAllowedAt(GetActorLocation());
+			}
+		}
+	}
+	PS->NotifyTookDamage(bPvP);
+	return Applied;
 }

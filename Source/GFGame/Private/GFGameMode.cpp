@@ -9,6 +9,9 @@
 #include "GFDataTables.h"
 #include "GFOverworldBuild.h"
 #include "GFOverworldGround.h"
+#include "GFShardTravelSubsystem.h"
+#include "GFShardhop.h"
+#include "GFZoneCatalog.h"
 #include "GFRecipeTypes.h"
 #include "GFTerritorySubsystem.h"
 #include "GFLog.h"
@@ -123,6 +126,17 @@ void AGFGameMode::PostLogin(APlayerController* NewPlayer)
 		PS->ColorIndex = Slot;
 	}
 	PS->ForceNetUpdate();
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (const UGFShardTravelSubsystem* Travel = GI->GetSubsystem<UGFShardTravelSubsystem>())
+		{
+			FName StoneId;
+			if (Travel->ConsumedStone(UGFShardTravelSubsystem::KeyFor(NewPlayer), StoneId))
+			{
+				PS->UnlockShardstone(StoneId);
+			}
+		}
+	}
 	PS->UploadLocalCharacterIfNeeded(); // host / standalone: the local profile goes straight in
 	UE_LOG(LogGF, Log, TEXT("Net: login %s (host=%d colour=%d)"), *Key, PS->bIsHost ? 1 : 0, PS->ColorIndex);
 }
@@ -193,8 +207,8 @@ AGFVoxelWorld* AGFGameMode::EnsureVoxelWorld()
 		const AGFOverworldGround* GroundDefaults = GetDefault<AGFOverworldGround>();
 		const float Margin = GroundDefaults ? GroundDefaults->Margin : FGFOverworldBuild::DefaultMarginCm;
 		Layout = Territory
-			? FGFOverworldBuild::Make(Territory->Curve, Territory->FactionLayout, Territory->Hazards, Margin)
-			: FGFOverworldBuild::Make({}, {}, {}, Margin);
+			? FGFOverworldBuild::MakeKindleRing(Territory->Curve, Territory->FactionLayout, Territory->Hazards, Margin)
+			: FGFOverworldBuild::MakeKindleRing({}, {}, {}, Margin);
 		Size = Layout.GridSize;
 		Ground = 0;
 		Origin = Layout.Origin;
@@ -230,6 +244,32 @@ AGFVoxelWorld* AGFGameMode::EnsureVoxelWorld()
 AActor* AGFGameMode::ChoosePlayerStart_Implementation(AController* Player)
 {
 	EnsureVoxelWorld();
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UGFShardTravelSubsystem* Travel = GI->GetSubsystem<UGFShardTravelSubsystem>())
+		{
+			FName StoneId;
+			const FString Key = UGFShardTravelSubsystem::KeyFor(Player);
+			if (Travel->Consume(Key, StoneId))
+			{
+				if (const FGFShardstoneRow* Stone = FGFZoneCatalog::Get().FindStone(StoneId))
+				{
+					if (AGFPlayerState* PS = Player ? Player->GetPlayerState<AGFPlayerState>() : nullptr)
+					{
+						PS->UnlockShardstone(StoneId);
+					}
+					const int32 Slot = FGFShardhop::SlotOf(GetGameState<AGameStateBase>(), Player ? Player->PlayerState : nullptr);
+					const FVector At = FGFShardhop::ArrivalPoint(*Stone, Slot);
+					FActorSpawnParameters Params;
+					Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+					if (APlayerStart* Start = GetWorld()->SpawnActor<APlayerStart>(APlayerStart::StaticClass(), FTransform(At), Params))
+					{
+						return Start;
+					}
+				}
+			}
+		}
+	}
 	AActor* Found = Super::ChoosePlayerStart_Implementation(Player);
 	if (Found)
 	{

@@ -26,6 +26,29 @@ FString GFFormatZoneLabel(EGFTerritoryZone Zone, FName FactionId, bool bSafe, bo
 	return TEXT("Wild");
 }
 
+FString GFFormatWorldZoneLabel(const FString& DisplayName, int32 DangerTier)
+{
+	if (DisplayName.IsEmpty())
+	{
+		return FString();
+	}
+	if (DangerTier <= 0)
+	{
+		return DisplayName + Dot() + TEXT("safe");
+	}
+	return DisplayName;
+}
+
+float GFCompassIconX(float RelativeYawDeg, float CanvasW)
+{
+	constexpr float Pad = 16.f;
+	constexpr float HalfAngle = 100.f;
+	const float Clamped = FMath::Clamp(RelativeYawDeg, -HalfAngle, HalfAngle);
+	const float T = (Clamped / HalfAngle + 1.f) * 0.5f;
+	const float Right = FMath::Max(Pad, CanvasW - Pad);
+	return FMath::Lerp(Pad, Right, T);
+}
+
 float GFChatLineAlpha(float AgeSeconds)
 {
 	if (AgeSeconds <= GFHUD::ChatHoldSeconds)
