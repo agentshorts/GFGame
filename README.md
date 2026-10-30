@@ -1,6 +1,6 @@
 # GFGame
 
-A cozy co-op dino builder made in Unreal Engine 5.8. Build a chunky voxel home and garden, invite friends to claim plots on your land (rent is paid in materials), tame predator dinos by learning what they like to eat, and earn materials in mini-games: a dino arena, a rhythm obby (Beat Hop), a side-scrolling platformer, a fashion show and more. Materials are the only currency.
+Shatter Flats prison planet, a cozy safe circle, dangerous outside. A co-op dino builder made in Unreal Engine 5.8. Build a chunky voxel home and garden inside the circle, invite friends to claim plots on your land (rent is paid in materials), tame predator dinos by learning what they like to eat, and earn materials in mini-games out past the circle: a dino arena, a rhythm obby (Beat Hop), a side-scrolling platformer, a fashion show and more. Materials are the only currency. Camp colours: Rime pale ice blue `#9FD8F5`, Verdant leaf green `#8ED47A`, Cinderwrights ember `#D9542B`.
 
 - Plan: see [PLAN.md](PLAN.md) (milestones, economy, modules, art sourcing, saves, risks, open questions).
 - Status: greybox phase 2 (systems, server rules and headless tests; no maps or final visuals yet). The C++ modules build (UE 5.8.4, GFGameEditor Win64 Development) and all 86 GFGame.* automation tests pass. See "Status" below.

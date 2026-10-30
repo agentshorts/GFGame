@@ -7,6 +7,19 @@ float FGFSafeRegion::Radius() const
 	return FMath::Max(0.f, FMath::Min(BaseRadius + RadiusPerExtraMember * Extra, FMath::Max(MaxRadius, BaseRadius)));
 }
 
+bool FGFSafeCircles::SafeRegionAt(int32 Index, FName& OutId, FVector& OutCenter, float& OutRadius) const
+{
+	if (!Regions.IsValidIndex(Index))
+	{
+		return false;
+	}
+	const FGFSafeRegion& Region = Regions[Index];
+	OutId = Region.Id;
+	OutCenter = Region.Center;
+	OutRadius = Region.Radius();
+	return OutRadius > 0.f;
+}
+
 bool FGFSafeCircles::IsInsideSafe(const FVector& Location) const
 {
 	for (const FGFSafeRegion& R : Regions)
@@ -529,6 +542,40 @@ const TArray<const IGFSafeZoneQuery*>& FGFSafeZoneUnion::Parts() const
 	}
 	bPartsCached = ScopeDepth > 0;
 	return PartsBuffer;
+}
+
+int32 FGFSafeZoneUnion::SafeRegionCount() const
+{
+	if (Depth > 0)
+	{
+		return 0;
+	}
+	TGuardValue<int32> Guard(Depth, Depth + 1);
+	int32 Count = 0;
+	for (const IGFSafeZoneQuery* Q : Parts())
+	{
+		Count += Q->SafeRegionCount();
+	}
+	return Count;
+}
+
+bool FGFSafeZoneUnion::SafeRegionAt(int32 Index, FName& OutId, FVector& OutCenter, float& OutRadius) const
+{
+	if (Depth > 0)
+	{
+		return false;
+	}
+	TGuardValue<int32> Guard(Depth, Depth + 1);
+	for (const IGFSafeZoneQuery* Q : Parts())
+	{
+		const int32 Count = Q->SafeRegionCount();
+		if (Index < Count)
+		{
+			return Q->SafeRegionAt(Index, OutId, OutCenter, OutRadius);
+		}
+		Index -= Count;
+	}
+	return false;
 }
 
 bool FGFSafeZoneUnion::HasAnySafe() const

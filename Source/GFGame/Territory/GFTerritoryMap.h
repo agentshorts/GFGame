@@ -21,6 +21,8 @@
 // IsSafeFor(FName) and IsSafeFor(FGFSocialPlayer) match the faction to that owner (own land only; dinos use this).
 // The IGFSafeZoneQuery override IsSafeFor(FGFSafeSubject) adds faction protection (FGFProtectionRules): own land
 // always, another faction's land for the host, a protected visitor or a faction guest, never neutral or wild.
+// HubRadius is the extra (#136 option 1): a subject with no faction is safe inside that circle. It does not
+// change IsInsideSafe, OwnerAt, or the giant's pathing shape. Radius 0 leaves it off.
 
 #include "CoreMinimal.h"
 #include "GFSafeZone.h"
@@ -84,6 +86,16 @@ public:
 
 	/** "In safe land AND protected": faction land with FGFProtectionRules::IsProtectedOn (host, protected, guest). */
 	virtual bool IsSafeFor(const FGFSafeSubject& Who, const FVector& Location) const override;
+	virtual int32 SafeRegionCount() const override;
+	virtual bool SafeRegionAt(int32 Index, FName& OutId, FVector& OutCenter, float& OutRadius) const override;
+
+	/**
+	 * Hub shelter for a subject with no faction (#136 option 1). The world subsystem sets the centre to the
+	 * starter anchor and the radius from the online player count (1200 + 400 per extra player, cap 3200).
+	 * IsInsideSafe ignores it, so it is not a pathing disc.
+	 */
+	FVector HubCenter = FVector::ZeroVector;
+	float HubRadius = 0.f;
 	/** The faction that owns this point (GetZoneAt), or None for neutral and wild. */
 	virtual FName OwnerAt(const FVector& Location) const override;
 

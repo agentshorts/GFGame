@@ -37,6 +37,12 @@ public:
 	FName DefaultSpawnAnchor;
 
 	/**
+	 * Faction a new player joins. Keep this equal to DefaultSpawnAnchor. Default Rime.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "GF|Spawn")
+	FName StarterFaction;
+
+	/**
 	 * Always-on server actors spawned with the game state (by class path, so this module needn't depend on theirs).
 	 * Default: the social director (safe-zone powers, jail, kick / ban, emotes) and the block paint volume (AGFPaintVolume).
 	 */

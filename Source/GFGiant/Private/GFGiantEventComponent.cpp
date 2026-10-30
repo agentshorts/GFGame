@@ -505,7 +505,20 @@ void UGFGiantEventComponent::FinishBelly(FBelly& B, bool bFaint)
 		FVector At;
 		{
 			const FGFSafeZoneUnion::FPartsScope PartsOnce(LandShape.Get());
-			At = FGFGiantRules::RespawnPoint(Tuning, GetSafeZone(), B.From, GetNoEntry());
+			FGFRespawnAim Aim;
+			Aim.Who = FGFSafeSubject(PS->PlayerKey, PS->FactionId, PS->bIsHost);
+			Aim.OwnFaction = PS->FactionId;
+			if (const AGFGameState* G = GS())
+			{
+				Aim.StarterFaction = G->StarterFaction;
+			}
+			Aim.Blocked = GetNoEntry();
+			const IGFSafeZoneQuery& Zone = GetLandZone();
+			At = FGFGiantRules::RespawnPoint(Tuning, Zone, B.From, Aim);
+			if (!Zone.IsSafeFor(Aim.Who, At))
+			{
+				UE_LOG(LogGF, Warning, TEXT("Respawn for %s fell back to %s, which is not safe for them."), *PS->PlayerKey, *At.ToString());
+			}
 		}
 		if (IGFFaintHandler* H = Cast<IGFFaintHandler>(FaintHandler.GetObject()))
 		{

@@ -1,6 +1,6 @@
 # GFGame asset briefs (Blender art)
 
-**Project:** GFGame, a **cozy co-op dino builder**: a voxel home and garden builder, with materials earned from four mini-games (dino taming, a fashion show, a small 3v3 one-lane battle arena, and Beat Hop, a rhythm obby). Original IP, and kept fully separate from every other project.
+**Project:** GFGame, on the **Shatter Flats prison planet: a cozy safe circle, dangerous outside**. A co-op voxel home and garden builder, with materials earned from four mini-games (dino taming, a fashion show, a small 3v3 one-lane battle arena, and Beat Hop, a rhythm obby). Original IP, and kept fully separate from every other project.
 **Written:** Oct 29, 2026 (Chicago time) by the Unreal side. **Engine:** Unreal 5.8.4. **Blender:** 5.2.2 (portable build).
 **Built from:** `PLAN.md` (the plan: M1 hub builder, M2 taming, M3 fashion, M4 arena, M5 Beat Hop), the style answers, and lessons from an earlier import test (cm-scene export, root scale 1, loop keys, Force Front X Axis).
 **Deadline:** none. Quality and consistency matter more than speed.
@@ -28,6 +28,7 @@
 | Hub camera | Third person: spring arm about 450 cm, pitch about −20°, FOV 90 | Make backs readable too, because players mostly see their character's back. |
 | Team colours (arena, set by UE at runtime) | ally `#4FC3F7`, enemy `#FF6B6B` | Only through a white `TeamTint` slot. |
 | Lighting | Dynamic and Lumen in Unreal | **Don't paint directional light or AO into textures.** |
+| Camp colours | Rime `#9FD8F5` pale ice blue, Verdant `#8ED47A` leaf green, Cinderwrights `#D9542B` ember | Render swatches. Lava bridge `#FFC21A` hot gold. Deadly forest `#26402C` deep pine. |
 
 ### Size classes (cm, UE; measured from the ground)
 | Class | Footprint | Height | Used for |
