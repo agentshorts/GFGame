@@ -12,5 +12,6 @@ class GFMOBA_API UGFMobaGateSubsystem : public UGFMiniGameGateSubsystem
 
 public:
 	virtual FName GetGateId() const override { return TEXT("Moba"); }
-	virtual FName GetMapName() const override { return TEXT("/Game/Maps/L_Arena"); }
+	virtual FName GetMapName() const override { return TEXT("/Game/Maps/L_Moba"); }
+	virtual FText GetDisplayName() const override { return FText::FromString(TEXT("MOBA")); }
 };

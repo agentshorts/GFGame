@@ -1,4 +1,5 @@
 #include "GFLabDirector.h"
+#include "GFMiniGameCatalog.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFInventoryComponent.h"
@@ -38,7 +39,8 @@ AGFLabDirector* AGFLabDirector::Get(UWorld* World, bool bSpawn)
 	{
 		FActorSpawnParameters P;
 		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		return World->SpawnActor<AGFLabDirector>(P);
+		const FVector At = FGFMiniGameCatalog::DefaultSpawn(ModeName);
+		return World->SpawnActor<AGFLabDirector>(AGFLabDirector::StaticClass(), FTransform(At), P);
 	}
 	return nullptr;
 }

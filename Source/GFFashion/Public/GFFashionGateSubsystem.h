@@ -14,6 +14,7 @@ class GFFASHION_API UGFFashionGateSubsystem : public UGFMiniGameGateSubsystem
 public:
 	virtual FName GetGateId() const override { return TEXT("Fashion"); }
 	virtual FName GetMapName() const override { return TEXT("/Game/Maps/L_Runway"); }
+	virtual FText GetDisplayName() const override { return FText::FromString(TEXT("Runway")); }
 
 	UFUNCTION(BlueprintPure, Category = "GF|Fashion")
 	TArray<FGFFashionTheme> GetThemes() const { return FGFFashionCatalog::Themes(); }

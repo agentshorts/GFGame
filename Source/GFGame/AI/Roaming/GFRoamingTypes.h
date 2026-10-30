@@ -20,7 +20,7 @@ struct GFGAME_API FGFRoamZone
 	explicit FGFRoamZone(FName InId) : Id(InId) {}
 };
 
-/** A map package (the gates' GetMapName(), e.g. /Game/Maps/L_Arena). */
+/** A map package (the gates' GetMapName(), e.g. /Game/Maps/L_Moba). */
 struct GFGAME_API FGFRoamMap
 {
 	FName Id = NAME_None;

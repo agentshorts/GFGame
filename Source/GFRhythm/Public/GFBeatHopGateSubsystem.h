@@ -16,6 +16,7 @@ class GFRHYTHM_API UGFBeatHopGateSubsystem : public UGFMiniGameGateSubsystem
 public:
 	virtual FName GetGateId() const override { return TEXT("BeatHop"); }
 	virtual FName GetMapName() const override { return TEXT("/Game/Maps/L_Beat"); }
+	virtual FText GetDisplayName() const override { return FText::FromString(TEXT("Beat Hop")); }
 
 	/** "System default output" first, then active output devices only. */
 	UFUNCTION(BlueprintCallable, Category = "GF|Rhythm")
