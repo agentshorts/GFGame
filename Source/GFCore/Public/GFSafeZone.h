@@ -164,6 +164,12 @@ public:
 	TArray<FBox> GetNoEntry() const;
 	bool IsInsideNoEntry(const FVector& Location) const { return FGFNoEntry::IsInside(GetNoEntry(), Location); }
 
+	/**
+	 * Every live provider's current zone, newest first, leaving out Skip (a provider whose own zone wraps this list).
+	 * The override is a whole-world replacement, not a provider, so it is not in this list.
+	 */
+	TArray<const IGFSafeZoneQuery*> GetProviderZones(const UObject* Skip = nullptr) const;
+
 private:
 	/** The query that owns the land at Location (override alone when set, else providers newest first), or null. */
 	const IGFSafeZoneQuery* OwnerZoneAt(const FVector& Location, FName& OutOwner) const;
@@ -171,4 +177,30 @@ private:
 	TArray<TWeakObjectPtr<UObject>> Providers;
 	TSharedPtr<IGFSafeZoneQuery> Override;
 	TArray<TPair<TWeakObjectPtr<const UObject>, FBox>> NoEntry;
+};
+
+/**
+ * Several zones' shapes as one: Own (optional) plus every provider zone in Zones except Skip
+ * (UGFSafeZoneSubsystem::GetProviderZones). The list is read again on every query, so the union follows providers
+ * as they appear, grow or go away. Inside is "inside any part". Edges are the parts' edges that no other part covers.
+ * Owned land answers OwnerAt and IsSafeFor through the part that owns it. Elsewhere any part that says safe wins.
+ * A query that re-enters the same union (two unions that see each other) gets an empty zone, so it can't loop.
+ */
+struct GFCORE_API FGFSafeZoneUnion : public IGFSafeZoneQuery
+{
+	const IGFSafeZoneQuery* Own = nullptr;
+	TWeakObjectPtr<const UGFSafeZoneSubsystem> Zones;
+	TWeakObjectPtr<const UObject> Skip;
+
+	virtual bool IsInsideSafe(const FVector& Location) const override;
+	virtual bool IsSafeFor(const FGFSafeSubject& Who, const FVector& Location) const override;
+	virtual FName OwnerAt(const FVector& Location) const override;
+	virtual FVector ClosestSafePoint(const FVector& Location) const override;
+	virtual bool ClosestEdge(const FVector& Location, FVector& OutPoint, FVector& OutOutward) const override;
+	virtual bool HasAnySafe() const override;
+
+private:
+	/** Own first, then providers newest first. Only parts with a safe area. */
+	TArray<const IGFSafeZoneQuery*, TInlineAllocator<8>> Parts() const;
+	mutable int32 Depth = 0;
 };

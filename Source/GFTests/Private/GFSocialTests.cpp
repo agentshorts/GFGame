@@ -1022,4 +1022,168 @@ bool FGFSocialGiantProtectionTest::RunTest(const FString&)
 	return true;
 }
 
+namespace GFSocialTest
+{
+	/** Faction lands as discs (Id = owning faction), with protection from Access. */
+	struct FDiscLands : public IGFSafeZoneQuery
+	{
+		const FGFFactionAccess* Access = nullptr;
+		FGFSafeCircles Discs;
+		virtual bool IsInsideSafe(const FVector& L) const override { return Discs.IsInsideSafe(L); }
+		virtual FVector ClosestSafePoint(const FVector& L) const override { return Discs.ClosestSafePoint(L); }
+		virtual bool ClosestEdge(const FVector& L, FVector& OutPoint, FVector& OutOutward) const override { return Discs.ClosestEdge(L, OutPoint, OutOutward); }
+		virtual bool HasAnySafe() const override { return Discs.HasAnySafe(); }
+		virtual FName OwnerAt(const FVector& L) const override
+		{
+			for (const FGFSafeRegion& R : Discs.Regions)
+			{
+				if (FVector::DistSquared2D(R.Center, L) <= FMath::Square(R.Radius()))
+				{
+					return R.Id;
+				}
+			}
+			return NAME_None;
+		}
+		virtual bool IsSafeFor(const FGFSafeSubject& Who, const FVector& L) const override
+		{
+			return FGFProtectionRules::IsProtectedOn(Who.Key, Who.GroupId, Who.bHost, OwnerAt(L), *Access);
+		}
+	};
+
+	static FGFSafeRegion Disc(FName Id, const FVector& Center, float Radius)
+	{
+		FGFSafeRegion R;
+		R.Id = Id;
+		R.Center = Center;
+		R.Members = 1;
+		R.BaseRadius = Radius;
+		R.RadiusPerExtraMember = 0.f;
+		R.MaxRadius = Radius;
+		return R;
+	}
+}
+
+// Big Grumble's shape covers all owned faction land: with two factions whose land lies outside his default circle
+// (registered as a safe-zone provider), his shape is his own circle plus both lands and follows them live. Chasing a
+// visitor in the open around both lands, he never sets foot on either. When the unprotected visitor steps onto
+// faction land he follows him in (the earlier rule), and once the visitor is protected he walks back out.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialGiantLandShapeTest, "GFGame.Social.GiantLandShape", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFSocialGiantLandShapeTest::RunTest(const FString&)
+{
+	FWorld W;
+	if (!W.Init(*this, TEXT("GFSocialGiantLandShape")))
+	{
+		return false;
+	}
+	UGFSocialComponent* S = W.Social;
+	UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(W.World);
+	const FVector CenterA(6000.f, 0.f, 0.f);
+	const FVector CenterB(-6000.f, 0.f, 0.f);
+	const float LandRadius = 1500.f;
+	TSharedPtr<FDiscLands> Lands = MakeShared<FDiscLands>();
+	Lands->Access = &S->Access;
+	Lands->Discs.Regions = { Disc(FA, CenterA, LandRadius), Disc(FB, CenterB, LandRadius) };
+	UGFTestZoneProvider* LandProvider = NewObject<UGFTestZoneProvider>(W.World);
+	LandProvider->Query = Lands;
+	Zones->RegisterProvider(LandProvider);
+
+	// Corners around both lands, in the order the visitor runs them (all in the open, clear of every safe area).
+	const FVector Legs[] = { FVector(-6000.f, 3800.f, 0.f), FVector(-6000.f, -3800.f, 0.f), FVector(6000.f, -3800.f, 0.f), FVector(6000.f, 3800.f, 0.f) };
+	AGFPlayerState* L = W.Add(TEXT("L"), FA);
+	AGFPlayerState* M = W.Add(TEXT("M"), FB);
+	AGFPlayerState* V = W.Add(TEXT("V"), FB);
+	PutAt(W.World, L, CenterA);
+	PutAt(W.World, M, CenterB);
+	PutAt(W.World, V, Legs[0]);
+	UGFGiantEventComponent* Giant = AGFGiantDirector::GetEvent(W.World, true);
+	if (!TestNotNull(TEXT("Giant event"), Giant))
+	{
+		return false;
+	}
+	Giant->bAutoTrigger = false;
+	Giant->ForcedSeed = 7;
+	Giant->Tuning.bEatIdleTarget = false;
+	Giant->Tuning.EventSeconds = 1000.f;
+
+	// The shape: his own circle plus both lands, read live from the providers.
+	const IGFSafeZoneQuery& Shape = Giant->GetSafeZone();
+	TestTrue(TEXT("The shape follows land by default"), Giant->IsFollowingLand() && &Shape == Giant->GetLandShape().Get());
+	TestTrue(TEXT("The subsystem's current zone is that shape"), Zones->GetZone() == &Shape);
+	const FGFSafeCircles Own(Giant->SafeRegions);
+	TestTrue(TEXT("His own circle is still part of the shape"), Own.IsInsideSafe(FVector::ZeroVector) && Shape.IsInsideSafe(FVector::ZeroVector));
+	TestFalse(TEXT("Both lands lie outside his own circle"), Own.IsInsideSafe(CenterA - FVector(LandRadius, 0.f, 0.f)) || Own.IsInsideSafe(CenterB + FVector(LandRadius, 0.f, 0.f)));
+	TestTrue(TEXT("The shape covers both lands"), Shape.IsInsideSafe(CenterA) && Shape.IsInsideSafe(CenterB));
+	TestFalse(TEXT("Open ground is not in the shape"), Shape.IsInsideSafe(Legs[0]));
+	TestEqual(TEXT("Owner through the shape"), Shape.OwnerAt(CenterA), FA);
+	FVector EdgeP, Outward;
+	TestTrue(TEXT("East of the first land, its border is the nearest edge"), Shape.ClosestEdge(FVector(9000.f, 0.f, 0.f), EdgeP, Outward)
+		&& FVector::Dist2D(EdgeP, FVector(7500.f, 0.f, 0.f)) < 1.f && Outward.X > 0.9f);
+	TestTrue(TEXT("Closest safe point from the open is on the nearest land"), FVector::Dist2D(Shape.ClosestSafePoint(FVector(9000.f, 0.f, 0.f)), FVector(7500.f, 0.f, 0.f)) < 1.f);
+	Lands->Discs.Regions.Add(Disc(TEXT("F3"), FVector(0.f, -6000.f, 0.f), 1000.f));
+	TestTrue(TEXT("New land joins the shape at once"), Shape.IsInsideSafe(FVector(0.f, -6000.f, 0.f)));
+	Lands->Discs.Regions.Pop();
+	TestFalse(TEXT("...and leaves it at once"), Shape.IsInsideSafe(FVector(0.f, -6000.f, 0.f)));
+	Lands->Discs.Regions[0].BaseRadius = Lands->Discs.Regions[0].MaxRadius = 2000.f;
+	TestTrue(TEXT("Growing land grows the shape"), Shape.IsInsideSafe(CenterA + FVector(1800.f, 0.f, 0.f)));
+	Lands->Discs.Regions[0].BaseRadius = Lands->Discs.Regions[0].MaxRadius = LandRadius;
+	Giant->SetSafeZone(nullptr);
+	TestFalse(TEXT("SetSafeZone(nullptr): own circles only"), Giant->IsFollowingLand() || Giant->GetSafeZone().IsInsideSafe(CenterA));
+	Giant->SetSafeZone(ConstCastSharedPtr<FGFSafeZoneUnion>(Giant->GetLandShape()));
+	TestTrue(TEXT("Back to following land"), Giant->IsFollowingLand());
+	Giant->SetSafeRegions({ Disc(TEXT("Hub"), FVector::ZeroVector, 1200.f) });
+	TestTrue(TEXT("SetSafeRegions keeps following land"), Giant->IsFollowingLand() && Giant->GetSafeZone().IsInsideSafe(CenterA));
+
+	// Skirting: the visitor runs the corners in the open; he chases without ever stepping on either land.
+	TestTrue(TEXT("Event starts"), Giant->ServerStartEvent());
+	TestEqual(TEXT("Targets the visitor in the open"), Giant->GetSim().TargetKey, FString(TEXT("V")));
+	const float Margin = Giant->Tuning.GiantRadius;
+	// Drive the server tick directly: the test world doesn't run component tick functions.
+	auto Step = [Giant]() { Giant->TickComponent(0.1f, LEVELTICK_All, nullptr); };
+	int32 OnLand = 0;
+	int32 Ticks = 0;
+	for (const FVector& At : Legs)
+	{
+		for (int32 i = 0; i < 450; ++i)
+		{
+			PutAt(W.World, V, At); // undo shoves: the visitor stays in the open
+			Step();
+			++Ticks;
+			if (!FGFSafeZone::IsClear(Lands->Discs, Giant->GetSim().Location, Margin))
+			{
+				++OnLand;
+			}
+		}
+		const FVector G = Giant->GetSim().Location;
+		TestTrue(FString::Printf(TEXT("Caught up with the visitor at (%.0f, %.0f); giant at (%.0f, %.0f)"), At.X, At.Y, G.X, G.Y),
+			FVector::Dist2D(G, At) < Giant->Tuning.HerdOffset + 1000.f);
+	}
+	TestEqual(FString::Printf(TEXT("Never on faction land while skirting (%d steps)"), Ticks), OnLand, 0);
+	TestTrue(TEXT("Still chasing"), Giant->bEventActive && Giant->GetSim().State == EGFGiantState::Chase);
+
+	// Chase-in: the unprotected visitor steps onto the first faction's land, so he follows him in.
+	const FVector OnLandA = CenterA + FVector(0.f, 600.f, 0.f);
+	bool bEntered = false;
+	for (int32 i = 0; i < 450 && !bEntered; ++i)
+	{
+		PutAt(W.World, V, OnLandA);
+		Step();
+		bEntered = Lands->OwnerAt(Giant->GetSim().Location) == FA;
+	}
+	TestTrue(TEXT("Followed the unprotected visitor onto faction land"), bEntered);
+	TestEqual(TEXT("Still after the visitor"), Giant->GetSim().TargetKey, FString(TEXT("V")));
+
+	// Once the visitor is protected nobody is exposed: he walks back out and stays out.
+	S->Access.FindOrAdd(FA, TEXT("V")).bProtected = true;
+	for (int32 i = 0; i < 300; ++i)
+	{
+		PutAt(W.World, V, OnLandA);
+		Step();
+	}
+	TestTrue(TEXT("Walked back off faction land"), FGFSafeZone::IsClear(Lands->Discs, Giant->GetSim().Location, Margin));
+	TestEqual(TEXT("Nobody eaten"), Giant->EatenKeys.Num(), 0);
+	TestEqual(TEXT("Damage from the giant"), Giant->DamageFromGiant, 0);
+	Zones->UnregisterProvider(LandProvider);
+	return true;
+}
+
 #endif

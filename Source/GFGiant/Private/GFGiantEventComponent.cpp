@@ -47,9 +47,19 @@ void UGFGiantEventComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	Lines = FGFGiantLines::Load();
-	if (UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(this))
+	UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(this);
+	if (Zones)
 	{
 		Zones->RegisterProvider(this); // server and clients (SafeRegions replicate)
+	}
+	// Shape: its own circles plus every other provider's land (faction territory), read live on each query.
+	LandShape = MakeShared<FGFSafeZoneUnion>();
+	LandShape->Own = &Circles;
+	LandShape->Zones = Zones;
+	LandShape->Skip = this;
+	if (!ZoneOverride.IsValid())
+	{
+		SetSafeZone(LandShape);
 	}
 	if (const UDataTable* InfoTable = FGFDataTables::Get<FGFGiantInfoRow>(TEXT("DT_GiantDino")))
 	{
@@ -121,7 +131,7 @@ int64 UGFGiantEventComponent::NowUtcTicks() const
 void UGFGiantEventComponent::SetSafeRegions(const TArray<FGFSafeRegion>& Regions)
 {
 	bUseDefaultRegion = false;
-	ZoneOverride.Reset();
+	ZoneOverride = LandShape; // these circles plus land (only the circles before BeginPlay)
 	SafeRegions = Regions;
 	NetUpdate();
 }
@@ -133,11 +143,11 @@ void UGFGiantEventComponent::SetSafeZone(TSharedPtr<IGFSafeZoneQuery> Zone)
 
 const IGFSafeZoneQuery& UGFGiantEventComponent::GetSafeZone() const
 {
+	Circles.Regions = SafeRegions; // also the own part of LandShape
 	if (ZoneOverride.IsValid())
 	{
 		return *ZoneOverride;
 	}
-	Circles.Regions = SafeRegions;
 	return Circles;
 }
 
