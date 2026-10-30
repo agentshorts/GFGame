@@ -1,6 +1,6 @@
 # HANDOFF feature/playable-packaging
 
-Win64 Development package that cooks `L_Hub` and still has the CSV tables at runtime. Branched from staging `fa4b4c3`. Code commit `6c36327`.
+Win64 Development package that cooks `L_Hub` and still has the CSV tables at runtime. Branched from staging `fa4b4c3`. Code commit `6c36327`. Handoff commit `a8628d7`. Decision: #95.
 
 ## What changed
 
@@ -29,7 +29,7 @@ Also chosen:
 
 Alternative: copy the CSVs under `Content/` and point `DirectoriesToAlwaysStageAsNonUFS` at that copy. That duplicates the source. `Data/CSV` stays the only copy.
 
-This choice still needs a GitHub issue titled `Decision: stage Data/CSV with RuntimeDependencies NonUFS`, body starting with `Label: design-decision`, linked from work issue #85. This run's GitHub credentials can read issues and cannot create issues or comments (`Resource not accessible by integration`, HTTP 403).
+Filed as #95 (`Decision: stage Data/CSV with RuntimeDependencies NonUFS`, first line `Label: design-decision`). The body links work issue #85 and cites `a8628d7`. Comments on #85 are blocked for this run's credentials (`Resource not accessible by integration`, HTTP 403), so the commit hashes are recorded here and on #95.
 
 ## Config keys
 
@@ -87,6 +87,6 @@ Run on the dev PC with the other editor tests:
 
 ## Follow-ups
 
-- File the decision issue above and link it from #85. Progress comments for `6c36327` and the handoff commit could not be posted from this run.
+- Post the commit hashes on #85 when a credential that can comment is available. #95 already points at #85.
 - If the booted exe still logs a missing CSV, change only `FGFDataTables::CsvPath` for packaged builds and keep the editor path the same. Confirm the files landed at `<archive>/Windows/<Project>/Data/CSV`.
 - `/Game/Art` is cooked in full, so the package includes art nothing in the hub references yet.
