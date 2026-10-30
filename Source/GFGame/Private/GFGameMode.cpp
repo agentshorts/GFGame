@@ -1,5 +1,6 @@
 #include "GFGameMode.h"
 #include "GFCharacter.h"
+#include "GFHUD.h"
 #include "GFPlayerController.h"
 #include "GFCraftingSubsystem.h"
 #include "GFVoxelWorld.h"
@@ -20,6 +21,7 @@ AGFGameMode::AGFGameMode()
 {
 	DefaultPawnClass = AGFCharacter::StaticClass();
 	PlayerControllerClass = AGFPlayerController::StaticClass();
+	HUDClass = AGFHUD::StaticClass();
 	GameStateClass = AGFGameState::StaticClass();
 	PlayerStateClass = AGFPlayerState::StaticClass();
 	bDelayedStart = false;
