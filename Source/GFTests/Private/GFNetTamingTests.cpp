@@ -74,7 +74,7 @@ namespace
 	{
 		for (TActorIterator<AGFDino> It(World); It; ++It)
 		{
-			if (It->Taming && It->Taming->Species == Species)
+			if (It->Taming && (Species.IsNone() || It->Taming->Species == Species))
 			{
 				return *It;
 			}
@@ -91,6 +91,25 @@ namespace
 	const FGFDinoPreferenceRecord* Page(const AGFPlayerState* PS, FName Species)
 	{
 		return PS ? PS->Journal.Find(Species) : nullptr;
+	}
+
+	/** Server: remove the wild dino director and every dino it spawned, so only this test's dinos exist, and reset the journals. */
+	void ClearWildDinos(UWorld* World)
+	{
+		UClass* DirectorClass = FindObject<UClass>(nullptr, TEXT("/Script/GFGame.GFWildDinoDirector"));
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			if ((DirectorClass && It->IsA(DirectorClass)) || It->IsA<AGFDino>())
+			{
+				It->Destroy();
+			}
+		}
+		// Anything a player sighted before the clear is forgotten, so the journal checks below only see this test.
+		for (TActorIterator<AGFPlayerState> It(World); It; ++It)
+		{
+			It->Journal.Records.Reset();
+			It->JournalChanged();
+		}
 	}
 }
 
@@ -117,11 +136,17 @@ bool FGFNetTamingTest::RunTest(const FString&)
 		AGFGameState* GS = GameState(Server);
 		GS->ServerMint(FGuid::NewGuid(), Run->C1, { FGFItemStack(TEXT("JerkyBites"), 5) }, TEXT("Test"));
 		GS->ServerMint(FGuid::NewGuid(), Run->C2, { FGFItemStack(TEXT("Steakroot"), 5), FGFItemStack(TEXT("Berry"), 2) }, TEXT("Test"));
+		ClearWildDinos(Server);
 		PlaceOnServer(*Run, Run->Host, 600.f, 600.f);
 		PlaceOnServer(*Run, Run->C1, 4900.f, 4000.f); // 9 m, empty-handed
 		PlaceOnServer(*Run, Run->C2, 4250.f, 4000.f); // 2.5 m, will hold Steakroot
 		ClientPS(0)->RequestSetHeldItem(NAME_None);
 		ClientPS(1)->RequestSetHeldItem(TEXT("Steakroot"));
+	});
+	// The wild dino director spawns Raptors and Nippers at the faction camps. FindDino matches by species, so clear them first.
+	WaitUntil(Ctx, TEXT("clients see no wild dinos"), 10.f, []()
+	{
+		return !FindDino(ClientWorlds()[0], NAME_None) && !FindDino(ClientWorlds()[1], NAME_None);
 	});
 	WaitUntil(Ctx, TEXT("client 2 holds Steakroot on the server"), 10.f, [Run]()
 	{
