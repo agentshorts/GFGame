@@ -3,6 +3,7 @@
 #include "GFAssetMap.h"
 #include "GFBeatHopGateSubsystem.h"
 #include "GFFashionGateSubsystem.h"
+#include "GFLog.h"
 #include "GFMiniGameCatalog.h"
 #include "GFMobaGateSubsystem.h"
 #include "GFTamingGateSubsystem.h"
@@ -91,9 +92,18 @@ void AGFMiniGameGate::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(AGFMiniGameGate, RimeCenter);
 }
 
+void AGFMiniGameGate::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+	// Deferred spawn sets EntryId before FinishSpawning, which is what calls this.
+	// Headless tests never begin play, so the sign and the mesh have to exist here.
+	ApplyVisuals();
+}
+
 void AGFMiniGameGate::BeginPlay()
 {
 	Super::BeginPlay();
+	// Clients receive EntryId on the spawn bunch before BeginPlay, and OnRep does not run for that first bunch.
 	ApplyVisuals();
 }
 
@@ -138,10 +148,17 @@ void AGFMiniGameGate::ApplyVisuals()
 				Mesh->EmptyOverrideMaterials();
 				bUsingPlaceholder = false;
 			}
+			else
+			{
+				UE_LOG(LogGF, Warning, TEXT("Gate: mesh %s did not load; using a placeholder"), *Entry->ArtObject);
+			}
 		}
 		if (bUsingPlaceholder)
 		{
-			Mesh->SetStaticMesh(FGFAssetMap::PlaceholderMesh(EGFPlaceholderShape::Cube));
+			// Authored art is optional. Beat Hop, Depths, the mine, the lab and the dino arena
+			// have no gate mesh yet, and a failed load takes the same tinted block.
+			UStaticMesh* Block = FGFAssetMap::PlaceholderMesh(EGFPlaceholderShape::Cube);
+			Mesh->SetStaticMesh(Block);
 			// Engine cube is 100 cm and centred. A gate is 2 x 1 x 3 blocks, sitting on the ground.
 			Mesh->SetRelativeScale3D(FVector(2.f, 1.f, 3.f));
 			Mesh->SetRelativeLocation(FVector(0.f, 0.f, 150.f));

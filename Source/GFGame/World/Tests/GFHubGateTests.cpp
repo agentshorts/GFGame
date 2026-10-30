@@ -63,6 +63,17 @@ namespace GFHubGateTests
 		return Count;
 	}
 
+	/** Bare worlds skip BeginPlay. ApplyVisuals is the same call Place() makes after FinishSpawning. */
+	static void FinishSpawnedGate(AGFMiniGameGate* Gate, const FTransform& Xform)
+	{
+		if (!Gate)
+		{
+			return;
+		}
+		Gate->FinishSpawning(Xform);
+		Gate->ApplyVisuals();
+	}
+
 	static AGFMiniGameGate* FindSpawnedGate(UWorld* World, FName Id, EGFMiniGameGateRole Role)
 	{
 		for (TActorIterator<AGFMiniGameGate> It(World); It; ++It)
@@ -308,7 +319,7 @@ bool FGFHubGateActorTest::RunTest(const FString&)
 		Gate->EntryId = Entry.Id;
 		Gate->GateRole = EGFMiniGameGateRole::Portal;
 		Gate->RimeCenter = FVector::ZeroVector;
-		Gate->FinishSpawning(Xform);
+		FinishSpawnedGate(Gate, Xform);
 		TestEqual(*FString::Printf(TEXT("%s label"), *Entry.Id.ToString()), Gate->GetLabel(), Entry.Label);
 		TestEqual(*FString::Printf(TEXT("%s sign text"), *Entry.Id.ToString()), Gate->GetSignText().ToString(), Entry.Label);
 		const bool bArt = !Entry.ArtObject.IsEmpty() && FPackageName::DoesPackageExist(FGFMiniGameCatalog::ArtPackage(Entry));
@@ -339,7 +350,7 @@ bool FGFHubGateActorTest::RunTest(const FString&)
 	DepthsGate->EntryId = TEXT("Depths");
 	DepthsGate->GateRole = EGFMiniGameGateRole::Portal;
 	DepthsGate->RimeCenter = Rime;
-	DepthsGate->FinishSpawning(DepthsXform);
+	FinishSpawnedGate(DepthsGate, DepthsXform);
 	TestTrue(TEXT("Depths portal moves the pawn onto its pad"), DepthsGate->EnterFrom(Pawn));
 	TestTrue(TEXT("Stand follows the anchor"), Pawn->GetActorLocation().Equals(FGFMiniGameCatalog::SimStand(*DepthsRow, Rime), 1.f));
 
@@ -351,7 +362,7 @@ bool FGFHubGateActorTest::RunTest(const FString&)
 	}
 	BeatGate->EntryId = TEXT("BeatHop");
 	BeatGate->GateRole = EGFMiniGameGateRole::Portal;
-	BeatGate->FinishSpawning(BeatXform);
+	FinishSpawnedGate(BeatGate, BeatXform);
 	const FVector Before = Pawn->GetActorLocation();
 	TestFalse(TEXT("Beat Hop does not drag the pawn onto a pad"), BeatGate->EnterFrom(Pawn));
 	TestTrue(TEXT("Pawn stays put when the map cannot be opened here"), Pawn->GetActorLocation().Equals(Before, 1.f));
@@ -363,7 +374,7 @@ bool FGFHubGateActorTest::RunTest(const FString&)
 	}
 	Marker->EntryId = TEXT("Depths");
 	Marker->GateRole = EGFMiniGameGateRole::Marker;
-	Marker->FinishSpawning(BeatXform);
+	FinishSpawnedGate(Marker, BeatXform);
 	TestEqual(TEXT("Pad marker says Depths"), Marker->GetLabel(), FString(TEXT("Depths")));
 	TestEqual(TEXT("Pad marker sign says Depths"), Marker->GetSignText().ToString(), FString(TEXT("Depths")));
 	TestFalse(TEXT("A marker is not a door"), Marker->EnterFrom(Pawn));

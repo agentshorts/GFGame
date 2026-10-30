@@ -86,6 +86,9 @@ namespace
 		Gate->GateRole = GateRole;
 		Gate->RimeCenter = Rime;
 		Gate->FinishSpawning(Xform);
+		// OnConstruction already applied visuals. Call again so this stays the entry point
+		// even if a future spawn path finishes construction before the entry id is set.
+		Gate->ApplyVisuals();
 		return Gate;
 	}
 
@@ -111,7 +114,11 @@ namespace
 		}
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		World->SpawnActor<AActor>(Class, FTransform(At), Params);
+		AActor* Spawned = World->SpawnActor<AActor>(Class, FTransform(At), Params);
+		if (bMoveExisting && Spawned)
+		{
+			Spawned->SetActorLocation(At);
+		}
 	}
 }
 

@@ -4,6 +4,8 @@
 // Markers stand on a mode map, or on a sim pad, and show that mode's name.
 // Missing gate art falls back to a tinted block so the gate still reads.
 // A sim pad sits outside the voxel floor, so its marker carries a solid slab.
+// Visuals are applied in OnConstruction. A bare automation world never begins play,
+// so BeginPlay alone would leave the sign blank and the mesh empty.
 
 #include "CoreMinimal.h"
 #include "Engine/HitResult.h"
@@ -31,6 +33,8 @@ class GFGAME_API AGFMiniGameGate : public AActor
 public:
 	AGFMiniGameGate();
 
+	/** Spawn path. Runs when FinishSpawning builds the actor, before any BeginPlay. */
+	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -48,6 +52,10 @@ public:
 	UFUNCTION()
 	void OnRep_Gate();
 
+	/**
+	 * Label, sign, mesh (or the tinted placeholder) and the pad slab.
+	 * Place() and the gate tests call this after the entry id is set. BeginPlay and OnRep call it too.
+	 */
 	void ApplyVisuals();
 
 	/** Server: a pawn walked into a portal. Map modes open their level. Sims move the pawn to the pad. */
