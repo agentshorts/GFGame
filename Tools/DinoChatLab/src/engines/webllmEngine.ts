@@ -15,7 +15,13 @@ export function createWebLlmEngine(getClient: () => WebLlmClient | null): ChatEn
       if (!client || !client.loadedModelId) {
         throw new Error("Load a WebLLM model first. ELIZA and the other script engines need no download.");
       }
-      const messages = buildWebLlmMessages(request.systemPrompt, request.history, request.persona.name);
+      const messages = buildWebLlmMessages(
+        request.systemPrompt,
+        request.history,
+        request.persona.name,
+        request.contextBudget,
+        request.maxTokens,
+      );
       const result = await client.complete({
         messages,
         temperature: request.temperature,

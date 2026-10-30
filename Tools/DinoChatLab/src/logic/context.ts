@@ -1,6 +1,18 @@
-export const DEFAULT_CONTEXT_BUDGET = 4096;
-export const MIN_CONTEXT_BUDGET = 128;
-export const MAX_CONTEXT_BUDGET = 8192;
+import {
+  clampBudget,
+  DEFAULT_CONTEXT_BUDGET,
+  estimateTokens,
+  MAX_CONTEXT_BUDGET,
+  MIN_CONTEXT_BUDGET,
+} from "../core/types";
+
+export {
+  clampBudget,
+  DEFAULT_CONTEXT_BUDGET,
+  estimateTokens,
+  MAX_CONTEXT_BUDGET,
+  MIN_CONTEXT_BUDGET,
+};
 
 export interface ContextTurn {
   speaker: string;
@@ -15,16 +27,6 @@ export interface ContextState {
 }
 
 /** Rough English stand-in: four characters to a token. WebLLM's own usage is shown when a model runs. */
-export function estimateTokens(text: string): number {
-  const trimmed = text.trim();
-  if (!trimmed) return 0;
-  return Math.ceil(trimmed.length / 4);
-}
-
-export function clampBudget(value: number): number {
-  if (!Number.isFinite(value)) return DEFAULT_CONTEXT_BUDGET;
-  return Math.min(MAX_CONTEXT_BUDGET, Math.max(MIN_CONTEXT_BUDGET, Math.floor(value)));
-}
 
 export function createContext(budget = DEFAULT_CONTEXT_BUDGET): ContextState {
   return { budget: clampBudget(budget), summary: "", worldNote: "", turns: [] };

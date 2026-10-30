@@ -25,10 +25,20 @@ const {
   winOdds,
   dinobook,
   alignmentPick,
+  knobs,
   contextBudget,
+  allChatBudget,
+  activeBudget,
   contextTokens,
   contextSummary,
   contextWorld,
+  playerRecord,
+  relationshipSummary,
+  relationshipKind,
+  relationshipKinds,
+  statKinds,
+  elderOn,
+  familyId,
   decisions,
   focusDecision,
   previewSteer,
@@ -59,6 +69,15 @@ const {
   markPromptDirty,
   rebuildPrompt,
   onBudget,
+  onAllChatBudget,
+  patchQuota,
+  patchThresholds,
+  setSummarizeEvery,
+  setFamily,
+  setRepDelta,
+  toggleElder,
+  setRelationshipKind,
+  recordWorld,
   colorFor,
   usePreset,
 } = useLab();
@@ -70,7 +89,15 @@ const presets = [
   "new player joined",
 ];
 
-const meterPct = () => Math.min(100, Math.round((contextTokens.value / contextBudget.value) * 100));
+const meterPct = () => Math.min(100, Math.round((contextTokens.value / Math.max(1, activeBudget.value)) * 100));
+
+function numberFrom(event: Event): number {
+  return Number((event.target as HTMLInputElement).value);
+}
+
+function onKind(event: Event) {
+  setRelationshipKind((event.target as HTMLSelectElement).value as Parameters<typeof setRelationshipKind>[0]);
+}
 
 function onComposerKey(event: KeyboardEvent) {
   if (event.key === "Enter" && !event.shiftKey) {
@@ -94,7 +121,7 @@ function onPromptInput(event: Event) {
       </div>
       <p class="status">
         {{ lineEngines.find((choice) => choice.id === engineId)?.label }}
-        · context {{ contextTokens }}/{{ contextBudget }}
+        · context {{ contextTokens }}/{{ activeBudget }}
         · intent {{ focusDecision.intent }}
       </p>
     </header>
@@ -322,23 +349,104 @@ function onPromptInput(event: Event) {
         <p class="hint">Attack: mango ×3, 12 ft, odds 0.8, no Dinobook. Ambush: same pack, odds 0.2, Dinobook on.</p>
 
         <h2>Context budget</h2>
+        <p class="hint">{{ contextTokens }} / {{ activeBudget }} on {{ selected.name }}. Each dino keeps a separate window.</p>
         <label class="field">
-          <span>{{ contextTokens }} / {{ contextBudget }} estimated tokens</span>
+          <span>1:1 and event budget</span>
           <input
             :value="contextBudget"
             type="number"
             min="128"
             max="8192"
             step="128"
-            @change="onBudget(Number(($event.target as HTMLInputElement).value))"
+            @change="onBudget(numberFrom($event))"
           />
         </label>
-        <div class="meter" role="meter" :aria-valuenow="contextTokens" :aria-valuemax="contextBudget" aria-label="Context tokens">
+        <label class="field">
+          <span>All-chat budget</span>
+          <input
+            :value="allChatBudget"
+            type="number"
+            min="128"
+            max="8192"
+            step="128"
+            @change="onAllChatBudget(numberFrom($event))"
+          />
+        </label>
+        <div class="meter" role="meter" :aria-valuenow="contextTokens" :aria-valuemax="activeBudget" aria-label="Context tokens">
           <div :style="{ width: `${meterPct()}%` }"></div>
         </div>
         <p class="hint">Default 4096. Four characters count as one token here. A loaded model reports its own usage.</p>
+        <label class="field">
+          <span>Summarize every N turns</span>
+          <input :value="knobs.summarizeEvery" type="number" min="1" max="100" @change="setSummarizeEvery(numberFrom($event))" />
+        </label>
         <p class="hint" v-if="contextSummary">Summary: {{ contextSummary }}</p>
+        <p class="hint" v-if="relationshipSummary">With this player: {{ relationshipSummary }}</p>
         <p class="hint" v-if="contextWorld">{{ contextWorld }}</p>
+        <p class="hint" v-if="playerRecord">{{ elderOn ? "Elder record" : "Rep band" }}: {{ playerRecord }}</p>
+
+        <h2>Cooldowns and thresholds</h2>
+        <div class="row">
+          <label class="field">
+            <span>Rest (seconds)</span>
+            <input :value="knobs.quota.restSeconds" type="number" min="0" max="86400" @change="patchQuota({ restSeconds: numberFrom($event) })" />
+          </label>
+          <label class="field">
+            <span>Per minute</span>
+            <input :value="knobs.quota.maxPerMinute" type="number" min="0" max="1000" @change="patchQuota({ maxPerMinute: numberFrom($event) })" />
+          </label>
+        </div>
+        <div class="row">
+          <label class="field">
+            <span>Per hour</span>
+            <input :value="knobs.quota.maxPerHour" type="number" min="0" max="10000" @change="patchQuota({ maxPerHour: numberFrom($event) })" />
+          </label>
+          <label class="field">
+            <span>Same player / hour</span>
+            <input :value="knobs.quota.maxToSamePlayerPerHour" type="number" min="0" max="10000" @change="patchQuota({ maxToSamePlayerPerHour: numberFrom($event) })" />
+          </label>
+        </div>
+        <label class="field">
+          <span>Speak chance {{ knobs.quota.speakChance.toFixed(2) }}</span>
+          <input :value="knobs.quota.speakChance" type="number" min="0" max="1" step="0.05" @change="patchQuota({ speakChance: numberFrom($event) })" />
+        </label>
+        <div class="row">
+          <label class="field">
+            <span>Interest minimum</span>
+            <input :value="knobs.thresholds.interestMin" type="number" min="1" max="10" @change="patchThresholds({ interestMin: numberFrom($event) })" />
+          </label>
+          <label class="field">
+            <span>Reply-to-reply interest</span>
+            <input :value="knobs.thresholds.replyToReplyInterest" type="number" min="1" max="10" @change="patchThresholds({ replyToReplyInterest: numberFrom($event) })" />
+          </label>
+        </div>
+        <label class="field">
+          <span>Relationship to this player</span>
+          <select :value="relationshipKind" @change="onKind">
+            <option v-for="kind in relationshipKinds" :key="kind" :value="kind">{{ kind }}</option>
+          </select>
+        </label>
+        <label class="check">
+          <input :checked="elderOn" type="checkbox" @change="toggleElder(($event.target as HTMLInputElement).checked)" />
+          <span>Elder of this family (reads the player record)</span>
+        </label>
+        <label class="field">
+          <span>Family id</span>
+          <input :value="familyId" type="text" @change="setFamily(($event.target as HTMLInputElement).value)" />
+        </label>
+        <details>
+          <summary>Rep deltas</summary>
+          <div v-for="kind in statKinds" :key="kind" class="row delta">
+            <span>{{ kind }}</span>
+            <input :value="knobs.repDeltas[kind]" type="number" min="-100" max="100" @change="setRepDelta(kind, numberFrom($event))" />
+          </div>
+        </details>
+
+        <h2>World events</h2>
+        <p class="hint">These buttons write stat events for the current player name. They are not wired to Unreal.</p>
+        <div class="pills">
+          <button v-for="kind in statKinds" :key="kind" type="button" @click="recordWorld(kind)">{{ kind.replaceAll('_', ' ') }}</button>
+        </div>
       </aside>
     </div>
   </div>

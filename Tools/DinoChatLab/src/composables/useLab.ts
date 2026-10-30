@@ -6,15 +6,42 @@ import type { WebLlmCompletion } from "../engines/types";
 import { createBrowserWebLlm, detectWebGpu, modelChoice } from "../engines/webllmBrowser";
 import type { LoadProgress } from "../engines/webllmBrowser";
 import { decide, DEFAULT_SMELL_FT, type Decision, type DecisionInput } from "../logic/alignment";
+import { contextBlob, type ContextState } from "../logic/context";
 import {
-  contextBlob,
-  createContext,
-  DEFAULT_CONTEXT_BUDGET,
-  remember,
-  setBudget,
-  tokenTotal,
-  type ContextState,
-} from "../logic/context";
+  applyAffinity,
+  blankRelationship,
+  budgetSplit,
+  canSpeak,
+  createDinoWindow,
+  decideInterest,
+  foldSummary,
+  overBudgetFraction,
+  planSpeak,
+  prioritize,
+  pushTurn,
+  resizeWindow,
+  scoreInterest,
+  shouldSummarize,
+  summarizePrompt,
+  windowTokens,
+  clampSummary,
+  type DinoWindow,
+} from "../core/memory";
+import { affinityDelta, asksForPlayerRecord, statsDigest } from "../core/stats";
+import { createDefaultStorage } from "../core/storage";
+import {
+  playerSubjectKey,
+  RELATIONSHIP_KINDS,
+  STAT_KINDS,
+  normalizeKnobs,
+  repBand,
+  type MemoryKnobs,
+  type QuotaLogEntry,
+  type RelationshipKind,
+  type SpeechQuota,
+  type StatKind,
+  type InterestThresholds,
+} from "../core/types";
 import { clampChatText, presentReply } from "../logic/present";
 import { buildSystemPrompt } from "../logic/prompt";
 import {
@@ -44,6 +71,7 @@ import {
 } from "../logic/types";
 
 const MANGO: ItemStack = { id: "mango-block", name: "Mango block", count: 1 };
+const storage = createDefaultStorage();
 
 export function useLab() {
   const personas = loadBundledPersonas();
@@ -72,8 +100,13 @@ export function useLab() {
   const dinobook = ref(false);
   const alignmentPick = ref<Alignment | "persona">("persona");
 
-  const contextBudget = ref(DEFAULT_CONTEXT_BUDGET);
-  const context = ref<ContextState>(createContext(DEFAULT_CONTEXT_BUDGET));
+  const knobs = ref<MemoryKnobs>(storage.getKnobs());
+  const windows = ref<Record<string, DinoWindow>>({});
+  const statsTick = ref(0);
+  const relTick = ref(0);
+  const contextBudget = computed(() => knobs.value.contextBudget);
+  const allChatBudget = computed(() => knobs.value.allChatBudget);
+  const activeBudget = computed(() => (mode.value === "all-chat" ? knobs.value.allChatBudget : knobs.value.contextBudget));
 
   const webGpu = ref({ ok: false, detail: "Checking WebGPU…" });
   const modelId = ref(browser.defaultModelId ?? "");
@@ -95,7 +128,39 @@ export function useLab() {
     return persona.alignment;
   }
 
+  function subjectKey(): string {
+    return playerSubjectKey(playerName.value);
+  }
+
+  function isElder(dinoId: string): boolean {
+    return knobs.value.elderIds.includes(dinoId);
+  }
+
+  function personaByName(name: string): Persona | undefined {
+    return personas.find((persona) => persona.name === name);
+  }
+
+  function relationshipFor(dinoId: string, key: string) {
+    return storage.getRelationship(dinoId, key) ?? blankRelationship(dinoId, key, new Date().toISOString());
+  }
+
+  function digestFor(elder: boolean): string {
+    const key = subjectKey();
+    const rows = storage.getStats(key);
+    if (!elder && rows.length === 0) return "";
+    return statsDigest({
+      rows,
+      playerKey: key,
+      familyId: knobs.value.familyId,
+      elder,
+      tokenCap: knobs.value.elderDigestCap,
+      bands: knobs.value.repBands,
+    });
+  }
+
   function inputFor(persona: Persona): DecisionInput {
+    statsTick.value;
+    const row = storage.getStats(subjectKey()).find((item) => item.familyId === knobs.value.familyId);
     return {
       alignment: alignmentFor(persona),
       inventory: inventory.value.map((stack) => ({
@@ -108,6 +173,7 @@ export function useLab() {
       winOdds: Math.min(1, Math.max(0, Number.isFinite(winOdds.value) ? winOdds.value : 0)),
       dinobook: dinobook.value,
       wants: persona.wants,
+      repBand: row ? repBand(row.rep, knobs.value.repBands) : undefined,
     };
   }
 
@@ -123,9 +189,32 @@ export function useLab() {
     intent: focusDecision.value.intent,
     cues: selected.value.cues,
   }));
-  const contextTokens = computed(() => tokenTotal(context.value));
-  const contextSummary = computed(() => context.value.summary);
-  const contextWorld = computed(() => context.value.worldNote);
+  const playerRecord = computed(() => {
+    statsTick.value;
+    return digestFor(isElder(selected.value.id));
+  });
+  const relationshipSummary = computed(() => {
+    relTick.value;
+    return storage.getRelationship(selected.value.id, subjectKey())?.summary ?? "";
+  });
+  const relationshipKind = computed(() => {
+    relTick.value;
+    return relationshipFor(selected.value.id, subjectKey()).kind;
+  });
+  const contextTokens = computed(() => {
+    statsTick.value;
+    relTick.value;
+    const window = windows.value[selected.value.id];
+    const blank = createDinoWindow(selected.value.id, activeBudget.value, "");
+    const rel = storage.getRelationship(selected.value.id, subjectKey());
+    return windowTokens(window ?? blank, rel, isElder(selected.value.id) ? playerRecord.value : "");
+  });
+  const contextSummary = computed(() => {
+    const window = windows.value[selected.value.id];
+    if (window) return window.memory.summary;
+    return storage.getMemory(selected.value.id)?.summary ?? "";
+  });
+  const contextWorld = computed(() => windows.value[selected.value.id]?.worldNote ?? "");
   const generatedPrompt = computed(() => buildSystemPrompt(
     selected.value,
     mode.value,
@@ -134,7 +223,10 @@ export function useLab() {
     {
       alignment: alignmentFor(selected.value),
       intent: focusDecision.value.intent,
-      summary: context.value.summary,
+      summary: contextSummary.value,
+      relationship: relationshipSummary.value,
+      playerRecord: playerRecord.value,
+      elder: isElder(selected.value.id),
     },
   ));
 
@@ -155,10 +247,88 @@ export function useLab() {
     systemPrompt.value = generatedPrompt.value;
   }
 
+  function resizeAll(budget: number) {
+    const next: Record<string, DinoWindow> = {};
+    for (const [id, window] of Object.entries(windows.value)) {
+      const resized = resizeWindow(window, budget, knobs.value.replyReserve, isElder(id));
+      next[id] = resized;
+      storage.putMemory(resized.memory);
+    }
+    windows.value = next;
+  }
+
+  function patchKnobs(partial: Partial<MemoryKnobs>) {
+    knobs.value = normalizeKnobs({ ...knobs.value, ...partial });
+    storage.putKnobs(knobs.value);
+    resizeAll(activeBudget.value);
+  }
+
+  watch(mode, () => {
+    resizeAll(activeBudget.value);
+  });
+
   function onBudget(value: number) {
-    const next = setBudget(context.value, value);
-    context.value = next;
-    contextBudget.value = next.budget;
+    patchKnobs({ contextBudget: value });
+  }
+
+  function onAllChatBudget(value: number) {
+    patchKnobs({ allChatBudget: value });
+  }
+
+  function patchQuota(partial: Partial<SpeechQuota>) {
+    patchKnobs({ quota: { ...knobs.value.quota, ...partial } });
+  }
+
+  function patchThresholds(partial: Partial<InterestThresholds>) {
+    patchKnobs({ thresholds: { ...knobs.value.thresholds, ...partial } });
+  }
+
+  function setSummarizeEvery(value: number) {
+    patchKnobs({ summarizeEvery: value });
+  }
+
+  function setFamily(familyId: string) {
+    patchKnobs({ familyId });
+  }
+
+  function setRepDelta(kind: StatKind, value: number) {
+    patchKnobs({ repDeltas: { ...knobs.value.repDeltas, [kind]: value } });
+  }
+
+  function toggleElder(on: boolean) {
+    const ids = new Set(knobs.value.elderIds);
+    if (on) ids.add(selected.value.id);
+    else ids.delete(selected.value.id);
+    patchKnobs({ elderIds: [...ids] });
+  }
+
+  function setRelationshipKind(kind: RelationshipKind) {
+    const at = new Date().toISOString();
+    const key = subjectKey();
+    const rel = storage.getRelationship(selected.value.id, key) ?? blankRelationship(selected.value.id, key, at, kind);
+    storage.putRelationship({ ...rel, kind });
+    relTick.value += 1;
+  }
+
+  function recordWorld(kind: StatKind) {
+    const at = new Date().toISOString();
+    const key = subjectKey();
+    storage.bumpStats({
+      at,
+      playerKey: key,
+      familyId: knobs.value.familyId,
+      dinoId: selected.value.id,
+      kind,
+      amount: 1,
+      note: "lab",
+    }, knobs.value.repDeltas);
+    const delta = affinityDelta(kind);
+    for (const persona of personas) {
+      const rel = storage.getRelationship(persona.id, key) ?? blankRelationship(persona.id, key, at);
+      storage.putRelationship(applyAffinity(rel, delta, at));
+    }
+    statsTick.value += 1;
+    relTick.value += 1;
   }
 
   function addItem() {
@@ -206,13 +376,62 @@ export function useLab() {
 
   function promptFor(persona: Persona, decision: Decision): string {
     if (promptDirty.value && persona.id === selected.value.id) return systemPrompt.value;
+    const rel = relationshipFor(persona.id, subjectKey());
     return buildSystemPrompt(
       persona,
       mode.value,
       peerNames(roster.value, persona.id),
       playerName.value.trim(),
-      { alignment: alignmentFor(persona), intent: decision.intent, summary: context.value.summary },
+      {
+        alignment: alignmentFor(persona),
+        intent: decision.intent,
+        summary: windows.value[persona.id]?.memory.summary ?? storage.getMemory(persona.id)?.summary ?? "",
+        relationship: rel.summary,
+        playerRecord: digestFor(isElder(persona.id)),
+        elder: isElder(persona.id),
+      },
     );
+  }
+
+  function quotaEntries(): QuotaLogEntry[] {
+    return storage.listLog().map((entry) => {
+      const action: QuotaLogEntry["action"] = entry.action === "reply" || entry.action === "post"
+        ? entry.action
+        : entry.action === "like" || entry.action === "skip_reply_to_reply"
+          ? "like"
+          : entry.action === "ignore"
+            ? "ignore"
+            : "skip";
+      return { at: entry.at, dinoId: entry.dinoId, subjectKey: entry.subjectKey, action };
+    });
+  }
+
+  function ensureWindow(dinoId: string): DinoWindow {
+    const budget = activeBudget.value;
+    const existing = windows.value[dinoId];
+    if (existing) {
+      return existing.budget === budget
+        ? existing
+        : resizeWindow(existing, budget, knobs.value.replyReserve, isElder(dinoId));
+    }
+    const created = createDinoWindow(dinoId, budget, new Date().toISOString());
+    const saved = storage.getMemory(dinoId);
+    if (saved) created.memory = { ...created.memory, ...saved, dinoId };
+    return created;
+  }
+
+  function commitWindow(window: DinoWindow) {
+    windows.value = { ...windows.value, [window.dinoId]: window };
+    storage.putMemory(window.memory);
+  }
+
+  function steerState(window: DinoWindow, relationshipText: string): ContextState {
+    return {
+      budget: window.budget,
+      summary: [window.memory.summary, relationshipText].filter((part) => part.length > 0).join("\n"),
+      worldNote: window.worldNote,
+      turns: window.turns.map((turn) => ({ speaker: turn.speaker, text: turn.text })),
+    };
   }
 
   function statsFrom(result: WebLlmCompletion): ReplyStats {
@@ -229,31 +448,137 @@ export function useLab() {
     };
   }
 
-  async function maybeSteer(persona: Persona, decision: Decision): Promise<{ intent: Decision["intent"]; note: string; stats?: ReplyStats }> {
+  async function maybeSteer(
+    persona: Persona,
+    decision: Decision,
+    window: DinoWindow,
+    relationshipText: string,
+  ): Promise<{ intent: Decision["intent"]; note: string; stats?: ReplyStats; window: DinoWindow }> {
     if (!steerWithModel.value || !browser.loadedModelId) {
-      return { intent: decision.intent, note: "" };
+      return { intent: decision.intent, note: "", window };
     }
     try {
       const result = await browser.complete({
-        messages: buildSteerMessages(context.value, decision, persona.name, context.value.budget),
+        messages: buildSteerMessages(steerState(window, relationshipText), decision, persona.name, window.budget),
         temperature: temperature.value,
         maxTokens: Math.max(16, Math.min(120, Math.floor(maxTokens.value))),
       });
       const parsed = parseModelSteer(result.text, decision.intent);
-      if (parsed.summary) context.value = { ...context.value, summary: parsed.summary };
+      let next = window;
+      if (parsed.summary) {
+        next = {
+          ...window,
+          memory: {
+            ...window.memory,
+            summary: clampSummary(parsed.summary, knobs.value.dinoSummaryCap),
+            updatedAt: new Date().toISOString(),
+          },
+        };
+      }
       const note = parsed.usedModel
         ? `Context model chose ${parsed.intent}.`
         : "Context model returned no intent. The alignment module stands.";
-      return { intent: parsed.intent, note, stats: statsFrom(result) };
+      return { intent: parsed.intent, note, stats: statsFrom(result), window: next };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return { intent: decision.intent, note: `Context model failed (${message}). The alignment module stands.` };
+      return { intent: decision.intent, note: `Context model failed (${message}). The alignment module stands.`, window };
     }
   }
 
-  async function speak(persona: Persona, heard: { speaker: string; text: string }): Promise<void> {
-    const decision = decide(inputFor(persona));
-    const steered = await maybeSteer(persona, decision);
+  async function speak(
+    persona: Persona,
+    heard: { speaker: string; text: string },
+    cycleId: string,
+  ): Promise<boolean> {
+    const started = performance.now();
+    const now = new Date().toISOString();
+    const other = personaByName(heard.speaker);
+    const key = other ? other.id : subjectKey();
+    const speakerIsDino = Boolean(other);
+    const speakerIsSelf = heard.speaker === persona.name;
+    let rel = relationshipFor(persona.id, key);
+    const quota = canSpeak({
+      dinoId: persona.id,
+      subjectKey: key,
+      log: quotaEntries(),
+      now,
+      quota: knobs.value.quota,
+    });
+    const worldInput = inputFor(persona);
+    const interest = scoreInterest({
+      text: heard.text,
+      relationshipKind: rel.kind,
+      affinity: rel.affinity,
+      repBand: worldInput.repBand,
+    });
+    const gate = decideInterest({
+      interest,
+      thresholds: knobs.value.thresholds,
+      relationshipKind: rel.kind,
+      speakerIsDino,
+      speakerIsSelf,
+    });
+    const plan = planSpeak({
+      mode: mode.value,
+      quotaOk: quota.ok,
+      quotaReason: quota.reason,
+      decision: gate,
+    });
+    const decision = decide(worldInput);
+    const elder = isElder(persona.id);
+    const record = digestFor(elder);
+    const metadata = {
+      interest,
+      intent: decision.intent,
+      quota: quota.reason,
+      kind: rel.kind,
+      statsDigest: record,
+    };
+    if (plan.action !== "reply") {
+      storage.appendLog({
+        id: "",
+        at: now,
+        cycleId,
+        dinoId: persona.id,
+        subjectKey: key,
+        action: plan.logAction,
+        detail: plan.reason,
+        metadata,
+        engine: engineId.value,
+        modelId: browser.loadedModelId,
+        promptTokens: null,
+        completionTokens: null,
+        durationMs: Math.round(performance.now() - started),
+      });
+      messages.value.push(nextMessage({
+        speaker: persona.name,
+        role: "system",
+        text: plan.action === "like" ? "likes that." : `stays quiet (${plan.reason})`,
+        rawText: plan.reason,
+        filtered: false,
+        replacements: [],
+        mode: mode.value,
+        intent: decision.intent,
+        reasons: [plan.reason, ...decision.reasons],
+        speechHint: decision.speechHint,
+        steer: plan.reason,
+      }));
+      return plan.action === "like";
+    }
+
+    let window = ensureWindow(persona.id);
+    const split = budgetSplit(window.budget, Math.max(knobs.value.replyReserve, maxTokens.value), elder);
+    const world = describeWorld(worldInput, decision.intent);
+    const tail = window.turns.at(-1);
+    if (!tail || tail.speaker !== heard.speaker || tail.text !== heard.text) {
+      window = pushTurn(window, {
+        speaker: heard.speaker,
+        text: heard.text,
+        role: speakerIsDino ? "dino" : "user",
+      }, world, split).window;
+    }
+    const steered = await maybeSteer(persona, decision, window, rel.summary);
+    window = steered.window;
     const finalDecision = { ...decision, intent: steered.intent };
     const steer = pickSteer({
       mode: mode.value,
@@ -262,43 +587,55 @@ export function useLab() {
       intent: steered.intent,
       cues: persona.cues,
     });
-    const reply = await engines[engineId.value].reply({
-      persona,
-      history: messages.value.map((message) => ({
-        speaker: message.speaker,
-        role: message.role,
-        text: message.text,
-      })),
-      utterance: steer.utterance,
-      mode: mode.value,
-      systemPrompt: promptFor(persona, finalDecision),
-      temperature: temperature.value,
-      maxTokens: maxTokens.value,
-      peerNames: peerNames(roster.value, persona.id),
-    });
-    let line = reply.text;
+    const asking = elder && asksForPlayerRecord(heard.text);
+    let line = record;
     let rephrased = false;
-    let stats = reply.stats ?? steered.stats;
-    if (rephraseWithModel.value && browser.loadedModelId) {
-      try {
-        const result = await browser.complete({
-          messages: buildRephraseMessages({
-            systemPrompt: promptFor(persona, finalDecision),
-            classicLine: reply.text,
-            memory: contextBlob(context.value),
-            budget: context.value.budget,
-          }),
-          temperature: temperature.value,
-          maxTokens: maxTokens.value,
-        });
-        if (result.text.trim().length > 0) {
-          line = result.text.trim();
-          rephrased = true;
-          stats = statsFrom(result);
+    let stats = steered.stats;
+    let promptTokens: number | null = null;
+    let completionTokens: number | null = null;
+    if (!asking) {
+      const reply = await engines[engineId.value].reply({
+        persona,
+        history: window.turns.map((turn) => ({
+          speaker: turn.speaker,
+          role: turn.role ?? "user",
+          text: turn.text,
+        })),
+        utterance: steer.utterance,
+        mode: mode.value,
+        systemPrompt: promptFor(persona, finalDecision),
+        temperature: temperature.value,
+        maxTokens: maxTokens.value,
+        peerNames: peerNames(roster.value, persona.id),
+        contextBudget: window.budget,
+      });
+      line = reply.text;
+      stats = reply.stats ?? steered.stats;
+      promptTokens = reply.stats?.promptTokens ?? null;
+      completionTokens = reply.stats?.completionTokens ?? null;
+      if (rephraseWithModel.value && browser.loadedModelId) {
+        try {
+          const result = await browser.complete({
+            messages: buildRephraseMessages({
+              systemPrompt: promptFor(persona, finalDecision),
+              classicLine: reply.text,
+              memory: contextBlob(steerState(window, rel.summary)),
+              budget: window.budget,
+            }),
+            temperature: temperature.value,
+            maxTokens: maxTokens.value,
+          });
+          if (result.text.trim().length > 0) {
+            line = result.text.trim();
+            rephrased = true;
+            stats = statsFrom(result);
+            promptTokens = result.promptTokens ?? promptTokens;
+            completionTokens = result.completionTokens ?? completionTokens;
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          notice.value = `Rephrase failed (${message}). The classic line stands.`;
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        notice.value = `Rephrase failed (${message}). The classic line stands.`;
       }
     }
     const presented = presentReply(line, {
@@ -306,12 +643,57 @@ export function useLab() {
       maxReplyLength: persona.maxReplyLength,
       maxTokens: maxTokens.value,
     });
-    context.value = remember(
-      context.value,
-      { speaker: persona.name, text: presented.text },
-      describeWorld(inputFor(persona), steered.intent),
-    );
+    const pushed = pushTurn(window, { speaker: persona.name, text: presented.text, role: "dino" }, world, split);
+    window = pushed.window;
+    rel = { ...rel, lastSeenAt: now };
+    const needsSummary = shouldSummarize(window.memory, knobs.value.summarizeEvery)
+      || overBudgetFraction(windowTokens(window, rel, elder ? record : ""), window.budget, knobs.value.summarizeAtFraction);
+    if (needsSummary) {
+      let modelSummary: string | null = null;
+      if (browser.loadedModelId) {
+        try {
+          const result = await browser.complete({
+            messages: summarizePrompt(window.memory.summary, window.pending, knobs.value.dinoSummaryCap),
+            temperature: temperature.value,
+            maxTokens: Math.min(120, knobs.value.dinoSummaryCap),
+          });
+          modelSummary = result.text.trim();
+        } catch {
+          modelSummary = null;
+        }
+      }
+      const folded = foldSummary({
+        memory: window.memory,
+        relationship: rel,
+        turns: window.pending,
+        now,
+        dinoCap: knobs.value.dinoSummaryCap,
+        relationshipCap: knobs.value.relationshipSummaryCap,
+        modelSummary,
+      });
+      window = { ...window, memory: folded.memory, pending: [] };
+      rel = folded.relationship;
+    }
+    storage.putRelationship(rel);
+    relTick.value += 1;
+    commitWindow(window);
     if (stats) lastStats.value = stats;
+    const spent = Math.round(performance.now() - started);
+    storage.appendLog({
+      id: "",
+      at: now,
+      cycleId,
+      dinoId: persona.id,
+      subjectKey: key,
+      action: "reply",
+      detail: [plan.reason, steer.reason, steered.note].filter((part) => part.length > 0).join(" "),
+      metadata,
+      engine: asking ? "stats" : engineId.value,
+      modelId: browser.loadedModelId,
+      promptTokens,
+      completionTokens,
+      durationMs: spent,
+    });
     messages.value.push(nextMessage({
       speaker: persona.name,
       role: "dino",
@@ -323,13 +705,21 @@ export function useLab() {
       mode: mode.value,
       stats,
       intent: steered.intent,
-      reasons: decision.reasons,
+      reasons: [plan.reason, ...decision.reasons],
       speechHint: decision.speechHint,
-      steer: [steer.reason, steered.note].filter((part) => part.length > 0).join(" "),
-      contextTokens: tokenTotal(context.value),
-      contextBudget: context.value.budget,
+      steer: asking
+        ? "Elder quotes the player record."
+        : [steer.reason, steered.note].filter((part) => part.length > 0).join(" "),
+      contextTokens: windowTokens(window, rel, elder ? record : ""),
+      contextBudget: window.budget,
       rephrased,
     }));
+    return true;
+  }
+
+  function orderedRoster(ownerKey: string): Persona[] {
+    if (mode.value !== "all-chat") return roster.value;
+    return prioritize(roster.value, (persona) => relationshipFor(persona.id, ownerKey).kind);
   }
 
   async function send() {
@@ -339,9 +729,15 @@ export function useLab() {
       notice.value = "Pick at least one dino for all-chat.";
       return;
     }
+    const ordered = orderedRoster(subjectKey());
+    if (ordered.length === 0) {
+      notice.value = "Every checked dino is ignoring this speaker.";
+      return;
+    }
     busy.value = true;
     notice.value = "";
     const speaker = mode.value === "event" ? "Game" : (playerName.value.trim() || "You");
+    const cycleId = `cycle-${Date.now()}`;
     try {
       messages.value.push(nextMessage({
         speaker,
@@ -352,14 +748,11 @@ export function useLab() {
         replacements: [],
         mode: mode.value,
       }));
-      context.value = remember(
-        context.value,
-        { speaker, text },
-        describeWorld(inputFor(selected.value), focusDecision.value.intent),
-      );
-      for (const persona of roster.value) {
-        await speak(persona, { speaker, text });
+      let spoke = false;
+      for (const persona of ordered) {
+        if (await speak(persona, { speaker, text }, cycleId)) spoke = true;
       }
+      if (!spoke) notice.value = "Nobody spoke. Check the cooldowns, the interest minimum, or ignore.";
       draft.value = "";
     } catch (error) {
       notice.value = error instanceof Error ? error.message : String(error);
@@ -375,16 +768,21 @@ export function useLab() {
       notice.value = "Say something first, then ask for another round.";
       return;
     }
-    if (roster.value.length === 0) {
-      notice.value = "Pick at least one dino for all-chat.";
+    const ownerKey = personaByName(last.speaker)?.id ?? subjectKey();
+    const ordered = orderedRoster(ownerKey);
+    if (ordered.length === 0) {
+      notice.value = "Every checked dino is ignoring this speaker.";
       return;
     }
     busy.value = true;
     notice.value = "";
+    const cycleId = `cycle-${Date.now()}`;
     try {
-      for (const persona of roster.value) {
-        await speak(persona, { speaker: last.speaker, text: last.text });
+      let spoke = false;
+      for (const persona of ordered) {
+        if (await speak(persona, { speaker: last.speaker, text: last.text }, cycleId)) spoke = true;
       }
+      if (!spoke) notice.value = "Nobody spoke. A dino will not answer the dino who just spoke unless they are rivals or interest is high.";
     } catch (error) {
       notice.value = error instanceof Error ? error.message : String(error);
     } finally {
@@ -398,12 +796,18 @@ export function useLab() {
     notice.value = "";
     lastStats.value = null;
     resetSeq(0);
-    context.value = createContext(contextBudget.value);
+    for (const persona of personas) {
+      storage.deleteMemory(persona.id);
+      storage.deleteRelationships(persona.id);
+    }
+    windows.value = {};
+    relTick.value += 1;
     rebuildPrompt();
     for (const engine of Object.values(engines)) engine.reset();
   }
 
   function exportTranscript() {
+    const window = windows.value[selected.value.id];
     const doc = transcriptDocument({
       exportedAt: new Date().toISOString(),
       mode: mode.value,
@@ -416,10 +820,10 @@ export function useLab() {
       personas: roster.value,
       messages: messages.value,
       context: {
-        budget: context.value.budget,
-        tokens: tokenTotal(context.value),
-        summary: context.value.summary,
-        worldNote: context.value.worldNote,
+        budget: activeBudget.value,
+        tokens: contextTokens.value,
+        summary: window?.memory.summary ?? "",
+        worldNote: window?.worldNote ?? "",
       },
     });
     const blob = new Blob([transcriptToJson(doc)], { type: "application/json" });
@@ -482,10 +886,20 @@ export function useLab() {
     winOdds,
     dinobook,
     alignmentPick,
+    knobs,
     contextBudget,
+    allChatBudget,
+    activeBudget,
     contextTokens,
     contextSummary,
     contextWorld,
+    playerRecord,
+    relationshipSummary,
+    relationshipKind,
+    relationshipKinds: RELATIONSHIP_KINDS,
+    statKinds: STAT_KINDS,
+    elderOn: computed(() => isElder(selected.value.id)),
+    familyId: computed(() => knobs.value.familyId),
     decisions,
     focusDecision,
     previewSteer,
@@ -516,6 +930,15 @@ export function useLab() {
     markPromptDirty,
     rebuildPrompt,
     onBudget,
+    onAllChatBudget,
+    patchQuota,
+    patchThresholds,
+    setSummarizeEvery,
+    setFamily,
+    setRepDelta,
+    toggleElder,
+    setRelationshipKind,
+    recordWorld,
     colorFor,
     usePreset,
   };

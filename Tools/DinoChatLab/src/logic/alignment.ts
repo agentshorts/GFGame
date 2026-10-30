@@ -1,3 +1,4 @@
+import type { RepBand } from "../core/types";
 import type { Alignment, Intent, ItemStack, Want } from "./types";
 
 /** Lab rules. Alignment, Dinobook, and mango blocks are not in the game data. */
@@ -20,6 +21,8 @@ export interface DecisionInput {
   /** Lab social net. True when this dino can call others. */
   dinobook: boolean;
   wants: Want[];
+  /** Set when this player already has a stat row. Omitted means the old rules. */
+  repBand?: RepBand;
 }
 
 export interface Decision {
@@ -78,10 +81,30 @@ function facts(input: DecisionInput, wanted: string[], others: string[]): string
     `Win odds ${input.winOdds.toFixed(2)}. ${input.winOdds >= CONFIDENT_ODDS ? "Thinks it can win alone." : "Does not think it can win alone."}`,
     input.dinobook ? "Dinobook is open, so it can rally help." : "Dinobook is quiet.",
   ];
+  if (input.repBand) lines.push(`Rep band ${input.repBand}.`);
   if (wanted.length > 0) lines.push(`Smells a wanted material: ${wanted.join(", ")}.`);
   else if (others.length > 0) lines.push(`Smells other goods: ${others.join(", ")}. Not on this dino's want list.`);
   else lines.push("Smells nothing it can act on.");
   return lines;
+}
+
+const THREAT_ALIGNMENTS = new Set<Alignment>(["LE", "NE", "CE", "CN"]);
+const THREAT_INTENTS = new Set<Intent>(["attack", "ambush", "extort"]);
+
+function applyRep(
+  input: DecisionInput,
+  chosen: { intent: Intent; because: string },
+): { intent: Intent; because: string } {
+  if (input.repBand === "hostile" && chosen.intent === "ignore" && THREAT_ALIGNMENTS.has(input.alignment)) {
+    if (input.alignment === "LE") {
+      return { intent: "extort", because: "Hostile rep pushes a lawful-evil dino toward extortion." };
+    }
+    return { intent: "attack", because: "Hostile rep pushes toward attack." };
+  }
+  if (input.repBand === "friendly" && THREAT_INTENTS.has(chosen.intent)) {
+    return { intent: "barter", because: "Friendly rep turns a threat into a trade." };
+  }
+  return chosen;
 }
 
 function choose(input: DecisionInput, wanted: string[], others: string[]): { intent: Intent; because: string } {
@@ -138,7 +161,7 @@ export function decide(input: DecisionInput): Decision {
   const wanted = wantedNames(input);
   const others = otherNames(input);
   const reasons = facts(input, wanted, others);
-  const chosen = choose(input, wanted, others);
+  const chosen = applyRep(input, choose(input, wanted, others));
   const item = wanted[0] ?? others[0] ?? "";
   return {
     intent: chosen.intent,
