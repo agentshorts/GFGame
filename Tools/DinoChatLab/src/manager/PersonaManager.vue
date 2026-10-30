@@ -20,7 +20,10 @@ const {
   logs,
   dinoSummary,
   relationshipSummary,
-  summarySource,
+  rep,
+  earnings,
+  repLabel,
+  repBands,
   selected,
   editable,
   groups,
@@ -90,7 +93,7 @@ function onFile(event: Event) {
       <p class="status">
         {{ username || "no name yet" }}
         · {{ mode === "local" ? "this browser only" : "shared hub" }}
-        · memory {{ summarySource }}
+        · memory core
       </p>
     </header>
 
@@ -324,6 +327,11 @@ function onFile(event: Event) {
             {{ row.metadata.memoryDelta }}
           </p>
           <h2>Memory</h2>
+          <p class="hint">
+            Rep {{ rep }} ({{ repLabel }}).
+            Friendly at {{ repBands.friendlyAt }}, wary at {{ repBands.waryAt }}, hostile at {{ repBands.hostileAt }}.
+            Lifetime earnings {{ earnings }}.
+          </p>
           <p class="hint">Dino summary</p>
           <p class="memory-block">{{ dinoSummary || "Empty." }}</p>
           <p class="hint">With {{ playerName || username || "the player" }}</p>

@@ -50,7 +50,7 @@ A deployed lab sets `VITE_DINO_API=/api` and serves the Vite build from the Work
 
 Do not deploy this Worker yourself. Do not add an account id, a DNS route, or a credential. Do not point it at the old `4squarebackend` Worker. After review, Cloudflare Bot deploys `Tools/DinoChatLab/wrangler.jsonc`. Run `npm run build` first so `dist/` exists. The Worker never loads WebLLM and stores no model keys.
 
-`src/manager/shim/untilCore.ts` copies the shapes planned for `src/core` (issue #75) until that branch exports them. When `src/core/index.ts` exports `fallbackSummarize` and `clampSummary`, the manager uses those. Rep on `player_stats` stays 0 here. The memory branch owns the rep deltas.
+The manager imports `src/core` directly. Interest, summaries, rep bands (`REP_BAND_THRESHOLDS`), and `creditWages` come from that contract. PersonaHub still uses migration `v1`. The original tables are unchanged. `dino_work` is created with `CREATE TABLE IF NOT EXISTS` on boot, so rows already stored in the other tables stay. Rep on a stat bump uses the core deltas. Wages only go up.
 
 There is still no Unreal wiring. The lab does not subscribe to giant events, and it does not write `ChatLog`.
 

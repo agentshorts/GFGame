@@ -1,4 +1,5 @@
-import type { DecisionLogRow, DinoMemory, RelationshipMemory, StatEvent } from "../../src/manager/shim/untilCore";
+import { isStatKind, WageCreditError } from "../../src/core/stats";
+import type { DecisionLogEntry, DinoMemory, DinoWork, RelationshipMemory, StatEventDraft } from "../../src/core/types";
 import type { HubStore } from "./hub";
 import { utcDay, type ReserveResult } from "./signup";
 import { hashToken, newToken, readCookie, sessionCookie, USER_COOKIE, validateUsername } from "./username";
@@ -18,10 +19,13 @@ export interface HubApi {
   putMemory(owner: string, memory: DinoMemory): Maybe<void>;
   getRelationship(owner: string, dinoId: string, subjectKey: string): Maybe<RelationshipMemory | null>;
   putRelationship(owner: string, rel: RelationshipMemory): Maybe<void>;
-  appendLog(owner: string, row: DecisionLogRow, now: string): Maybe<Awaited<ReturnType<HubStore["appendLog"]>>>;
-  tailLog(owner: string, dinoId: string, limit: number): Maybe<DecisionLogRow[]>;
+  appendLog(owner: string, row: DecisionLogEntry, now: string): Maybe<Awaited<ReturnType<HubStore["appendLog"]>>>;
+  tailLog(owner: string, dinoId: string, limit: number): Maybe<DecisionLogEntry[]>;
   getStats(playerKey: string, familyId: string): Maybe<Awaited<ReturnType<HubStore["getStats"]>>>;
-  bumpStats(owner: string, event: StatEvent, now: string): Maybe<Awaited<ReturnType<HubStore["bumpStats"]>>>;
+  listStats(playerKey: string): Maybe<Awaited<ReturnType<HubStore["listStats"]>>>;
+  bumpStats(owner: string, event: StatEventDraft, now: string): Maybe<Awaited<ReturnType<HubStore["bumpStats"]>>>;
+  getWork(dinoId: string): Maybe<DinoWork | null>;
+  creditWages(dinoId: string, amount: number): Maybe<DinoWork>;
 }
 
 export interface LimiterApi {
@@ -234,7 +238,7 @@ export async function handleApi(request: Request, deps: ApiDeps): Promise<Respon
       action: row.action,
       detail: typeof row.detail === "string" ? row.detail : "",
       metadata,
-      engine: typeof row.engine === "string" ? row.engine : null,
+      engine: typeof row.engine === "string" && row.engine.length > 0 ? row.engine : "none",
       modelId: typeof row.modelId === "string" ? row.modelId : null,
       promptTokens: typeof row.promptTokens === "number" ? row.promptTokens : null,
       completionTokens: typeof row.completionTokens === "number" ? row.completionTokens : null,
@@ -246,8 +250,9 @@ export async function handleApi(request: Request, deps: ApiDeps): Promise<Respon
 
   if (path === "/api/stats" && request.method === "GET") {
     const playerKey = url.searchParams.get("playerKey") ?? "";
-    const familyId = url.searchParams.get("familyId") ?? "*";
-    return json({ stats: await hub.getStats(playerKey, familyId) });
+    const familyId = url.searchParams.get("familyId");
+    if (familyId) return json({ stats: await hub.getStats(playerKey, familyId) });
+    return json({ stats: await hub.listStats(playerKey) });
   }
 
   if (path === "/api/stats/events" && request.method === "POST") {
@@ -256,7 +261,7 @@ export async function handleApi(request: Request, deps: ApiDeps): Promise<Respon
     const body = await readJson(request, 4000);
     if (!body.ok) return body.response;
     const event = asRecord(body.value);
-    if (!event || typeof event.playerKey !== "string" || typeof event.kind !== "string" || typeof event.dinoId !== "string") {
+    if (!event || typeof event.playerKey !== "string" || typeof event.kind !== "string" || typeof event.dinoId !== "string" || !isStatKind(event.kind)) {
       return json({ error: "Stat event JSON is not valid." }, 400);
     }
     const bumped = await hub.bumpStats(who.username, {
@@ -264,12 +269,36 @@ export async function handleApi(request: Request, deps: ApiDeps): Promise<Respon
       playerKey: event.playerKey,
       familyId: typeof event.familyId === "string" ? event.familyId : "*",
       dinoId: event.dinoId,
-      kind: event.kind as StatEvent["kind"],
+      kind: event.kind,
       amount: typeof event.amount === "number" ? event.amount : 1,
       note: typeof event.note === "string" ? event.note : "",
     }, now);
     if (!bumped.ok) return json({ error: bumped.error }, bumped.status);
-    return json({ stats: bumped.stats }, 201);
+    return json({ event: bumped.event, stats: bumped.stats }, 201);
+  }
+
+  if (path === "/api/work" && request.method === "GET") {
+    const who = await caller(request, hub, now);
+    if (who instanceof Response) return who;
+    return json({ work: await hub.getWork(url.searchParams.get("dinoId") ?? "") });
+  }
+
+  if (path === "/api/work/wages" && request.method === "POST") {
+    const who = await caller(request, hub, now);
+    if (who instanceof Response) return who;
+    const body = await readJson(request, 1000);
+    if (!body.ok) return body.response;
+    const record = asRecord(body.value);
+    if (!record || typeof record.dinoId !== "string" || typeof record.amount !== "number") {
+      return json({ error: "Wage credit JSON is not valid." }, 400);
+    }
+    try {
+      const work = await hub.creditWages(record.dinoId, record.amount);
+      return json({ work });
+    } catch (error) {
+      const message = error instanceof WageCreditError || error instanceof Error ? error.message : "Could not credit wages.";
+      return json({ error: message }, 400);
+    }
   }
 
   return json({ error: "No route for that." }, 404);

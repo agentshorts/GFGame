@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import type { DecisionLogRow, DinoMemory, RelationshipMemory, StatEvent } from "../src/manager/shim/untilCore";
+import type { DecisionLogEntry, DinoMemory, DinoWork, RelationshipMemory, StatEventDraft } from "../src/core/types";
 import { HubStore, migrateHub, type DeleteResult, type LogWriteResult, type SavePersonaResult } from "./lib/hub";
 import { handleApi } from "./lib/http";
 import { migrateSignups, reserveSignup, type ReserveResult } from "./lib/signup";
@@ -84,11 +84,11 @@ export class PersonaHub extends DurableObject<Env> {
     this.store.putRelationship(owner, rel);
   }
 
-  appendLog(owner: string, row: DecisionLogRow, now: string): LogWriteResult {
+  appendLog(owner: string, row: DecisionLogEntry, now: string): LogWriteResult {
     return this.store.appendLog(owner, row, now);
   }
 
-  tailLog(owner: string, dinoId: string, limit: number): DecisionLogRow[] {
+  tailLog(owner: string, dinoId: string, limit: number): DecisionLogEntry[] {
     return this.store.tailLog(owner, dinoId, limit);
   }
 
@@ -96,8 +96,20 @@ export class PersonaHub extends DurableObject<Env> {
     return this.store.getStats(playerKey, familyId);
   }
 
-  bumpStats(owner: string, event: StatEvent, now: string) {
+  listStats(playerKey: string) {
+    return this.store.listStats(playerKey);
+  }
+
+  bumpStats(owner: string, event: StatEventDraft, now: string) {
     return this.store.bumpStats(owner, event, now);
+  }
+
+  getWork(dinoId: string): DinoWork | null {
+    return this.store.getWork(dinoId);
+  }
+
+  creditWages(dinoId: string, amount: number): DinoWork {
+    return this.store.creditWages(dinoId, amount);
   }
 }
 

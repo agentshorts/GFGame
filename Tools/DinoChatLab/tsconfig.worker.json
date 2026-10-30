@@ -19,7 +19,6 @@
     "worker/lib/sql.ts",
     "worker/lib/username.ts",
     "worker-configuration.d.ts",
-    "src/manager/shim/untilCore.ts",
     "src/manager/profile.ts",
     "src/logic/filter.ts",
     "src/logic/persona.ts",

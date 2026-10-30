@@ -1,7 +1,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { loadBundledPersonas } from "../data/loadPersonas";
 import type { Persona } from "../logic/types";
-import { loadSummaryFns, localSummaryFns, type SummaryFns } from "./memory";
+import { REP_BAND_THRESHOLDS, repBand, type DecisionLogEntry, type DinoMemory, type KeyValueStore, type RelationshipMemory, type StoredPersona } from "../core";
 import {
   affinityFor,
   blankDino,
@@ -17,8 +17,7 @@ import {
   type SpeechPattern,
 } from "./profile";
 import { browserKv, claimUsername, readLocalUsername, remoteMe } from "./session";
-import { apiBaseFromEnv, createStorage, StoreError, type KeyValue } from "./storage";
-import type { DecisionLogRow, DinoMemory, RelationshipMemory, Storage } from "./shim/untilCore";
+import { apiBaseFromEnv, createStorage, StorageConflictError, StoreError, type ManagerStorage } from "./storage";
 import { runManagerTurn, type TestLine } from "./testChat";
 
 export interface EditorDino {
@@ -41,12 +40,24 @@ function bundledRow(persona: Persona): EditorDino {
   };
 }
 
+function storedRecord(row: StoredPersona): unknown {
+  if (typeof row.json === "string" && row.json.length > 0) {
+    try {
+      return JSON.parse(row.json) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  const legacy = row as StoredPersona & { record?: unknown };
+  return legacy.record ?? null;
+}
+
 function asManaged(record: unknown, fallbackId: string): ManagedDino | null {
   const normalized = normalizeManaged(fallbackId, record);
   return normalized.ok ? normalized.dino : null;
 }
 
-export function useManager(options?: { kv?: KeyValue; apiBase?: string | null; fetchImpl?: typeof fetch }) {
+export function useManager(options?: { kv?: KeyValueStore; apiBase?: string | null; fetchImpl?: typeof fetch }) {
   const kv = options?.kv ?? browserKv();
   const apiBase = options?.apiBase === undefined ? apiBaseFromEnv(import.meta.env.VITE_DINO_API) : options.apiBase;
   const fetchImpl = options?.fetchImpl;
@@ -66,14 +77,14 @@ export function useManager(options?: { kv?: KeyValue; apiBase?: string | null; f
   const draft = ref("");
   const chatBusy = ref(false);
   const transcripts = ref<Record<string, TestLine[]>>({});
-  const logs = ref<DecisionLogRow[]>([]);
+  const logs = ref<DecisionLogEntry[]>([]);
   const dinoSummary = ref("");
   const relationshipSummary = ref("");
   const turnsSince = ref(0);
   const interactions = ref(0);
-  const summarySource = ref<"core" | "shim">("shim");
-  let storage: Storage | null = null;
-  let summarize: SummaryFns = localSummaryFns;
+  const rep = ref(0);
+  const earnings = ref(0);
+  let storage: ManagerStorage | null = null;
   const cycles = new Map<string, string>();
 
   const selected = computed(() => dinos.value.find((row) => row.managed.persona.id === selectedId.value) ?? null);
@@ -125,7 +136,11 @@ export function useManager(options?: { kv?: KeyValue; apiBase?: string | null; f
     const rel = subject ? await storage.getRelationship(row.managed.persona.id, subject) : null;
     relationshipSummary.value = rel?.summary ?? "";
     interactions.value = rel?.interactions ?? 0;
-    logs.value = await storage.tailLog(row.managed.persona.id, 12);
+    logs.value = (await storage.listLog(row.managed.persona.id, 12)).slice().reverse();
+    const stats = subject ? await storage.getStats(subject) : [];
+    rep.value = stats.find((item) => item.familyId === "*")?.rep ?? stats[0]?.rep ?? 0;
+    const work = await storage.getWork(row.managed.persona.id);
+    earnings.value = work?.lifetimeEarnings ?? 0;
   }
 
   async function boot(name: string) {
@@ -133,9 +148,6 @@ export function useManager(options?: { kv?: KeyValue; apiBase?: string | null; f
     playerName.value = name;
     needsName.value = false;
     storage = createStorage({ apiBase, kv, owner: name, fetchImpl });
-    const loaded = await loadSummaryFns();
-    summarize = loaded.fns;
-    summarySource.value = loaded.source;
     const bundled = loadBundledPersonas().map(bundledRow);
     const bundledIds = new Set(bundled.map((row) => row.managed.persona.id));
     let stored: EditorDino[] = [];
@@ -143,7 +155,7 @@ export function useManager(options?: { kv?: KeyValue; apiBase?: string | null; f
       const rows = await storage.listPersonas();
       stored = rows.flatMap((row) => {
         if (bundledIds.has(row.id)) return [];
-        const managed = asManaged(row.record, row.id);
+        const managed = asManaged(storedRecord(row), row.id);
         if (!managed) return [];
         return [{
           managed,
@@ -251,8 +263,9 @@ export function useManager(options?: { kv?: KeyValue; apiBase?: string | null; f
     try {
       const saved = await storage.savePersona({
         id: normalized.dino.persona.id,
+        owner: username.value,
         version: row.version,
-        record: normalized.dino,
+        json: JSON.stringify(normalized.dino),
       });
       row.managed = normalized.dino;
       row.version = saved.version;
@@ -261,7 +274,9 @@ export function useManager(options?: { kv?: KeyValue; apiBase?: string | null; f
       row.dirty = false;
       notice.value = `Saved ${normalized.dino.persona.name} (version ${saved.version}).`;
     } catch (error) {
-      notice.value = error instanceof StoreError ? error.message : "Could not save.";
+      notice.value = error instanceof StoreError || error instanceof StorageConflictError
+        ? error.message
+        : "Could not save.";
     }
   }
 
@@ -392,7 +407,7 @@ export function useManager(options?: { kv?: KeyValue; apiBase?: string | null; f
         turnsSinceSummary: turnsSince.value,
         interactions: interactions.value,
         cycleId,
-        summarize,
+        rep: rep.value,
       });
       transcripts.value = { ...transcripts.value, [id]: [...(transcripts.value[id] ?? []), ...turn.lines] };
       draft.value = "";
@@ -507,7 +522,10 @@ export function useManager(options?: { kv?: KeyValue; apiBase?: string | null; f
     logs,
     dinoSummary,
     relationshipSummary,
-    summarySource,
+    rep,
+    earnings,
+    repLabel: computed(() => repBand(rep.value, REP_BAND_THRESHOLDS)),
+    repBands: REP_BAND_THRESHOLDS,
     selected,
     editable,
     groups,

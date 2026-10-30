@@ -1,16 +1,19 @@
-import { normalizeManaged } from "../../src/manager/profile";
+import { blankWork, creditWork, emptyStats, mergeWork, normalizeWork } from "../../src/core/stats";
 import {
-  emptyStats,
-  STAT_COLUMNS,
+  clampRep,
+  DEFAULT_REP_DELTAS,
   STAT_KINDS,
-  type DecisionLogRow,
+  type DecisionLogEntry,
   type DinoMemory,
-  type PlayerStats,
+  type DinoWork,
+  type PlayerStatsRow,
   type RelationshipMemory,
   type StatEvent,
+  type StatEventDraft,
   type StatKind,
   type StoredPersona,
-} from "../../src/manager/shim/untilCore";
+} from "../../src/core/types";
+import { normalizeManaged } from "../../src/manager/profile";
 import { num, text, type Row, type Sql } from "./sql";
 
 export const PERSONA_MAX_PER_USER = 50;
@@ -104,7 +107,33 @@ const SCHEMAS = [
     count INTEGER NOT NULL,
     PRIMARY KEY (username, bucket, window)
   )`,
+  `CREATE TABLE IF NOT EXISTS dino_work (
+    dino_id TEXT PRIMARY KEY,
+    employer_id TEXT,
+    employment TEXT,
+    lifetime_earnings INTEGER NOT NULL DEFAULT 0,
+    minerals_found INTEGER NOT NULL DEFAULT 0,
+    seeking_job INTEGER NOT NULL DEFAULT 0,
+    hired_at TEXT
+  )`,
 ];
+
+/** SQL columns for the v1 player_stats table. Names stay put so existing rows still match. */
+const SQL_STAT_COLUMN: Record<StatKind, string> = {
+  kill: "kills",
+  elder_kill: "elder_kills",
+  hit_taken: "hits_taken",
+  hit_dealt: "hits_dealt",
+  mango_given: "mango_given",
+  mango_refused: "mango_refused",
+  block_given: "blocks_given",
+  block_refused: "blocks_refused",
+  rental_returned: "rentals_returned",
+  rental_late: "rentals_late",
+  rental_downed: "rentals_downed",
+  bounty_claimed: "bounties_claimed",
+  bounty_placed: "bounties_on_player",
+};
 
 export interface SavePersonaResult {
   ok: boolean;
@@ -147,18 +176,14 @@ export function takeRate(sql: Sql, username: string, bucket: string, window: str
   return rows.length > 0;
 }
 
-function personaFromRow(row: Row): StoredPersona | null {
-  try {
-    return {
-      id: text(row, "id"),
-      owner: text(row, "owner"),
-      version: num(row, "version"),
-      updatedAt: text(row, "updated_at"),
-      record: JSON.parse(text(row, "json")) as unknown,
-    };
-  } catch {
-    return null;
-  }
+function personaFromRow(row: Row): StoredPersona {
+  return {
+    id: text(row, "id"),
+    owner: text(row, "owner"),
+    version: num(row, "version"),
+    updatedAt: text(row, "updated_at"),
+    json: text(row, "json"),
+  };
 }
 
 function memoryFromRow(row: Row): DinoMemory {
@@ -182,7 +207,7 @@ function relationshipFromRow(row: Row): RelationshipMemory {
   };
 }
 
-function statsFromRow(row: Row): PlayerStats {
+function statsFromRow(row: Row): PlayerStatsRow {
   return {
     playerKey: text(row, "player_key"),
     familyId: text(row, "family_id"),
@@ -204,7 +229,7 @@ function statsFromRow(row: Row): PlayerStats {
   };
 }
 
-function logFromRow(row: Row): DecisionLogRow {
+function logFromRow(row: Row): DecisionLogEntry {
   let metadata: Record<string, unknown> = {};
   try {
     const parsed = JSON.parse(text(row, "metadata")) as unknown;
@@ -221,7 +246,7 @@ function logFromRow(row: Row): DecisionLogRow {
     action: text(row, "action"),
     detail: text(row, "detail"),
     metadata,
-    engine: text(row, "engine") || null,
+    engine: text(row, "engine") || "none",
     modelId: text(row, "model_id") || null,
     promptTokens: row.prompt_tokens === null || row.prompt_tokens === undefined ? null : num(row, "prompt_tokens"),
     completionTokens: row.completion_tokens === null || row.completion_tokens === undefined ? null : num(row, "completion_tokens"),
@@ -269,10 +294,7 @@ export class HubStore {
 
   listPersonas(): StoredPersona[] {
     const rows = this.sql.exec(`SELECT id, owner, json, version, updated_at FROM personas ORDER BY updated_at DESC`);
-    return rows.flatMap((row) => {
-      const persona = personaFromRow(row);
-      return persona ? [persona] : [];
-    });
+    return rows.map(personaFromRow);
   }
 
   savePersona(owner: string, id: string, record: unknown, version: number, now: string): SavePersonaResult {
@@ -296,7 +318,7 @@ export class HubStore {
       return {
         ok: true,
         status: 201,
-        persona: { id, owner, version: 1, updatedAt: now, record: normalized.dino },
+        persona: { id, owner, version: 1, updatedAt: now, json: normalized.json },
       };
     }
     const row = existing[0]!;
@@ -318,7 +340,7 @@ export class HubStore {
     return {
       ok: true,
       status: 200,
-      persona: { id, owner, version: next, updatedAt: now, record: normalized.dino },
+      persona: { id, owner, version: next, updatedAt: now, json: normalized.json },
     };
   }
 
@@ -394,7 +416,7 @@ export class HubStore {
     );
   }
 
-  appendLog(owner: string, row: DecisionLogRow, now: string): LogWriteResult {
+  appendLog(owner: string, row: DecisionLogEntry, now: string): LogWriteResult {
     if (!takeRate(this.sql, owner, "decision_log", minuteWindow(now), LOG_PER_MINUTE)) {
       return { ok: false, status: 429, error: "Too many decision-log writes this minute." };
     }
@@ -438,7 +460,7 @@ export class HubStore {
     return { ok: true, status: 201 };
   }
 
-  tailLog(owner: string, dinoId: string, limit: number): DecisionLogRow[] {
+  tailLog(owner: string, dinoId: string, limit: number): DecisionLogEntry[] {
     const cap = Math.min(50, Math.max(1, Math.floor(limit) || 20));
     const rows = dinoId
       ? this.sql.exec(
@@ -455,7 +477,7 @@ export class HubStore {
     return rows.map(logFromRow);
   }
 
-  getStats(playerKey: string, familyId: string): PlayerStats | null {
+  getStats(playerKey: string, familyId: string): PlayerStatsRow | null {
     const rows = this.sql.exec(
       `SELECT * FROM player_stats WHERE player_key = ? AND family_id = ?`,
       playerKey,
@@ -464,7 +486,14 @@ export class HubStore {
     return rows[0] ? statsFromRow(rows[0]) : null;
   }
 
-  bumpStats(owner: string, event: StatEvent, now: string): { ok: true; stats: PlayerStats } | { ok: false; status: number; error: string } {
+  listStats(playerKey: string): PlayerStatsRow[] {
+    return this.sql.exec(
+      `SELECT * FROM player_stats WHERE player_key = ? ORDER BY family_id`,
+      playerKey,
+    ).map(statsFromRow);
+  }
+
+  bumpStats(owner: string, event: StatEventDraft, now: string): { ok: true; event: StatEvent; stats: PlayerStatsRow } | { ok: false; status: number; error: string } {
     if (!takeRate(this.sql, owner, "stat_events", minuteWindow(now), LOG_PER_MINUTE)) {
       return { ok: false, status: 429, error: "Too many stat writes this minute." };
     }
@@ -472,14 +501,14 @@ export class HubStore {
       return { ok: false, status: 400, error: "Stat event is not valid." };
     }
     if (!DINO_ID.test(event.dinoId)) return { ok: false, status: 400, error: "Dino id is not valid." };
-    const amount = Math.floor(event.amount);
+    const amount = Math.floor(event.amount ?? 1);
     if (!Number.isFinite(amount) || amount < 1 || amount > 100) {
       return { ok: false, status: 400, error: "Stat amount has to be from 1 to 100." };
     }
-    const column = STAT_COLUMNS[event.kind as StatKind];
-    this.sql.exec(
+    const inserted = this.sql.exec(
       `INSERT INTO stat_events (at, player_key, family_id, dino_id, kind, amount, note)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       RETURNING id`,
       event.at || now,
       event.playerKey,
       event.familyId,
@@ -488,14 +517,79 @@ export class HubStore {
       amount,
       (event.note ?? "").slice(0, 200),
     );
-    this.addStat(event.playerKey, event.familyId, column, amount, now);
-    if (event.familyId !== "*") this.addStat(event.playerKey, "*", column, amount, now);
+    const saved: StatEvent = {
+      id: num(inserted[0], "id"),
+      at: event.at || now,
+      playerKey: event.playerKey,
+      familyId: event.familyId,
+      dinoId: event.dinoId,
+      kind: event.kind,
+      amount,
+      note: (event.note ?? "").slice(0, 200),
+    };
+    const delta = DEFAULT_REP_DELTAS[event.kind] * amount;
+    this.addStat(event.playerKey, event.familyId, event.kind, amount, delta, now);
+    if (event.familyId !== "*") this.addStat(event.playerKey, "*", event.kind, amount, delta, now);
     const stats = this.getStats(event.playerKey, event.familyId) ?? emptyStats(event.playerKey, event.familyId, now);
-    return { ok: true, stats };
+    return { ok: true, event: saved, stats };
   }
 
-  private addStat(playerKey: string, familyId: string, column: string, amount: number, now: string): void {
-    if (!Object.values(STAT_COLUMNS).includes(column)) throw new Error("Unknown stat column.");
+  getWork(dinoId: string): DinoWork | null {
+    if (!DINO_ID.test(dinoId)) return null;
+    const rows = this.sql.exec(`SELECT * FROM dino_work WHERE dino_id = ?`, dinoId);
+    const row = rows[0];
+    if (!row) return null;
+    const employer = text(row, "employer_id");
+    const employment = text(row, "employment");
+    const hired = text(row, "hired_at");
+    return normalizeWork(dinoId, {
+      dinoId,
+      employerId: employer || null,
+      employment: employment === "rented" || employment === "tamed" ? employment : null,
+      lifetimeEarnings: num(row, "lifetime_earnings"),
+      mineralsFound: num(row, "minerals_found"),
+      seekingJob: num(row, "seeking_job") === 1,
+      hiredAt: hired || null,
+    });
+  }
+
+  putWork(work: DinoWork): void {
+    const merged = mergeWork(this.getWork(work.dinoId), normalizeWork(work.dinoId, work));
+    this.writeWork(merged);
+  }
+
+  creditWages(dinoId: string, amount: number): DinoWork {
+    if (!DINO_ID.test(dinoId)) throw new Error("Dino id is not valid.");
+    const credited = creditWork(this.getWork(dinoId) ?? blankWork(dinoId), amount);
+    this.putWork(credited);
+    return this.getWork(dinoId) ?? credited;
+  }
+
+  private writeWork(work: DinoWork): void {
+    this.sql.exec(
+      `INSERT INTO dino_work
+         (dino_id, employer_id, employment, lifetime_earnings, minerals_found, seeking_job, hired_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(dino_id) DO UPDATE SET
+         employer_id = excluded.employer_id,
+         employment = excluded.employment,
+         lifetime_earnings = excluded.lifetime_earnings,
+         minerals_found = excluded.minerals_found,
+         seeking_job = excluded.seeking_job,
+         hired_at = excluded.hired_at`,
+      work.dinoId,
+      work.employerId,
+      work.employment,
+      work.lifetimeEarnings,
+      work.mineralsFound,
+      work.seekingJob ? 1 : 0,
+      work.hiredAt,
+    );
+  }
+
+  private addStat(playerKey: string, familyId: string, kind: StatKind, amount: number, repDelta: number, now: string): void {
+    const column = SQL_STAT_COLUMN[kind];
+    if (!column) throw new Error("Unknown stat column.");
     this.sql.exec(
       `INSERT INTO player_stats (player_key, family_id, updated_at) VALUES (?, ?, ?)
        ON CONFLICT(player_key, family_id) DO UPDATE SET updated_at = excluded.updated_at`,
@@ -503,9 +597,11 @@ export class HubStore {
       familyId,
       now,
     );
+    const current = this.getStats(playerKey, familyId)?.rep ?? 0;
     this.sql.exec(
-      `UPDATE player_stats SET ${column} = ${column} + ?, updated_at = ? WHERE player_key = ? AND family_id = ?`,
+      `UPDATE player_stats SET ${column} = ${column} + ?, rep = ?, updated_at = ? WHERE player_key = ? AND family_id = ?`,
       amount,
+      clampRep(current + repDelta),
       now,
       playerKey,
       familyId,

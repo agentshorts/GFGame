@@ -1,23 +1,13 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { canSpeak, clampSummary, defaultKnobs, estimateTokens, fallbackSummarize, memoryKeyValueStore, REP_BAND_THRESHOLDS, repBand } from "../src/core";
+import { WageCreditError } from "../src/core/stats";
+import { gateAction, scoreInterest } from "../src/manager/interest";
 import { blankDino, exportDocument, importDocument, personaForTest, profileFromPersona } from "../src/manager/profile";
-import { gateAction, quotaVerdict, scoreInterest } from "../src/manager/interest";
-import { DEFAULT_QUOTA } from "../src/manager/shim/untilCore";
-import { clampSummary, fallbackSummarize } from "../src/manager/memory";
-import { createLocalStorage, type KeyValue } from "../src/manager/storage";
+import { createLocalStorage } from "../src/manager/storage";
 import { runManagerTurn } from "../src/manager/testChat";
-import { localSummaryFns } from "../src/manager/memory";
 import { parsePersona } from "../src/logic/persona";
 import grumbleJson from "../personas/01-big-grumble.json";
-
-function memoryKv(): KeyValue {
-  const map = new Map<string, string>();
-  return {
-    getItem: (key) => map.get(key) ?? null,
-    setItem: (key, value) => { map.set(key, value); },
-    removeItem: (key) => { map.delete(key); },
-  };
-}
 
 describe("persona manager", () => {
   it("builds a draft the existing persona parser accepts", () => {
@@ -42,40 +32,57 @@ describe("persona manager", () => {
     dino.profile.relationships.push({ subjectKey: "Pip", kind: "rival", affinity: -4 });
     expect(scoreInterest("hello", dino.profile, "Pip").interest).toBe(7);
     expect(scoreInterest("hello", dino.profile, "Pip").action).toBe("reply");
-    expect(scoreInterest("I brought mango", dino.profile, "Sam").interest).toBe(8);
+    expect(scoreInterest("I brought mango", dino.profile, "Sam").interest).toBe(7);
+    expect(scoreInterest("hello", dino.profile, "Sam", REP_BAND_THRESHOLDS.friendlyAt).band).toBe("friendly");
+    expect(scoreInterest("hello", dino.profile, "Sam", REP_BAND_THRESHOLDS.friendlyAt).interest).toBe(6);
     dino.profile.interest.comment = 7;
     expect(gateAction(7, dino.profile.interest)).toBe("like");
     expect(gateAction(6, dino.profile.interest)).toBe("ignore");
-    expect(scoreInterest("mango mango mango mango", dino.profile, "Pip").interest).toBe(10);
+    expect(scoreInterest("mango mango mango mango", dino.profile, "Pip").interest).toBe(9);
+    expect(repBand(REP_BAND_THRESHOLDS.hostileAt, REP_BAND_THRESHOLDS)).toBe("hostile");
   });
 
   it("records a quota miss without calling it a reply", () => {
-    expect(quotaVerdict({ ...DEFAULT_QUOTA, speakChance: 0 }).ok).toBe(false);
-    expect(quotaVerdict(DEFAULT_QUOTA, 0).reason).toBe("default quota allows this test");
+    const quota = { ...defaultKnobs().quota, speakChance: 0 };
+    const missed = canSpeak({
+      dinoId: "new-dino",
+      subjectKey: "Pip",
+      log: [],
+      now: "2026-10-30T00:00:00.000Z",
+      quota,
+    });
+    expect(missed.ok).toBe(false);
+    expect(canSpeak({
+      dinoId: "new-dino",
+      subjectKey: "Pip",
+      log: [],
+      now: "2026-10-30T00:00:00.000Z",
+      quota: defaultKnobs().quota,
+    }).reason).toBe("ok");
   });
 
-  it("clamps summaries from the front and stays deterministic", () => {
-    const line = "mango grudge ";
-    const once = fallbackSummarize("old fact", [line.repeat(40)], 10);
-    const twice = fallbackSummarize("old fact", [line.repeat(40)], 10);
+  it("uses the core summary and stays deterministic", () => {
+    const turn = { speaker: "Pip", text: "mango grudge ".repeat(40) };
+    const once = fallbackSummarize("old fact", [turn], 10);
+    const twice = fallbackSummarize("old fact", [turn], 10);
     expect(twice).toBe(once);
-    expect(once.length).toBeLessThanOrEqual(40);
-    expect(once.endsWith("grudge")).toBe(true);
-    expect(clampSummary("abcdef", 1)).toBe("cdef");
+    expect(estimateTokens(once)).toBeLessThanOrEqual(10);
+    expect(clampSummary("abcdef", 1)).toBe("abcd");
   });
 
-  it("round-trips personas, memory, the log, and stat totals locally", async () => {
-    const storage = createLocalStorage(memoryKv(), "ada");
+  it("round-trips personas, memory, wages, and stat totals through the core adapter", async () => {
+    const storage = createLocalStorage(memoryKeyValueStore());
     const dino = blankDino(new Set());
-    const saved = await storage.savePersona({ id: dino.persona.id, version: 0, record: dino });
+    const json = JSON.stringify(dino);
+    const saved = await storage.savePersona({ id: dino.persona.id, owner: "ada", version: 0, json });
     expect(saved.version).toBe(1);
     expect(saved.owner).toBe("ada");
-    await expect(storage.savePersona({ id: dino.persona.id, version: 0, record: dino })).rejects.toMatchObject({ status: 409 });
-    const updated = await storage.savePersona({ id: dino.persona.id, version: 1, record: dino });
+    await expect(storage.savePersona({ id: dino.persona.id, owner: "ada", version: 0, json })).rejects.toMatchObject({ status: 409 });
+    const updated = await storage.savePersona({ id: dino.persona.id, owner: "ada", version: 1, json });
     expect(updated.version).toBe(2);
     await storage.putMemory({ dinoId: dino.persona.id, summary: "Pip brought mango.", updatedAt: "2026-10-30T00:00:00.000Z", turnsSinceSummary: 1 });
     expect((await storage.getMemory(dino.persona.id))?.summary).toContain("mango");
-    const stats = await storage.bumpStats({
+    const event = await storage.bumpStats({
       at: "2026-10-30T00:00:00.000Z",
       playerKey: "ada",
       familyId: "red",
@@ -84,9 +91,14 @@ describe("persona manager", () => {
       amount: 2,
       note: "lab",
     });
-    expect(stats.kills).toBe(2);
-    expect(stats.rep).toBe(0);
-    expect((await storage.getStats("ada", "*"))?.kills).toBe(2);
+    expect(event.amount).toBe(2);
+    const rows = await storage.getStats("ada");
+    expect(rows.find((row) => row.familyId === "red")?.kills).toBe(2);
+    expect(rows.find((row) => row.familyId === "*")?.kills).toBe(2);
+    expect(rows.find((row) => row.familyId === "red")?.rep).toBe(-16);
+    expect((await storage.creditWages(dino.persona.id, 10)).lifetimeEarnings).toBe(10);
+    expect((await storage.creditWages(dino.persona.id, 5)).lifetimeEarnings).toBe(15);
+    await expect(storage.creditWages(dino.persona.id, -1)).rejects.toBeInstanceOf(WageCreditError);
   });
 
   it("talks in the test chat and writes a decision row", async () => {
@@ -100,12 +112,11 @@ describe("persona manager", () => {
       turnsSinceSummary: 0,
       interactions: 0,
       cycleId: "cycle-test",
-      summarize: localSummaryFns,
       now: new Date("2026-10-30T12:00:00.000Z"),
     });
     expect(turn.log.action).toBe("reply");
     expect(turn.log.metadata.interest).toBe(5);
-    expect(turn.log.metadata.quota).toBe("default quota allows this test");
+    expect(turn.log.metadata.quota).toBe("ok");
     expect(turn.log.metadata.memoryDelta).toContain("dino summary updated");
     expect(turn.lines.some((line) => line.role === "dino" && line.text.length > 0)).toBe(true);
     expect(turn.dinoSummary.length).toBeGreaterThan(0);
@@ -120,7 +131,6 @@ describe("persona manager", () => {
       turnsSinceSummary: 0,
       interactions: 0,
       cycleId: "cycle-test",
-      summarize: localSummaryFns,
     });
     expect(quiet.log.action).toBe("ignore");
     expect(quiet.lines.some((line) => line.role === "dino")).toBe(false);

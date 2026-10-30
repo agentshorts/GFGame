@@ -1,11 +1,10 @@
+import { BUDGET_CAPS, canSpeak, defaultKnobs, fallbackSummarize, type ContextTurn, type DecisionLogEntry, type RelationshipKind } from "../core";
 import { createEngines } from "../engines";
 import { decide, DEFAULT_SMELL_FT } from "../logic/alignment";
 import { presentReply } from "../logic/present";
 import type { Persona } from "../logic/types";
-import { quotaVerdict, scoreInterest } from "./interest";
-import { DINO_SUMMARY_TOKENS, RELATION_SUMMARY_TOKENS, type SummaryFns } from "./memory";
+import { scoreInterest } from "./interest";
 import { personaForTest, type ManagedDino } from "./profile";
-import { DEFAULT_QUOTA, type DecisionLogRow, type RelationshipKind } from "./shim/untilCore";
 
 export interface TestLine {
   speaker: string;
@@ -22,14 +21,14 @@ export interface TurnInput {
   turnsSinceSummary: number;
   interactions: number;
   cycleId: string;
-  summarize: SummaryFns;
+  rep?: number;
   now?: Date;
   roll?: number;
 }
 
 export interface TurnResult {
   lines: TestLine[];
-  log: DecisionLogRow;
+  log: DecisionLogEntry;
   dinoSummary: string;
   relationshipSummary: string;
   turnsSinceSummary: number;
@@ -69,8 +68,15 @@ async function classicReply(persona: Persona, utterance: string, playerName: str
 export async function runManagerTurn(input: TurnInput): Promise<TurnResult> {
   const started = input.now ?? new Date();
   const player = input.playerName.trim() || "you";
-  const quota = quotaVerdict(DEFAULT_QUOTA, input.roll ?? 0);
-  const interest = scoreInterest(input.text, input.dino.profile, player);
+  const quota = canSpeak({
+    dinoId: input.dino.persona.id,
+    subjectKey: player,
+    log: [],
+    now: started.toISOString(),
+    quota: defaultKnobs().quota,
+    random: () => input.roll ?? 0,
+  });
+  const interest = scoreInterest(input.text, input.dino.profile, player, input.rep ?? 0);
   const decision = decide({
     alignment: input.dino.persona.alignment,
     inventory: [],
@@ -98,16 +104,16 @@ export async function runManagerTurn(input: TurnInput): Promise<TurnResult> {
     lines.push({ speaker: input.dino.persona.name, role: "note", text: "Stayed quiet. Quota said no." });
   }
 
-  const noteLines = [`${player}: ${input.text}`];
-  if (replyText) noteLines.push(`${input.dino.persona.name}: ${replyText}`);
-  const dinoSummary = input.summarize.fallbackSummarize(input.dinoSummary, noteLines, DINO_SUMMARY_TOKENS);
-  const relationshipSummary = input.summarize.fallbackSummarize(input.relationshipSummary, noteLines, RELATION_SUMMARY_TOKENS);
+  const turns: ContextTurn[] = [{ speaker: player, text: input.text, role: "user" }];
+  if (replyText) turns.push({ speaker: input.dino.persona.name, text: replyText, role: "dino" });
+  const dinoSummary = fallbackSummarize(input.dinoSummary, turns, BUDGET_CAPS.dinoSummary);
+  const relationshipSummary = fallbackSummarize(input.relationshipSummary, turns, BUDGET_CAPS.relationship);
   const memoryDelta = [
     input.dinoSummary === dinoSummary ? "dino summary unchanged" : "dino summary updated",
     input.relationshipSummary === relationshipSummary ? "relationship summary unchanged" : "relationship summary updated",
   ].join("; ");
   const finished = Date.now();
-  const log: DecisionLogRow = {
+  const log: DecisionLogEntry = {
     id: crypto.randomUUID(),
     at: started.toISOString(),
     cycleId: input.cycleId,
@@ -124,7 +130,7 @@ export async function runManagerTurn(input: TurnInput): Promise<TurnResult> {
       hits: interest.hits,
       mins: input.dino.profile.interest,
     },
-    engine: action === "reply" ? "eliza" : null,
+    engine: action === "reply" ? "eliza" : "none",
     modelId: null,
     promptTokens: null,
     completionTokens: null,

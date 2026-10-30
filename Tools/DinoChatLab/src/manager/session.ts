@@ -1,11 +1,11 @@
 import { readCookie, USER_COOKIE, USERNAME_STORAGE_KEY, validateUsername } from "../../worker/lib/username";
-import type { KeyValue } from "./storage";
+import type { KeyValueStore } from "../core";
 
-export function browserKv(): KeyValue {
+export function browserKv(): KeyValueStore {
   return localStorage;
 }
 
-export function readLocalUsername(kv: KeyValue, cookieHeader: string): string | null {
+export function readLocalUsername(kv: KeyValueStore, cookieHeader: string): string | null {
   const stored = kv.getItem(USERNAME_STORAGE_KEY)?.trim() ?? "";
   const storedCheck = validateUsername(stored);
   if (storedCheck.ok) return storedCheck.username;
@@ -14,7 +14,7 @@ export function readLocalUsername(kv: KeyValue, cookieHeader: string): string | 
   return cookieCheck.ok ? cookieCheck.username : null;
 }
 
-export function writeLocalUsername(kv: KeyValue, username: string): void {
+export function writeLocalUsername(kv: KeyValueStore, username: string): void {
   kv.setItem(USERNAME_STORAGE_KEY, username);
   if (typeof document === "undefined") return;
   const maxAge = 60 * 60 * 24 * 400;
@@ -24,7 +24,7 @@ export function writeLocalUsername(kv: KeyValue, username: string): void {
 export async function claimUsername(
   name: string,
   apiBase: string | null,
-  kv: KeyValue,
+  kv: KeyValueStore,
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ ok: true; username: string } | { ok: false; error: string }> {
   const check = validateUsername(name);

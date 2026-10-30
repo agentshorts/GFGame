@@ -1,13 +1,16 @@
 import { filterOutput } from "../logic/filter";
 import { parsePersona } from "../logic/persona";
 import type { Persona } from "../logic/types";
-import { AUTHORED_KINDS, type AuthoredKind } from "./shim/untilCore";
+import { SENTIMENTS, type RelationshipKind, type Sentiment } from "../core/types";
+
+export { SENTIMENTS };
+export type { Sentiment };
 
 export const SPEECH_PATTERNS = ["CASUAL", "FORMAL", "EXPRESSIVE"] as const;
 export type SpeechPattern = (typeof SPEECH_PATTERNS)[number];
 
-export const SENTIMENTS = ["like", "dislike", "neutral"] as const;
-export type Sentiment = (typeof SENTIMENTS)[number];
+export const AUTHORED_KINDS = ["friend", "rival", "family"] as const satisfies readonly RelationshipKind[];
+export type AuthoredKind = (typeof AUTHORED_KINDS)[number];
 
 export interface Topic {
   name: string;

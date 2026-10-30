@@ -123,7 +123,7 @@ describe("PersonaHub", () => {
     sql.close();
   });
 
-  it("adds a kill to the family row and the totals, and leaves rep alone", () => {
+  it("adds a kill to the family row and the totals, and applies the core rep delta", () => {
     const sql = openMemorySql();
     migrateHub(sql);
     const hub = new HubStore(sql);
@@ -140,9 +140,21 @@ describe("PersonaHub", () => {
     expect(bumped.ok).toBe(true);
     if (!bumped.ok) return;
     expect(bumped.stats.kills).toBe(1);
-    expect(bumped.stats.rep).toBe(0);
+    expect(bumped.stats.rep).toBe(-8);
+    expect(bumped.event.kind).toBe("kill");
     expect(hub.getStats("Pip", "*")?.kills).toBe(1);
-    expect(hub.getStats("Pip", "*")?.rep).toBe(0);
+    expect(hub.getStats("Pip", "*")?.rep).toBe(-8);
+    sql.close();
+  });
+
+  it("credits wages on the work table and leaves persona rows alone", () => {
+    const sql = openMemorySql();
+    migrateHub(sql);
+    const hub = new HubStore(sql);
+    expect(hub.creditWages("big-grumble", 10).lifetimeEarnings).toBe(10);
+    expect(hub.creditWages("big-grumble", 5).lifetimeEarnings).toBe(15);
+    expect(sql.exec(`SELECT COUNT(*) AS n FROM personas`)[0]?.n ?? 0).toBe(0);
+    expect(() => hub.creditWages("big-grumble", -1)).toThrow(/lifetime earnings/);
     sql.close();
   });
 });
