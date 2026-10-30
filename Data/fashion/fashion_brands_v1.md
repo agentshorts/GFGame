@@ -10,10 +10,10 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 
 | Brand | Parody of | Faction vibe | Tagline | Quick check |
 |---|---|---|---|---|
-| Dirtachi | Gucci | Verdant | Muddy money, double-D monogram. | quick web check 2026-10-30: no fashion brand found under this name |
+| Dirtachi | Gucci | Verdant | Muddy money, double-D print. | quick web check 2026-10-30: no fashion brand found under this name |
 | Predada | Prada | Cinderwrights | The predator wears Predada. | quick web check 2026-10-30: no fashion brand found under this name |
-| Lava Vuitonne | Louis Vuitton | Cinderwrights | Monogrammed, molten, mildly on fire. | quick web check 2026-10-30: no fashion brand found under this name |
-| Shardnel | Chanel | Rime | No. 5 shards of the finest ice. | quick web check 2026-10-30: no fashion brand found under this name |
+| Lava Vuitonne | Louis Vuitton | Cinderwrights | Patterned, molten, mildly on fire. | quick web check 2026-10-30: no fashion brand found under this name |
+| Shardnel | Chanel | Rime | Five shards of the finest ice. | quick web check 2026-10-30: no fashion brand found under this name |
 | Versaurus | Versace | Cinderwrights | Gold, loud, and Jurassic. | quick web check 2026-10-30: no fashion brand found under this name |
 | Bonenciaga | Balenciaga | any | Ugly on purpose. Made of bones on purpose. | quick web check 2026-10-30: no fashion brand found under this name |
 | Dinor | Dior | Verdant | J'adore? J'a-dino. | quick web check 2026-10-30: no fashion brand found under this name |
@@ -23,9 +23,9 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 | Spike | Nike | any | Just Dig It. | quick check: common word, likely used by other goods; revisit (close to the original) |
 | Raptidas | Adidas | any | Three claws, one stripe short of trouble. | quick web check 2026-10-30: no fashion brand found under this name |
 | Off-Rime | Off-White | Rime | "FROSTBITE" in quotation marks. | quick web check 2026-10-30: no fashion brand found under this name |
-| Fangdi | Fendi | Cinderwrights | FF stands for Fang Fang. | quick web check 2026-10-30: no fashion brand found under this name |
+| Fangdi | Fendi | Cinderwrights | Fangs stand for Fang Fang. | quick web check 2026-10-30: no fashion brand found under this name |
 | Gnawvenchy | Givenchy | Rime | Chewed couture. | quick web check 2026-10-30: no fashion brand found under this name |
-| Volcantino | Valentino | Cinderwrights | Rockstud, but the rocks are lava. | quick web check 2026-10-30: no fashion brand found under this name |
+| Volcantino | Valentino | Cinderwrights | Studs, but the studs are lava. | quick web check 2026-10-30: no fashion brand found under this name |
 | Mon-Rimer | Moncler | Rime | Puffier than a startled Pebbling. | renamed from 'Monclaw' (a real dog-apparel line) during the quick check |
 | Ptero Goose | Canada Goose | Rime | Expedition-grade. Flaps included. | quick web check 2026-10-30: no fashion brand found under this name |
 | Pangaeagonia | Patagonia | Verdant | One supercontinent, one fleece. | quick web check 2026-10-30: no fashion brand found under this name |
@@ -62,7 +62,7 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
 | `dirtachi_01` | Double-D Mud Loafers | shoes | dead skin, mud clay, crystal | TBD |
-| `dirtachi_02` | Dirtachi Monogram Purse | bag/purse | dead skin, gold dust | TBD |
+| `dirtachi_02` | Dirtachi Mud-Print Purse | bag/purse | dead skin, gold dust | TBD |
 | `dirtachi_03` | Bee-in-the-Bog Cardigan | top | fur, moss thread | TBD |
 
 ### Predada
@@ -77,16 +77,16 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
-| `lavatonne_01` | Speedy Magma Tote | bag/purse | dead skin, ember core, gold dust | TBD |
-| `lavatonne_02` | LV Lava Trunk | bag/purse | obsidian, scales | TBD |
-| `lavatonne_03` | Ember Monogram Scarf | accessory | ash silk | TBD |
+| `lavatonne_01` | Magma Duffle Tote | bag/purse | dead skin, ember core, gold dust | TBD |
+| `lavatonne_02` | Lava Steamer Trunk | bag/purse | obsidian, scales | TBD |
+| `lavatonne_03` | Ember Print Scarf | accessory | ash silk | TBD |
 
 ### Shardnel
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
 | `shardnel_01` | Quilted Shard Flap Bag | bag/purse | dead skin, crystal | TBD |
-| `shardnel_02` | No. 5 Frost Perfume | cosmetic | crystal, glacier water | TBD |
+| `shardnel_02` | Frost Shard Perfume | cosmetic | crystal, glacier water | TBD |
 | `shardnel_03` | Tweed Rime Jacket | top | fur, frost thread | TBD |
 | `shardnel_04` | Pearl-Tooth Necklace | accessory | teeth, crystal | TBD |
 
@@ -94,9 +94,9 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
-| `versaurus_01` | Medusaur Gold Shirt | top | ash silk, gold dust | TBD |
+| `versaurus_01` | Gold Scale Silk Shirt | top | ash silk, gold dust | TBD |
 | `versaurus_02` | Baroque Scale Leggings | bottoms | scales, gold dust | TBD |
-| `versaurus_03` | Greek-Key Tail Cuff | accessory | gold dust, bone | TBD |
+| `versaurus_03` | Gold Tail Cuff | accessory | gold dust, bone | TBD |
 
 ### Bonenciaga
 
@@ -120,21 +120,21 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 |---|---|---|---|---|
 | `hermozoic_01` | Birkinosaur Bag | bag/purse | dead skin, gold dust, crystal | TBD |
 | `hermozoic_02` | Kelly Fossil Bag | bag/purse | dead skin, amber | TBD |
-| `hermozoic_03` | H-Is-for-Herbivore Belt | accessory | dead skin, gold dust | TBD |
+| `hermozoic_03` | Herbivore Buckle Belt | accessory | dead skin, gold dust | TBD |
 
 ### Burrowberry
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
 | `burrowberry_01` | Check Trench Coat | top | fur, moss thread | TBD |
-| `burrowberry_02` | Burrow Check Scarf | accessory | fur | TBD |
+| `burrowberry_02` | Plaid Burrow Scarf | accessory | fur | TBD |
 | `burrowberry_03` | Bog Wellies | shoes | rubber sap, mud clay | TBD |
 
 ### Sup-Rex
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
-| `suprex_01` | Box Logo Tee (Tiny Arms Fit) | top | ash silk, berry dye | TBD |
+| `suprex_01` | Red Block Tee (Tiny Arms Fit) | top | ash silk, berry dye | TBD |
 | `suprex_02` | Drop-Day Beanie | hat/mask | fur | TBD |
 | `suprex_03` | Brick (Literally a Brick) Keychain | accessory | mud clay | TBD |
 
@@ -143,7 +143,7 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
 | `spike_01` | Air Stegos | shoes | scales, rubber sap, crystal | TBD |
-| `spike_02` | Tail Swoosh Track Pants | bottoms | ash silk | TBD |
+| `spike_02` | Tail-Stripe Track Pants | bottoms | ash silk | TBD |
 | `spike_03` | Spike Sweatband | accessory | fur | TBD |
 
 ### Raptidas
@@ -151,7 +151,7 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
 | `raptidas_01` | Three-Claw Track Suit | full suit | ash silk, scales | TBD |
-| `raptidas_02` | Stan Snatch Sneakers | shoes | dead skin, rubber sap | TBD |
+| `raptidas_02` | Court Claw Sneakers | shoes | dead skin, rubber sap | TBD |
 | `raptidas_03` | Raptor Slides | shoes | rubber sap | TBD |
 
 ### Off-Rime
@@ -166,15 +166,15 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
-| `fangdi_01` | Fang Baguette Bag | bag/purse | dead skin, teeth | TBD |
-| `fangdi_02` | Peekaboo Jaw Purse | bag/purse | dead skin, teeth, crystal | TBD |
-| `fangdi_03` | FF Ember Slides | shoes | rubber sap, ember core | TBD |
+| `fangdi_01` | Fang Shoulder Bag | bag/purse | dead skin, teeth | TBD |
+| `fangdi_02` | Open-Jaw Purse | bag/purse | dead skin, teeth, crystal | TBD |
+| `fangdi_03` | Ember Slides | shoes | rubber sap, ember core | TBD |
 
 ### Gnawvenchy
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
-| `gnawvenchy_01` | Antigona Gnaw Bag | bag/purse | dead skin, bone | TBD |
+| `gnawvenchy_01` | Gnaw Tote Bag | bag/purse | dead skin, bone | TBD |
 | `gnawvenchy_02` | Bite-Mark Hoodie | top | fur, ash silk | TBD |
 | `gnawvenchy_03` | Frostbitten Lip Balm | cosmetic | crystal, glacier water | TBD |
 
@@ -182,7 +182,7 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
-| `volcantino_01` | Rockstud Magma Heels | shoes | obsidian, ember core | TBD |
+| `volcantino_01` | Studded Magma Pumps | shoes | obsidian, ember core | TBD |
 | `volcantino_02` | Volcano Red Gown | full suit | ash silk, berry dye, glitter | TBD |
 | `volcantino_03` | Stud Clutch | bag/purse | dead skin, obsidian | TBD |
 
@@ -205,15 +205,15 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
-| `pangaeagonia_01` | Better-Sweater Fleece | top | fur, moss thread | TBD |
-| `pangaeagonia_02` | Baggies Swamp Shorts | bottoms | moss thread | TBD |
-| `pangaeagonia_03` | Synchilla Snap-Jaw Pullover | top | fur, teeth | TBD |
+| `pangaeagonia_01` | Swamp Fleece Jacket | top | fur, moss thread | TBD |
+| `pangaeagonia_02` | Swamp Trunks | bottoms | moss thread | TBD |
+| `pangaeagonia_03` | Snap-Jaw Fleece Pullover | top | fur, teeth | TBD |
 
 ### The North Fang
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
-| `northfang_01` | Nuptse Fang Puffer | top | fur, frost thread | TBD |
+| `northfang_01` | Fang Puffer Jacket | top | fur, frost thread | TBD |
 | `northfang_02` | Summit Ice Pants | bottoms | frost thread, scales | TBD |
 | `northfang_03` | Base-Camp Duffel | bag/purse | dead skin, rubber sap | TBD |
 
@@ -221,7 +221,7 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
-| `leafis_01` | 501 Vine Jeans | bottoms | moss thread, berry dye | TBD |
+| `leafis_01` | Straight Vine Jeans | bottoms | moss thread, berry dye | TBD |
 | `leafis_02` | Trucker Leaf Jacket | top | moss thread | TBD |
 
 ### Rex-Ban
@@ -236,7 +236,7 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
 | `clawcs_01` | Classic Claw Clog | shoes | rubber sap | TBD |
-| `clawcs_02` | Jibbitz Tooth Charms | accessory | teeth, glitter | TBD |
+| `clawcs_02` | Clog Tooth Charms | accessory | teeth, glitter | TBD |
 
 ### Conversaur
 
@@ -256,15 +256,15 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
-| `drraptens_01` | 1460 Stompers | shoes | dead skin, rubber sap | TBD |
-| `drraptens_02` | Yellow-Stitch Mary Janes | shoes | dead skin | TBD |
+| `drraptens_01` | Eight-Eye Stomp Boots | shoes | dead skin, rubber sap | TBD |
+| `drraptens_02` | Stitched Stomp Mary Janes | shoes | dead skin | TBD |
 
 ### Mykel Claws
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
 | `mykelclaws_01` | Jet-Set Claw Tote | bag/purse | dead skin, gold dust | TBD |
-| `mykelclaws_02` | MK Gold Claw Watch | accessory | gold dust, crystal | TBD |
+| `mykelclaws_02` | Gold Claw Watch | accessory | gold dust, crystal | TBD |
 
 ### Sephossil
 
@@ -293,8 +293,8 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
-| `lululava_01` | Align Magma Leggings | bottoms | ash silk, ember core | TBD |
-| `lululava_02` | Define Ember Jacket | top | ash silk | TBD |
+| `lululava_01` | Magma Yoga Leggings | bottoms | ash silk, ember core | TBD |
+| `lululava_02` | Ember Run Jacket | top | ash silk | TBD |
 | `lululava_03` | Belt Bag (Heat-Proof) | bag/purse | scales, ash silk | TBD |
 
 ### Calvin Claine
@@ -308,7 +308,7 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
-| `tommyhillfanger_01` | Flag-Fang Polo | top | ash silk, berry dye | TBD |
+| `tommyhillfanger_01` | Colorblock Fang Polo | top | ash silk, berry dye | TBD |
 | `tommyhillfanger_02` | Regatta Chinos | bottoms | ash silk | TBD |
 
 ### Ralph Roarin'
@@ -324,7 +324,7 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
 | `armorni_01` | Ice-Plate Suit | full suit | scales, frost thread, crystal | TBD |
-| `armorni_02` | Code Frost Cologne | cosmetic | crystal, glacier water | TBD |
+| `armorni_02` | Frost Cologne | cosmetic | crystal, glacier water | TBD |
 
 ### Shardovski
 
@@ -352,15 +352,15 @@ Trademark check: Quick web search only (not a formal USPTO/EUIPO clearance). Two
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
-| `roarlex_01` | Sub-Swamper Dive Watch | accessory | gold dust, crystal | TBD |
-| `roarlex_02` | Day-Date Extinction Watch | accessory | gold dust, amber | TBD |
+| `roarlex_01` | Swamp Dive Watch | accessory | gold dust, crystal | TBD |
+| `roarlex_02` | Extinction Calendar Watch | accessory | gold dust, amber | TBD |
 
 ### A Bathing Rex
 
 | Id | Item | Type | Materials (placeholder) | Recipe |
 |---|---|---|---|---|
 | `bathingrex_01` | Shark-Jaw Full-Zip Hoodie | full suit | fur, teeth | TBD |
-| `bathingrex_02` | Bape-Sta Stompers | shoes | dead skin, glitter | TBD |
+| `bathingrex_02` | Star-Stomp Sneakers | shoes | dead skin, glitter | TBD |
 
 ### Hide & Moss
 
