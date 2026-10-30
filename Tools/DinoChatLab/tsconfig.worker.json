@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"],
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "moduleDetection": "force"
+  },
+  "include": [
+    "worker/index.ts",
+    "worker/lib/http.ts",
+    "worker/lib/hub.ts",
+    "worker/lib/signup.ts",
+    "worker/lib/sql.ts",
+    "worker/lib/username.ts",
+    "worker-configuration.d.ts",
+    "src/manager/profile.ts",
+    "src/logic/filter.ts",
+    "src/logic/persona.ts",
+    "src/logic/types.ts"
+  ]
+}

@@ -61,6 +61,7 @@ button:disabled { opacity: 0.55; cursor: wait; }
 }
 
 h1 { margin: 0.15rem 0 0; font-size: 1.7rem; font-weight: 650; }
+.lab-link { color: var(--amber); font-size: 0.86rem; }
 
 .status {
   margin: 0;

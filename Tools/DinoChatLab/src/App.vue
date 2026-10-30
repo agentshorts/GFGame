@@ -118,6 +118,7 @@ function onPromptInput(event: Event) {
       <div>
         <p class="eyebrow">Workbench</p>
         <h1>Dino Chat Lab</h1>
+        <a class="lab-link" href="#/personas">Personas</a>
       </div>
       <p class="status">
         {{ lineEngines.find((choice) => choice.id === engineId)?.label }}
