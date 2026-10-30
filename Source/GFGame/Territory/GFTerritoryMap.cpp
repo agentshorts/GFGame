@@ -1,5 +1,15 @@
 #include "GFTerritoryMap.h"
 
+namespace
+{
+	bool InHazardBox(const FGFTerritoryHazard& Hazard, const FVector& Location)
+	{
+		const float DX = FMath::Abs(Location.X - Hazard.Center.X);
+		const float DY = FMath::Abs(Location.Y - Hazard.Center.Y);
+		return DX <= FMath::Abs(Hazard.HalfExtent.X) && DY <= FMath::Abs(Hazard.HalfExtent.Y);
+	}
+}
+
 FGFTerritoryFaction* FGFTerritoryMap::FindFaction(FName Id)
 {
 	return Factions.FindByPredicate([Id](const FGFTerritoryFaction& Faction) { return Faction.Id == Id; });
@@ -36,7 +46,29 @@ FGFSafeRegion FGFTerritoryMap::RegionFor(const FGFTerritoryFaction& Faction) con
 	Region.Id = Faction.Id;
 	Region.Center = Faction.Center;
 	const int32 Count = EffectiveMembers(Faction.Members);
-	if (Faction.Id.IsNone() || Count <= 0)
+	if (Faction.Id.IsNone())
+	{
+		Region.Members = 0;
+		Region.BaseRadius = 0.f;
+		Region.RadiusPerExtraMember = 0.f;
+		Region.MaxRadius = 0.f;
+		return Region;
+	}
+
+	if (Faction.RadiusByMembers.Num() > 0)
+	{
+		// Members stays the effective count so overlap can still break ties on size. Radius() is the
+		// table value because the per-member step is zero and the cap equals the base.
+		const int32 Idx = FMath::Min(Count, Faction.RadiusByMembers.Num() - 1);
+		const float Radius = FMath::Max(0.f, Faction.RadiusByMembers[Idx]);
+		Region.Members = Count;
+		Region.BaseRadius = Radius;
+		Region.RadiusPerExtraMember = 0.f;
+		Region.MaxRadius = Radius;
+		return Region;
+	}
+
+	if (Count <= 0)
 	{
 		Region.Members = 0;
 		Region.BaseRadius = 0.f;
@@ -65,6 +97,23 @@ float FGFTerritoryMap::AreaOf(const FGFTerritoryFaction& Faction) const
 {
 	const float Radius = RadiusOf(Faction);
 	return UE_PI * Radius * Radius;
+}
+
+bool FGFTerritoryMap::Touches(FName A, FName B) const
+{
+	const FGFTerritoryFaction* FactionA = FindFaction(A);
+	const FGFTerritoryFaction* FactionB = FindFaction(B);
+	if (!FactionA || !FactionB)
+	{
+		return false;
+	}
+	const float RadiusA = RadiusOf(*FactionA);
+	const float RadiusB = RadiusOf(*FactionB);
+	if (RadiusA <= 0.f || RadiusB <= 0.f)
+	{
+		return false;
+	}
+	return FVector::Dist2D(FactionA->Center, FactionB->Center) <= RadiusA + RadiusB;
 }
 
 TArray<FGFSafeRegion> FGFTerritoryMap::CopySafeRegions() const
@@ -109,7 +158,7 @@ bool FGFTerritoryMap::CircleCacheMatches() const
 	{
 		const FGFTerritoryFaction& Live = Factions[Index];
 		const FGFTerritoryFaction& Cached = CachedFactions[Index];
-		if (Live.Id != Cached.Id || Live.Members != Cached.Members || Live.Center != Cached.Center)
+		if (Live.Id != Cached.Id || Live.Members != Cached.Members || Live.Center != Cached.Center || Live.RadiusByMembers != Cached.RadiusByMembers)
 		{
 			return false;
 		}
@@ -179,6 +228,27 @@ FGFTerritoryZoneHit FGFTerritoryMap::GetZoneAt(const FVector& Location) const
 		}
 	}
 	Hit.Zone = EGFTerritoryZone::Wild;
+	return Hit;
+}
+
+FGFTerritoryHazardHit FGFTerritoryMap::GetHazardAt(const FVector& Location) const
+{
+	FGFTerritoryHazardHit Hit;
+	if (GetZoneAt(Location).Zone != EGFTerritoryZone::Wild)
+	{
+		return Hit;
+	}
+	for (const FGFTerritoryHazard& Hazard : Hazards)
+	{
+		if (!InHazardBox(Hazard, Location))
+		{
+			continue;
+		}
+		Hit.bHazard = true;
+		Hit.Id = Hazard.Id;
+		Hit.Kind = Hazard.Kind;
+		return Hit;
+	}
 	return Hit;
 }
 

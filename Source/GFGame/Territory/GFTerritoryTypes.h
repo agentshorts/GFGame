@@ -72,7 +72,7 @@ struct GFGAME_API FGFNeutralZone
 	float Radius = 800.f;
 };
 
-/** One faction anchor. Members is the head count; the curve may clamp how much of that count grows the radius. */
+/** One faction anchor. Members is the head count. A set RadiusByMembers table replaces the shared curve. */
 USTRUCT(BlueprintType)
 struct GFGAME_API FGFTerritoryFaction
 {
@@ -86,6 +86,58 @@ struct GFGAME_API FGFTerritoryFaction
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Territory", meta = (ClampMin = "0"))
 	int32 Members = 0;
+
+	/**
+	 * Radius at each effective member count. Index 0 is 0 members.
+	 * Empty means this faction uses the shared curve. A count past the last index uses the last entry.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Territory")
+	TArray<float> RadiusByMembers;
+};
+
+/**
+ * Axis-aligned hazard box. Z is ignored. Kind is a config name, not an enum.
+ * BetweenA and BetweenB record which anchors the box sits between. The query does not read them.
+ */
+USTRUCT(BlueprintType)
+struct GFGAME_API FGFTerritoryHazard
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Territory")
+	FName Id;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Territory")
+	FName Kind;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Territory")
+	FVector Center = FVector::ZeroVector;
+
+	/** Horizontal half-size. X along world X, Y along world Y. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Territory")
+	FVector2D HalfExtent = FVector2D::ZeroVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Territory")
+	FName BetweenA;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Territory")
+	FName BetweenB;
+};
+
+/** A hazard box hit. bHazard is false when the point is not inside a wild hazard. */
+USTRUCT(BlueprintType)
+struct GFGAME_API FGFTerritoryHazardHit
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Territory")
+	bool bHazard = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Territory")
+	FName Id;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Territory")
+	FName Kind;
 };
 
 /**

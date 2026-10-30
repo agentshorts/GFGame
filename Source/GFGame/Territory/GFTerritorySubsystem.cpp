@@ -3,7 +3,14 @@
 #include "GFGameState.h"
 #include "GFSafeZone.h"
 #include "GFTamingComponent.h"
+#include "DrawDebugHelpers.h"
 #include "Engine/World.h"
+#include "HAL/IConsoleManager.h"
+
+static TAutoConsoleVariable<int32> CVarGFTerritoryDrawHazards(
+	TEXT("gf.Territory.DrawHazards"),
+	0,
+	TEXT("Draw territory hazard boxes. 0 is off. Queries ignore Z; the drawn box uses a fixed vertical extent."));
 
 UGFTerritorySubsystem* UGFTerritorySubsystem::Get(const UObject* WorldContext)
 {
@@ -33,6 +40,7 @@ void UGFTerritorySubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	RefreshFromWorld();
+	DrawHazards();
 }
 
 TStatId UGFTerritorySubsystem::GetStatId() const
@@ -51,6 +59,7 @@ void UGFTerritorySubsystem::RefreshFromWorld()
 	const AGFGameState* GS = World ? World->GetGameState<AGFGameState>() : nullptr;
 	Map.Curve = Curve;
 	Map.Neutral = NeutralZone;
+	Map.Hazards = Hazards;
 	Map.MaxMembers = FGFTerritoryLimits::FactionSeatCap(GS);
 
 	TArray<FGFTerritoryFaction> Next = FactionLayout;
@@ -89,6 +98,35 @@ FGFTerritoryZoneHit UGFTerritorySubsystem::GetZoneAt(FVector Location)
 {
 	RefreshFromWorld();
 	return Map.GetZoneAt(Location);
+}
+
+FGFTerritoryHazardHit UGFTerritorySubsystem::GetHazardAt(FVector Location)
+{
+	RefreshFromWorld();
+	return Map.GetHazardAt(Location);
+}
+
+void UGFTerritorySubsystem::DrawHazards() const
+{
+	if (CVarGFTerritoryDrawHazards.GetValueOnGameThread() == 0)
+	{
+		return;
+	}
+#if ENABLE_DRAW_DEBUG
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	// Vertical extent is visual only. GetHazardAt ignores Z.
+	const float VisualHalfZ = 100.f;
+	for (const FGFTerritoryHazard& Hazard : Map.Hazards)
+	{
+		const FVector Extent(FMath::Abs(Hazard.HalfExtent.X), FMath::Abs(Hazard.HalfExtent.Y), VisualHalfZ);
+		DrawDebugBox(World, Hazard.Center, Extent, FColor::Orange, false, 0.f, 0, 2.f);
+		DrawDebugString(World, Hazard.Center + FVector(0.f, 0.f, VisualHalfZ), Hazard.Id.ToString(), nullptr, FColor::Orange, 0.f, false, 1.f);
+	}
+#endif
 }
 
 bool UGFTerritorySubsystem::IsSafeFor(const AGFPlayerState* Player, FVector Location)
