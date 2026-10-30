@@ -439,6 +439,8 @@ bool FGFFerrySpawnerRouteOnlyTest::RunTest(const FString&)
 	TestFalse(TEXT("Owned land is not a spawn"), FGFFerryRouteSpawnRules::IsLegalSpawnPoint(Owned, LavaBridge, HazardAt));
 	TestFalse(TEXT("Owned land is not LavaBridge"), Map.GetHazardAt(Owned).bHazard);
 
+	// Four Rime members cover the forest box. One member leaves its center wild.
+	TestTrue(TEXT("Forest check members"), Map.SetMembers(Rime, 1) && Map.SetMembers(Cinder, 1));
 	const FGFTerritoryHazard* Forest = Map.Hazards.FindByPredicate([](const FGFTerritoryHazard& Hazard) { return Hazard.Id == DeadlyForest; });
 	if (!TestNotNull(TEXT("DeadlyForest"), Forest))
 	{
@@ -490,9 +492,12 @@ bool FGFFerryLayoutTest::RunTest(const FString&)
 
 	for (const FGFFerryStop& Stop : Director->Stops)
 	{
-		TestTrue(*FString::Printf(TEXT("%s anchor is a faction"), *Stop.Id.ToString()), Map.FindFaction(Stop.AnchorId) != nullptr);
-		TestTrue(*FString::Printf(TEXT("%s members"), *Stop.AnchorId.ToString()), Map.SetMembers(Stop.AnchorId, 1));
 		const FGFTerritoryFaction* Anchor = Map.FindFaction(Stop.AnchorId);
+		if (!TestNotNull(*FString::Printf(TEXT("%s anchor is a faction"), *Stop.Id.ToString()), Anchor))
+		{
+			return false;
+		}
+		TestTrue(*FString::Printf(TEXT("%s members"), *Stop.AnchorId.ToString()), Map.SetMembers(Stop.AnchorId, 1));
 		const float Radius = Map.RadiusOf(*Anchor);
 		const float Dist = FVector::Dist2D(Stop.Location, Anchor->Center);
 		TestTrue(*FString::Printf(TEXT("%s is inside the 1-member disc (%.0f <= %.0f)"), *Stop.Id.ToString(), Dist, Radius), Dist <= Radius);
