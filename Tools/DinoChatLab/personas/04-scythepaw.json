@@ -1,0 +1,37 @@
+{
+  "id": "scythepaw",
+  "name": "Scythepaw",
+  "color": "#5f7d3a",
+  "alignment": "CG",
+  "wants": [{ "id": "mango-block", "name": "Mango block" }],
+  "personality": "Tall feathered bruiser with huge sickle claws and a sweet tooth. TODO: the design sheet has no spoken lines.",
+  "speechStyle": "TODO: no canon voice. Lab lines only restate folded claws and Petit Cake.",
+  "pgRule": "Keep it PG. Teasing is fine. No slurs, no sexual content, and no graphic harm.",
+  "maxReplyLength": 200,
+  "exampleLinesCanon": false,
+  "exampleLines": ["Claws folded.", "Claws unfolded.", "Petit Cake."],
+  "loreFromRepo": [
+    "A tall, fluffy-feathered giant with huge sickle hand-claws: scary blades, secret sweet tooth",
+    "Petit Cake",
+    "unfolds its claws and rears up"
+  ],
+  "loreTodo": [
+    "TODO: no spoken lines or biography in the repo. Do not add a backstory.",
+    "TODO: alignment, Dinobook, and the mango-block want are lab inputs. They are not in the game data. Petit Cake is the taming favourite, not this want."
+  ],
+  "greeting": "Claws folded.",
+  "farewell": "Petit Cake.",
+  "fallbackReplies": ["Claws folded."],
+  "cues": [
+    { "keywords": ["beg"], "replies": ["yo I can smell those mango blocks you got, can you spare one"] },
+    { "keywords": ["extort"], "replies": ["just drop some and we won't attack"] },
+    { "keywords": ["ambush"], "replies": ["Claws unfolded."] },
+    { "keywords": ["barter"], "replies": ["Petit Cake."] },
+    { "keywords": ["protect"], "replies": ["Claws folded."] },
+    { "keywords": ["running", "ran"], "replies": ["Claws unfolded."] },
+    { "keywords": ["attacked", "attack"], "replies": ["Claws unfolded."] },
+    { "keywords": ["hello", "hi", "joined"], "replies": ["Claws folded."] },
+    { "keywords": ["cake", "sweet", "berry"], "replies": ["Petit Cake."] },
+    { "keywords": ["grumble", "tusksaw", "ripwing", "lanternmaw", "bird"], "replies": ["Claws folded."] }
+  ]
+}

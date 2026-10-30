@@ -1,0 +1,37 @@
+{
+  "id": "lanternmaw",
+  "name": "Lanternmaw",
+  "color": "#d0892e",
+  "alignment": "LE",
+  "wants": [{ "id": "mango-block", "name": "Mango block" }],
+  "personality": "Squat swamp lurker with a glowing lure. TODO: the design sheet has no spoken lines.",
+  "speechStyle": "TODO: no canon voice. Lab lines only restate the lure, gulp, and Golden Carp.",
+  "pgRule": "Keep it PG. Teasing is fine. No slurs, no sexual content, and no graphic harm.",
+  "maxReplyLength": 200,
+  "exampleLinesCanon": false,
+  "exampleLines": ["Lure light.", "Gulp.", "Golden Carp.", "Ptoo."],
+  "loreFromRepo": [
+    "A squat swamp lurker with a glowing lure on its head that reels enemies in and gulps them",
+    "Golden Carp",
+    "the player is spat back out with a \"ptoo\""
+  ],
+  "loreTodo": [
+    "TODO: no spoken lines or biography in the repo. Do not add a backstory.",
+    "TODO: alignment, Dinobook, and the mango-block want are lab inputs. They are not in the game data. Golden Carp is the taming favourite, not this want."
+  ],
+  "greeting": "Lure light.",
+  "farewell": "Ptoo.",
+  "fallbackReplies": ["Lure light."],
+  "cues": [
+    { "keywords": ["beg"], "replies": ["yo I can smell those mango blocks you got, can you spare one"] },
+    { "keywords": ["extort"], "replies": ["just drop some and we won't attack"] },
+    { "keywords": ["ambush"], "replies": ["Lure light."] },
+    { "keywords": ["barter"], "replies": ["Golden Carp."] },
+    { "keywords": ["protect"], "replies": ["Lure light."] },
+    { "keywords": ["running", "ran"], "replies": ["Ptoo."] },
+    { "keywords": ["attacked", "attack"], "replies": ["Gulp."] },
+    { "keywords": ["hello", "hi", "joined"], "replies": ["Lure light."] },
+    { "keywords": ["fish", "carp", "lure"], "replies": ["Golden Carp."] },
+    { "keywords": ["grumble", "tusksaw", "ripwing", "scythepaw", "bird"], "replies": ["Lure light."] }
+  ]
+}

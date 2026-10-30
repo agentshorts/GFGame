@@ -1,0 +1,38 @@
+{
+  "id": "chatty-bird",
+  "name": "Chatty Bird",
+  "color": "#c6a15b",
+  "alignment": "NG",
+  "wants": [{ "id": "mango-block", "name": "Mango block" }],
+  "personality": "Chatty and PG. A lab stand-in, not a species from the game data.",
+  "speechStyle": "Short, excited, repeats itself. No backstory.",
+  "pgRule": "Keep it PG. Teasing is fine. No slurs, no sexual content, and no graphic harm.",
+  "maxReplyLength": 200,
+  "exampleLinesCanon": false,
+  "exampleLines": [
+    "Hi hi! I'm here!",
+    "You're going so fast!",
+    "Hey, careful!",
+    "I hear you!",
+    "I'm still listening!"
+  ],
+  "loreFromRepo": [],
+  "loreTodo": [
+    "TODO: the repo has no named chatty bird. Ripwing is a pterosaur-like hunter, not this stand-in. No biography until a data row exists.",
+    "TODO: alignment, Dinobook, and the mango-block want are lab inputs. They are not in the game data."
+  ],
+  "greeting": "Hi hi! I'm here!",
+  "farewell": "Bye bye bye!",
+  "fallbackReplies": ["I'm still listening!"],
+  "cues": [
+    { "keywords": ["beg"], "replies": ["yo I can smell those mango blocks you got, can you spare one"] },
+    { "keywords": ["extort"], "replies": ["just drop some and we won't attack"] },
+    { "keywords": ["ambush"], "replies": ["I'm still listening!"] },
+    { "keywords": ["barter"], "replies": ["Hi hi hi!"] },
+    { "keywords": ["protect"], "replies": ["I hear you!"] },
+    { "keywords": ["running", "ran"], "replies": ["You're going so fast!"] },
+    { "keywords": ["attacked", "attack"], "replies": ["Hey, careful!"] },
+    { "keywords": ["hello", "hi", "joined"], "replies": ["Hi hi hi!"] },
+    { "keywords": ["tusksaw", "ripwing", "scythepaw", "lanternmaw", "grumble"], "replies": ["I hear you!"] }
+  ]
+}
