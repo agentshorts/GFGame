@@ -1,5 +1,9 @@
 #include "GFTestKit.h"
 #include "GFFerryDirector.h"
+#include "GFFerryRiderComponent.h"
+#include "Engine/Engine.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "GFInventoryComponent.h"
 #include "GFPlayerState.h"
 #include "GFLog.h"
@@ -172,7 +176,54 @@ static void GFRunTestKitCommand(const TArray<FString>& Args, UWorld* World)
 	}
 	const int32 Players = FGFTestKit::GrantAll(World);
 	UE_LOG(LogGF, Log, TEXT("TestKit: gf.TestKit topped up %d player(s)"), Players);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 6.f, FColor::Green, FString::Printf(TEXT("Test kit topped up for %d player(s)"), Players));
+	}
 }
+
+// Dev stand-in for the ferry prompt, which has no key yet: board at the nearest landing.
+static void GFRunFerryRideCommand(const TArray<FString>& Args, UWorld* World)
+{
+	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	APawn* Rider = PC ? PC->GetPawn() : nullptr;
+	UGFFerryRiderComponent* Ride = Rider ? Rider->FindComponentByClass<UGFFerryRiderComponent>() : nullptr;
+	if (!Ride)
+	{
+		UE_LOG(LogGF, Warning, TEXT("TestKit: gf.Ferry.Ride needs a local player pawn"));
+		return;
+	}
+	FName Best;
+	float BestDist = TNumericLimits<float>::Max();
+	for (TActorIterator<AGFFerryDirector> It(World); It; ++It)
+	{
+		for (const FGFFerryStop& Stop : It->Stops)
+		{
+			const float Dist = FVector::Dist2D(Stop.Location, Rider->GetActorLocation());
+			if (Dist < BestDist)
+			{
+				BestDist = Dist;
+				Best = Stop.Id;
+			}
+		}
+	}
+	if (Best.IsNone())
+	{
+		UE_LOG(LogGF, Warning, TEXT("TestKit: no ferry landing in this map"));
+		return;
+	}
+	Ride->RequestTrip(Best);
+	UE_LOG(LogGF, Log, TEXT("TestKit: gf.Ferry.Ride asked to board at %s (%.0f cm away)"), *Best.ToString(), BestDist);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 6.f, FColor::Green, FString::Printf(TEXT("Ferry: boarding at %s (%.0f m away, must be within 4 m)"), *Best.ToString(), BestDist / 100.f));
+	}
+}
+
+static FAutoConsoleCommandWithWorldAndArgs GGFFerryRideCommand(
+	TEXT("gf.Ferry.Ride"),
+	TEXT("Dev. Board the ferry at the nearest landing (stand within 4 m of it). The pass makes the trip free."),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&GFRunFerryRideCommand));
 
 static FAutoConsoleCommandWithWorldAndArgs GGFTestKitCommand(
 	TEXT("gf.TestKit"),

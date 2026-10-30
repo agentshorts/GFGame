@@ -1,7 +1,7 @@
 #pragma once
 
 // Dev test kit for playtests: a few blocks, crafting materials, one outfit item and a ferry pass.
-// Console: gf.TestKit. Auto-grant at spawn with -GFTestKit or bAutoGrantTestKit in [/Script/GFGame.GFTestKitSubsystem].
+// Console: gf.TestKit, and gf.Ferry.Ride to board at the nearest landing (the ferry prompt has no key yet). Auto-grant at spawn with -GFTestKit or bAutoGrantTestKit in [/Script/GFGame.GFTestKitSubsystem].
 // Every grant tops items up to a target count, so granting twice adds nothing. Not compiled into Shipping.
 
 #include "CoreMinimal.h"
