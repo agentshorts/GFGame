@@ -51,7 +51,7 @@ AGFEnvironmentDirector::AGFEnvironmentDirector()
 	if (HasAnyFlags(RF_ClassDefaultObject))
 	{
 		SunIntensity = 10.f;
-		ExposureBias = 11.f;
+		ExposureBias = 0.f;
 	}
 }
 
@@ -88,7 +88,7 @@ void AGFEnvironmentDirector::EnsureEnvironment()
 			bAddedSun = true;
 
 			// Only when we own the sun. A hand-lit map keeps its own exposure.
-			// Auto exposure is off, so 10 lux needs this bias or the empty map stays black.
+			// Auto exposure is off, so the bias is fixed. 0 reads right at 10 lux in the packaged hub.
 			UPostProcessComponent* Exposure = AddEnvComponent<UPostProcessComponent>(this);
 			Exposure->bUnbound = true;
 			Exposure->Priority = 1.f;

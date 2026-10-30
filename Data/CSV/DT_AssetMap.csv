@@ -1,9 +1,9 @@
 ---,Mesh,Material,Placeholder,Color,PlaceholderScale,PlaceholderOffset,SkeletalMesh,IdleAnim,MoveAnim,ArtScale,ArtOffset,ArtRotation
-Dino.Nipper,None,None,Sphere,"(R=0.55,G=0.80,B=0.45,A=1.0)","(X=0.6,Y=0.6,Z=0.6)","(X=0.0,Y=0.0,Z=30.0)",None,None,None,"(X=1.0,Y=1.0,Z=1.0)","(X=0.0,Y=0.0,Z=0.0)","(Pitch=0.0,Yaw=0.0,Roll=0.0)"
+Dino.Nipper,None,None,Sphere,"(R=0.55,G=0.80,B=0.45,A=1.0)","(X=0.6,Y=0.6,Z=0.6)","(X=0.0,Y=0.0,Z=-58.0)",None,None,None,"(X=1.0,Y=1.0,Z=1.0)","(X=0.0,Y=0.0,Z=0.0)","(Pitch=0.0,Yaw=0.0,Roll=0.0)"
 Dino.Raptor,None,None,Sphere,"(R=0.85,G=0.55,B=0.25,A=1.0)","(X=0.9,Y=0.6,Z=1.2)","(X=0.0,Y=0.0,Z=60.0)",/Game/Art/Dinos/Raptor/SK_Dino_Raptor.SK_Dino_Raptor,Raptor.Idle,Raptor.Run,"(X=1.0,Y=1.0,Z=1.0)","(X=0.0,Y=0.0,Z=-96.0)","(Pitch=0.0,Yaw=0.0,Roll=0.0)"
-Dino.Sailback,None,None,Sphere,"(R=0.35,G=0.55,B=0.80,A=1.0)","(X=1.8,Y=1.0,Z=1.4)","(X=0.0,Y=0.0,Z=70.0)",None,None,None,"(X=1.0,Y=1.0,Z=1.0)","(X=0.0,Y=0.0,Z=0.0)","(Pitch=0.0,Yaw=0.0,Roll=0.0)"
-Dino.Rex,None,None,Sphere,"(R=0.70,G=0.25,B=0.20,A=1.0)","(X=2.4,Y=1.4,Z=2.6)","(X=0.0,Y=0.0,Z=130.0)",None,None,None,"(X=1.0,Y=1.0,Z=1.0)","(X=0.0,Y=0.0,Z=0.0)","(Pitch=0.0,Yaw=0.0,Roll=0.0)"
-Dino.Hornback,None,None,Sphere,"(R=0.55,G=0.45,B=0.70,A=1.0)","(X=2.0,Y=1.4,Z=1.4)","(X=0.0,Y=0.0,Z=70.0)",None,None,None,"(X=1.0,Y=1.0,Z=1.0)","(X=0.0,Y=0.0,Z=0.0)","(Pitch=0.0,Yaw=0.0,Roll=0.0)"
+Dino.Sailback,None,None,Sphere,"(R=0.35,G=0.55,B=0.80,A=1.0)","(X=1.8,Y=1.0,Z=1.4)","(X=0.0,Y=0.0,Z=-18.0)",None,None,None,"(X=1.0,Y=1.0,Z=1.0)","(X=0.0,Y=0.0,Z=0.0)","(Pitch=0.0,Yaw=0.0,Roll=0.0)"
+Dino.Rex,None,None,Sphere,"(R=0.70,G=0.25,B=0.20,A=1.0)","(X=2.4,Y=1.4,Z=2.6)","(X=0.0,Y=0.0,Z=42.0)",None,None,None,"(X=1.0,Y=1.0,Z=1.0)","(X=0.0,Y=0.0,Z=0.0)","(Pitch=0.0,Yaw=0.0,Roll=0.0)"
+Dino.Hornback,None,None,Sphere,"(R=0.55,G=0.45,B=0.70,A=1.0)","(X=2.0,Y=1.4,Z=1.4)","(X=0.0,Y=0.0,Z=-18.0)",None,None,None,"(X=1.0,Y=1.0,Z=1.0)","(X=0.0,Y=0.0,Z=0.0)","(Pitch=0.0,Yaw=0.0,Roll=0.0)"
 Prop.Mailbox,None,None,Cube,"(R=0.85,G=0.25,B=0.30,A=1.0)","(X=0.4,Y=0.4,Z=1.2)","(X=0.0,Y=0.0,Z=60.0)",None,None,None,"(X=1.0,Y=1.0,Z=1.0)","(X=0.0,Y=0.0,Z=0.0)","(Pitch=0.0,Yaw=0.0,Roll=0.0)"
 Prop.ClaimFlag,None,None,Cylinder,"(R=1.00,G=1.00,B=1.00,A=1.0)","(X=0.1,Y=0.1,Z=2.5)","(X=0.0,Y=0.0,Z=125.0)",None,None,None,"(X=1.0,Y=1.0,Z=1.0)","(X=0.0,Y=0.0,Z=0.0)","(Pitch=0.0,Yaw=0.0,Roll=0.0)"
 Prop.RentSign,None,None,Cube,"(R=0.95,G=0.85,B=0.45,A=1.0)","(X=0.8,Y=0.1,Z=0.6)","(X=0.0,Y=0.0,Z=150.0)",None,None,None,"(X=1.0,Y=1.0,Z=1.0)","(X=0.0,Y=0.0,Z=0.0)","(Pitch=0.0,Yaw=0.0,Roll=0.0)"

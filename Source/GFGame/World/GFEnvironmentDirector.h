@@ -31,7 +31,7 @@ public:
 
 	/**
 	 * Exposure bias added only when this director creates the sun.
-	 * Auto exposure is off, so 10 lux would otherwise be black.
+	 * Auto exposure is off. 0 reads right at 10 lux; 11 blows the hub out to white.
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "GF|World")
 	float ExposureBias;
