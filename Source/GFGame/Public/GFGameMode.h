@@ -28,6 +28,13 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "GF|Data") TSoftObjectPtr<UDataTable> DinoDietTable;
 
 	/**
+	 * Faction anchor used when the map has no PlayerStart, or when a PlayerStart is tagged with this id.
+	 * A tagged start wins. Any other map PlayerStart still wins over the anchor fallback.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "GF|Spawn")
+	FName DefaultSpawnAnchor;
+
+	/**
 	 * Always-on server actors spawned with the game state (by class path, so this module needn't depend on theirs).
 	 * Default: the social director (safe-zone powers, jail, kick / ban, emotes) and the block paint volume (AGFPaintVolume).
 	 */

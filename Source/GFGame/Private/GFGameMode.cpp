@@ -1,6 +1,7 @@
 #include "GFGameMode.h"
 #include "GFCharacter.h"
 #include "GFHUD.h"
+#include "GFFerrySpawn.h"
 #include "GFPlayerController.h"
 #include "GFCraftingSubsystem.h"
 #include "GFVoxelWorld.h"
@@ -230,16 +231,51 @@ AGFVoxelWorld* AGFGameMode::EnsureVoxelWorld()
 AActor* AGFGameMode::ChoosePlayerStart_Implementation(AController* Player)
 {
 	EnsureVoxelWorld();
-	AActor* Found = Super::ChoosePlayerStart_Implementation(Player);
-	if (Found)
+
+	TArray<APlayerStart*> Starts;
+	TArray<FGFMapPlayerStart> Listed;
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
 	{
-		return Found;
+		FGFMapPlayerStart Row;
+		Row.Tag = It->PlayerStartTag;
+		Row.Location = It->GetActorLocation();
+		Listed.Add(Row);
+		Starts.Add(*It);
 	}
+	const int32 Index = FGFPlayerStartRules::ChooseStartIndex(Listed, DefaultSpawnAnchor);
+	if (Index != INDEX_NONE)
+	{
+		const bool bTagged = !DefaultSpawnAnchor.IsNone() && Starts[Index]->PlayerStartTag == DefaultSpawnAnchor;
+		if (bTagged)
+		{
+			return Starts[Index];
+		}
+		if (AActor* Found = Super::ChoosePlayerStart_Implementation(Player))
+		{
+			return Found;
+		}
+		return Starts[Index];
+	}
+
+	TArray<FGFTerritoryFaction> Layout;
+	if (const UGFTerritorySubsystem* Live = UGFTerritorySubsystem::Get(this))
+	{
+		Layout = Live->FactionLayout;
+	}
+	else if (const UGFTerritorySubsystem* Defaults = GetDefault<UGFTerritorySubsystem>())
+	{
+		Layout = Defaults->FactionLayout;
+	}
+	const FVector Where = FGFPlayerStartRules::FallbackLocation(DefaultSpawnAnchor, Layout);
 	if (!FallbackStart)
 	{
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		FallbackStart = GetWorld()->SpawnActor<APlayerStart>(APlayerStart::StaticClass(), FTransform(FVector(0.f, 0.f, 120.f)), Params);
+		FallbackStart = GetWorld()->SpawnActor<APlayerStart>(APlayerStart::StaticClass(), FTransform(Where), Params);
+	}
+	else
+	{
+		FallbackStart->SetActorLocation(Where);
 	}
 	return FallbackStart;
 }
