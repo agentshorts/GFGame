@@ -14,13 +14,13 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-namespace GFSpawnDefaultTests
+namespace GFSpawnDefaultTestImpl
 {
 	static constexpr EAutomationTestFlags Flags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 	static const FName Rime(TEXT("Rime"));
 	static const FName Verdant(TEXT("Verdant"));
 
-	struct FWorld
+	struct FSpawnTestWorld
 	{
 		UWorld* World = nullptr;
 		AGFGameState* GS = nullptr;
@@ -67,7 +67,7 @@ namespace GFSpawnDefaultTests
 			return PS;
 		}
 
-		~FWorld()
+		~FSpawnTestWorld()
 		{
 			if (World)
 			{
@@ -148,12 +148,12 @@ namespace GFSpawnDefaultTests
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFAutoJoinRimeTest, "GFGame.Spawn.AutoJoinRime", GFSpawnDefaultTests::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFAutoJoinRimeTest, "GFGame.Spawn.AutoJoinRime", GFSpawnDefaultTestImpl::Flags)
 bool FGFAutoJoinRimeTest::RunTest(const FString&)
 {
-	using namespace GFSpawnDefaultTests;
+	using namespace GFSpawnDefaultTestImpl;
 
-	FWorld W;
+	FSpawnTestWorld W;
 	if (!W.Init(*this, TEXT("GFSpawnAutoJoin")))
 	{
 		return false;
@@ -206,10 +206,10 @@ bool FGFAutoJoinRimeTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFStarterFallbackTest, "GFGame.Spawn.StarterFallback", GFSpawnDefaultTests::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFStarterFallbackTest, "GFGame.Spawn.StarterFallback", GFSpawnDefaultTestImpl::Flags)
 bool FGFStarterFallbackTest::RunTest(const FString&)
 {
-	using namespace GFSpawnDefaultTests;
+	using namespace GFSpawnDefaultTestImpl;
 
 	TestEqual(TEXT("Starter id is Rime"), FGFSpawnDefaults::StarterFactionId(), Rime);
 	TestTrue(TEXT("Fallback height is 120 cm"), FMath::IsNearlyEqual(FGFSpawnDefaults::FallbackZ, 120.f));
@@ -220,9 +220,9 @@ bool FGFStarterFallbackTest::RunTest(const FString&)
 	TArray<FGFSpawnAnchor> ShiftedAnchors;
 	ShiftedAnchors.Add(Shifted);
 	const FVector At = FGFSpawnDefaults::StarterFallback(Rime, ShiftedAnchors);
-	TestEqual(TEXT("Shifted anchor X"), At.X, 10.f);
-	TestEqual(TEXT("Shifted anchor Y"), At.Y, 20.f);
-	TestEqual(TEXT("Shifted anchor Z"), At.Z, 120.f);
+	TestEqual(TEXT("Shifted anchor X"), At.X, 10.0);
+	TestEqual(TEXT("Shifted anchor Y"), At.Y, 20.0);
+	TestEqual(TEXT("Shifted anchor Z"), At.Z, 120.0);
 
 	FGFSpawnAnchor Origin;
 	Origin.Id = Rime;
@@ -237,10 +237,10 @@ bool FGFStarterFallbackTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFRespawnPreferenceTest, "GFGame.Giant.RespawnPreference", GFSpawnDefaultTests::Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFRespawnPreferenceTest, "GFGame.Giant.RespawnPreference", GFSpawnDefaultTestImpl::Flags)
 bool FGFRespawnPreferenceTest::RunTest(const FString&)
 {
-	using namespace GFSpawnDefaultTests;
+	using namespace GFSpawnDefaultTestImpl;
 
 	const FGFGiantTuning Tuning;
 	FRivalZone Zone;
