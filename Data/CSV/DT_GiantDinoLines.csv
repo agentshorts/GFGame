@@ -1,0 +1,73 @@
+Id,Phase,Line
+GD_Spotted_01,Spotted,"Ooh, fresh snacks! I mean... friends!"
+GD_Spotted_02,Spotted,Well well well. Who's out past bedtime?
+GD_Spotted_03,Spotted,I smell someone who forgot to go home.
+GD_Spotted_04,Spotted,Found you! Your hiding is very bad.
+GD_Spotted_05,Spotted,Hey! Wait up! I just want to play!
+GD_Spotted_06,Spotted,Is that a tiny friend? It IS! Hi!!
+GD_Chase_01,Chase,Run run run! This is the fun part!
+GD_Chase_02,Chase,You call that running? My nap is faster.
+GD_Chase_03,Chase,"Tag! Wait, I didn't touch you. Tag again!"
+GD_Chase_04,Chase,Your little legs are SO cute when they panic.
+GD_Chase_05,Chase,"I'm not chasing, I'm escorting. Loudly."
+GD_Chase_06,Chase,"Left! No, right! Ha, wrong both times!"
+GD_Chase_07,Chase,"Don't drop your rocks! Actually, do."
+GD_Chase_08,Chase,"Keep going, the garden misses you!"
+GD_CloseCall_01,CloseCall,"Ooh, SO close, {Target}! I felt your hair wiggle!"
+GD_CloseCall_02,CloseCall,Boop! Almost got the boop in.
+GD_CloseCall_03,CloseCall,That was a warning sniff. Next is a hug.
+GD_CloseCall_04,CloseCall,"Hey, no fair dodging! Who taught you that?"
+GD_CloseCall_05,CloseCall,"My nose touched your shoe, {Target}. That counts."
+GD_CloseCall_06,CloseCall,"Heh. Your heart is racing, I can hear it."
+GD_Herded_01,Herded,"Aww, you went inside. Boring!"
+GD_Herded_02,Herded,Safe and sound. For NOW.
+GD_Herded_03,Herded,"Fine, hide in your cute little garden."
+GD_Herded_04,Herded,You run home every time. I see you.
+GD_Herded_05,Herded,Nice house. Be a shame if I... looked at it.
+GD_Herded_06,Herded,"Okay okay, you win this round, tiny."
+GD_Circling_01,Circling,Come out and play!
+GD_Circling_02,Circling,Knock knock. It's me. Big me.
+GD_Circling_03,Circling,Your fence is rude and so are you.
+GD_Circling_04,Circling,I can wait. I'm VERY good at waiting.
+GD_Circling_05,Circling,Is that a cookpot? Make me something!
+GD_Circling_06,Circling,Just one toe out. One. I'll be nice.
+GD_Circling_07,Circling,I'm not stuck. I'm choosing to be out here.
+GD_Circling_08,Circling,Hellooo? Anybody want a ride? On my teeth?
+GD_Leaving_01,Leaving,"Ugh, fine. I'm bored anyway."
+GD_Leaving_02,Leaving,"Nap time. You got lucky, tiny."
+GD_Leaving_03,Leaving,I'm leaving because I WANT to. Bye.
+GD_Leaving_04,Leaving,This isn't over! It's just... paused.
+GD_Leaving_05,Leaving,Tell your dinos I said hi. Grr.
+GD_Leaving_06,Leaving,Keep the garden warm. I'll be back.
+GD_Return_01,Return,Guess who's baaack!
+GD_Return_02,Return,Missed me? I missed you. Hungrily.
+GD_Return_03,Return,Your circle got bigger. Mine did too.
+GD_Return_04,Return,Round two! I stretched this time.
+GD_Return_05,Return,Did you miss my lovely voice?
+GD_Return_06,Return,I brought my running legs today.
+GD_Snacked_01,Snacked,"Mmm, crunchy! Okay, I'm full. Bye!"
+GD_Snacked_02,Snacked,One snack is plenty. Thanks for the gift!
+GD_Snacked_03,Snacked,Brave little one. Tasty little one.
+GD_Snacked_04,Snacked,"Your friends ran off. Rude of them, honestly."
+GD_Snacked_05,Snacked,Delicious! That's all I wanted. Toodles!
+GD_Snacked_06,Snacked,Next time send TWO newbies. Kidding. Maybe.
+GD_Target_01,Target,"Where you going, {Target}? Huh? Where you going?"
+GD_Target_02,Target,Hey {Target}! Yes YOU! You're my favorite!
+GD_Target_03,Target,"Don't look back, it just makes me faster."
+GD_Target_04,Target,I picked you special. Feel honored!
+GD_Target_05,Target,Your friends left you. I never would.
+GD_Target_06,Target,You're the slowest one. That's why I love you.
+GD_Target_07,Target,"Run, buddy, run! I'm right behind you!"
+GD_Target_08,Target,Where you going? The fun is right HERE!
+GD_Target_09,Target,"Why you running, {Target}?"
+GD_Target_10,Target,"Why you running, huh? Why you running?"
+GD_Target_11,Target,Where you going? Huh? Huh?
+GD_Target_12,Target,"What's the rush, {Target}? Huh?"
+GD_Target_13,Target,Who you running from? Me? Why me?
+GD_Target_14,Target,"Why you scared, huh? I'm friendly!"
+GD_Target_15,Target,"Where you think you're going, huh?"
+GD_Target_16,Target,"Slow down! Why you so fast, huh?"
+GD_Target_17,Target,You going home? Already? Why?
+GD_Target_18,Target,Hey. Hey. {Target}. Where you going?
+GD_Target_19,Target,"Why you hiding, huh? I see you!"
+GD_Target_20,Target,You leaving? Huh? Without me?

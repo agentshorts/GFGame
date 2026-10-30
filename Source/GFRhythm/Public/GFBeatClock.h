@@ -12,7 +12,7 @@ enum class EGFBeatSource : uint8
 	Metronome,
 	/** Built-in song (Songs mode). TODO(M5): Quartz start + audio render clock. */
 	Song,
-	/** Live loopback of her PC's output (Spotify etc.) through FGFBeatTracker. */
+	/** Live loopback of the PC's audio output (any app) through FGFBeatTracker. */
 	Live
 };
 

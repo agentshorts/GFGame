@@ -13,6 +13,8 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
+#include "GameFramework/GameSession.h"
+#include "TimerManager.h"
 
 AGFGameMode::AGFGameMode()
 {
@@ -21,6 +23,45 @@ AGFGameMode::AGFGameMode()
 	GameStateClass = AGFGameState::StaticClass();
 	PlayerStateClass = AGFPlayerState::StaticClass();
 	bDelayedStart = false;
+	StartupDirectorClasses.Add(FSoftClassPath(TEXT("/Script/GFSocial.GFSocialDirector")));
+}
+
+void AGFGameMode::InitGameState()
+{
+	Super::InitGameState();
+	for (const FSoftClassPath& Path : StartupDirectorClasses)
+	{
+		UClass* Class = Path.TryLoadClass<AActor>();
+		if (!Class)
+		{
+			UE_LOG(LogGF, Warning, TEXT("Net: startup director %s not found"), *Path.ToString());
+			continue;
+		}
+		bool bExists = false;
+		for (TActorIterator<AActor> It(GetWorld(), Class); It && !bExists; ++It)
+		{
+			bExists = true;
+		}
+		if (!bExists)
+		{
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			GetWorld()->SpawnActor<AActor>(Class, FTransform::Identity, Params);
+		}
+	}
+}
+
+void AGFGameMode::PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)
+{
+	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
+	const AGFGameState* GS = GetGameState<AGFGameState>();
+	const FString Key = UniqueId.IsValid() ? UniqueId->ToString() : FString();
+	FString Why;
+	if (ErrorMessage.IsEmpty() && GS && !Key.IsEmpty() && GS->IsJoinRefused(Key, Why))
+	{
+		ErrorMessage = Why.IsEmpty() ? FString(TEXT("You can't join this world.")) : Why;
+		UE_LOG(LogGF, Log, TEXT("Net: refused %s at PreLogin (%s)"), *Key, *ErrorMessage);
+	}
 }
 
 void AGFGameMode::PostLogin(APlayerController* NewPlayer)
@@ -40,6 +81,22 @@ void AGFGameMode::PostLogin(APlayerController* NewPlayer)
 	}
 	PS->PlayerKey = Key;
 	PS->bIsHost = NewPlayer->IsLocalController();
+	// Ban check on the final key too (PreLogin only sees the raw net id; this also catches the "Name#id" fallback).
+	FString Why;
+	if (!PS->bIsHost && GS->IsJoinRefused(Key, Why))
+	{
+		UE_LOG(LogGF, Log, TEXT("Net: refused %s at login (%s)"), *Key, *Why);
+		const FText Reason = FText::FromString(Why.IsEmpty() ? FString(TEXT("You can't join this world.")) : Why);
+		TWeakObjectPtr<APlayerController> Weak(NewPlayer);
+		GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this, Weak, Reason]()
+		{
+			if (APlayerController* PC = Weak.Get(); PC && GameSession)
+			{
+				GameSession->KickPlayer(PC, Reason);
+			}
+		}));
+		return;
+	}
 	// Colour: keep the remembered one, else the first free slot.
 	TSet<int32> Used;
 	for (APlayerState* Other : GS->PlayerArray)

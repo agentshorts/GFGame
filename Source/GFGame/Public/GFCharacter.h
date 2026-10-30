@@ -13,7 +13,7 @@ class AGFVoxelWorld;
 struct FInputActionValue;
 
 /**
- * Her character. Third-person by default (spring arm ~450 cm, pitch ~-20, FOV 90 per ASSET_BRIEFS),
+ * The player character. Third-person by default (spring arm ~450 cm, pitch ~-20, FOV 90 per ASSET_BRIEFS),
  * V toggles first-person. LMB removes a block, RMB places the selected block, wheel cycles the hotbar.
  * Input assets are optional: if none are assigned, a default mapping is built in C++ at runtime.
  */

@@ -39,6 +39,10 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Net")
 	bool bIsHost = false;
 
+	/** Faction (opaque id; None = not in one). Set by the server through AGFGameState::ServerClaimFaction. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Faction")
+	FName FactionId;
+
 	/** Name-tag / claim-flag colour slot. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Net")
 	int32 ColorIndex = 0;
@@ -65,6 +69,10 @@ public:
 	/** Mailbox (PLAN.md section 2a): this player's letters, unclaimed first. Written by the server, owner-only. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Land")
 	TArray<FGFMailLetter> Mailbox;
+
+	/** Mode progress (pinned recipe, wagers off, arena formation, ...). Written by the server, owner-only. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Mode")
+	FGFPlayerProgress Progress;
 
 	/** Server copy of this player's plot blueprints (travels with the character, not replicated). */
 	TArray<FGFPlotBlueprint> Blueprints;
@@ -102,6 +110,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GF|Taming")
 	void RequestSetShareJournal(bool bShare);
 
+	/** Spray one Calming Mist at a dino within 8 m: it settles and won't turn on anyone for 10 s. Result in MistResults. */
+	UFUNCTION(BlueprintCallable, Category = "GF|Taming")
+	void RequestUseCalmingMist(AActor* Dino);
+	/** Client side: mist results in arrival order (true = it worked and one mist was used). */
+	TArray<bool> MistResults;
+	/** Server: reach, item, calm, burning one mist. */
+	bool ServerHandleMist(AActor* Dino);
+
 	/** Client side: offer results in arrival order (tests and UI). */
 	TArray<EGFOfferResult> OfferResults;
 
@@ -110,7 +126,7 @@ public:
 	/** Server: adds a tamed dino to this player's roster. Returns the companion id. */
 	FGuid ServerAddCompanion(FName Species);
 
-	/** Any landlord / mailbox / blueprint request (claim, pay rent, gift, claim letter, restore, her board tools). Returns the request id. */
+	/** Any landlord / mailbox / blueprint request (claim, pay rent, gift, claim letter, restore, the host's board tools). Returns the request id. */
 	UFUNCTION(BlueprintCallable, Category = "GF|Land")
 	int32 RequestLandAction(FGFLandAction Action);
 
@@ -118,8 +134,23 @@ public:
 	TMap<int32, EGFLandResult> LandResults;
 	TArray<FString> LandNotices;
 
+	/** All-chat text. The server checks the chat gates (jail mute) and adds it to AGFGameState::ChatLog. */
+	UFUNCTION(BlueprintCallable, Category = "GF|Chat")
+	void RequestChat(const FString& Text);
+	/** Client side: chat answers in arrival order ("Ok", "Muted", "Empty", ...). */
+	TArray<FName> ChatResults;
+
 	/** Server: a toast for this player. */
 	void NotifyLand(const FString& Notice);
+
+	/** Any mini-game mode request (arena, Depths, mine, lab, or "Player" settings). Returns the request id. */
+	UFUNCTION(BlueprintCallable, Category = "GF|Mode")
+	int32 RequestMode(FGFModeRequest Request);
+	/** Client side: answers per mode request id. */
+	TMap<int32, FGFModeResult> ModeResults;
+
+	/** Server: the character changed outside the inventory (progress, roster): replicate and write back soon. */
+	void MarkCharacterChanged();
 
 	/** Client side: last result per transaction (tests and UI toasts). */
 	TMap<FGuid, EGFTxResult> TransferResults;
@@ -179,11 +210,24 @@ public:
 	UFUNCTION(Client, Reliable)
 	void ClientLandNotice(const FString& Notice);
 	UFUNCTION(Server, Reliable)
+	void ServerModeRequest(const FGFModeRequest& Request);
+	UFUNCTION(Client, Reliable)
+	void ClientModeResult(const FGFModeResult& Result);
+	UFUNCTION(Server, Reliable)
 	void ServerOfferFood(AActor* Dino);
+	UFUNCTION(Server, Reliable)
+	void ServerUseCalmingMist(AActor* Dino);
+	UFUNCTION(Client, Reliable)
+	void ClientMistResult(bool bOk);
 	UFUNCTION(Client, Reliable)
 	void ClientOfferResult(EGFOfferResult Result);
 	UFUNCTION(Server, Reliable)
 	void ServerSetShareJournal(bool bShare);
+
+	UFUNCTION(Server, Reliable)
+	void ServerChat(const FString& Text);
+	UFUNCTION(Client, Reliable)
+	void ClientChatResult(FName Code);
 
 	UFUNCTION(Server, Reliable)
 	void ServerTransferTo(FGuid TxId, const FString& ToKey, const TArray<FGFItemStack>& Stacks);
@@ -202,6 +246,7 @@ protected:
 	int32 CharacterRevision = 0;
 	int32 AckedRevision = 0;
 	int32 NextLandRequestId = 1;
+	int32 NextModeRequestId = 1;
 	int32 EditsAccepted = 0;
 	int32 EditsRejected = 0;
 	bool bUploadedLocal = false;

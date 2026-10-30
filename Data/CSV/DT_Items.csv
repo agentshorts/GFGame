@@ -55,3 +55,11 @@ BioCulture,"NSLOCTEXT(""GFItems"", ""BioCulture"", ""Bio-Culture"")",None,Materi
 CircuitInk,"NSLOCTEXT(""GFItems"", ""CircuitInk"", ""Circuit Ink"")",None,Material,999,Uncommon,,3,10,Rare,True,False,Lab
 AnomalyShard,"NSLOCTEXT(""GFItems"", ""AnomalyShard"", ""Anomaly Shard"")",None,Material,999,Rare,,4,20,Rare,True,False,Lab
 Chair,"NSLOCTEXT(""GFItems"", ""Chair"", ""Chair"")",None,Furniture,99,Common,,0,0,None,False,False,None
+ScrapWire,"NSLOCTEXT(""GFItems"", ""ScrapWire"", ""Scrap Wire"")",None,Material,999,Common,,1,1,Building,True,True,None
+BentPipe,"NSLOCTEXT(""GFItems"", ""BentPipe"", ""Bent Pipe"")",None,Material,999,Common,,1,1,Building,True,True,None
+CrackedLens,"NSLOCTEXT(""GFItems"", ""CrackedLens"", ""Cracked Lens"")",None,Material,999,Common,,2,3,Glow,True,True,None
+LabTreat,"NSLOCTEXT(""GFItems"", ""LabTreat"", ""Lab Treat"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None
+CalmingMist,"NSLOCTEXT(""GFItems"", ""CalmingMist"", ""Calming Mist"")",None,Tool,99,Uncommon,,0,0,None,False,False,None
+LabCoat,"NSLOCTEXT(""GFItems"", ""LabCoat"", ""Lab Coat"")",None,Outfit,1,Uncommon,,0,0,None,False,False,None
+SafetyGoggles,"NSLOCTEXT(""GFItems"", ""SafetyGoggles"", ""Safety Goggles"")",None,Outfit,1,Common,,0,0,None,False,False,None
+BurrowLantern,"NSLOCTEXT(""GFItems"", ""BurrowLantern"", ""Burrow Lantern"")",None,Furniture,99,Uncommon,,0,0,None,False,False,None

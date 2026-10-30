@@ -5,6 +5,7 @@
 #include "GFDinoTypes.h"
 #include "GFCompanionRoster.h"
 #include "GFLandTypes.h"
+#include "GFModeTypes.h"
 #include "GFNetTypes.generated.h"
 
 /**
@@ -28,6 +29,8 @@ struct GFNET_API FGFCharacterData
 	UPROPERTY(SaveGame) FGFDiscoveredDinoPreferences Journal;
 	/** Plot backups from every host world this player has lived in (HostWorldId + PlotId). */
 	UPROPERTY(SaveGame) TArray<FGFPlotBlueprint> Blueprints;
+	/** Mode progress: pinned recipe, wager setting, arena formation, first tame, ... */
+	UPROPERTY(SaveGame) FGFPlayerProgress Progress;
 };
 
 /** What the host remembers about someone who has visited (server only, saved with the world). */

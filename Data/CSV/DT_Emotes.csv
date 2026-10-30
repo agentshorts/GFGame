@@ -1,0 +1,9 @@
+---,Label,AnimKey,Icon,Seconds
+Heart,Heart,,<3,2.5
+ThumbsUp,Thumbs up,Player.Emote_Cheer,+1,2.5
+ThumbsDown,Thumbs down,,-1,2.5
+Yes,Yes,,Yes,2.0
+No,No,,No,2.0
+Bye,Bye,Player.Emote_Wave,Bye!,2.5
+Hello,Hello,Player.Emote_Wave,Hi!,2.5
+Sit,Sit,Player.Emote_Sit,...,6.0

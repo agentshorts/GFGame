@@ -387,7 +387,7 @@ bool FGFNetRentTest::RunTest(const FString&)
 		{
 			return;
 		}
-		TestEqual(TEXT("Save version"), Back->SaveVersion, static_cast<int32>(EGFSaveVersion::LandAndMail));
+		TestTrue(TEXT("Save version is current"), Back->SaveVersion >= static_cast<int32>(EGFSaveVersion::LandAndMail) && Back->SaveVersion == static_cast<int32>(EGFSaveVersion::Latest));
 		GS->Land = FGFLandState();
 		GS->Mail.Reset();
 		TestTrue(TEXT("Apply"), UGFSaveSubsystem::ApplyToWorld(ServerWorld(), Back));
@@ -450,7 +450,7 @@ bool FGFNetMailboxTest::RunTest(const FString&)
 	Land(Ctx, this, []() { return Guest(0); }, Gift(-1, TEXT("Stone"), 1, TEXT("?")), EGFLandResult::NoSuchPlayer, TEXT("Unknown recipient"));
 	Land(Ctx, this, []() { return Guest(0); }, Gift(2, TEXT("Stone"), 0, TEXT("zero")), EGFLandResult::InvalidStacks, TEXT("Zero items"));
 	Land(Ctx, this, []() { return Host(); }, [Run]() { FGFLandAction A = ToPlayer(EGFLandOp::SendNote, Run->Keys[2]); A.Text = TEXT("welcome to the island!"); return A; }, EGFLandResult::Ok, TEXT("She sends a note"));
-	Land(Ctx, this, []() { return Host(); }, Gift(2, TEXT("Dirt"), 5, TEXT("for the garden")), EGFLandResult::Ok, TEXT("She sends dirt"));
+	Land(Ctx, this, []() { return Host(); }, Gift(2, TEXT("Dirt"), 5, TEXT("for the garden")), EGFLandResult::Ok, TEXT("Host sends dirt"));
 	Do(Ctx, [this, Run]()
 	{
 		TestEqual(TEXT("Guest 1 gave 10 stone"), GuestOnServer(0)->Inventory->GetCount(TEXT("Stone")), 54);

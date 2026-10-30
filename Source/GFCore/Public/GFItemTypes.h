@@ -16,7 +16,9 @@ enum class EGFItemCategory : uint8
 	Seed,
 	Treat,
 	Outfit,
-	Block
+	Block,
+	/** Usable gadget (Calming Mist). Not tradeable: no tier, never wagered or rented. */
+	Tool
 };
 
 /** Economy category (PLAN.md section 2): used for wager matching and the "what I need" journal. */

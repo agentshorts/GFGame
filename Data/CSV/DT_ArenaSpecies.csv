@@ -1,0 +1,6 @@
+---,Role,HP,Attack,AttackInterval,Range,Speed
+Nipper,Skirmisher,320.0,18.0,0.8,150.0,450.0
+Raptor,Assassin,380.0,26.0,1.0,180.0,480.0
+Sailback,Tank,650.0,16.0,1.2,200.0,320.0
+Rex,Bruiser,600.0,30.0,1.4,220.0,330.0
+Hornback,Tank,600.0,20.0,1.2,200.0,340.0

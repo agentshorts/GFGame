@@ -1,0 +1,5 @@
+---,Band,LevelDelta,AI,Claws,RivalSpells
+Small,1,-1,Easy,1,0
+Medium,2,0,Normal,2,0
+Big,3,1,Normal,3,2
+Huge,4,2,Champion,4,4

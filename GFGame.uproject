@@ -15,6 +15,12 @@
 		{ "Name": "GFRhythm", "Type": "Runtime", "LoadingPhase": "Default" },
 		{ "Name": "GFNet", "Type": "Runtime", "LoadingPhase": "Default" },
 		{ "Name": "GFSave", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFArena", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFDepths", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFMine", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFLab", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFGiant", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFSocial", "Type": "Runtime", "LoadingPhase": "Default" },
 		{ "Name": "GFTests", "Type": "Editor", "LoadingPhase": "Default" }
 	],
 	"Plugins": [
@@ -25,6 +31,7 @@
 		{ "Name": "FunctionalTestingEditor", "Enabled": true, "TargetAllowList": [ "Editor" ] },
 		{ "Name": "PythonScriptPlugin", "Enabled": true, "TargetAllowList": [ "Editor" ] },
 		{ "Name": "ModelContextProtocol", "Enabled": true, "TargetAllowList": [ "Editor" ] },
-		{ "Name": "AllToolsets", "Enabled": true, "TargetAllowList": [ "Editor" ] }
+		{ "Name": "AllToolsets", "Enabled": true, "TargetAllowList": [ "Editor" ] },
+		{ "Name": "AndroidFileServer", "Enabled": false }
 	]
 }

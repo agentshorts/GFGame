@@ -152,6 +152,55 @@ public:
 	/** The player confirmed a character write-back (pack-ups wait for this). */
 	void ServerOnCharacterAcked(AGFPlayerState* PS);
 
+	// ---------------- Mini-game modes (server) ----------------
+	EGFTxResult ServerForfeit(const FGuid& TxId, const FGuid& EscrowId, FName Reason = NAME_None);
+
+	/** A mode director (IGFModeHandler) registers itself on the server; its saved blob is restored right away. */
+	void RegisterModeHandler(UObject* Handler);
+	void UnregisterModeHandler(UObject* Handler);
+	IGFModeHandler* FindModeHandler(FName Mode) const;
+	/** Routes a player's request: "Player" settings here, everything else to the mode's handler. */
+	FGFModeResult ServerHandleModeRequest(AGFPlayerState* By, const FGFModeRequest& Request);
+	void NotifyModesPlayerReady(AGFPlayerState* PS);
+	void NotifyModesPlayerLeft(AGFPlayerState* PS);
+	/** World save: ModeSaveBlobs refreshed from every live handler. */
+	TMap<FName, FGFModeBlob> GatherModeStates() const;
+	/** World load: replaces ModeSaveBlobs and pushes them into live handlers. */
+	void RestoreModeStates(const TMap<FName, FGFModeBlob>& Blobs);
+
+	/** Server only: persistent mode state by mode name (saved with the world). */
+	TMap<FName, FGFModeBlob> ModeSaveBlobs;
+
+	/** Recipe rows (DT_Recipes CSV): the pinned recipe protects its inputs from wagers. */
+	static const struct FGFRecipeRow* FindRecipe(FName RecipeId);
+
+	// ---------------- Factions (opaque ids; server) ----------------
+	/** Leader per faction: the first player to claim it this session. Replicated to everyone. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Faction")
+	TArray<FGFFactionLeader> FactionLeaders;
+	/** Seats per faction (9 players: 3 per faction). */
+	UPROPERTY(EditAnywhere, Category = "GF|Faction")
+	int32 MaxPerFaction = 3;
+	/** Server: PS joins FactionId (None = leaves). "Ok", "Full", "Same". The first claimer becomes its leader. */
+	FName ServerClaimFaction(AGFPlayerState* PS, FName FactionId);
+	FString FactionLeaderOf(FName FactionId) const;
+	bool IsFactionLeader(const AGFPlayerState* PS) const;
+	int32 FactionCount(FName FactionId) const;
+	/** Server, session only: faction per player key, so a rejoin (new player state) keeps its faction. */
+	TMap<FString, FName> SessionFactions;
+
+	// ---------------- Chat ----------------
+	/** All chat, newest last (last MaxChat). */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Chat")
+	TArray<FGFChatMessage> ChatLog;
+	static constexpr int32 MaxChat = 64;
+	static constexpr int32 MaxChatChars = 200;
+	/** Server: one chat line from By. Every mode handler's ChatBlockReason is asked first. Returns "Ok" or why not. */
+	FName ServerHandleChat(AGFPlayerState* By, const FString& Text);
+
+	/** Server: any mode handler refusing this player key (bans). */
+	bool IsJoinRefused(const FString& PlayerKey, FString& OutWhy) const;
+
 	bool IsKnownPlayer(const FString& Key) const;
 	FString DisplayNameOf(const FString& Key) const;
 
@@ -171,4 +220,6 @@ protected:
 private:
 	mutable TWeakObjectPtr<AGFVoxelWorld> CachedVoxel;
 	TUniquePtr<IGFLedgerAccounts> AccountsImpl;
+	TMap<FName, TWeakObjectPtr<UObject>> ModeHandlers;
+	int32 NextChatSeq = 1;
 };

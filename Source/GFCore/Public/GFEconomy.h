@@ -137,6 +137,8 @@ struct GFCORE_API FGFTransferLedger
 	EGFTxResult Release(IGFLedgerAccounts& Accounts, const FGuid& TxId, const FGuid& EscrowId, const FString& To, FName Reason = NAME_None);
 	/** Every depositor gets their own stake back; the escrow closes. */
 	EGFTxResult Refund(IGFLedgerAccounts& Accounts, const FGuid& TxId, const FGuid& EscrowId, FName Reason = NAME_None);
+	/** Everything in the escrow is destroyed (counted as burned); the escrow closes. A lost arena wager. */
+	EGFTxResult Forfeit(const FGuid& TxId, const FGuid& EscrowId, FName Reason = NAME_None);
 	/** Refunds every open escrow of Kind (e.g. all wagers after a crash). Returns how many were refunded. */
 	int32 RefundOpen(IGFLedgerAccounts& Accounts, FName Kind);
 

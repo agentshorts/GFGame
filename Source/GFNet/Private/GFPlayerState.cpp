@@ -25,12 +25,14 @@ void AGFPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(AGFPlayerState, PlayerKey);
 	DOREPLIFETIME(AGFPlayerState, bIsHost);
 	DOREPLIFETIME(AGFPlayerState, ColorIndex);
+	DOREPLIFETIME(AGFPlayerState, FactionId);
 	DOREPLIFETIME(AGFPlayerState, HeldItem);
 	DOREPLIFETIME(AGFPlayerState, bCharacterReady);
 	DOREPLIFETIME_CONDITION(AGFPlayerState, Companions, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(AGFPlayerState, Journal, COND_OwnerOnly);
 	DOREPLIFETIME(AGFPlayerState, bShareJournal);
 	DOREPLIFETIME_CONDITION(AGFPlayerState, Mailbox, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(AGFPlayerState, Progress, COND_OwnerOnly);
 }
 
 void AGFPlayerState::BeginPlay()
@@ -128,6 +130,7 @@ void AGFPlayerState::ServerAcceptCharacter(FGFCharacterData Data)
 	if (AGFGameState* GS = GetGFGameState())
 	{
 		GS->ServerOnPlayerReady(this); // rent owed while away is collected now, mailbox filled
+		GS->NotifyModesPlayerReady(this);
 	}
 }
 
@@ -142,6 +145,7 @@ FGFCharacterData AGFPlayerState::BuildCharacterData() const
 	Data.Companions = Companions;
 	Data.Journal = Journal;
 	Data.Blueprints = Blueprints;
+	Data.Progress = Progress;
 	return Data;
 }
 
@@ -155,6 +159,11 @@ void AGFPlayerState::ApplyCharacterData(const FGFCharacterData& Data)
 	Companions = Data.Companions;
 	Journal = Data.Journal;
 	Blueprints = Data.Blueprints;
+	Progress = Data.Progress;
+	if (Companions.Num() > 0)
+	{
+		Progress.bHasTamed = true; // characters from before the flag existed
+	}
 }
 
 void AGFPlayerState::PushCharacterToOwner()
@@ -227,6 +236,86 @@ void AGFPlayerState::ServerLandAction_Implementation(const FGFLandAction& Action
 	}
 }
 
+int32 AGFPlayerState::RequestMode(FGFModeRequest Request)
+{
+	Request.RequestId = NextModeRequestId++;
+	if (HasAuthority())
+	{
+		ServerModeRequest_Implementation(Request);
+	}
+	else
+	{
+		ServerModeRequest(Request);
+	}
+	return Request.RequestId;
+}
+
+void AGFPlayerState::ServerModeRequest_Implementation(const FGFModeRequest& Request)
+{
+	AGFGameState* GS = GetGFGameState();
+	FGFModeResult R = GS && bCharacterReady ? GS->ServerHandleModeRequest(this, Request) : FGFModeResult::Fail(TEXT("NotReady"));
+	R.RequestId = Request.RequestId;
+	R.Mode = Request.Mode;
+	R.Verb = Request.Verb;
+	if (!R.bOk)
+	{
+		UE_LOG(LogGF, Verbose, TEXT("Mode: %s %s.%s -> %s"), *PlayerKey, *Request.Mode.ToString(), *Request.Verb.ToString(), *R.Code.ToString());
+	}
+	if (IsLocallyOwned())
+	{
+		ModeResults.Add(R.RequestId, R);
+	}
+	else
+	{
+		ClientModeResult(R);
+	}
+}
+
+void AGFPlayerState::ClientModeResult_Implementation(const FGFModeResult& Result)
+{
+	ModeResults.Add(Result.RequestId, Result);
+}
+
+void AGFPlayerState::RequestChat(const FString& Text)
+{
+	if (HasAuthority())
+	{
+		ServerChat_Implementation(Text);
+	}
+	else
+	{
+		ServerChat(Text);
+	}
+}
+
+void AGFPlayerState::ServerChat_Implementation(const FString& Text)
+{
+	AGFGameState* GS = GetGFGameState();
+	const FName Code = GS ? GS->ServerHandleChat(this, Text) : FName(TEXT("NotReady"));
+	if (IsLocallyOwned())
+	{
+		ChatResults.Add(Code);
+	}
+	else
+	{
+		ClientChatResult(Code);
+	}
+}
+
+void AGFPlayerState::ClientChatResult_Implementation(FName Code)
+{
+	ChatResults.Add(Code);
+}
+
+void AGFPlayerState::MarkCharacterChanged()
+{
+	if (HasAuthority())
+	{
+		ForceNetUpdate();
+		ScheduleWriteBack();
+	}
+}
+
 void AGFPlayerState::ClientLandResult_Implementation(int32 RequestId, EGFLandResult Result)
 {
 	LandResults.Add(RequestId, Result);
@@ -271,6 +360,10 @@ void AGFPlayerState::SnapshotToGuestRecord()
 	if (!HasAuthority() || !GS || PlayerKey.IsEmpty())
 	{
 		return;
+	}
+	if (bCharacterReady && !bLoggedOut)
+	{
+		GS->NotifyModesPlayerLeft(this); // wagers refunded, crews walk home, unbanked run loot handled
 	}
 	FGFGuestRecord& Rec = GS->GuestRecords.FindOrAdd(PlayerKey);
 	Rec.PlayerKey = PlayerKey;
@@ -513,6 +606,44 @@ void AGFPlayerState::ServerSetShareJournal_Implementation(bool bShare)
 	bShareJournal = bShare;
 }
 
+void AGFPlayerState::RequestUseCalmingMist(AActor* Dino)
+{
+	if (HasAuthority())
+	{
+		MistResults.Add(ServerHandleMist(Dino));
+	}
+	else
+	{
+		ServerUseCalmingMist(Dino);
+	}
+}
+
+void AGFPlayerState::ServerUseCalmingMist_Implementation(AActor* Dino)
+{
+	ClientMistResult(ServerHandleMist(Dino));
+}
+
+void AGFPlayerState::ClientMistResult_Implementation(bool bOk)
+{
+	MistResults.Add(bOk);
+}
+
+bool AGFPlayerState::ServerHandleMist(AActor* Dino)
+{
+	UGFTamingComponent* Taming = Dino ? Dino->FindComponentByClass<UGFTamingComponent>() : nullptr;
+	AGFGameState* GS = GetGFGameState();
+	if (!HasAuthority() || !Taming || !GS || !bCharacterReady || Inventory->GetCount(GFLabItems::CalmingMist) < 1)
+	{
+		return false;
+	}
+	if (!Taming->ServerCalm(this))
+	{
+		return false; // out of reach, tamed or fled: the mist isn't used
+	}
+	GS->ServerBurn(FGuid::NewGuid(), PlayerKey, { FGFItemStack(GFLabItems::CalmingMist, 1) }, TEXT("CalmingMist"));
+	return true;
+}
+
 void AGFPlayerState::RequestOfferFood(AActor* Dino)
 {
 	if (HasAuthority())
@@ -578,6 +709,7 @@ FGuid AGFPlayerState::ServerAddCompanion(FName Species)
 		return FGuid();
 	}
 	const FGuid Id = FGFCompanions::AddTamed(Companions, Species, FString());
+	Progress.bHasTamed = true; // first tame opens the Mine Mouth
 	ForceNetUpdate();
 	ScheduleWriteBack();
 	return Id;

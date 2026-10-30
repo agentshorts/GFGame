@@ -50,8 +50,24 @@ public:
 
 	/** Server: Tamer offers Food. Validates reach; the caller checks and removes the item. Writes journals. */
 	EGFOfferResult ServerOffer(UObject* Tamer, FName Food);
+	static constexpr float MistRange = 800.f;
+	/** Server: Tamer sprays Calming Mist at this dino (reach checked; the caller burns the item). */
+	bool ServerCalm(UObject* Tamer);
+	/** Server time the mist wears off (replicated for the UI). */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Taming")
+	float CalmedUntil = -1000.f;
 	/** Server: hostile at Key (pack call-in). */
 	void ServerForceHostile(const FString& Key);
+
+	/**
+	 * Noise (FGFNoise, e.g. a player emoting outside safety): a wild dino within the noise radius turns on the noise
+	 * maker and comes for them. Tamed, fled, already-hostile and mist-calmed dinos ignore it.
+	 */
+	static bool ShouldHearNoise(EGFTameState State, bool bCalmed, float Distance, float Radius);
+	/** Server: reacts to one noise. True if it turned on the noise maker. */
+	bool ServerHearNoise(const struct FGFNoiseEvent& Noise);
+	/** Server stats (tests): noises this dino reacted to. */
+	int32 NoisesHeard = 0;
 
 	UFUNCTION(BlueprintPure, Category = "GF|Taming")
 	EGFTameState GetTameState() const { return RepState; }
@@ -81,6 +97,11 @@ public:
 	static APawn* FindTamerPawn(const UWorld* World, const FString& Key);
 
 protected:
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
+	void HandleNoise(UWorld* World, const struct FGFNoiseEvent& Noise);
+	FDelegateHandle NoiseHandle;
+
 	void SyncReplicated();
 	void TickServer(float DeltaTime);
 	void CallPack(const FString& Key);

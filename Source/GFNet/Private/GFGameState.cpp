@@ -1,4 +1,6 @@
 #include "GFGameState.h"
+#include "GFRecipeTypes.h"
+#include "GFDataTables.h"
 #include "GFPlayerState.h"
 #include "GFVoxelWorld.h"
 #include "GFInventoryComponent.h"
@@ -19,6 +21,8 @@ void AGFGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(AGFGameState, HostWorldId);
 	DOREPLIFETIME(AGFGameState, bFreeBuild);
 	DOREPLIFETIME(AGFGameState, Land);
+	DOREPLIFETIME(AGFGameState, FactionLeaders);
+	DOREPLIFETIME(AGFGameState, ChatLog);
 }
 
 void AGFGameState::BeginPlay()
@@ -279,6 +283,116 @@ void AGFGameState::ServerSetLandlord(const FString& Key)
 	}
 	MarkLandChanged();
 	ServerRefreshMailbox(Key);
+}
+
+// --- Factions ---
+
+int32 AGFGameState::FactionCount(FName FactionId) const
+{
+	int32 N = 0;
+	for (const APlayerState* P : PlayerArray)
+	{
+		const AGFPlayerState* PS = Cast<AGFPlayerState>(P);
+		N += PS && !PS->bLoggedOut && !FactionId.IsNone() && PS->FactionId == FactionId ? 1 : 0;
+	}
+	return N;
+}
+
+FString AGFGameState::FactionLeaderOf(FName FactionId) const
+{
+	const FGFFactionLeader* L = FactionLeaders.FindByPredicate([&](const FGFFactionLeader& F) { return F.FactionId == FactionId; });
+	return L && !FactionId.IsNone() ? L->LeaderKey : FString();
+}
+
+bool AGFGameState::IsFactionLeader(const AGFPlayerState* PS) const
+{
+	return PS && !PS->FactionId.IsNone() && !PS->PlayerKey.IsEmpty() && FactionLeaderOf(PS->FactionId) == PS->PlayerKey;
+}
+
+FName AGFGameState::ServerClaimFaction(AGFPlayerState* PS, FName FactionId)
+{
+	if (!HasAuthority() || !PS)
+	{
+		return TEXT("NotAuthority");
+	}
+	if (PS->FactionId == FactionId)
+	{
+		return TEXT("Same");
+	}
+	if (!FactionId.IsNone() && FactionCount(FactionId) >= MaxPerFaction)
+	{
+		return TEXT("Full");
+	}
+	PS->FactionId = FactionId;
+	PS->ForceNetUpdate();
+	if (!PS->PlayerKey.IsEmpty())
+	{
+		SessionFactions.Add(PS->PlayerKey, FactionId);
+	}
+	// Leadership stays with the first claimer for the whole session (even if they switch away or log out).
+	if (!FactionId.IsNone() && FactionLeaderOf(FactionId).IsEmpty())
+	{
+		FGFFactionLeader L;
+		L.FactionId = FactionId;
+		L.LeaderKey = PS->PlayerKey;
+		FactionLeaders.Add(L);
+	}
+	ForceNetUpdate();
+	return TEXT("Ok");
+}
+
+// --- Chat ---
+
+FName AGFGameState::ServerHandleChat(AGFPlayerState* By, const FString& Text)
+{
+	if (!HasAuthority() || !By)
+	{
+		return TEXT("NotAuthority");
+	}
+	const FString Clean = Text.TrimStartAndEnd().Left(MaxChatChars);
+	if (Clean.IsEmpty())
+	{
+		return TEXT("Empty");
+	}
+	for (const TPair<FName, TWeakObjectPtr<UObject>>& Pair : ModeHandlers)
+	{
+		if (const IGFModeHandler* H = Cast<IGFModeHandler>(Pair.Value.Get()))
+		{
+			const FName Why = H->ChatBlockReason(By);
+			if (!Why.IsNone())
+			{
+				return Why;
+			}
+		}
+	}
+	FGFChatMessage M;
+	M.Seq = NextChatSeq++;
+	M.SenderKey = By->PlayerKey;
+	M.SenderName = By->GetPlayerName();
+	M.Text = Clean;
+	M.Channel = TEXT("All");
+	ChatLog.Add(M);
+	if (ChatLog.Num() > MaxChat)
+	{
+		ChatLog.RemoveAt(0, ChatLog.Num() - MaxChat);
+	}
+	ForceNetUpdate();
+	return TEXT("Ok");
+}
+
+bool AGFGameState::IsJoinRefused(const FString& PlayerKey, FString& OutWhy) const
+{
+	for (const TPair<FName, TWeakObjectPtr<UObject>>& Pair : ModeHandlers)
+	{
+		if (const IGFModeHandler* H = Cast<IGFModeHandler>(Pair.Value.Get()))
+		{
+			if (H->RefuseJoin(PlayerKey, OutWhy))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 bool AGFGameState::IsKnownPlayer(const FString& Key) const
@@ -1026,4 +1140,162 @@ EGFLandResult AGFGameState::ServerHandleLandAction(AGFPlayerState* By, const FGF
 	}
 	}
 	return EGFLandResult::NotAllowed;
+}
+
+// ---------------- Mini-game modes ----------------
+
+EGFTxResult AGFGameState::ServerForfeit(const FGuid& TxId, const FGuid& EscrowId, FName Reason)
+{
+	return HasAuthority() ? LogTx(TEXT("forfeit"), Ledger.Forfeit(TxId, EscrowId, Reason)) : EGFTxResult::UnknownAccount;
+}
+
+void AGFGameState::RegisterModeHandler(UObject* Handler)
+{
+	IGFModeHandler* H = Cast<IGFModeHandler>(Handler);
+	if (!HasAuthority() || !H)
+	{
+		return;
+	}
+	const FName Mode = H->GetModeName();
+	ModeHandlers.Add(Mode, Handler);
+	if (const FGFModeBlob* Blob = ModeSaveBlobs.Find(Mode))
+	{
+		H->RestoreModeState(Blob->Bytes);
+	}
+}
+
+void AGFGameState::UnregisterModeHandler(UObject* Handler)
+{
+	IGFModeHandler* H = Cast<IGFModeHandler>(Handler);
+	if (!H)
+	{
+		return;
+	}
+	const FName Mode = H->GetModeName();
+	const TWeakObjectPtr<UObject>* Found = ModeHandlers.Find(Mode);
+	if (Found && Found->Get() == Handler)
+	{
+		FGFModeBlob Blob;
+		H->CaptureModeState(Blob.Bytes);
+		if (Blob.Bytes.Num() > 0)
+		{
+			ModeSaveBlobs.Add(Mode, MoveTemp(Blob));
+		}
+		ModeHandlers.Remove(Mode);
+	}
+}
+
+IGFModeHandler* AGFGameState::FindModeHandler(FName Mode) const
+{
+	const TWeakObjectPtr<UObject>* Found = ModeHandlers.Find(Mode);
+	return Found && Found->IsValid() ? Cast<IGFModeHandler>(Found->Get()) : nullptr;
+}
+
+const FGFRecipeRow* AGFGameState::FindRecipe(FName RecipeId)
+{
+	const UDataTable* Recipes = FGFDataTables::Get<FGFRecipeRow>(TEXT("DT_Recipes"));
+	return Recipes && !RecipeId.IsNone() ? Recipes->FindRow<FGFRecipeRow>(RecipeId, TEXT("FindRecipe"), false) : nullptr;
+}
+
+FGFModeResult AGFGameState::ServerHandleModeRequest(AGFPlayerState* By, const FGFModeRequest& Request)
+{
+	if (!HasAuthority() || !By)
+	{
+		return FGFModeResult::Fail(TEXT("NotAuthority"));
+	}
+	if (Request.Mode == FName(TEXT("Player")))
+	{
+		if (Request.Verb == FName(TEXT("PinRecipe")))
+		{
+			const FName Recipe = Request.Name(0);
+			if (!Recipe.IsNone() && !FindRecipe(Recipe))
+			{
+				return FGFModeResult::Fail(TEXT("UnknownRecipe"));
+			}
+			By->Progress.PinnedRecipe = Recipe;
+			By->MarkCharacterChanged();
+			return FGFModeResult::Ok();
+		}
+		if (Request.Verb == FName(TEXT("ClaimFaction")))
+		{
+			const FName Code = ServerClaimFaction(By, Request.Name(0));
+			return Code == FName(TEXT("Ok")) ? FGFModeResult::Ok() : FGFModeResult::Fail(Code);
+		}
+		if (Request.Verb == FName(TEXT("WagersOff")))
+		{
+			By->Progress.bWagersOff = Request.Int(0) != 0;
+			By->MarkCharacterChanged();
+			return FGFModeResult::Ok();
+		}
+		return FGFModeResult::Fail(TEXT("UnknownVerb"));
+	}
+	IGFModeHandler* H = FindModeHandler(Request.Mode);
+	return H ? H->HandleModeRequest(By, Request) : FGFModeResult::Fail(TEXT("ModeClosed"));
+}
+
+void AGFGameState::NotifyModesPlayerReady(AGFPlayerState* PS)
+{
+	// A rejoin within the session gets its faction back (leadership is by key, so it comes back too).
+	if (HasAuthority() && PS && PS->FactionId.IsNone())
+	{
+		if (const FName* Faction = SessionFactions.Find(PS->PlayerKey); Faction && !Faction->IsNone())
+		{
+			PS->FactionId = *Faction;
+			PS->ForceNetUpdate();
+		}
+	}
+	TArray<TWeakObjectPtr<UObject>> Handlers;
+	ModeHandlers.GenerateValueArray(Handlers);
+	for (const TWeakObjectPtr<UObject>& W : Handlers)
+	{
+		if (IGFModeHandler* H = Cast<IGFModeHandler>(W.Get()))
+		{
+			H->OnModePlayerReady(PS);
+		}
+	}
+}
+
+void AGFGameState::NotifyModesPlayerLeft(AGFPlayerState* PS)
+{
+	TArray<TWeakObjectPtr<UObject>> Handlers;
+	ModeHandlers.GenerateValueArray(Handlers);
+	for (const TWeakObjectPtr<UObject>& W : Handlers)
+	{
+		if (IGFModeHandler* H = Cast<IGFModeHandler>(W.Get()))
+		{
+			H->OnModePlayerLeft(PS);
+		}
+	}
+}
+
+TMap<FName, FGFModeBlob> AGFGameState::GatherModeStates() const
+{
+	TMap<FName, FGFModeBlob> Out = ModeSaveBlobs;
+	for (const TPair<FName, TWeakObjectPtr<UObject>>& Pair : ModeHandlers)
+	{
+		if (const IGFModeHandler* H = Cast<IGFModeHandler>(Pair.Value.Get()))
+		{
+			FGFModeBlob Blob;
+			H->CaptureModeState(Blob.Bytes);
+			if (Blob.Bytes.Num() > 0)
+			{
+				Out.Add(Pair.Key, MoveTemp(Blob));
+			}
+		}
+	}
+	return Out;
+}
+
+void AGFGameState::RestoreModeStates(const TMap<FName, FGFModeBlob>& Blobs)
+{
+	ModeSaveBlobs = Blobs;
+	for (const TPair<FName, TWeakObjectPtr<UObject>>& Pair : ModeHandlers)
+	{
+		IGFModeHandler* H = Cast<IGFModeHandler>(Pair.Value.Get());
+		const FGFModeBlob* Blob = ModeSaveBlobs.Find(Pair.Key);
+		if (H && Blob)
+		{
+			H->RestoreModeState(Blob->Bytes);
+		}
+	}
 }

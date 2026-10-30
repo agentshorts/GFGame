@@ -392,6 +392,37 @@ EGFTxResult FGFTransferLedger::Refund(IGFLedgerAccounts& Accounts, const FGuid& 
 	return EGFTxResult::Applied;
 }
 
+EGFTxResult FGFTransferLedger::Forfeit(const FGuid& TxId, const FGuid& EscrowId, FName Reason)
+{
+	if (WasApplied(TxId))
+	{
+		return EGFTxResult::AlreadyApplied;
+	}
+	if (!TxId.IsValid())
+	{
+		return EGFTxResult::InvalidStacks;
+	}
+	FGFEscrow* E = FindEscrowMutable(EscrowId);
+	if (!E)
+	{
+		return EGFTxResult::UnknownEscrow;
+	}
+	if (!E->bOpen)
+	{
+		return EGFTxResult::EscrowClosed;
+	}
+	const TArray<FGFItemStack> All = E->AllStacks();
+	for (const FGFItemStack& S : All)
+	{
+		Burned.FindOrAdd(S.ItemId) += S.Count;
+	}
+	E->bOpen = false;
+	E->Deposits.Reset();
+	MarkApplied(TxId);
+	Log(TxId, EGFTxKind::Burn, EscrowId.ToString(), FString(), All, Reason);
+	return EGFTxResult::Applied;
+}
+
 int32 FGFTransferLedger::RefundOpen(IGFLedgerAccounts& Accounts, FName Kind)
 {
 	TArray<FGuid> Ids;

@@ -6,11 +6,11 @@
 **Deadline:** none. Quality and consistency matter more than speed.
 
 > **Design answers (Oct 29):**
-> - **Art style:** chunky voxel, Minecraft-*like*.
+> - **Art style:** chunky voxel (classic block-builder look).
 > - **Favourite dinos:** the murderous ones (predators like T. rex, raptors and spinosaurus), done in voxel style.
 > - **Deadline:** none.
 >
-> **Originality rules (from PLAN.md):** Minecraft, Roblox, Palworld, Pokémon and Dress to Impress are mood references only. Don't copy any of their block textures, skin templates or UV layouts, creature designs, UI, logos or sounds. Never put those names in file names, material names, or any generator prompt. Real dinosaur species are fine ("raptor", "T. rex", "spinosaurus"). Don't copy any film's or game's specific dino design (signature stripe patterns, neck frills, spitting, and so on). **Every design below is original to GFGame.** Display names are placeholders, because she gets to name things.
+> **Originality rules (from PLAN.md):** Other games are mood references only. Don't copy any other game's block textures, skin templates or UV layouts, creature designs, UI, logos or sounds. Never put other games' names in file names, material names, or any generator prompt. Real dinosaur species are fine ("raptor", "T. rex", "spinosaurus"). Don't copy any film's or game's specific dino design (signature stripe patterns, neck frills, spitting, and so on). **Every design below is original to GFGame.** Display names are placeholders, because players get to name things.
 >
 > **Separation:** don't reuse any mesh, rig, texture, material or `.blend` from any other project. Your own export *script and settings* may be reused; that's tooling, not content.
 
@@ -25,7 +25,7 @@
 | **Texel density** | **16 px per block face = 1 px per mv**, on everything | Blocks, furniture, characters and dinos all share the same pixel size, so nothing looks higher-res than anything else. |
 | Doors and openings | A door is 1 × 2 blocks (100 × 200 cm) | The player (175 cm) and the raptor (150 cm, ≤ 75 cm wide) must fit through. |
 | Player | 175 cm tall (28 mv) | UE capsule is about radius 40 and half-height 88. |
-| Hub camera | Third person: spring arm about 450 cm, pitch about −20°, FOV 90 | Make backs readable too, because she mostly sees her character's back. |
+| Hub camera | Third person: spring arm about 450 cm, pitch about −20°, FOV 90 | Make backs readable too, because players mostly see their character's back. |
 | Team colours (arena, set by UE at runtime) | ally `#4FC3F7`, enemy `#FF6B6B` | Only through a white `TeamTint` slot. |
 | Lighting | Dynamic and Lumen in Unreal | **Don't paint directional light or AO into textures.** |
 
@@ -170,7 +170,7 @@ Check that dinos and characters still read at about 120 px tall.
 | 101+ | arena tower, core, minions, lane kit, player combat anims, dino armour | mixed | 5 | M4 |
 | 130+ | Beat Hop: 5 lane-colour beat bricks + neutral/hold/pad/crumble bricks, track kit, VFX meshes and sprites, player hop/air/land/fall anims, Jukebox | mixed | 6 | M5 |
 
-**Why this order:** batch 1 tests every pipeline type in one import pass: a voxel block (texture-array faces plus a preview mesh), the shared humanoid skeleton, a modular outfit layered on it, and a creature rig with follow and fight locomotion. Then come the first playable hub (M1), then taming (her favourite part: predators), then fashion, and the arena last because it's the riskiest and least essential (PLAN.md §8).
+**Why this order:** batch 1 tests every pipeline type in one import pass: a voxel block (texture-array faces plus a preview mesh), the shared humanoid skeleton, a modular outfit layered on it, and a creature rig with follow and fight locomotion. Then come the first playable hub (M1), then taming (the core draw: predators), then fashion, and the arena last because it's the riskiest and least essential (PLAN.md §8).
 
 ---
 
@@ -191,7 +191,7 @@ Check that dinos and characters still read at about 120 px tall.
 - `mv_grid.blend`: an empty cm scene with a 6.25 cm snapping grid, block-sized guides, and the export script, so every later asset starts from the same file.
 
 ### 3.1 `SM_Block_Grass` (batch 1)
-- **Purpose:** the default ground block, and the block she sees most. Its side view also defines how all block sides look.
+- **Purpose:** the default ground block, and the block players see most. Its side view also defines how all block sides look.
 - **Size:** a 100 × 100 × 100 cm cube. `dimensions_cm` = `[100, 100, 100]`. **Tris:** 12.
 - **Textures (exactly 16 × 16 px each):**
   - `T_Block_Grass_Top`: grass ramp with a few lighter blade pixels. It **must tile seamlessly on all 4 edges and still look right rotated 90/180/270°** (the mesher may rotate tops to break repetition).
@@ -203,7 +203,7 @@ Check that dinos and characters still read at about 120 px tall.
 - **UE target:** `/Game/Art/Blocks/SM_Block_Grass` (textures in `/Game/Art/Blocks/Textures/`).
 
 ### 3.2 `SM_Block_WoodPlank` (batch 1)
-- **Purpose:** the first building block. Walls and floors of her first house are made from it.
+- **Purpose:** the first building block. Walls and floors of the player's first house are made from it.
 - **Size:** 100 cm cube, `[100, 100, 100]`, 12 tris.
 - **Texture:** `T_Block_WoodPlank` 16 × 16: **4 horizontal planks of 4 px**, staggered seams in the darkest wood shade, sparse grain, 1–2 nail pixels. Tiles on all edges.
 - **Materials:** a single slot `All` (all 6 faces). **Origin:** bottom centre. **Collision:** UCX box.
@@ -216,7 +216,7 @@ Check that dinos and characters still read at about 120 px tall.
 - **Materials:** slot `All`. **Origin:** bottom centre. **Collision:** UCX box.
 - **UE target:** `/Game/Art/Blocks/SM_Block_Stone`.
 
-### 3.4 `SK_Player_Base` (batch 1): her character, and the shared humanoid skeleton
+### 3.4 `SK_Player_Base` (batch 1): the player character, and the shared humanoid skeleton
 - **Purpose:** the player avatar in every mode. It **defines `SKEL_GF_Humanoid`**, which every outfit piece, runway animation and the arena moves are built on. The bone list is frozen once batch 1 passes.
 - **Proportions (whole mv):**
   - **Head** 8 × 8 × 8 (50 cm).
@@ -225,7 +225,7 @@ Check that dinos and characters still read at about 120 px tall.
   - **Legs** 4 × 4 cross-section: thigh 4, calf 4, foot 2. The foot extends 1 mv forward, so it's 4 × 5 × 2.
   - Total **28 mv = 175 cm** tall and 14 mv = 87.5 cm wide. `dimensions_cm` (UE X, Y, Z) = `[50, 87.5, 175]`.
   - Slightly big-headed, so it's cute and readable from the hub camera.
-- **Look (original):** a friendly neutral avatar in simple **basewear**: a plain tank top and shorts in soft neutrals, so she's never "undressed" in the dressing room. Her own original UV layout (not any game's skin template).
+- **Look (original):** a friendly neutral avatar in simple **basewear**: a plain tank top and shorts in soft neutrals, so the player is never "undressed" in the dressing room. Its own original UV layout (not any game's skin template).
   - **Face:** the front 8 × 8 of the head is a separate `Face` slot. `T_Player_Face_D` is **32 × 8 = 4 expressions** (neutral, happy, wink, surprised) side by side, and Unreal offsets the UV to swap them.
   - **Hair:** none on the base. Hair is an outfit slot, so the base has a simple short cap of hair-coloured pixels and the hair pieces sit over it.
 - **Tris:** 200–1,000. **Materials:**
@@ -251,7 +251,7 @@ Check that dinos and characters still read at about 120 px tall.
 - **Origin:** on the ground between the feet, under the pelvis. **UE target:** `/Game/Art/Characters/Player/SK_Player_Base`.
 
 ### 3.5 `SK_Outfit_Top_GardenTee` (batch 1): the first modular outfit piece
-- **Purpose:** proves the modular outfit system (M3 fashion, and also what she wears in the hub). It's the **Top** slot. The other slots (Hair, Bottom, Shoes, Accessory) follow the same rules (§4.4).
+- **Purpose:** proves the modular outfit system (M3 fashion, and also what the player wears in the hub). It's the **Top** slot. The other slots (Hair, Bottom, Shoes, Accessory) follow the same rules (§4.4).
 - **Rule for all outfit pieces:** a **shell 0.5 mv (3.125 cm) outside the body surface** on every covered face, so it never z-fights and the body never needs hiding. Use the **same bind pose and the same skeleton** as `SK_Player_Base`, rigidly weighted to the bone under each part.
 - **Coverage:** torso (spine_01 and spine_02) plus short sleeves over the top 3 mv of each upperarm. The torso shell is 8.5 mv wide × 4.5 deep plus offsets, so about 53 × 28 cm. `dimensions_cm` ≈ `[28.1, 87.5, 65.6]` (measure and record the exact figure).
 - **Look (original):** a relaxed short-sleeve tee with rolled cuffs, a chest pocket with a **pixel flower** on it, and a 1 px hem line. The body is dyeable (`_M` R), and the pocket flower is the secondary dye (`_M` G).
@@ -261,13 +261,13 @@ Check that dinos and characters still read at about 120 px tall.
 - **UE target:** `/Game/Art/Characters/Outfits/Top/SK_Outfit_Top_GardenTee`.
 
 ### 3.6 `SK_Dino_Raptor` (batch 1): the first tameable predator
-- **Purpose:** the first dino she'll tame (M2). Tamed, it **follows her and fights** wild dinos. Wild ones use the same mesh with a different texture. It's also the pipeline test for creature locomotion and combat.
+- **Purpose:** the first dino the player tames (M2). Tamed, it **follows the player and fights** wild dinos. Wild ones use the same mesh with a different texture. It's also the pipeline test for creature locomotion and combat.
 - **Gameplay facts:**
   - Follows the player at **3–8 m**, walking or running to catch up, so it has to **outrun the player** (run 700 cm/s vs the player's 450).
   - Fights with a bite, and later a pounce (Unreal supplies the leap movement).
   - **Fits through a 1 × 2 door.**
   - Faints instead of dying.
-  - Can rest in her garden.
+  - Can rest in the player's garden.
 - **Size (mv):**
   - Overall: **48 long (300 cm) × 24 tall at the head (150 cm) × ≤ 12 wide (75 cm)**. `dimensions_cm` (UE X, Y, Z) = `[300, 75, 150]`.
   - Hip height about 14 mv (87.5 cm).
@@ -283,7 +283,7 @@ Check that dinos and characters still read at about 120 px tall.
   - **Colouring:** rust back fading through ember to an ochre and bone belly, with **charcoal chevrons** down the spine and tail (chevrons, not stripes).
   - From behind (the follow camera mostly sees its back and side): the chevrons and crest must read.
 - **Tris:** 400–2,000. **Materials:**
-  - `Body` (`T_Dino_Raptor_D` 128², `_M` 128² with R = crest and feathers, so she can dye them as a cosmetic later)
+  - `Body` (`T_Dino_Raptor_D` 128², `_M` 128² with R = crest and feathers, so the player can dye them as a cosmetic later)
   - also deliver **`T_Dino_Raptor_Wild_D`** on the same UVs: an olive and moss camo variant for wild raptors.
 - **Rig:** hand-built, deform only, about 26 bones (≤ 35):
   - `root, pelvis, spine_01, spine_02, neck_01, neck_02, head, jaw, crest, tail_01…tail_05`
@@ -342,7 +342,7 @@ Check that dinos and characters still read at about 120 px tall.
 | `SM_Furn_Table_Wood` | 1×1×1 | 50–300 | |
 | `SM_Furn_Chair_Wood` | 1×1×1 | 50–300 | the seat faces −Y |
 | `SM_Furn_Lamp_Lantern` | 1×1×1 (lantern 6 mv) | 50–300 | `_E` on the flame; Unreal adds a light |
-| `SM_Furn_FlowerPot` | 1×1×1 (pot 6 mv) | 50–300 | `_M` R = petals (Unreal tints to the flower colour she grew) |
+| `SM_Furn_FlowerPot` | 1×1×1 (pot 6 mv) | 50–300 | `_M` R = petals (Unreal tints to the flower colour the player grew) |
 | `SM_Furn_Wardrobe` | 1×1×2 | 100–500 | Passive bonus: more outfit slots. Doors closed, with a pixel hanger icon on the front |
 | `SM_Furn_DinoBed` | 2×2×1 | 100–600 | Passive bonus: +1 follower. A nest of bones and scales with a cushion (dyeable) |
 | `SM_Furn_Fence_Wood` / `_Gate` | 1×1×1 | 50–200 | Unreal auto-joins neighbours, so put posts at the cell centre and rails to the ±X/±Y edges as **4 separate rail meshes** (`_Post`, `_Rail`) |
@@ -355,7 +355,7 @@ Check that dinos and characters still read at about 120 px tall.
 | `SM_Furn_Vanity` | 1×1×2 | 100–500 | mirror (paper-light pixels), for the fashion theme |
 | `SM_Furn_TrophyShelf` | 2×1×2 | 100–600 | slots for arena trophies |
 | `SM_Furn_Banner` | 1×(1 mv)×2 | 20–100 | `_M` plus a pattern texture param (arena rewards) |
-| `SM_Furn_PhotoFrame` | 1×(1 mv)×1 | 20–100 | **a separate `Photo` slot with a 0–1 UV**, so the player can drop in a real photo (personal touch, Q10) |
+| `SM_Furn_PhotoFrame` | 1×(1 mv)×1 | 20–100 | **a separate `Photo` slot with a 0–1 UV**, so the player can drop in a real photo (Q10) |
 | `SM_Furn_FossilDisplay` | 1×1×2 | 100–500 | a fossil skull on a stand |
 | `SM_Furn_EggNest` | 1×1×1 | 50–300 | displays cosmetic dino eggs |
 | `SM_Furn_CrystalChandelier` | 1×1×1 (hangs from the top) | 100–500 | `_E`; **origin at the top centre** (hangs from the ceiling) |
@@ -416,7 +416,7 @@ All follow §1 and the raptor's conventions: shared bone names, rigid voxel skin
 - **Shoes:** foot plus the lower 2 mv of the calf.
 - **Accessory:** a hat, glasses, a necklace, a bag or wings, rigid on `head`, `spine_02` or `hand_r`. Hats sit over any hair (hair under a hat is Unreal's job: there's a `Hair_UnderHat` variant flag).
 
-**Starter list (33 pieces):** a proposal until the open question is answered Q7 (favourite fashion themes). Placeholder themes are Garden Party, Dino Explorer, Apex Predator (her taste), Cozy Night In, Beach Day and Glam Night.
+**Starter list (33 pieces):** a proposal until the open question is answered Q7 (favourite fashion themes). Placeholder themes are Garden Party, Dino Explorer, Apex Predator, Cozy Night In, Beach Day and Glam Night.
 
 | Slot | Pieces |
 |---|---|
@@ -429,7 +429,7 @@ All follow §1 and the raptor's conventions: shared bone names, rigid voxel skin
 **Runway and dressing room:**
 - Static: `SM_Runway_Stage` (modular 2×1 block segments plus an end platform), `SM_Runway_Backdrop` (a separate `Logo` slot for a title image), `SM_Runway_JudgeDesk`, `SM_Runway_Spotlight` (`_E`), `SM_Dressing_Mirror`, `SM_Dressing_Rack`.
 - Player anims: `Runway_Walk` loop (30 f, authored for 180 cm/s, hip sway), `Pose_01…04` (60 f each, holds), `Turn180` (20 f), `Wave` (30 f), `Spin` (24 f).
-- **Judges (proposal):** her tamed predator species as the judges, sitting at the desk. They use the dino rigs plus accessories (`SM_DinoAcc_Monocle`, `SM_DinoAcc_Bowtie`) and new clips: `Judge_Sit` loop, `Judge_Clap` (24 f), `Judge_ScoreRaise` (18 f, holding up a scorecard prop `SM_Prop_ScoreCard` with a number-texture param), and `Judge_Gasp` (18 f).
+- **Judges (proposal):** the player's tamed predator species as the judges, sitting at the desk. They use the dino rigs plus accessories (`SM_DinoAcc_Monocle`, `SM_DinoAcc_Bowtie`) and new clips: `Judge_Sit` loop, `Judge_Clap` (24 f), `Judge_ScoreRaise` (18 f, holding up a scorecard prop `SM_Prop_ScoreCard` with a number-texture param), and `Judge_Gasp` (18 f).
 
 ### 4.5 Batch 5: arena, 3v3 one lane (M4, last)
 Everything that changes by side gets a white **`TeamTint`** slot (ally `#4FC3F7`, enemy `#FF6B6B`, set by Unreal). Keep it visible from the third-person camera.
@@ -444,14 +444,14 @@ Everything that changes by side gets a white **`TeamTint`** slot (ally `#4FC3F7`
 | `SK_Arena_Minion_Ranged` | 50 × 50 × 80 | 150–600 | **"Sproutling"**: a seed-pod critter that spits seeds. Same clips, Attack release f6 |
 | `SM_Proj_Seed`, `SM_Proj_SeedBomb`, `SM_Proj_Pebble` | ≤ 25 | ≤ 100 | origin at the centre; the trails are Unreal VFX |
 | `SM_Prop_GardenWand` | 75 long | 50–300 | the player's weapon, on the `prop_r` bone, `_E` tip |
-| `SM_DinoAcc_Armor_<Species>` | per species | 100–800 | armour plates plus `TeamTint`, for her dinos and the bot team's dinos |
+| `SM_DinoAcc_Armor_<Species>` | per species | 100–800 | armour plates plus `TeamTint`, for the player's dinos and the bot team's dinos |
 
 **Player arena anims** (on `SKEL_GF_Humanoid`): `Attack_Throw` (15 f, release f7), `Cast_1/2/3` (18 f each, release f10), `Ultimate` (36 f, release f20), `Hit`, `KO` (30 f, sits down dizzy, hold), `Recall` loop (60 f).
 The rival bot heroes reuse the player skeleton with outfit pieces, plus the dinos with armour, so **no new rigs are needed**.
 If the arena gets cut (PLAN.md fallback: tower defence with dinos), the tower, core, minions and projectiles still get used.
 
 ### 4.6 Batch 6: Beat Hop rhythm obby (M5)
-**What it is:** she runs and bunny-hops along a voxel course; bricks in 4–5 coloured lanes light up on the beat and she has to land on the lit one in time (PLAN.md M5). The course is **generated in Unreal from chart data** (bricks placed as instances), so the artist makes the **pieces**, not levels. All bricks are exactly **1 block (100 cm)** wide and deep; lanes are 100 cm apart.
+**What it is:** the player runs and bunny-hops along a voxel course; bricks in 4–5 coloured lanes light up on the beat and has to land on the lit one in time (PLAN.md M5). The course is **generated in Unreal from chart data** (bricks placed as instances), so the artist makes the **pieces**, not levels. All bricks are exactly **1 block (100 cm)** wide and deep; lanes are 100 cm apart.
 
 **Beat bricks** (static, bottom-centre origin, UCX box, 16 × 16 faces like every block, **with `_E` emissive masks**). Unreal drives glow per instance: dim (about 20 %) → approaching → **lit on the beat** → hit flash or miss. So paint `_D` as the brick at rest and `_E` as everything that glows.
 

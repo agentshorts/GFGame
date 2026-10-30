@@ -1,0 +1,5 @@
+---,Stars,Rolls
+Stars0,0,"((ItemId=""Scales"",Min=1,Max=2,Chance=1.0),(ItemId=""Bone"",Min=1,Max=1,Chance=0.5))"
+Stars1,1,"((ItemId=""Scales"",Min=2,Max=3,Chance=1.0),(ItemId=""Bone"",Min=1,Max=2,Chance=1.0),(ItemId=""Amber"",Min=1,Max=1,Chance=0.3))"
+Stars2,2,"((ItemId=""Scales"",Min=2,Max=4,Chance=1.0),(ItemId=""Bone"",Min=2,Max=3,Chance=1.0),(ItemId=""Amber"",Min=1,Max=1,Chance=0.6),(ItemId=""SpellPage"",Min=1,Max=1,Chance=0.3),(ItemId=""SmokedHaunch"",Min=1,Max=1,Chance=0.2))"
+Stars3,3,"((ItemId=""Scales"",Min=3,Max=5,Chance=1.0),(ItemId=""Bone"",Min=2,Max=4,Chance=1.0),(ItemId=""Amber"",Min=1,Max=2,Chance=1.0),(ItemId=""SpellPage"",Min=1,Max=1,Chance=0.6),(ItemId=""SmokedHaunch"",Min=1,Max=1,Chance=0.3),(ItemId=""Fossil"",Min=1,Max=1,Chance=0.1))"

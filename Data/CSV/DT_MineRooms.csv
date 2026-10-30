@@ -1,0 +1,4 @@
+---,NeedsUpgrade,Yields
+Shallows,None,"((ItemId=""Stone"",Min=2,Max=3,Chance=1.0),(ItemId=""Clay"",Min=1,Max=1,Chance=0.6),(ItemId=""Coalnut"",Min=1,Max=1,Chance=0.4))"
+CrystalGallery,Tunnels,"((ItemId=""Stone"",Min=1,Max=2,Chance=1.0),(ItemId=""Metal"",Min=1,Max=1,Chance=0.6),(ItemId=""Crystal"",Min=1,Max=1,Chance=0.3))"
+GlowGrotto,Lanterns,"((ItemId=""GlowDust"",Min=1,Max=1,Chance=0.8),(ItemId=""Crystal"",Min=1,Max=1,Chance=0.25),(ItemId=""PrismShard"",Min=1,Max=1,Chance=0.2))"

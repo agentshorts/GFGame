@@ -5,7 +5,7 @@
 #include "GFDinoTypes.h"
 #include "GFCompanionRoster.generated.h"
 
-/** One owned dino (stub; M2 adds level, accessories). */
+/** One owned dino. Level and XP come from Dino Arena matches (ability 3 unlocks at level 3). */
 USTRUCT(BlueprintType)
 struct GFCOMPANION_API FGFCompanionEntry
 {
@@ -15,6 +15,8 @@ struct GFCOMPANION_API FGFCompanionEntry
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Companion") FName Species;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Companion") FString Name;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Companion") bool bInParty = true;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Companion") int32 Level = 1;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Companion") int32 XP = 0;
 };
 
 /** Roster helpers shared by the game-instance roster and the networked player state. */
@@ -24,6 +26,12 @@ struct GFCOMPANION_API FGFCompanions
 	static constexpr int32 MaxParty = 3;
 	static FGuid AddTamed(TArray<FGFCompanionEntry>& Roster, FName Species, const FString& Name);
 	static int32 PartySize(const TArray<FGFCompanionEntry>& Roster);
+	static constexpr int32 MaxLevel = 10;
+	static constexpr int32 XPPerLevel = 5;
+	/** Adds XP and recomputes the level (1 + XP / 5, capped at 10). Returns true if it levelled up. */
+	static bool AddXP(FGFCompanionEntry& Entry, int32 Amount);
+	static FGFCompanionEntry* Find(TArray<FGFCompanionEntry>& Roster, const FGuid& Id);
+	static const FGFCompanionEntry* Find(const TArray<FGFCompanionEntry>& Roster, const FGuid& Id);
 };
 
 /** Cross-mode companion state (PLAN.md section 4) plus the per-save diet knowledge book. */

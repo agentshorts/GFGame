@@ -22,6 +22,8 @@ enum class EGFSaveVersion : int32
 	EconomyLedger = 3,
 	/** Land plots (tenants, rent), mail and her copies of packed-up blueprints. */
 	LandAndMail = 4,
+	/** Mini-game mode state (mine rooms, crews, depots, ...) as per-mode blobs. */
+	ModeStates = 5,
 
 	// keep last
 	VersionPlusOne,
@@ -55,6 +57,8 @@ public:
 	/** v4: every letter; unclaimed ones still hold their items in the ledger's mail escrows. */
 	UPROPERTY(SaveGame) TArray<FGFMailLetter> Mail;
 	UPROPERTY(SaveGame) TArray<FGFPlotBlueprint> PackedBlueprints;
+	/** v5: persistent mini-game state by mode name (e.g. "Mine"). */
+	UPROPERTY(SaveGame) TMap<FName, FGFModeBlob> ModeStates;
 
 	// --- v1 fields (single-player save). Read only by the v1 -> v2 migration. ---
 	UPROPERTY(SaveGame) FGFInventory Inventory;

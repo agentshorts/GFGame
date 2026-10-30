@@ -2,7 +2,11 @@
 
 Run:
   UnrealEditor-Cmd.exe GFGame.uproject -run=pythonscript -script="<abs>/Tools/import_art_batch.py" -unattended -nullrhi -nosplash
-Writes Saved/ArtImport/ue_report.json. Settings: Force Front X Axis, convert scene + scene units,
+Env: GFART_BATCH=3b,7 (comma list) and/or GFART_ONLY=SM_Plot_ClaimFlag,... select the union of both; skeleton dependents follow.
+     GFART_PROBE=<json from Tools/art_foot_probe.py> is required for skeletal assets with clips: every clip's posed-mesh min Z
+     must stay >= -5 cm and the lowest clip must match the manifest's min_ground_z_cm (UE also checks foot/toe bone Z >= -5).
+Batches 3b and 7 get materials: M_GF_Prop (Diffuse, DyeMask R, Emissive mask _E) instances per mesh, M_GF_TeamTint for TeamTint slots. Translucent blocks (manifest unreal_material_hint, e.g. SM_Block_Water) get M_GF_Water (Opacity, PanSpeedU/V).
+Writes Saved/ArtImport/ue_report.json. Manifest types: static_mesh, skeletal_mesh, texture_set (UI PNGs, batch 8+). Settings: Force Front X Axis, convert scene + scene units,
 uniform scale 1, no redundant-key removal (scale tracks kept), no materials (slots keep names).
 """
 import json, math, os, re, traceback
@@ -14,7 +18,70 @@ OUT = os.path.join(PROJ, "Saved", "ArtImport")
 os.makedirs(OUT, exist_ok=True)
 AT = unreal.AssetToolsHelpers.get_asset_tools()
 EAL = unreal.EditorAssetLibrary
-ORDER = ["SM_Block_Grass", "SM_Block_WoodPlank", "SM_Block_Stone", "SK_Player_Base", "SK_Outfit_Top_GardenTee", "SK_Dino_Raptor"]
+ORDER = [
+    # batch 1
+    "SM_Block_Grass", "SM_Block_WoodPlank", "SM_Block_Stone", "SK_Player_Base", "SK_Outfit_Top_GardenTee", "SK_Dino_Raptor",
+    # batch 2 (M1 hub kit). Assets that use textures_shared_from come after the asset that ships the texture.
+    "SM_Block_ClayBrick", "SM_Block_Cobblestone", "SM_Block_Dirt", "SM_Block_Fabric", "SM_Block_Farmland", "SM_Block_Glass",
+    "SM_Block_Leaves", "SM_Block_Log", "SM_Block_PathDirt", "SM_Block_Sand", "SM_Block_StoneBrick", "SM_Block_Thatch",
+    "SM_Furn_Bed_Wood", "SM_Furn_Chair_Wood", "SM_Furn_CraftingBench", "SM_Furn_Door_Wood", "SM_Furn_FlowerPot",
+    "SM_Furn_Lamp_Lantern", "SM_Furn_Table_Wood", "SM_Furn_Wardrobe",
+    "SM_Crop_Berry_S0", "SM_Crop_Berry_S1", "SM_Crop_Berry_S2", "SM_Crop_Berry_S3",
+    "SM_Crop_Fiber_S0", "SM_Crop_Fiber_S1", "SM_Crop_Fiber_S2", "SM_Crop_Fiber_S3",
+    "SM_Crop_Flower_S0", "SM_Crop_Flower_S1", "SM_Crop_Flower_S2", "SM_Crop_Flower_S3", "SM_Crop_Flower_S3_Rare",
+    "SM_Node_ClayPit", "SM_Node_ClayPit_Empty", "SM_Node_Rock", "SM_Node_Rock_Pebbles", "SM_Node_Tree", "SM_Node_Tree_Stump",
+    "SM_Gate_Arena", "SM_Gate_Runway", "SM_Gate_Valley",
+    # batch 8 (landlord kit + co-op UI). SK_Player_Base v2 is also tagged batch 8 (it keeps its batch-1 slot above).
+    "SM_Land_Board", "SM_Rent_Board", "SM_Mailbox", "SM_Mailbox_Flag",
+    "SM_Plot_ClaimFlag", "SM_Plot_CornerPost", "SM_Plot_BorderSegment", "SM_Plot_Signpost",
+    "SM_Sign_ForRent", "SM_Sign_RentDue", "SM_Sign_RentDue_Sleepy",
+    "SM_Overgrowth_Vine_A", "SM_Overgrowth_Vine_B", "SM_Overgrowth_Vine_C",
+    "SM_Item_Letter", "SM_Item_Parcel",
+    "UI_Batch8_Coop",
+    # batch 3b (taming / cooking / fishing). SK_Player_Base v3 and SK_Dino_Raptor v3 keep their batch-1 slots above.
+    "SM_Crop_Steakroot_S0", "SM_Crop_Steakroot_S1", "SM_Crop_Steakroot_S2", "SM_Crop_Steakroot_S3",
+    "SM_Crop_Emberpepper_S0", "SM_Crop_Emberpepper_S1", "SM_Crop_Emberpepper_S2", "SM_Crop_Emberpepper_S3",
+    "SM_Crop_Thornmelon_S0", "SM_Crop_Thornmelon_S1", "SM_Crop_Thornmelon_S2", "SM_Crop_Thornmelon_S3",
+    "SM_Item_Steakroot", "SM_Item_Emberpepper", "SM_Item_Thornmelon", "SM_Item_Fizzberry", "SM_Item_RiverFish",
+    "SM_Item_GoldenCarp", "SM_Item_Glowgrub", "SM_Item_WildEgg", "SM_Item_SmokedHaunch", "SM_Item_PetitCake",
+    "SM_Item_JerkyBites", "SM_Item_EmberRoast", "SM_Item_FishSkewer", "SM_Item_GrubJelly",
+    "SM_Furn_Cookpot", "SM_Node_FishingSpot", "SM_Prop_FishingRod", "SM_Prop_Bobber",
+    "SM_Node_RottenLog", "SM_Node_RottenLog_Dug", "SM_Node_WildNest", "SM_Node_WildNest_Empty",
+    "SM_Block_Water",
+    "UI_Batch3b_Taming",
+    # batch 7 (arena / colosseum). SK_Player_Base v4 and SK_Dino_Raptor v4 keep their batch-1 slots above.
+    "SM_Colo_Wall_Straight", "SM_Colo_Wall_Curve", "SM_Colo_Stands", "SM_Colo_Gate", "SM_Colo_GateBars", "SM_Colo_Pillar",
+    "SM_Colo_Torch", "SM_Colo_Banner", "SM_Colo_Balcony", "SM_Colo_RivalBalcony", "SM_Colo_StartSpot",
+    "SM_Colo_StartSpot_Front", "SM_Colo_Hourglass",
+    "SM_Deco_CupTrophy_Bronze", "SM_Deco_CupTrophy_Silver", "SM_Deco_CupTrophy_Gold", "SM_Deco_CupTrophy_Champion",
+    "SM_Deco_TrophyCase",
+    "SM_VFX_RainCloud", "SM_VFX_RainDrop", "SM_VFX_Vine_A", "SM_VFX_Vine_B", "SM_VFX_Vine_C", "SM_VFX_StoneWall",
+    "SM_VFX_SparkBolt", "SM_VFX_BloomPetal", "SM_VFX_FizzBomb", "SM_VFX_EmberFleck", "SM_VFX_WhistleNote",
+    "SM_VFX_RoarRing", "SM_VFX_SwipeArc", "SM_VFX_SprayCone", "SM_VFX_ChargeDust",
+    "SM_Block_ArenaSand",
+    "UI_Batch7_Arena_v2",  # v2 is the complete set (v1 folder left in the inbox, not imported)
+]
+_ALL = list(ORDER)
+_only = [a.strip() for a in os.environ.get("GFART_ONLY", "").split(",") if a.strip()]
+_batches = [b.strip() for b in os.environ.get("GFART_BATCH", "").split(",") if b.strip()]
+def _batch_of(a): return str(json.load(open(os.path.join(INBOX, a, "manifest.json"), encoding="utf-8")).get("batch", "1"))
+if _only or _batches:
+    # GFART_ONLY=SK_Dino_Raptor re-imports just that asset; GFART_BATCH=2 or 3b,7 imports manifests with that "batch"
+    # (no field = batch 1). Both together select the union (e.g. batch 3b + 7 plus the batch-8 fixes by name).
+    ORDER = [a for a in ORDER if a in _only or _batch_of(a) in _batches]
+if _only or _batches:
+    # A re-imported skeleton is deleted and re-created, so every asset that reuses it must come along
+    # (e.g. SK_Player_Base v2 in batch 8 drags SK_Outfit_Top_GardenTee, which reuses SKEL_GF_Humanoid).
+    def _man(a): return json.load(open(os.path.join(INBOX, a, "manifest.json"), encoding="utf-8"))
+    _defs = {(_man(a).get("skeleton") or {}).get("skeleton_name") for a in ORDER if not (_man(a).get("skeleton") or {}).get("reuse_existing")}
+    _defs.discard(None)
+    ORDER = [a for a in _ALL if a in ORDER or (_man(a).get("skeleton") or {}).get("reuse_existing") in _defs]
+CLIP_LIMIT_Z = -5.0  # cm: no clip may sink the posed mesh below this (manifest "limit -5")
+_probe_path = os.environ.get("GFART_PROBE", "").strip()
+PROBE = json.load(open(_probe_path, encoding="utf-8")) if _probe_path else {}
+PROP_MAT_BATCHES = ("3b", "7")
+MAT_DIR = "/Game/Art/Materials"
+BAD_PATH = re.compile(r"[a-z]:[\\/]users[\\/]", re.I)  # source paths must not leak a username
 DIM_TOL = 0.05  # cm
 report = {"assets": {}, "log": []}
 
@@ -92,11 +159,89 @@ def import_textures(man, folder, dest):
         name = os.path.splitext(tex)[0]
         t = run_import(os.path.join(folder, tex), dest + "/Textures", name, None)
         try_set(t, "filter", unreal.TextureFilter.TF_NEAREST)
-        if name.endswith("_M"):
+        if name.startswith("T_Icon_"):
+            ui_texture(t, name)
+        elif name.endswith("_M") or name.endswith("_E"):  # dye masks and greyscale emissive masks are linear
             try_set(t, "srgb", False)
             try_set(t, "compression_settings", unreal.TextureCompressionSettings.TC_MASKS)
         EAL.save_loaded_asset(t)
         out.append(name)
+    return out
+
+def ui_texture(t, name):
+    """UI settings: UserInterface2D (RGBA), UI LOD group, no mips (so non-power-of-two sizes are fine), nearest."""
+    try_set(t, "compression_settings", unreal.TextureCompressionSettings.TC_EDITOR_ICON)
+    try_set(t, "lod_group", unreal.TextureGroup.TEXTUREGROUP_UI)
+    try_set(t, "mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+    try_set(t, "filter", unreal.TextureFilter.TF_NEAREST)
+    try_set(t, "never_stream", True)
+    try_set(t, "srgb", not name.endswith("_M"))  # _M masks are linear
+
+def ui_settings_ok(t, name):
+    g = t.get_editor_property
+    return (g("compression_settings") == unreal.TextureCompressionSettings.TC_EDITOR_ICON
+            and g("lod_group") == unreal.TextureGroup.TEXTUREGROUP_UI
+            and g("mip_gen_settings") == unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS
+            and g("filter") == unreal.TextureFilter.TF_NEAREST
+            and bool(g("srgb")) == (not name.endswith("_M")))
+
+def tex_size(t):
+    for a, b in (("blueprint_get_size_x", "blueprint_get_size_y"),):
+        try: return [int(getattr(t, a)()), int(getattr(t, b)())]
+        except Exception: pass
+    try:
+        s = t.get_editor_property("source")
+        return [int(s.get_size_x()), int(s.get_size_y())]
+    except Exception as e:
+        log("info: texture size " + str(e)); return None
+
+def do_texture_set(name, man, folder, r):
+    """texture_set manifest: PNGs straight into unreal_target (no mesh), UI settings, size per manifest."""
+    dest = man["unreal_target"]
+    sizes = {}
+    for k, v in man.get("textures", {}).items():
+        for f in v.get("files", []):
+            sizes[os.path.splitext(f)[0]] = v.get("size")
+    r["textures"] = {}
+    chk = r["checks"]
+    for tex in man["files"]["textures"]:
+        tname = os.path.splitext(tex)[0]
+        tr = {}
+        r["textures"][tname] = tr
+        try:
+            t = run_import(os.path.join(folder, tex), dest, tname, None)
+            ui_texture(t, tname)
+            EAL.save_loaded_asset(t)
+            tr["size"] = tex_size(t)
+            tr["size_expected"] = sizes.get(tname)
+            tr["sources"] = source_files(t)
+            tr["settings_ok"] = ui_settings_ok(t, tname)
+            tr["pass"] = (tr["settings_ok"] and tr["size"] == tr["size_expected"] and tr["sources"] is not None
+                          and not any(BAD_PATH.search(p) for p in tr["sources"]))
+        except Exception as e:
+            tr["error"] = str(e) + "\n" + traceback.format_exc(); tr["pass"] = False
+    r["texture_count"] = len(r["textures"])
+    chk["texture_count"] = r["texture_count"] == len(man["files"]["textures"]) and r["texture_count"] > 0
+    chk["textures"] = all(v["pass"] for v in r["textures"].values())
+    r["failed_textures"] = [k for k, v in r["textures"].items() if not v["pass"]]
+
+def source_files(asset):
+    try:
+        return [str(f) for f in asset.get_editor_property("asset_import_data").extract_filenames()]
+    except Exception as e:
+        log("warn: source paths " + str(e)); return None
+
+def shared_textures(man):
+    """files.textures_shared_from: reuse the textures the named asset already imported (no copy)."""
+    src = man["files"].get("textures_shared_from")
+    out = []
+    if not src:
+        return out
+    sman = json.load(open(os.path.join(INBOX, src, "manifest.json"), encoding="utf-8"))
+    sdest = sman["unreal_target"].rsplit("/", 1)[0] + "/Textures/"
+    for tex in man["files"].get("textures_shared", []):
+        p = sdest + os.path.splitext(tex)[0]
+        out.append({"texture": p, "exists": EAL.does_asset_exist(p), "from": src})
     return out
 
 def vec(v): return [round(v.x, 3), round(v.y, 3), round(v.z, 3)]
@@ -187,13 +332,16 @@ def do_static(name, man, folder, r):
     dest = man["unreal_target"].rsplit("/", 1)[0]
     m = run_import(os.path.join(folder, man["files"]["mesh"]), dest, name, fbx_options("static"))
     r["textures"] = import_textures(man, folder, dest)
+    r["textures_shared"] = shared_textures(man)
+    for tname in r["textures"]:
+        t = unreal.load_asset(dest + "/Textures/" + tname)
+        r.setdefault("texture_sources", {})[tname] = source_files(t)
+    r["mesh_sources"] = source_files(m)
     bb = m.get_bounding_box()
     dims = [round(bb.max.x - bb.min.x, 3), round(bb.max.y - bb.min.y, 3), round(bb.max.z - bb.min.z, 3)]
     r["dims_cm"] = dims; r["bounds_min"] = vec(bb.min); r["bounds_max"] = vec(bb.max)
     r["tris"] = tri_count_static(m)
-    sub = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
-    try: r["simple_collision"] = sub.get_simple_collision_count(m)
-    except Exception as e: r["simple_collision"] = None; log("warn: collision count " + str(e))
+    r["simple_collision"] = None  # StaticMeshEditorSubsystem is unavailable in -run=pythonscript; count convex elems instead
     try:
         ag = m.get_editor_property("body_setup").get_editor_property("agg_geom")
         r["collision_convex_elems"] = len(ag.get_editor_property("convex_elems"))
@@ -203,7 +351,41 @@ def do_static(name, man, folder, r):
     chk["dims"] = all(abs(a - b) <= DIM_TOL for a, b in zip(dims, man["dimensions_cm"]))
     chk["tris"] = r["tris"] == man["tri_count"] if r["tris"] is not None else "n/a"
     chk["slots"] = r["material_slots"] == man["material_slots"]
-    chk["collision"] = (r["simple_collision"] or 0) >= 1 or (r.get("collision_convex_elems") or 0) >= 1
+    cnote = re.search(r"Collision: ([^;]*)", man["qa"].get("notes", ""))
+    r["collision_expected"] = len(re.findall(r"UCX_", cnote.group(1))) if cnote else None
+    if "/Crops/" in man["unreal_target"]:
+        chk["collision"] = "n/a"  # crops get no collision (brief 1.8); count still reported
+    elif r["collision_expected"] is not None:
+        chk["collision"] = r.get("collision_convex_elems") == r["collision_expected"]
+    else:
+        chk["collision"] = (r["simple_collision"] or 0) >= 1 or (r.get("collision_convex_elems") or 0) >= 1
+    # min Z must match the manifest's min_ground_z_cm (0 for ground props; hinge/wall/centred pivots are negative on purpose)
+    r["min_z_expected"] = float(man["qa"].get("min_ground_z_cm", 0.0))
+    chk["min_z"] = abs(bb.min.z - r["min_z_expected"]) <= DIM_TOL
+    if r["textures_shared"]:
+        chk["shared_textures_exist"] = all(t["exists"] for t in r["textures_shared"])
+    paths = (r["mesh_sources"] or []) + [p for v in r.get("texture_sources", {}).values() for p in (v or [])]
+    r["bad_source_paths"] = [p for p in paths if BAD_PATH.search(p)]
+    chk["source_paths_clean"] = not r["bad_source_paths"] and r["mesh_sources"] is not None
+    # FBX empties named SOCKET_<Name> become static mesh sockets <Name> (manifest notes list them; "SOCKET_Trophy_1..4" = 1 to 4)
+    exp_s = expected_sockets(man["qa"].get("notes", ""))
+    try:
+        # StaticMesh.Sockets is protected in Python; probe the expected names via find_socket
+        r["sockets"] = [n for n in exp_s if m.find_socket(n) is not None]
+    except Exception as e:
+        r["sockets"] = None; log("info: sockets " + str(e))
+    if exp_s:
+        r["sockets_expected"] = exp_s
+        chk["sockets"] = r["sockets"] is not None and all(s in r["sockets"] for s in exp_s)
+
+def expected_sockets(notes):
+    out = []
+    for m in re.finditer(r"SOCKET_(\w+?)(?:_(\d+)\.\.(\d+)|\b)", notes):
+        if m.group(2):
+            out += ["{}_{}".format(m.group(1), i) for i in range(int(m.group(2)), int(m.group(3)) + 1)]
+        else:
+            out.append(m.group(1))
+    return sorted(set(out))
 
 def do_skel(name, man, folder, r):
     dest = man["unreal_target"].rsplit("/", 1)[0]
@@ -283,6 +465,13 @@ def do_skel(name, man, folder, r):
                 per.append({"f": f, "feet_z": {b: round(z, 3) for b, z in ws.items()}})
             cr["root_scale_max_dev"] = round(max_root_scale_dev, 6)
             cr["per_frame"] = per
+            fz = [z for p in per for z in p["feet_z"].values()]
+            cr["min_feet_bone_z"] = round(min(fz), 3) if fz else None
+            cr["feet_above_limit"] = (min(fz) >= CLIP_LIMIT_Z) if fz else "n/a"
+            pr = PROBE.get(name, {}).get(aname)
+            if pr is not None:
+                cr["probe_min_z"] = pr["worst_min_z_cm"]
+                cr["probe_above_limit"] = pr["worst_min_z_cm"] >= CLIP_LIMIT_Z
             # loop closure
             p0 = pose_at(anim, 0); pn = pose_at(anim, nf)
             worst = (0.0, 0.0, 0.0, None)
@@ -297,21 +486,314 @@ def do_skel(name, man, folder, r):
             cr["error"] = str(e) + "\n" + traceback.format_exc()
     for cn, cr in r["clips"].items():
         ok = "error" not in cr and cr.get("frames_ok", False) and cr.get("skeleton_ok", False) and cr.get("loop_closes", True) is True and cr.get("root_scale_max_dev", 1) < 1e-4
+        ok = ok and cr.get("feet_above_limit") in (True, "n/a") and cr.get("probe_above_limit", True) is True
         cr["pass"] = ok
     chk["clips"] = all(cr["pass"] for cr in r["clips"].values()) if r["clips"] else "n/a"
     chk["clip_count"] = len(r["clips"]) == len(clips_expected) if man["files"]["animations"] else "n/a"
+    # min Z per manifest: the lowest posed-mesh point over all clips (Blender foot probe) must match min_ground_z_cm
+    if man["files"]["animations"] and man["qa"].get("min_ground_z_cm") is not None:
+        r["min_z_expected"] = float(man["qa"]["min_ground_z_cm"])
+        pz = [cr.get("probe_min_z") for cr in r["clips"].values()]
+        if pz and None not in pz:
+            r["probe_min_z"] = min(pz)
+            chk["min_z"] = abs(min(pz) - r["min_z_expected"]) <= DIM_TOL
+            chk["clips_above_limit"] = min(pz) >= CLIP_LIMIT_Z
+        else:
+            r["min_z_note"] = "no foot-probe data for every clip: run Tools/art_foot_probe.py and pass GFART_PROBE"
+            chk["min_z"] = False
+
+PLAYER_MAT_DIR = "/Game/Art/Characters/Player/Materials"
+
+def _mexpr(mat, cls, x, y):
+    return unreal.MaterialEditingLibrary.create_material_expression(mat, cls, x, y)
+
+def build_dye_mask_master(path, default_d, default_m):
+    """M_GF_DyeMask: Base = D, then lerp to D*Dye_R by M.R, D*Dye_B by M.B, and Dye_G last by M.G
+    (Basewear_M v2: R = tank dye, G = player-colour trim, B = shorts dye; trim overrides). Dye_* default white = no tint."""
+    MEL = unreal.MaterialEditingLibrary
+    d, n = path.rsplit("/", 1)
+    mat = AT.create_asset(n, d, unreal.Material, unreal.MaterialFactoryNew())
+    td = _mexpr(mat, unreal.MaterialExpressionTextureSampleParameter2D, -900, -100)
+    td.set_editor_property("parameter_name", "Diffuse")
+    td.set_editor_property("texture", default_d)
+    td.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
+    tm = _mexpr(mat, unreal.MaterialExpressionTextureSampleParameter2D, -900, 250)
+    tm.set_editor_property("parameter_name", "Mask")
+    tm.set_editor_property("texture", default_m)
+    tm.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_MASKS)
+    cur = td; cur_pin = "RGB"; y = -300
+    for ch, pin in (("R", "R"), ("B", "B"), ("G", "G")):  # apply order R, B, G (trim last)
+        col = _mexpr(mat, unreal.MaterialExpressionVectorParameter, -600, y)
+        col.set_editor_property("parameter_name", "Dye_" + ch)
+        col.set_editor_property("default_value", unreal.LinearColor(1, 1, 1, 1))
+        mul = _mexpr(mat, unreal.MaterialExpressionMultiply, -350, y)
+        MEL.connect_material_expressions(td, "RGB", mul, "A")
+        MEL.connect_material_expressions(col, "", mul, "B")
+        lerp = _mexpr(mat, unreal.MaterialExpressionLinearInterpolate, -150, y)
+        MEL.connect_material_expressions(cur, cur_pin, lerp, "A")
+        MEL.connect_material_expressions(mul, "", lerp, "B")
+        MEL.connect_material_expressions(tm, pin, lerp, "Alpha")
+        cur = lerp; cur_pin = ""; y += 200
+    MEL.connect_material_property(cur, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    rough = _mexpr(mat, unreal.MaterialExpressionConstant, -150, 400)
+    rough.set_editor_property("r", 0.9)
+    MEL.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    try_set(mat, "used_with_skeletal_mesh", True)
+    MEL.recompile_material(mat)
+    EAL.save_loaded_asset(mat)
+    return mat
+
+def player_materials(man, r):
+    """Master + 3 instances for SK_Player_Base slots (Skin, Face, Basewear), assigned to the mesh."""
+    MEL = unreal.MaterialEditingLibrary
+    tdir = man["unreal_target"].rsplit("/", 1)[0] + "/Textures/"
+    master = build_dye_mask_master(PLAYER_MAT_DIR + "/M_GF_DyeMask", unreal.load_asset(tdir + "T_Player_Basewear_D"), unreal.load_asset(tdir + "T_Player_Basewear_M"))
+    inst = {}
+    for slot in ("Skin", "Face", "Basewear"):
+        mi = AT.create_asset("MI_Player_" + slot, PLAYER_MAT_DIR, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+        MEL.set_material_instance_parent(mi, master)
+        MEL.set_material_instance_texture_parameter_value(mi, "Diffuse", unreal.load_asset(tdir + "T_Player_" + slot + "_D"))
+        MEL.set_material_instance_texture_parameter_value(mi, "Mask", unreal.load_asset(tdir + "T_Player_" + slot + "_M"))
+        EAL.save_loaded_asset(mi)
+        inst[slot] = mi
+    m = unreal.load_asset(man["unreal_target"])
+    mats = list(m.materials)
+    for i, sm in enumerate(mats):
+        s = str(sm.material_slot_name)
+        if s in inst:
+            sm.material_interface = inst[s]
+            mats[i] = sm
+    m.set_editor_property("materials", mats)
+    EAL.save_loaded_asset(m)
+    m = unreal.load_asset(man["unreal_target"])
+    got = {str(s.material_slot_name): (s.material_interface.get_name() if s.material_interface else None) for s in m.materials}
+    r["player_materials"] = got
+    r["checks"]["player_materials"] = all(got.get(s) == "MI_Player_" + s for s in ("Skin", "Face", "Basewear"))
+PLAYER_MATS = ["MI_Player_Skin", "MI_Player_Face", "MI_Player_Basewear", "M_GF_DyeMask"]
 
 def owned_assets(man):
+    if man["type"] == "texture_set":
+        return [man["unreal_target"] + "/" + os.path.splitext(t)[0] for t in man["files"]["textures"]]
     dest = man["unreal_target"].rsplit("/", 1)[0]
     out = [dest + "/" + os.path.splitext(a)[0] for a in man["files"].get("animations", [])]
     out = [dest.replace(dest, dest + "/Anims") + "/" + os.path.basename(a) for a in out]
     out += [dest + "/Textures/" + os.path.splitext(t)[0] for t in man["files"].get("textures", [])]
-    out.append(man["unreal_target"])
+    if man.get("asset_name") == "SK_Player_Base":
+        # dependents first: mesh -> material instances -> master -> textures
+        tex = [a for a in out if "/Textures/" in a]
+        out = [a for a in out if "/Textures/" not in a] + [man["unreal_target"]] + [PLAYER_MAT_DIR + "/" + m for m in PLAYER_MATS] + tex
+    elif man["type"] == "static_mesh" and str(man.get("batch")) in PROP_MAT_BATCHES:
+        tex = [a for a in out if "/Textures/" in a]
+        out = [a for a in out if "/Textures/" not in a] + [man["unreal_target"], prop_mi_path(man)] + tex
+    else:
+        out.append(man["unreal_target"])
     sk = man.get("skeleton") or {}
     if sk and not sk.get("reuse_existing"):
         out.append(dest + "/" + sk["skeleton_name"])
         out.append(man["unreal_target"] + "_Skeleton")
     return out
+
+def prop_mi_path(man):
+    return man["unreal_target"].rsplit("/", 1)[0] + "/Materials/MI_" + man["asset_name"][3:]
+
+def _png(path, w, h, rgb):
+    """Tiny solid-colour PNG (stdlib only) used as a material default texture."""
+    import struct, zlib
+    raw = b"".join(b"\x00" + bytes(rgb) * w for _ in range(h))
+    def chunk(t, d): return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    with open(path, "wb") as fh:
+        fh.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+def default_tex(name, rgb, linear):
+    p = MAT_DIR + "/" + name
+    if EAL.does_asset_exist(p):
+        return unreal.load_asset(p)
+    src = os.path.join(OUT, name + ".png")
+    _png(src, 4, 4, rgb)
+    t = run_import(src, MAT_DIR, name, None)
+    try_set(t, "filter", unreal.TextureFilter.TF_NEAREST)
+    if linear:
+        try_set(t, "srgb", False)
+        try_set(t, "compression_settings", unreal.TextureCompressionSettings.TC_MASKS)
+    EAL.save_loaded_asset(t)
+    return t
+
+def _tparam(mat, pname, tex, sampler, x, y):
+    n = _mexpr(mat, unreal.MaterialExpressionTextureSampleParameter2D, x, y)
+    n.set_editor_property("parameter_name", pname)
+    n.set_editor_property("texture", tex)
+    n.set_editor_property("sampler_type", sampler)
+    return n
+
+def build_prop_master(path):
+    """M_GF_Prop: Base = lerp(D, D*Dye_R, DyeMask.R); Emissive = Base * Emissive.R * EmissiveColor * EmissiveStrength.
+    DyeMask/Emissive default to a black linear mask and EmissiveStrength to 0, so a plain prop is just its _D."""
+    MEL = unreal.MaterialEditingLibrary
+    white = default_tex("T_GF_DefaultWhite", (255, 255, 255), False)
+    black = default_tex("T_GF_MaskBlack", (0, 0, 0), True)
+    d, n = path.rsplit("/", 1)
+    mat = AT.create_asset(n, d, unreal.Material, unreal.MaterialFactoryNew())
+    td = _tparam(mat, "Diffuse", white, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, -1000, -200)
+    tm = _tparam(mat, "DyeMask", black, unreal.MaterialSamplerType.SAMPLERTYPE_MASKS, -1000, 150)
+    te = _tparam(mat, "Emissive", black, unreal.MaterialSamplerType.SAMPLERTYPE_MASKS, -1000, 450)
+    dye = _mexpr(mat, unreal.MaterialExpressionVectorParameter, -700, -350)
+    dye.set_editor_property("parameter_name", "Dye_R"); dye.set_editor_property("default_value", unreal.LinearColor(1, 1, 1, 1))
+    mul = _mexpr(mat, unreal.MaterialExpressionMultiply, -450, -300)
+    MEL.connect_material_expressions(td, "RGB", mul, "A"); MEL.connect_material_expressions(dye, "", mul, "B")
+    lerp = _mexpr(mat, unreal.MaterialExpressionLinearInterpolate, -250, -200)
+    MEL.connect_material_expressions(td, "RGB", lerp, "A"); MEL.connect_material_expressions(mul, "", lerp, "B")
+    MEL.connect_material_expressions(tm, "R", lerp, "Alpha")
+    MEL.connect_material_property(lerp, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    ecol = _mexpr(mat, unreal.MaterialExpressionVectorParameter, -700, 600)
+    ecol.set_editor_property("parameter_name", "EmissiveColor"); ecol.set_editor_property("default_value", unreal.LinearColor(1, 1, 1, 1))
+    estr = _mexpr(mat, unreal.MaterialExpressionScalarParameter, -700, 800)
+    estr.set_editor_property("parameter_name", "EmissiveStrength"); estr.set_editor_property("default_value", 0.0)
+    e1 = _mexpr(mat, unreal.MaterialExpressionMultiply, -450, 400)
+    MEL.connect_material_expressions(lerp, "", e1, "A"); MEL.connect_material_expressions(te, "R", e1, "B")
+    e2 = _mexpr(mat, unreal.MaterialExpressionMultiply, -300, 500)
+    MEL.connect_material_expressions(e1, "", e2, "A"); MEL.connect_material_expressions(ecol, "", e2, "B")
+    e3 = _mexpr(mat, unreal.MaterialExpressionMultiply, -150, 600)
+    MEL.connect_material_expressions(e2, "", e3, "A"); MEL.connect_material_expressions(estr, "", e3, "B")
+    MEL.connect_material_property(e3, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    rough = _mexpr(mat, unreal.MaterialExpressionConstant, -150, 200)
+    rough.set_editor_property("r", 0.9)
+    MEL.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    MEL.recompile_material(mat)
+    EAL.save_loaded_asset(mat)
+    return mat
+
+def build_team_tint_master(path):
+    """M_GF_TeamTint: TeamTint slots (UV 0-1, no atlas). Base = TeamColor; Emissive = TeamColor * TeamGlow (UE pulses TeamGlow)."""
+    MEL = unreal.MaterialEditingLibrary
+    d, n = path.rsplit("/", 1)
+    mat = AT.create_asset(n, d, unreal.Material, unreal.MaterialFactoryNew())
+    col = _mexpr(mat, unreal.MaterialExpressionVectorParameter, -600, 0)
+    col.set_editor_property("parameter_name", "TeamColor"); col.set_editor_property("default_value", unreal.LinearColor(1, 1, 1, 1))
+    glow = _mexpr(mat, unreal.MaterialExpressionScalarParameter, -600, 250)
+    glow.set_editor_property("parameter_name", "TeamGlow"); glow.set_editor_property("default_value", 0.0)
+    mul = _mexpr(mat, unreal.MaterialExpressionMultiply, -300, 150)
+    MEL.connect_material_expressions(col, "", mul, "A"); MEL.connect_material_expressions(glow, "", mul, "B")
+    MEL.connect_material_property(col, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    MEL.connect_material_property(mul, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    rough = _mexpr(mat, unreal.MaterialExpressionConstant, -300, 350)
+    rough.set_editor_property("r", 0.9)
+    MEL.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    MEL.recompile_material(mat)
+    EAL.save_loaded_asset(mat)
+    return mat
+
+def build_water_master(path):
+    """M_GF_Water: translucent block (manifest unreal_material_hint). Base = Diffuse sampled at panned UVs
+    (PanSpeedU/PanSpeedV UV per second); Opacity = scalar Opacity. The texture itself stays opaque."""
+    MEL = unreal.MaterialEditingLibrary
+    white = default_tex("T_GF_DefaultWhite", (255, 255, 255), False)
+    d, n = path.rsplit("/", 1)
+    mat = AT.create_asset(n, d, unreal.Material, unreal.MaterialFactoryNew())
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    uvc = _mexpr(mat, unreal.MaterialExpressionTextureCoordinate, -1100, -200)
+    su = _mexpr(mat, unreal.MaterialExpressionScalarParameter, -1100, 0)
+    su.set_editor_property("parameter_name", "PanSpeedU"); su.set_editor_property("default_value", 0.05)
+    sv = _mexpr(mat, unreal.MaterialExpressionScalarParameter, -1100, 150)
+    sv.set_editor_property("parameter_name", "PanSpeedV"); sv.set_editor_property("default_value", 0.0)
+    app = _mexpr(mat, unreal.MaterialExpressionAppendVector, -900, 50)
+    MEL.connect_material_expressions(su, "", app, "A"); MEL.connect_material_expressions(sv, "", app, "B")
+    pan = _mexpr(mat, unreal.MaterialExpressionPanner, -700, -100)
+    MEL.connect_material_expressions(uvc, "", pan, "Coordinate"); MEL.connect_material_expressions(app, "", pan, "Speed")
+    td = _tparam(mat, "Diffuse", white, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, -450, -150)
+    MEL.connect_material_expressions(pan, "", td, "UVs")
+    MEL.connect_material_property(td, "RGB", unreal.MaterialProperty.MP_BASE_COLOR)
+    op = _mexpr(mat, unreal.MaterialExpressionScalarParameter, -450, 200)
+    op.set_editor_property("parameter_name", "Opacity"); op.set_editor_property("default_value", 0.65)
+    MEL.connect_material_property(op, "", unreal.MaterialProperty.MP_OPACITY)
+    rough = _mexpr(mat, unreal.MaterialExpressionConstant, -450, 350)
+    rough.set_editor_property("r", 0.2)
+    MEL.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    MEL.recompile_material(mat)
+    EAL.save_loaded_asset(mat)
+    return mat
+
+_masters = {}
+def master(name, builder):
+    p = MAT_DIR + "/" + name
+    if name not in _masters:
+        _masters[name] = unreal.load_asset(p) if EAL.does_asset_exist(p) else builder(p)
+    return _masters[name]
+
+def team_tint_mi():
+    p = MAT_DIR + "/MI_GF_TeamTint"
+    if EAL.does_asset_exist(p):
+        return unreal.load_asset(p)
+    mi = AT.create_asset("MI_GF_TeamTint", MAT_DIR, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    unreal.MaterialEditingLibrary.set_material_instance_parent(mi, master("M_GF_TeamTint", build_team_tint_master))
+    EAL.save_loaded_asset(mi)
+    return mi
+
+def prop_materials(name, man, r):
+    """Batch 3b/7 static meshes: MI_<Name> (M_GF_Prop: _D, _M dye mask, _E emissive) on the atlas slot (Main/All),
+    MI_GF_TeamTint on TeamTint slots. Pattern (banner art) and Glass slots stay empty for gameplay/VFX code."""
+    MEL = unreal.MaterialEditingLibrary
+    dest = man["unreal_target"].rsplit("/", 1)[0]
+    own = [os.path.splitext(t)[0] for t in man["files"].get("textures", [])]
+    tex = {}
+    for t in own:
+        tex[t] = dest + "/Textures/" + t
+    src = man["files"].get("textures_shared_from")
+    if src:
+        sman = json.load(open(os.path.join(INBOX, src, "manifest.json"), encoding="utf-8"))
+        for t in man["files"].get("textures_shared", []):
+            t = os.path.splitext(t)[0]
+            tex[t] = sman["unreal_target"].rsplit("/", 1)[0] + "/Textures/" + t
+    diff = [t for t in tex if not t.startswith("T_Icon_") and not t.endswith("_E") and not t.endswith("_M")]
+    emis = [t for t in tex if t.endswith("_E")]
+    mask = [t for t in tex if t.endswith("_M")]
+    mi = AT.create_asset(prop_mi_path(man).rsplit("/", 1)[1], dest + "/Materials", unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    hint = man.get("unreal_material_hint") or {}
+    water = str(hint.get("blend_mode", "")).lower() == "translucent"
+    if water:
+        # Translucent block (SM_Block_Water): opacity + UV panner from the manifest hint
+        wm = master("M_GF_Water", build_water_master)
+        MEL.set_material_instance_parent(mi, wm)
+        spd = list(hint.get("panner_speed_uv_per_s", [0.05, 0.0])) + [0.0, 0.0]
+        MEL.set_material_instance_scalar_parameter_value(mi, "Opacity", float(hint.get("opacity", 0.65)))
+        MEL.set_material_instance_scalar_parameter_value(mi, "PanSpeedU", float(spd[0]))
+        MEL.set_material_instance_scalar_parameter_value(mi, "PanSpeedV", float(spd[1]))
+    else:
+        MEL.set_material_instance_parent(mi, master("M_GF_Prop", build_prop_master))
+    if diff:
+        MEL.set_material_instance_texture_parameter_value(mi, "Diffuse", unreal.load_asset(tex[diff[0]]))
+    if mask and not water:
+        MEL.set_material_instance_texture_parameter_value(mi, "DyeMask", unreal.load_asset(tex[mask[0]]))
+    if emis and not water:
+        MEL.set_material_instance_texture_parameter_value(mi, "Emissive", unreal.load_asset(tex[emis[0]]))
+        MEL.set_material_instance_scalar_parameter_value(mi, "EmissiveStrength", 2.0)
+    EAL.save_loaded_asset(mi)
+    m = unreal.load_asset(man["unreal_target"])
+    mats = list(m.get_editor_property("static_materials"))
+    for i, sm in enumerate(mats):
+        s = str(sm.get_editor_property("material_slot_name"))
+        if s in ("Main", "All"):
+            sm.set_editor_property("material_interface", mi)
+        elif s == "TeamTint":
+            sm.set_editor_property("material_interface", team_tint_mi())
+        mats[i] = sm
+    m.set_editor_property("static_materials", mats)
+    EAL.save_loaded_asset(m)
+    m = unreal.load_asset(man["unreal_target"])
+    got = {str(s.material_slot_name): (s.material_interface.get_name() if s.material_interface else None) for s in m.static_materials}
+    r["materials"] = got
+    r["material_params"] = {"diffuse": diff[:1], "dye_mask": mask[:1], "emissive": emis[:1]}
+    ok = all(got.get(s) == mi.get_name() for s in got if s in ("Main", "All"))
+    ok = ok and all(got.get(s) == "MI_GF_TeamTint" for s in got if s == "TeamTint")
+    ok = ok and bool(diff) and all(EAL.does_asset_exist(tex[t]) for t in diff + mask + emis)
+    if water:
+        r["material_params"]["water"] = {"blend_mode": str(wm.get_editor_property("blend_mode")),
+            "opacity": MEL.get_material_instance_scalar_parameter_value(mi, "Opacity"),
+            "pan_u": MEL.get_material_instance_scalar_parameter_value(mi, "PanSpeedU"),
+            "pan_v": MEL.get_material_instance_scalar_parameter_value(mi, "PanSpeedV")}
+        w = r["material_params"]["water"]
+        ok = ok and "TRANSLUCENT" in w["blend_mode"].upper() and abs(w["opacity"] - float(hint.get("opacity", 0.65))) < 1e-3 \
+            and abs(w["pan_u"] - float(spd[0])) < 1e-4
+    r["checks"]["materials"] = ok
 
 # Clean re-import: replace-existing on skeletal meshes re-creates a default skeleton, so delete this
 # batch's own assets first (dependents first, skeletons last). Nothing outside the manifests is touched.
@@ -333,15 +815,30 @@ for name in ORDER:
     try:
         man = json.load(open(os.path.join(folder, "manifest.json"), encoding="utf-8"))
         r["status_in_manifest"] = man.get("status")
-        r["expected"] = {"dims_cm": man["dimensions_cm"], "tris": man["tri_count"], "slots": man["material_slots"]}
+        r["expected"] = {"dims_cm": man.get("dimensions_cm"), "tris": man.get("tri_count"), "slots": man.get("material_slots")}
         if man["type"] == "static_mesh":
             do_static(name, man, folder, r)
+        elif man["type"] == "texture_set":
+            do_texture_set(name, man, folder, r)
         else:
             do_skel(name, man, folder, r)
+            if name == "SK_Player_Base":
+                player_materials(man, r)
     except Exception as e:
         r["error"] = str(e) + "\n" + traceback.format_exc()
     r["pass"] = "error" not in r and all(v is True or v == "n/a" for v in r["checks"].values())
     log("{}: pass={} checks={}".format(name, r["pass"], r["checks"]))
+
+for name in ORDER:
+    man = mans[name]
+    r = report["assets"][name]
+    if man["type"] == "static_mesh" and str(man.get("batch")) in PROP_MAT_BATCHES and "error" not in r:
+        try:
+            prop_materials(name, man, r)
+        except Exception as e:
+            r["error"] = "materials: " + str(e) + "\n" + traceback.format_exc()
+        r["pass"] = "error" not in r and all(v is True or v == "n/a" for v in r["checks"].values())
+        log("{}: materials {} pass={}".format(name, r.get("materials"), r["pass"]))
 
 delete_redirectors()
 with open(os.path.join(OUT, "ue_report.json"), "w", encoding="utf-8") as fh:

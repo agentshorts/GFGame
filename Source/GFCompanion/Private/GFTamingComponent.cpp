@@ -1,6 +1,7 @@
 #include "GFTamingComponent.h"
 #include "GFTamer.h"
 #include "GFDataTables.h"
+#include "GFNoise.h"
 #include "Engine/DataTable.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -26,6 +27,7 @@ void UGFTamingComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME(UGFTamingComponent, RepStarterKey);
 	DOREPLIFETIME(UGFTamingComponent, RepOwnerKey);
 	DOREPLIFETIME(UGFTamingComponent, RepTargetKey);
+	DOREPLIFETIME(UGFTamingComponent, CalmedUntil);
 }
 
 const FDinoDietRow* UGFTamingComponent::GetDietRow() const
@@ -162,10 +164,87 @@ EGFOfferResult UGFTamingComponent::ServerOffer(UObject* TamerObj, FName Food)
 	return Result;
 }
 
+bool UGFTamingComponent::ServerCalm(UObject* TamerObj)
+{
+	IGFTamer* Tamer = Cast<IGFTamer>(TamerObj);
+	const AActor* Owner = GetOwner();
+	if (!Tamer || !Owner || !Owner->HasAuthority())
+	{
+		return false;
+	}
+	const APawn* Pawn = Tamer->GetTamerPawn();
+	if (!Pawn || FVector::Dist(Pawn->GetActorLocation(), Owner->GetActorLocation()) > MistRange + OfferRangeSlack)
+	{
+		return false;
+	}
+	if (!Machine.ApplyCalm(GetWorld()->GetTimeSeconds()))
+	{
+		return false;
+	}
+	CalmedUntil = Machine.CalmUntil;
+	SyncReplicated();
+	return true;
+}
+
 void UGFTamingComponent::ServerForceHostile(const FString& Key)
 {
+	if (Machine.IsCalmed(GetWorld()->GetTimeSeconds()))
+	{
+		return; // the mist keeps it out of the pack's charge
+	}
 	Machine.ForceHostile(Key);
 	SyncReplicated();
+}
+
+void UGFTamingComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		NoiseHandle = FGFNoise::OnNoise().AddUObject(this, &UGFTamingComponent::HandleNoise);
+	}
+}
+
+void UGFTamingComponent::EndPlay(const EEndPlayReason::Type Reason)
+{
+	if (NoiseHandle.IsValid())
+	{
+		FGFNoise::OnNoise().Remove(NoiseHandle);
+		NoiseHandle.Reset();
+	}
+	Super::EndPlay(Reason);
+}
+
+bool UGFTamingComponent::ShouldHearNoise(EGFTameState State, bool bCalmed, float Distance, float Radius)
+{
+	return State != EGFTameState::Tamed && State != EGFTameState::Fled && State != EGFTameState::Hostile && !bCalmed
+		&& Radius > 0.f && Distance <= Radius;
+}
+
+void UGFTamingComponent::HandleNoise(UWorld* World, const FGFNoiseEvent& Noise)
+{
+	if (World == GetWorld())
+	{
+		ServerHearNoise(Noise);
+	}
+}
+
+bool UGFTamingComponent::ServerHearNoise(const FGFNoiseEvent& Noise)
+{
+	const AActor* Owner = GetOwner();
+	if (!Owner || !Owner->HasAuthority() || Noise.SourceKey.IsEmpty())
+	{
+		return false;
+	}
+	const float Dist = FVector::Dist(Owner->GetActorLocation(), Noise.Location);
+	if (!ShouldHearNoise(Machine.State, Machine.IsCalmed(GetWorld()->GetTimeSeconds()), Dist, Noise.Radius))
+	{
+		return false;
+	}
+	Machine.ForceHostile(Noise.SourceKey);
+	SyncReplicated();
+	++NoisesHeard;
+	return Machine.State == EGFTameState::Hostile && Machine.TargetKey == Noise.SourceKey;
 }
 
 void UGFTamingComponent::CallPack(const FString& Key)

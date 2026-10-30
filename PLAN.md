@@ -3,7 +3,7 @@
 GFGame is a **cozy co-op dino builder** (original IP) built in Unreal Engine 5.8.
 Plan written Oct 29, 2026 for the Unreal, art and coding contributors. All C++ is reviewed before merge.
 
-**Original IP only.** Pokémon, Palworld, Minecraft, Roblox and Dress to Impress are mood references for this doc only. None of their names, creature designs, UI, sounds, logos or assets go into the game, its file names, or the prompts used to generate art ("dino", "runway", "block house" are fine; "Palworld-style X" in a generator prompt is not).
+**Original IP only.** Other games are mood references for this doc only. No other game's names, creature designs, UI, sounds, logos or assets go into the game, its file names, or the prompts used to generate art ("dino", "runway", "block house" are fine; "<other game>-style X" in a generator prompt is not).
 
 ---
 
@@ -11,14 +11,14 @@ Plan written Oct 29, 2026 for the Unreal, art and coding contributors. All C++ i
 
 **Loop:** Home hub (build, garden, craft) → see what you need for the next furniture or decoration → pick a mini-game → earn materials and cosmetic unlocks → craft and place → garden grows while you play → repeat.
 
-Design pillars: cozy, no fail-states in the hub, every mini-game session 3–8 min, she should always have something to place.
+Design pillars: cozy, no fail-states in the hub, every mini-game session 3–8 min, the player should always have something to place.
 
-### Materials table (all names are placeholders; let her rename them)
+### Materials table (all names are placeholders; players can rename them later)
 
 | Source | Primary yield | Secondary / rare | Used for |
 |---|---|---|---|
 | **Garden (hub)** | Flowers, Fruit, Fiber (cotton-like plant), Seeds | Rare bloom (1 in 10 harvests) | Dyes, dino treats, fabric, decor pots |
-| **Hub foraging** (M1 placeholder source) | Wood, Stone, Clay | — | Basic blocks and furniture. Stays as a trickle so she's never stuck |
+| **Hub foraging** (M1 placeholder source) | Wood, Stone, Clay | — | Basic blocks and furniture. Stays as a trickle so players are never stuck |
 | **A. Dino taming** | Scales, Bone, Amber, Dino Eggs (cosmetic) | Fossil (rare) | Sturdy furniture, lamps (amber), garden fences, dino beds |
 | **B. Mini-MOBA** | Crystal, Metal, Trophy Tokens | Banner patterns | Lights, glass blocks, metal furniture, trophy display decor |
 | **C. Fashion show** | Fabric, Ribbon, Glitter, Fans (score-based) | Outfit unlocks | Curtains, rugs, beds, wallpaper, wardrobe; new outfit pieces |
@@ -28,11 +28,11 @@ Cross-links (so every mode feeds the others):
 - **Dino treats** (crafted from garden Fruit) raise taming chance → garden feeds A.
 - **Dyes** (from Flowers) recolor outfits and blocks → garden feeds C and the builder.
 - **Tamed dinos** can be assigned as MOBA allies (one companion slot) and as "models" walking the runway → A feeds B and C.
-- **Beat Hop** songs she unlocks play on the hub **Jukebox**, and Prism Shards make the coloured glass and lights her builds and garden glow with at night → D feeds the builder. Dyes (from the garden) recolour her Beat Hop outfit trail → garden feeds D.
+- **Beat Hop** songs the player unlocks play on the hub **Jukebox**, and Prism Shards make the coloured glass and lights that make builds and gardens glow at night → D feeds the builder. Dyes (from the garden) recolour the Beat Hop outfit trail → garden feeds D.
 - Furniture placed at home gives small passive bonuses (e.g. a "Wardrobe" unlocks more outfit slots; a "Dino Bed" lets one more dino follow) → builder feeds back.
 
 ### Sinks
-Crafting recipes (main sink), block crafting (bulk Wood/Stone/Clay/Glass), seeds, dino treats, outfit dyes, house-plot expansions (one-time, big costs), cosmetic dino accessories. No selling, no currency inflation needed. One soft currency at most ("Hearts" from fashion Fans) only if open question Q8 says she wants a shop.
+Crafting recipes (main sink), block crafting (bulk Wood/Stone/Clay/Glass), seeds, dino treats, outfit dyes, house-plot expansions (one-time, big costs), cosmetic dino accessories. No selling, no currency inflation needed. One soft currency at most ("Hearts" from fashion Fans) only if open question Q8 asks for a shop.
 
 ### Pacing targets (tune in DataTables, not code)
 - First furniture placed within **5 min** of starting.
@@ -61,11 +61,11 @@ Scope: third-person character on a home plot (64×64 blocks wide, 32 high), bloc
 - `GFGame.Craft.Recipe`: with inputs → output added, inputs removed; without inputs → fails and inventory unchanged.
 - `GFGame.Garden.Grow`: planted crop reaches Harvestable after its DataTable time (simulated clock); harvest yields the table's range.
 - `GFGame.Save.RoundTrip`: build 500 random blocks + 10 furniture + 3 crops + inventory → save → clear world → load → identical hash.
-- `GFGame.Perf.FullPlot` (functional test): plot 50% filled, average frame ≤ 8 ms on the RTX 4060 at 1080p in a Development build; peak RAM < 3 GB.
+- `GFGame.Perf.FullPlot` (functional test): plot 50% filled, average frame ≤ 8 ms on the target mid-range GPU at 1080p in a Development build; peak RAM < 3 GB.
 - Manual: a playtester builds a small house with a door, bed and garden in under 15 min without help.
 
 ### M2 – Dino taming (5–7 days)
-Scope: separate "Valley" map reached from a hub portal/door. 3 dino species (one small herbivore, one mid, one large) with Blender Bot rigs. Taming = approach calmly (stealth meter) → offer treats → a short rhythm/trust mini-game → trust fills → tamed. No capture items. Tamed dinos follow (StateTree: Idle/Follow/Fight/Rest), fight wild aggressive dinos with 1–2 abilities each, and can be stationed at home (wander in the garden). Party of up to 3 followers. Yields per §2.
+Scope: separate "Valley" map reached from a hub portal/door. 3 dino species (one small herbivore, one mid, one large) with Blender rigs. Taming = approach calmly (stealth meter) → offer treats → a short rhythm/trust mini-game → trust fills → tamed. No capture items. Tamed dinos follow (StateTree: Idle/Follow/Fight/Rest), fight wild aggressive dinos with 1–2 abilities each, and can be stationed at home (wander in the garden). Party of up to 3 followers. Yields per §2.
 **Accept:**
 - `GFGame.Tame.TrustMath`: trust gain/decay matches the DataTable for 3 species; a favorite treat gives the configured multiplier.
 - `GFGame.Tame.StateFlow`: Wild → Wary → Trusting → Tamed transitions only on valid events; a fled dino resets.
@@ -75,7 +75,7 @@ Scope: separate "Valley" map reached from a hub portal/door. 3 dino species (one
 - Manual: tame all 3 species in one 10-min session.
 
 ### M3 – Fashion show (4–6 days)
-Scope: dressing room with a modular character (body + slots: hair, top, bottom, shoes, accessory, plus dye colors); 30–40 original pieces; themed rounds ("Garden Party", "Dino Explorer"…) drawn from a DataTable; 60–90 s to dress, then a runway walk (Level Sequence + camera), then scoring by 3–5 AI judges using tags (theme match, color harmony, completeness, novelty vs last outfits) with a small random spread. Optional: a tamed dino walks with her. Rewards per §2 by score tier.
+Scope: dressing room with a modular character (body + slots: hair, top, bottom, shoes, accessory, plus dye colors); 30–40 original pieces; themed rounds ("Garden Party", "Dino Explorer"…) drawn from a DataTable; 60–90 s to dress, then a runway walk (Level Sequence + camera), then scoring by 3–5 AI judges using tags (theme match, color harmony, completeness, novelty vs last outfits) with a small random spread. Optional: a tamed dino walks with the player. Rewards per §2 by score tier.
 **Accept:**
 - `GFGame.Fashion.Score`: fixed outfits produce expected tier against each theme (golden-file test of 10 outfits × 3 themes); same input + seed → same score.
 - `GFGame.Fashion.Equip`: every piece in `DT_Outfits` equips without missing-bone/material warnings (iterates all rows).
@@ -96,7 +96,7 @@ Scope, deliberately small: **1 lane, 3v3** (player + up to 2 tamed dinos as alli
 A rhythm game you play with your feet: an obby-style voxel course where you run and bunny-hop, and coloured bricks light up on the beat like notes on a note highway. Original design (mood refs: rhythm games with lanes, obby/bhop courses); no names, UI, songs or charts from any existing game.
 
 **Two modes:**
-- **Live mode ("Play to my music")** — the headline mode. Beat Hop listens to whatever is already playing on her PC (Spotify, YouTube, any app) through **WASAPI loopback** of an output device, tracks the beat live, and builds the course just ahead of her. Details below.
+- **Live mode ("Play to my music")** — the headline mode. Beat Hop listens to whatever is already playing on the player's PC (any app) through **WASAPI loopback** of an output device, tracks the beat live, and builds the course just ahead of the player. Details below.
 - **Songs mode** (kept) — a few built-in songs with hand-tuned charts, tighter timing and best-score tables. It doubles as the no-setup option, the silence fallback, and the test harness for the shared movement/judge/track code. Built first.
 
 **Core loop:** pick a song + difficulty at the hub Beat gate → the course loads with the song → run and **bunny-hop** along a voxel track 4–5 lanes wide → ahead of you, bricks **glow up in their lane colour on the beat** (they start dim about 2 beats early, flash fully on their beat) → **land on the lit brick in time** → judged **Perfect / Good / Miss** → hits build a **combo** (multiplier ×1 → ×4) → **misses**: the brick crumbles and you **drop** to a catch-floor/checkpoint (Normal/Hard) or just **lose speed** (Easy and "Cozy" no-fail mode) → song ends → score, grade (S/A/B/C), best combo → rewards. Runs are one song, **2–4 min**.
@@ -106,13 +106,13 @@ A rhythm game you play with your feet: an obby-style voxel course where you run 
 - **Movement:** ground run 600 cm/s target; bhop keeps speed (jump within 100 ms of landing = no friction applied); air strafing lets you drift lanes mid-air. The track is laid out at the chart's reference speed, so a clean bhop chain keeps you on the beat; a miss or stumble slows you so later bricks pass early → misses compound gently, and a **pace ghost** (soft glow line) shows where "on time" is.
 
 **How a track works (Songs mode; live mode builds the same note types on the fly):**
-- **Music (Songs mode only):** the few songs that ship *inside* the game are original or royalty-free/CC0 with a licence that allows use in a game (generated music only on a paid plan with commercial rights), each with a ledger row (§6). **Live mode needs no licensing**: the game ships no music and only listens to what she plays on her own PC (Q13, resolved).
+- **Music (Songs mode only):** the few songs that ship *inside* the game are original or royalty-free/CC0 with a licence that allows use in a game (generated music only on a paid plan with commercial rights), each with a ledger row (§6). **Live mode needs no licensing**: the game ships no music and only listens to what the player plays on their own PC (Q13, resolved).
 - **Song row** `DT_RhythmSongs`: Id, Title/Artist, SoundWave, BPM (or tempo map), first-beat offset (ms), time signature, preview start, unlock tag, licence row id.
 - **Charts** are JSON in git, one file per song × difficulty (`Content/Charts/<SongId>_<Easy|Normal|Hard>.json`): `{ "song": "...", "difficulty": "Normal", "bpm": 120, "offset_ms": 85, "lanes": 4, "ref_speed_cms": 600, "notes": [ { "beat": 8.0, "lane": 2, "type": "Tap" }, { "beat": 9.0, "lane": 3, "type": "Hold", "len_beats": 2 }, ... ] }`. An editor utility imports them into `URhythmChart` data assets; contributors edit/diff the JSON.
 - **Charting workflow:** a small Python/editor tool proposes a chart from BPM + onset detection, then it's hand-tuned (playtested at 0.5× speed in a debug mode). The course geometry is **generated from the chart** (beat × ref speed = distance along the track, lane = sideways offset), so a new song needs no level art.
 - **Difficulty:** Easy (4 lanes, quarter notes, no Gaps, wide windows, no drops), Normal (4 lanes, eighths, Gaps and Pads, drops to checkpoint), Hard (5 lanes, syncopation, Holds + Switches, tighter windows). Plus "Cozy" (any chart, no fail, half rewards). MVP: **3 songs × 3 difficulties**; more songs are just audio + JSON.
 
-**Live mode: listening to her PC's audio**
+**Live mode: listening to the PC's audio**
 - **Capture:** WASAPI **loopback** on an output (render) endpoint, shared mode, on a dedicated capture thread (MMCSS "Pro Audio" priority). The audio is downmixed to mono float, resampled to 48 kHz, and pushed into a lock-free ring buffer with the packet's QPC timestamp (`IAudioCaptureClient::GetBuffer`), so analysis knows exactly when each sample was rendered. Audio is processed in memory only: **never recorded, saved or sent anywhere**.
 - **Settings → Beat Hop → "Listen to":** a dropdown of **active output devices only** (enumerated with `eRender`, shown by friendly name), with **"System default output" as the default**. With "System default" chosen, it follows default-device changes live (`IMMNotificationClient`). A specific device is saved by endpoint ID; if it disappears, fall back to the system default and show a toast. **There is no microphone or input-device option**: capture endpoints are never enumerated or opened.
 - **The game's own sound:** loopback also hears the game. In live mode the game's music is off, hit sounds default to off (a toggle turns on short, quiet clicks), and the detector ignores onsets within 30 ms of a sound the game itself triggered.
@@ -125,7 +125,7 @@ A rhythm game you play with your feet: an obby-style voxel course where you run 
 - **Brick generation with a short look-ahead buffer** (`UGFLiveChartGenerator`): the course is generated from **predicted** beats about **1.5–2 s ahead** (2–4 beats; tunable), so bricks appear and start their dim glow before their beat.
   - Lane and brick type come from what the bands are doing. Kick-heavy beats go to centre lanes; snare and accents go to outer lanes or Switches. Sustained loud sections become Holds, and big accents after a quiet bar become Pads.
   - Music repeats, so the onset pattern of the last bar seeds the next bar's pattern.
-  - Bricks inside the last 0.5 s are **frozen**: later tempo corrections never move a brick she's about to land on.
+  - Bricks inside the last 0.5 s are **frozen**: later tempo corrections never move a brick the player is about to land on.
   - Difficulty here sets brick density: Easy is on-beat only, Normal adds off-beats, Hard adds syncopation and 5 lanes.
   - `AGFRhythmTrack` streams the course endlessly, adding HISM instances ahead and recycling them behind.
 - **Latency calibration** (Settings → Beat Hop → "Live latency"):
@@ -161,20 +161,20 @@ A rhythm game you play with your feet: an obby-style voxel course where you run 
 - `GFGame.Live.Silence`: silence or noise input → no misses, fallback within 1.5 s, resume within 4 s of music returning; 10 s of silence at the start offers Songs mode.
 - `GFGame.Live.Devices` (functional, on a dev PC): only render endpoints are listed (no capture devices), "System default" follows a default-device switch, and a removed device falls back without a crash.
 - `GFGame.Live.Latency` (functional): the game plays its own click track to the default output, captures it via loopback, and the measured internal latency is compensated to within ±10 ms.
-- Manual, live: with Spotify playing on the PC, a playtester plays 3 different songs on Normal; bricks feel on the beat after the tap-along calibration, and pausing Spotify triggers the fallback cleanly.
-- `GFGame.Rhythm.Perf`: course with 600 bricks ≤ 8 ms average frame on the RTX 4060 at 1080p.
+- Manual, live: with a music app playing on the PC, a playtester plays 3 different songs on Normal; bricks feel on the beat after the tap-along calibration, and pausing the music triggers the fallback cleanly.
+- `GFGame.Rhythm.Perf`: course with 600 bricks ≤ 8 ms average frame on the target mid-range GPU at 1080p.
 - Manual: a playtester full-combos one Easy chart and finds Normal fair; with the calibration offset set, Perfects feel "on the beat".
 - **Cut line:** if it passes 13 days, ship Easy + Normal only with Tap/Gap notes (no Holds/Switches/Pads) in both modes. If live tracking still isn't solid, ship live mode with Easy only (on-beat bricks, widest windows) and Songs mode complete.
 
 ### M6 – Polish and delivery (3–5 days)
-Title screen with a personal touch (per Q10), tutorial prompts, music/SFX (licensed per §6), settings (volume, graphics preset, key rebinding), achievements/"memory book" of firsts, crash-safe autosave, packaged Shipping build, installer or zipped folder, desktop shortcut, a printed/digital quick-start card.
+Title screen (per Q10), tutorial prompts, music/SFX (licensed per §6), settings (volume, graphics preset, key rebinding), achievements/"memory book" of firsts, crash-safe autosave, packaged Shipping build, installer or zipped folder, desktop shortcut, a printed/digital quick-start card.
 **Accept:**
 - Full playthrough script (manual, ~2 h): new save → each mode → craft 20 items → plot expansion → quit/reload → no blocker bugs, no crashes.
 - `GFGame.Smoke.AllMaps`: every map loads and unloads with zero errors in the log.
 - Shipping build runs on the target PC (Q3) at ≥ 60 fps on the hub at the chosen preset.
 - License ledger complete: every asset row has source + license + proof (§6).
 
-**Order and parallel work:** Blender Bot can model/rig M2 dinos and M3 outfit pieces while agents build M1 code. M5 needs no new rigs (it reuses the player skeleton and brick blocks), so it can be built before M4 if the MOBA slips. Rough total: **~6–7 weeks of agent work** with daily reviews.
+**Order and parallel work:** The Blender artist can model/rig M2 dinos and M3 outfit pieces while agents build M1 code. M5 needs no new rigs (it reuses the player skeleton and brick blocks), so it can be built before M4 if the MOBA slips. Rough total: **~6–7 weeks of agent work** with daily reviews.
 
 ---
 
@@ -233,16 +233,15 @@ Tables are edited as CSV in git (agents diff them easily) and reimported via an 
 **Style:** decided by Q1. A stylized, low-poly/toon look is cheapest and fits voxels; avoid realism.
 
 **Sources, in order of preference:**
-1. **Blender Bot (own work):** dinos (rig, Idle/Walk/Run/Attack/Happy/Eat), furniture kit, outfit pieces on one shared character skeleton. Fully owned.
-2. **AI 3D generators, paid plan only,** as base meshes that Blender Bot cleans, retopos and rigs:
-   - **Meshy** (terms checked Oct 29, 2026): paid-plan users own their output, provided the models are not published to the Meshy Community and the inputs don't infringe anyone's copyright. Free plan = Meshy owns the output and licenses it under CC BY 4.0 (credit required) and free downloads are limited. Rights follow the plan at generation time.
-   - **Tripo** (checked Oct 29, 2026): paid plans (Pro ~$20/mo monthly) give ownership and commercial use **when the model is set to private**. Free plan = Tripo retains IP and its pages conflict on whether commercial use is allowed, so **never ship Free-plan Tripo output.**
+1. **Blender (own work):** dinos (rig, Idle/Walk/Run/Attack/Happy/Eat), furniture kit, outfit pieces on one shared character skeleton. Fully owned.
+2. **AI 3D generators, paid plan only,** as base meshes that the Blender artist cleans, retopos and rigs:
+   - Use only generators whose paid plan grants ownership and commercial use of the output; check and save the terms on the day of first use. Free plans often keep the rights or require attribution, so **never ship free-plan output.**
    - Prompts and reference images must be original (no franchise names, no screenshots of other games). Save the prompt, reference, plan tier and date for every generation.
-3. **Fab:** check each listing's license at purchase. Standard License = OK for use in a game. Personal License blocks public release, so prefer Standard. Listings marked for Unreal only must stay in Unreal. Check AI-generated disclosure on listings. Free Quixel/Epic content is fine inside Unreal.
+3. **Asset stores:** check each listing's license at purchase. Standard License = OK for use in a game. Personal License blocks public release, so prefer Standard. Listings marked for Unreal only must stay in Unreal. Check AI-generated disclosure on listings. Free content from the engine's own store is fine inside Unreal.
 4. **Audio:** music/SFX from royalty-free libraries with a game license (or generated on a paid plan with commercial rights), each logged.
-5. **Fonts:** OFL fonts (Google Fonts) only.
+5. **Fonts:** OFL-licensed fonts only.
 
-**License ledger:** `docs/LicenseLedger.csv`. Columns: `asset_path, source (Blender Bot/Meshy/Tripo/Fab/other), url_or_job_id, creator, license, plan_tier_at_generation, date_ct, prompt_or_ref_file, attribution_needed, proof_file (receipt/terms snapshot PDF), notes`. Rule: no asset is merged without a ledger row; `GFGame.Data.LedgerCheck` fails if any `/Game/Art/**` asset has no row. Save a PDF of each generator's terms on the day of first use.
+**License ledger:** `docs/LicenseLedger.csv`. Columns: `asset_path, source (own work/AI generator/asset store/other), url_or_job_id, creator, license, plan_tier_at_generation, date_ct, prompt_or_ref_file, attribution_needed, proof_file (receipt/terms snapshot PDF), notes`. Rule: no asset is merged without a ledger row; `GFGame.Data.LedgerCheck` fails if any `/Game/Art/**` asset has no row. Save a PDF of each generator's terms on the day of first use.
 
 Keep everything clean so the project can be shown, devlogged or released.
 
@@ -267,35 +266,35 @@ Keep everything clean so the project can be shown, devlogged or released.
 | **Voxel performance** | Naive per-block actors/meshes die fast | Chunked data + one mesh per chunk (greedy meshing into a dynamic/procedural mesh), or HISM per block type per chunk as the simple first version; rebuild only dirty chunks; small plot size; perf test in M1 |
 | **AI-agent C++ quality** | Crashes, UPROPERTY/GC mistakes, tangled modules | Small PRs, tests required, `-WarningsAsErrors` on GFGame modules, check `UPROPERTY` on all UObject pointers, every PR reviewed, no raw `new` of UObjects, no ticks without reason |
 | Toolchain | UBT rejected the installed MSVC 14.4x for game targets in the Oct 29 check | Fix in M0 before any feature work |
-| Art consistency | Mixed sources look patchy | One style sheet, one shared skeleton, Blender Bot does final materials on everything |
-| Taming feels like a clone | Genre is crowded | Trust/rhythm mechanic and dinos living in her garden, not capture devices |
+| Art consistency | Mixed sources look patchy | One style sheet, one shared skeleton, the Blender artist does final materials on everything |
+| Taming feels like a clone | Genre is crowded | Trust/rhythm mechanic and dinos living in your garden, not capture devices |
 | Scope creep from "one more feature" | Scope grows | Lock milestone scope; extras go to a `LATER.md` |
 | **Beat Hop audio sync** | Frame-time clocks drift; audio/display latency differs per PC; bhop speed varies so bricks can arrive off-beat | Quartz-started song + audio-clock song time, calibration screen, judge on landing timestamp not frame, pace ghost + generous Easy windows, `ClockDrift` test |
 | **Live beat tracking** (new biggest Beat Hop risk) | Real songs have tempo drift, breakdowns, rubato and quiet intros; Bluetooth adds unknown delay; loopback also hears the game | Prediction + 1.5–2 s look-ahead with frozen near bricks, confidence-gated warm-up and re-lock, looser live windows, silence fallback, per-device latency calibration, game audio off in live mode, offline golden-clip tests, Songs mode as a fallback, live-Easy-only cut line |
 | Music licensing | Only Songs-mode tracks ship inside the game | Original/royalty-free only for built-in songs, with a ledger row per song (§6). Live mode ships no music, so nothing to licence |
-| GPU contention | One RTX 4060 shared by Blender, generators and UE | Schedule Blender renders and UE builds apart |
+| GPU contention | One GPU shared by Blender, generators and UE | Schedule Blender renders and UE builds apart |
 
 ---
 
 ## 9. Open questions
 
-1. **Art style:** cute/chibi, toon low-poly, cozy pastel, or something else? Any game or show whose *look* she loves (as a mood reference only)?
+1. **Art style:** cute/chibi, toon low-poly, cozy pastel, or something else? Any game or show to use as a mood reference for the look (reference only)?
 2. **Favorite dinos** (real species are fine: e.g. triceratops, stegosaurus, parasaurolophus) and should they be realistic, cute, or fantasy-colored?
-3. **Platform:** her own Windows PC? What GPU/specs? Controller or mouse/keyboard? (Console or Mac would change the plan a lot.)
-4. **Deadline / occasion:** birthday, anniversary, holiday? Date drives which milestones make it in.
+3. **Platform:** Windows PC: minimum GPU/specs? Controller or mouse/keyboard? (Console or Mac would change the plan a lot.)
+4. **Deadline:** the target date drives which milestones make it in.
 5. **Single-player only?** Or co-op with friends (co-op would add a lot of work)?
-6. **Names:** the game's title, her character's name, home/valley names, and does she get to name each dino?
-7. **Fashion themes** she'd love (e.g. cottagecore, streetwear, goth, Y2K, formal, beach) and anything she'd hate.
+6. **Names:** the game's title, the default character name, home/valley names, and can players name each dino?
+7. **Fashion themes** to include (e.g. cottagecore, streetwear, goth, Y2K, formal, beach) and any to avoid.
 8. Should there be a shop/currency, or only crafting?
 9. Should gardens grow in **real time** while the game is closed (like a pet) or only while playing?
-10. **Personal touches:** inside jokes, a message on the title screen, your pets/places as easter eggs, a photo frame furniture item?
-11. How competitive should the MOBA feel — easy and cute, or a real challenge? Is the MOBA even a must-have for her, or a nice-to-have?
-12. ~~**Beat Hop music:** what music, and should we make a track?~~ **Resolved (Oct 29):** Beat Hop's live mode syncs to whatever she plays on her PC (Spotify etc.) via output-device loopback, so licensing isn't an issue and her own music is the soundtrack. Built-in Songs mode keeps a few licence-free tracks. (Keyboard vs controller for hopping folds into Q3.)
+10. **Easter eggs:** a message on the title screen, hidden extras, a photo frame furniture item?
+11. How competitive should the MOBA feel — easy and cute, or a real challenge? Is the MOBA a must-have or a nice-to-have?
+12. ~~**Beat Hop music:** what music, and should we make a track?~~ **Resolved (Oct 29):** Beat Hop's live mode syncs to whatever the player is playing on their PC via output-device loopback, so licensing isn't an issue and the player's own music is the soundtrack. Built-in Songs mode keeps a few licence-free tracks. (Keyboard vs controller for hopping folds into Q3.)
 
 ---
 
 ## 10. Next steps
 1. Answer Q1–Q4 (style, dinos, platform, deadline) — blocks art and the schedule.
 2. M0 (new repo, toolchain fix, smoke test).
-3. Blender Bot: style sheet + shared character skeleton + 1 test dino once Q1/Q2 are answered.
-4. Decide Meshy vs Tripo (paid plan) only if Blender Bot needs base meshes; save terms PDFs and start the ledger.
+3. Art: style sheet + shared character skeleton + 1 test dino once Q1/Q2 are answered.
+4. Pick an AI 3D generator (paid plan) only if the artist needs base meshes; save terms PDFs and start the ledger.

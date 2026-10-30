@@ -1,0 +1,16 @@
+---,Species,Slot,Cooldown,Range,Target,DamageMult,Status,StatusSeconds,SelfStatus,SelfStatusSeconds,HealFraction,BonusVsStatus,BonusVsStatus2,BonusMult,bDash,UnlockLevel
+SwarmNip,Nipper,1,6.0,160.0,Enemy,1.8,None,0.0,None,0.0,0.0,None,None,1.0,False,1
+Scatter,Nipper,2,10.0,0.0,Self,0.0,None,0.0,Guard,1.5,0.0,None,None,1.0,False,1
+SnackBreak,Nipper,3,18.0,0.0,Self,0.0,None,0.0,None,0.0,0.25,None,None,1.0,False,3
+Pounce,Raptor,1,8.0,800.0,Enemy,1.4,Stun,0.3,None,0.0,0.0,Stun,Root,1.5,True,1
+SickleRake,Raptor,2,10.0,180.0,Enemy,1.6,Shred,5.0,None,0.0,0.0,None,None,1.0,False,1
+PackCall,Raptor,3,20.0,600.0,AllyArea,0.0,Haste,6.0,None,0.0,0.0,None,None,1.0,False,3
+SailFlare,Sailback,1,14.0,600.0,EnemyArea,0.0,Taunt,3.0,Guard,3.0,0.0,None,None,1.0,False,1
+RiverSpray,Sailback,2,10.0,450.0,EnemyArea,0.5,Wet,5.0,None,0.0,0.0,None,None,1.0,False,1
+TidalSnap,Sailback,3,9.0,220.0,Enemy,1.6,None,0.0,None,0.0,0.0,Wet,None,2.0,False,3
+Roar,Rex,1,16.0,700.0,EnemyArea,0.0,Stun,1.5,None,0.0,0.0,None,None,1.0,False,1
+TailSwipe,Rex,2,9.0,300.0,EnemyArea,1.0,Stun,0.3,None,0.0,0.0,None,None,1.0,False,1
+EmberChomp,Rex,3,12.0,240.0,Enemy,1.8,Burn,4.0,None,0.0,0.0,Root,Stun,1.25,False,3
+Charge,Hornback,1,12.0,600.0,Enemy,1.2,Stun,0.8,None,0.0,0.0,None,None,1.0,True,1
+HornToss,Hornback,2,8.0,200.0,Enemy,1.2,Stun,0.4,None,0.0,0.0,None,None,1.0,False,1
+Brace,Hornback,3,18.0,0.0,Self,0.0,None,0.0,Guard,4.0,0.0,None,None,1.0,False,3

@@ -46,6 +46,7 @@ crashinfo-*
 *.xcodeproj
 
 # Secrets and credentials (public repo)
+secrets/
 .env
 .env.*
 *.env

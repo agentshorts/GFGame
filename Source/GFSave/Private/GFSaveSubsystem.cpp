@@ -63,6 +63,7 @@ UGFSaveGame* UGFSaveSubsystem::CaptureWorld(UWorld* World)
 		Save->Land = GS->Land;
 		Save->Mail = GS->Mail;
 		Save->PackedBlueprints = GS->PackedBlueprints;
+		Save->ModeStates = GS->GatherModeStates();
 	}
 	return Save;
 }
@@ -115,6 +116,7 @@ bool UGFSaveSubsystem::ApplyToWorld(UWorld* World, const UGFSaveGame* Save)
 		}
 		GS->Mail = Save->Mail;
 		GS->PackedBlueprints = Save->PackedBlueprints;
+		GS->RestoreModeStates(Save->ModeStates);
 		for (APlayerState* PS : GS->PlayerArray)
 		{
 			const AGFPlayerState* GPS = Cast<AGFPlayerState>(PS);

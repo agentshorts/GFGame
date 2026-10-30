@@ -1,0 +1,5 @@
+---,SearchSeconds,Weight,Loot
+FilingCabinet,4.0,3,"((ItemId=""Fiber"",Min=1,Max=2,Chance=0.6),(ItemId=""ScrapWire"",Min=1,Max=2,Chance=0.7),(ItemId=""CrackedLens"",Min=1,Max=1,Chance=0.3),(ItemId=""PolymerGel"",Min=1,Max=1,Chance=0.1))"
+BreakRoomFridge,5.0,2,"((ItemId=""BioCulture"",Min=1,Max=1,Chance=0.35),(ItemId=""Fruit"",Min=1,Max=2,Chance=0.5),(ItemId=""BentPipe"",Min=1,Max=1,Chance=0.5),(ItemId=""PolymerGel"",Min=1,Max=1,Chance=0.2))"
+ServerRack,6.0,2,"((ItemId=""ScrapWire"",Min=2,Max=3,Chance=0.9),(ItemId=""CircuitInk"",Min=1,Max=1,Chance=0.35),(ItemId=""Metal"",Min=1,Max=1,Chance=0.5),(ItemId=""AnomalyShard"",Min=1,Max=1,Chance=0.05))"
+SpecimenTank,8.0,1,"((ItemId=""BioCulture"",Min=1,Max=1,Chance=0.5),(ItemId=""PolymerGel"",Min=1,Max=1,Chance=0.4),(ItemId=""CrackedLens"",Min=1,Max=2,Chance=0.6),(ItemId=""AnomalyShard"",Min=1,Max=1,Chance=0.15))"

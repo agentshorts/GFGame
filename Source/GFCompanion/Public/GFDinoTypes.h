@@ -4,6 +4,14 @@
 #include "Engine/DataTable.h"
 #include "GFDinoTypes.generated.h"
 
+/** The Lab Treat (Overtime lab): every species accepts it, worth 1.5x its mean accepted food. */
+namespace GFLabItems
+{
+	static const FName LabTreat(TEXT("LabTreat"));
+	static const FName CalmingMist(TEXT("CalmingMist"));
+	static constexpr float LabTreatMultiplier = 1.5f;
+}
+
 /** One accepted food and the bond it gives (bond bar is 0..100). */
 USTRUCT(BlueprintType)
 struct GFCOMPANION_API FGFDietEntry
@@ -231,6 +239,10 @@ struct GFCOMPANION_API FGFTameMachine
 	UPROPERTY() float StateTime = 0.f;
 	UPROPERTY() float CalmTime = 0.f;
 	UPROPERTY() float LastOfferTime = -1000.f;
+	/** Calming Mist: until this time (server seconds) nobody counts as a threat and refusals don't anger it. */
+	UPROPERTY() float CalmUntil = -1000.f;
+
+	static constexpr float CalmingMistSeconds = 10.f;
 
 	/** Advances timers and reacts to who is around. Returns true if State changed. */
 	bool Tick(const FDinoDietRow& Row, float Now, float Dt, const TArray<FGFTamerView>& Players);
@@ -240,6 +252,9 @@ struct GFCOMPANION_API FGFTameMachine
 	void NotifyHit() { CalmTime = 0.f; }
 	/** Turn hostile at Key (pack call-in). */
 	void ForceHostile(const FString& Key);
+	/** Calming Mist: a Threat or Hostile dino settles to Alert and stays calm for Seconds. False if tamed or fled. */
+	bool ApplyCalm(float Now, float Seconds = CalmingMistSeconds);
+	bool IsCalmed(float Now) const { return Now < CalmUntil; }
 	void Flee();
 	bool IsTamed() const { return State == EGFTameState::Tamed; }
 

@@ -8,6 +8,10 @@ float FDinoDietRow::AcceptedGain(FName Food) const
 	{
 		return -1.f;
 	}
+	if (Food == GFLabItems::LabTreat && !Accepted.IsEmpty())
+	{
+		return FMath::RoundToFloat(MeanAcceptedGain() * GFLabItems::LabTreatMultiplier); // every species eats it
+	}
 	for (const FGFDietEntry& E : Accepted)
 	{
 		if (E.Food == Food)
@@ -236,6 +240,22 @@ void FGFTameMachine::ForceHostile(const FString& Key)
 	}
 }
 
+bool FGFTameMachine::ApplyCalm(float Now, float Seconds)
+{
+	if (State == EGFTameState::Tamed || State == EGFTameState::Fled)
+	{
+		return false;
+	}
+	CalmUntil = Now + Seconds;
+	Aggravation = 0;
+	TargetKey.Reset();
+	if (State == EGFTameState::Threat || State == EGFTameState::Hostile)
+	{
+		SetState(EGFTameState::Alert);
+	}
+	return true;
+}
+
 void FGFTameMachine::Flee()
 {
 	if (State == EGFTameState::Tamed)
@@ -276,6 +296,10 @@ bool FGFTameMachine::Tick(const FDinoDietRow& Row, float Now, float Dt, const TA
 		bThreatPresent |= !bOk && P.Distance <= Row.CalmRadius() * S;
 		bThreatInWarn |= !bOk && P.Distance <= Row.WarnRadius() * S;
 		bThreatInAggro |= !bOk && P.Distance <= Row.AggroRadius * S;
+	}
+	if (IsCalmed(Now))
+	{
+		bThreatPresent = bThreatInWarn = bThreatInAggro = false; // Calming Mist: nobody looks like a threat
 	}
 
 	// Bond fades while nobody is around; at zero the tame attempt is forgotten.
@@ -423,7 +447,7 @@ EGFOfferResult FGFTameMachine::Offer(const FDinoDietRow& Row, float Now, const F
 	if (Kind == EGFFeedResult::Rejected)
 	{
 		++Aggravation;
-		if (Aggravation >= 2)
+		if (Aggravation >= 2 && !IsCalmed(Now))
 		{
 			SetState(EGFTameState::Threat);
 			TargetKey = Key;
