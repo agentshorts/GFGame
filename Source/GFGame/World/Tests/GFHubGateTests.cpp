@@ -63,7 +63,7 @@ namespace GFHubGateTests
 		return Count;
 	}
 
-	static AGFMiniGameGate* FindGate(UWorld* World, FName Id, EGFMiniGameGateRole Role)
+	static AGFMiniGameGate* FindSpawnedGate(UWorld* World, FName Id, EGFMiniGameGateRole Role)
 	{
 		for (TActorIterator<AGFMiniGameGate> It(World); It; ++It)
 		{
@@ -313,7 +313,13 @@ bool FGFHubGateActorTest::RunTest(const FString&)
 		TestEqual(*FString::Printf(TEXT("%s sign text"), *Entry.Id.ToString()), Gate->GetSignText().ToString(), Entry.Label);
 		const bool bArt = !Entry.ArtObject.IsEmpty() && FPackageName::DoesPackageExist(FGFMiniGameCatalog::ArtPackage(Entry));
 		TestEqual(*FString::Printf(TEXT("%s placeholder matches missing art"), *Entry.Id.ToString()), Gate->IsUsingPlaceholder(), !bArt);
-		TestNotNull(*FString::Printf(TEXT("%s mesh"), *Entry.Id.ToString()), Gate->GetGateMesh() ? Gate->GetGateMesh()->GetStaticMesh() : nullptr);
+		// GetStaticMesh returns TObjectPtr. TestNotNull only accepts a raw pointer.
+		UStaticMesh* MeshAsset = nullptr;
+		if (UStaticMeshComponent* GateMesh = Gate->GetGateMesh())
+		{
+			MeshAsset = GateMesh->GetStaticMesh().Get();
+		}
+		TestNotNull(*FString::Printf(TEXT("%s mesh"), *Entry.Id.ToString()), MeshAsset);
 		TestFalse(*FString::Printf(TEXT("%s portal has no solid floor"), *Entry.Id.ToString()), FloorBlocks(Gate->GetPadFloor()));
 		if (Entry.bExpectArt)
 		{
@@ -387,7 +393,7 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 
 	for (const FGFMiniGameEntry& Entry : FGFMiniGameCatalog::All())
 	{
-		AGFMiniGameGate* Portal = FindGate(Scope.World, Entry.Id, EGFMiniGameGateRole::Portal);
+		AGFMiniGameGate* Portal = FindSpawnedGate(Scope.World, Entry.Id, EGFMiniGameGateRole::Portal);
 		if (!TestNotNull(*FString::Printf(TEXT("%s portal"), *Entry.Id.ToString()), Portal))
 		{
 			continue;
@@ -398,7 +404,7 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 		TestFalse(*FString::Printf(TEXT("%s portal floor stays open"), *Entry.Id.ToString()), FloorBlocks(Portal->GetPadFloor()));
 		if (Entry.bHasPad)
 		{
-			AGFMiniGameGate* Marker = FindGate(Scope.World, Entry.Id, EGFMiniGameGateRole::Marker);
+			AGFMiniGameGate* Marker = FindSpawnedGate(Scope.World, Entry.Id, EGFMiniGameGateRole::Marker);
 			TestNotNull(*FString::Printf(TEXT("%s pad marker"), *Entry.Id.ToString()), Marker);
 			if (Marker)
 			{
@@ -429,7 +435,7 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 			return false;
 		}
 		BeatDirector->Place(TEXT("/Game/Maps/L_Beat"), Rime);
-		AGFMiniGameGate* Sign = FindGate(BeatWorld.World, TEXT("BeatHop"), EGFMiniGameGateRole::Marker);
+		AGFMiniGameGate* Sign = FindSpawnedGate(BeatWorld.World, TEXT("BeatHop"), EGFMiniGameGateRole::Marker);
 		if (TestNotNull(TEXT("Beat Hop map sign"), Sign))
 		{
 			TestEqual(TEXT("Beat Hop map shows Beat Hop"), Sign->GetLabel(), FString(TEXT("Beat Hop")));
@@ -437,7 +443,7 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 			TestFalse(TEXT("Beat Hop map marker has no pad floor"), FloorBlocks(Sign->GetPadFloor()));
 		}
 		TestEqual(TEXT("Course is on the Beat Hop map"), CountClass(BeatWorld.World, Beat->PlacedClass), 1);
-		TestNull(TEXT("Depths is not written on the Beat Hop map"), FindGate(BeatWorld.World, TEXT("Depths"), EGFMiniGameGateRole::Marker));
+		TestNull(TEXT("Depths is not written on the Beat Hop map"), FindSpawnedGate(BeatWorld.World, TEXT("Depths"), EGFMiniGameGateRole::Marker));
 	}
 
 	{
@@ -453,7 +459,7 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 		}
 		RunwayDirector->Place(TEXT("/Game/Maps/L_Runway"), Rime);
 		TestEqual(TEXT("Runway stage is placed"), CountClass(RunwayWorld.World, Fashion->PlacedClass), 1);
-		AGFMiniGameGate* Sign = FindGate(RunwayWorld.World, TEXT("Fashion"), EGFMiniGameGateRole::Marker);
+		AGFMiniGameGate* Sign = FindSpawnedGate(RunwayWorld.World, TEXT("Fashion"), EGFMiniGameGateRole::Marker);
 		if (TestNotNull(TEXT("Runway sign actor"), Sign))
 		{
 			TestEqual(TEXT("Runway sign"), Sign->GetLabel(), FString(TEXT("Runway")));
@@ -473,14 +479,14 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 			return false;
 		}
 		MobaDirector->Place(TEXT("/Game/Maps/L_Moba"), Rime);
-		AGFMiniGameGate* Sign = FindGate(MobaWorld.World, TEXT("Moba"), EGFMiniGameGateRole::Marker);
+		AGFMiniGameGate* Sign = FindSpawnedGate(MobaWorld.World, TEXT("Moba"), EGFMiniGameGateRole::Marker);
 		if (TestNotNull(TEXT("MOBA sign actor"), Sign))
 		{
 			TestEqual(TEXT("MOBA map shows MOBA"), Sign->GetLabel(), FString(TEXT("MOBA")));
 			TestEqual(TEXT("MOBA map sign text"), Sign->GetSignText().ToString(), FString(TEXT("MOBA")));
 			TestFalse(TEXT("MOBA map marker has no pad floor"), FloorBlocks(Sign->GetPadFloor()));
 		}
-		TestNull(TEXT("MOBA map has no Depths sign"), FindGate(MobaWorld.World, TEXT("Depths"), EGFMiniGameGateRole::Marker));
+		TestNull(TEXT("MOBA map has no Depths sign"), FindSpawnedGate(MobaWorld.World, TEXT("Depths"), EGFMiniGameGateRole::Marker));
 	}
 	return true;
 }

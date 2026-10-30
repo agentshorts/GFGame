@@ -11,6 +11,7 @@
 #include "GFMiniGameGate.generated.h"
 
 class UBoxComponent;
+class UFont;
 class UStaticMeshComponent;
 class UTextRenderComponent;
 class APawn;
@@ -81,6 +82,13 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	FString Label;
+
+	/** UTextRenderComponent has no GetText in UE 5.8. This is the string last passed to SetText. */
+	FText SignText;
+
+	/** UTextRenderComponent has no GetFont in UE 5.8. Loaded once and passed to SetFont. */
+	UPROPERTY(Transient)
+	TObjectPtr<UFont> SignFont;
 
 	bool bUsingPlaceholder = true;
 	float NextEnterSeconds = 0.f;

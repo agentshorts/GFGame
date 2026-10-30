@@ -99,7 +99,7 @@ void AGFMiniGameGate::BeginPlay()
 
 FText AGFMiniGameGate::GetSignText() const
 {
-	return LabelText ? LabelText->GetText() : FText::GetEmpty();
+	return SignText;
 }
 
 void AGFMiniGameGate::OnRep_Gate()
@@ -111,15 +111,17 @@ void AGFMiniGameGate::ApplyVisuals()
 {
 	const FGFMiniGameEntry* Entry = FGFMiniGameCatalog::Find(EntryId);
 	Label = Entry ? Entry->Label : FString();
+	SignText = FText::FromString(Label);
 	if (LabelText)
 	{
-		LabelText->SetText(FText::FromString(Label));
-		if (!LabelText->GetFont())
+		LabelText->SetText(SignText);
+		if (!SignFont)
 		{
-			if (UFont* Font = LoadObject<UFont>(nullptr, TEXT("/Engine/EngineFonts/RobotoDistanceField.RobotoDistanceField")))
-			{
-				LabelText->SetFont(Font);
-			}
+			SignFont = LoadObject<UFont>(nullptr, TEXT("/Engine/EngineFonts/RobotoDistanceField.RobotoDistanceField"));
+		}
+		if (SignFont)
+		{
+			LabelText->SetFont(SignFont);
 		}
 	}
 
