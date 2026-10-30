@@ -8,6 +8,7 @@
 #include "Engine/World.h"
 #include "GameFramework/WorldSettings.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/GameSession.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFModeTypes.h"
@@ -133,6 +134,7 @@ bool FGFSocialFactionFilterTest::RunTest(const FString&)
 	TestFalse(TEXT("Member isn't"), W.GS->IsFactionLeader(M));
 	TestTrue(TEXT("Other faction has its own leader"), W.GS->IsFactionLeader(X));
 	TestEqual(TEXT("Same again"), W.GS->ServerClaimFaction(M, FA), FName(TEXT("Same")));
+	W.GS->MaxPerFaction = 3; // a cap set for this check (the default is 0, no cap)
 	W.Add(TEXT("M2"), FA);
 	TestEqual(TEXT("Full at 3"), W.GS->ServerClaimFaction(W.Add(TEXT("M3"), NAME_None), FA), FName(TEXT("Full")));
 	TestEqual(TEXT("Switch"), W.GS->ServerClaimFaction(M, FB), FName(TEXT("Ok")));
@@ -628,6 +630,26 @@ bool FGFSocialLeaderHandoverTest::RunTest(const FString&)
 	A->bLoggedOut = true;
 	TestTrue(TEXT("A left: earliest jailed member leads"), W.Social->Describe(B).bLeader);
 	TestFalse(TEXT("C is later"), W.Social->Describe(C).bLeader);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialPlayerCapTest, "GFGame.Social.PlayerCap", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFSocialPlayerCapTest::RunTest(const FString&)
+{
+	// Up to 10 players in a world (5v5 in the MOBA). 10 doesn't split over 3 factions, so factions are uncapped by default.
+	TestEqual(TEXT("Max players is 10"), GetDefault<AGameSession>()->MaxPlayers, 10);
+	TestEqual(TEXT("No per-faction cap by default"), GetDefault<AGFGameState>()->MaxPerFaction, 0);
+	FWorld W;
+	if (!W.Init(*this, TEXT("GFSocialPlayerCap")))
+	{
+		return false;
+	}
+	for (int32 i = 0; i < 10; ++i)
+	{
+		AGFPlayerState* PS = W.Add(FString::Printf(TEXT("P%d"), i), NAME_None, i == 0);
+		TestEqual(TEXT("Everyone fits in one faction"), PS ? W.GS->ServerClaimFaction(PS, FA) : FName(), FName(TEXT("Ok")));
+	}
+	TestEqual(TEXT("Ten in one faction"), W.GS->FactionCount(FA), 10);
 	return true;
 }
 

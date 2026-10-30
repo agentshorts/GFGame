@@ -319,7 +319,7 @@ FName AGFGameState::ServerClaimFaction(AGFPlayerState* PS, FName FactionId)
 	{
 		return TEXT("Same");
 	}
-	if (!FactionId.IsNone() && FactionCount(FactionId) >= MaxPerFaction)
+	if (!FactionId.IsNone() && MaxPerFaction > 0 && FactionCount(FactionId) >= MaxPerFaction)
 	{
 		return TEXT("Full");
 	}

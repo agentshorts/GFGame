@@ -4,7 +4,7 @@
 #include "GFMiniGameGateSubsystem.h"
 #include "GFMobaGateSubsystem.generated.h"
 
-/** Gate B: mini arena, 3v3 one lane vs bots (M4). Stub. */
+/** Gate B: the MOBA (M4). Target is now a true 5v5 (up to 10 players); PLAN.md M4 still has the older 3v3-vs-bots scope. Stub. */
 UCLASS()
 class GFMOBA_API UGFMobaGateSubsystem : public UGFMiniGameGateSubsystem
 {

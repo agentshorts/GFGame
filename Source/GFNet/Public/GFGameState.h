@@ -180,9 +180,10 @@ public:
 	/** Leader per faction: the first player to claim it this session. Replicated to everyone. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Faction")
 	TArray<FGFFactionLeader> FactionLeaders;
-	/** Seats per faction (9 players: 3 per faction). */
+	/** Seats per faction; 0 = no cap (the default). A world holds up to 10 players (GameSession MaxPlayers in
+	 *  DefaultGame.ini), which doesn't split evenly over 3 factions, so no per-faction number is assumed. Set it to cap one. */
 	UPROPERTY(EditAnywhere, Category = "GF|Faction")
-	int32 MaxPerFaction = 3;
+	int32 MaxPerFaction = 0;
 	/** Server: PS joins FactionId (None = leaves). "Ok", "Full", "Same". The first claimer becomes its leader. */
 	FName ServerClaimFaction(AGFPlayerState* PS, FName FactionId);
 	FString FactionLeaderOf(FName FactionId) const;
