@@ -3,7 +3,6 @@
 #include "GFAssetMap.h"
 #include "GFBeatHopGateSubsystem.h"
 #include "GFFashionGateSubsystem.h"
-#include "GFLog.h"
 #include "GFMiniGameCatalog.h"
 #include "GFMobaGateSubsystem.h"
 #include "GFTamingGateSubsystem.h"
@@ -147,10 +146,6 @@ void AGFMiniGameGate::ApplyVisuals()
 				Mesh->SetRelativeLocation(FVector::ZeroVector);
 				Mesh->EmptyOverrideMaterials();
 				bUsingPlaceholder = false;
-			}
-			else
-			{
-				UE_LOG(LogGF, Warning, TEXT("Gate: mesh %s did not load; using a placeholder"), *Entry->ArtObject);
 			}
 		}
 		if (bUsingPlaceholder)
