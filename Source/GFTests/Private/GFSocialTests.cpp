@@ -574,4 +574,61 @@ bool FGFSocialNoiseTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialLeaderHandoverTest, "GFGame.Social.JailLeaderHandover", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFSocialLeaderHandoverTest::RunTest(const FString&)
+{
+	auto Seat = [](const TCHAR* Key, int32 Order, bool bJailed = false)
+	{
+		FGFSocialPlayer M;
+		M.Key = Key;
+		M.ClaimOrder = Order;
+		M.bJailed = bJailed;
+		return M;
+	};
+	TArray<FGFSocialPlayer> S;
+	S.Add(Seat(TEXT("A"), 1));
+	S.Add(Seat(TEXT("B"), 2));
+	S.Add(Seat(TEXT("C"), 3));
+	TestEqual(TEXT("Earliest claim"), FGFSocialRules::ChooseLeader(S), FString(TEXT("A")));
+	S.RemoveAt(0);
+	TestEqual(TEXT("Leader left"), FGFSocialRules::ChooseLeader(S), FString(TEXT("B")));
+	S.Empty();
+	S.Add(Seat(TEXT("A"), 1, true));
+	S.Add(Seat(TEXT("B"), 2));
+	S.Add(Seat(TEXT("C"), 3, true));
+	TestEqual(TEXT("Skip a jailed member"), FGFSocialRules::ChooseLeader(S), FString(TEXT("B")));
+	S[1].bJailed = true;
+	TestEqual(TEXT("All jailed: earliest of them"), FGFSocialRules::ChooseLeader(S), FString(TEXT("A")));
+	S.RemoveAt(0);
+	TestEqual(TEXT("Left, and both remaining are jailed"), FGFSocialRules::ChooseLeader(S), FString(TEXT("B")));
+	S.Empty();
+	S.Add(Seat(TEXT("A"), 0));
+	S.Add(Seat(TEXT("B"), 2));
+	TestEqual(TEXT("No claim order sorts last"), FGFSocialRules::ChooseLeader(S), FString(TEXT("B")));
+	S.Empty();
+	TestEqual(TEXT("Nobody online"), FGFSocialRules::ChooseLeader(S), FString());
+
+	FWorld W;
+	if (!W.Init(*this, TEXT("GFSocialHandover")))
+	{
+		return false;
+	}
+	AGFPlayerState* H = W.Add(TEXT("H"), NAME_None, true);
+	AGFPlayerState* A = W.Add(TEXT("A"), FA);
+	AGFPlayerState* B = W.Add(TEXT("B"), FA);
+	AGFPlayerState* C = W.Add(TEXT("C"), FA);
+	TestTrue(TEXT("First claim leads"), W.Social->Describe(A).bLeader);
+	TestFalse(TEXT("Later claim does not"), W.Social->Describe(B).bLeader);
+	TestEqual(TEXT("Game state leader is still the first claimer"), W.GS->FactionLeaderOf(FA), FString(TEXT("A")));
+	TestEqual(TEXT("Host jails A"), W.Social->ServerJail(H, A), C::Ok);
+	TestTrue(TEXT("Next free member leads"), W.Social->Describe(B).bLeader);
+	TestEqual(TEXT("That member can jail"), W.Social->ServerJail(B, C), C::Ok);
+	TestEqual(TEXT("Host jails B"), W.Social->ServerJail(H, B), C::Ok);
+	TestTrue(TEXT("All jailed: earliest claim leads"), W.Social->Describe(A).bLeader);
+	A->bLoggedOut = true;
+	TestTrue(TEXT("A left: earliest jailed member leads"), W.Social->Describe(B).bLeader);
+	TestFalse(TEXT("C is later"), W.Social->Describe(C).bLeader);
+	return true;
+}
+
 #endif

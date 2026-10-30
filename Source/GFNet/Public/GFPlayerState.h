@@ -43,19 +43,6 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Faction")
 	FName FactionId;
 
-	/**
-	 * Session jail flag. Written by UGFJailSubsystem on the server and replicated out.
-	 * SetJailed does nothing without authority, so a client cannot flip it.
-	 */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Jail")
-	bool bJailed = false;
-
-	UFUNCTION(BlueprintPure, Category = "GF|Jail")
-	bool IsJailed() const { return bJailed; }
-
-	/** Server only. Leaves the replicated flag unchanged when called without authority. */
-	void SetJailed(bool bNewJailed);
-
 	/** Name-tag / claim-flag colour slot. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Net")
 	int32 ColorIndex = 0;

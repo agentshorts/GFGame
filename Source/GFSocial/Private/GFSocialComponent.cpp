@@ -82,6 +82,7 @@ void UGFSocialComponent::BeginPlay()
 	if (AGFGameState* G = GS())
 	{
 		G->RegisterModeHandler(this); // restores the saved bans right away
+		FactionClaimHandle = G->OnFactionChanged.AddUObject(this, &UGFSocialComponent::NoteFactionClaim);
 	}
 }
 
@@ -96,6 +97,7 @@ void UGFSocialComponent::EndPlay(const EEndPlayReason::Type Reason)
 	{
 		if (AGFGameState* G = GS())
 		{
+			G->OnFactionChanged.Remove(FactionClaimHandle);
 			G->UnregisterModeHandler(this);
 		}
 		if (Cell)
@@ -166,10 +168,40 @@ FGFSocialPlayer UGFSocialComponent::Describe(const AGFPlayerState* PS) const
 		P.bHost = PS->bIsHost;
 		P.bSafe = IsPlayerSafe(PS);
 		P.bJailed = IsJailed(PS->PlayerKey);
-		const AGFGameState* G = GS();
-		P.bLeader = G && G->IsFactionLeader(PS);
+		if (const AGFGameState* G = GS(); G && !P.Faction.IsNone())
+		{
+			TArray<FGFSocialPlayer> Seats;
+			for (const APlayerState* Other : G->PlayerArray)
+			{
+				const AGFPlayerState* Mate = Cast<AGFPlayerState>(Other);
+				if (!Mate || Mate->bLoggedOut || Mate->FactionId != P.Faction || Mate->PlayerKey.IsEmpty())
+				{
+					continue;
+				}
+				FGFSocialPlayer Seat;
+				Seat.Key = Mate->PlayerKey;
+				Seat.bJailed = IsJailed(Mate->PlayerKey);
+				const int32* Order = ClaimOrder.Find(Mate->PlayerKey + TEXT("|") + P.Faction.ToString());
+				Seat.ClaimOrder = Order ? *Order : 0;
+				Seats.Add(Seat);
+			}
+			P.bLeader = FGFSocialRules::ChooseLeader(Seats) == P.Key;
+		}
 	}
 	return P;
+}
+
+void UGFSocialComponent::NoteFactionClaim(AGFPlayerState* PS, FName FactionId)
+{
+	if (!PS || PS->PlayerKey.IsEmpty() || FactionId.IsNone())
+	{
+		return;
+	}
+	const FString Slot = PS->PlayerKey + TEXT("|") + FactionId.ToString();
+	if (!ClaimOrder.Contains(Slot))
+	{
+		ClaimOrder.Add(Slot, NextClaimOrder++);
+	}
 }
 
 void UGFSocialComponent::ServerSetPlayerMode(const FString& Key, FName Mode)

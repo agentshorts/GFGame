@@ -165,8 +165,13 @@ private:
 	void UpdateLocalDrip();
 	void ShowEmote(const FGFEmoteEvent& E);
 	bool DoKick(AGFPlayerState* Target, const FString& Why);
+	void NoteFactionClaim(AGFPlayerState* PS, FName FactionId);
 
 	FGFScaleBook ScaleBook;
+	/** "PlayerKey|Faction" -> first claim order this session. */
+	TMap<FString, int32> ClaimOrder;
+	int32 NextClaimOrder = 1;
+	FDelegateHandle FactionClaimHandle;
 	FGFCooldowns Cooldowns;
 	TMap<FString, FName> PlayerModes;
 	int32 NextEmoteSeq = 1;

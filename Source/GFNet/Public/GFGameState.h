@@ -10,7 +10,7 @@ class AGFPlayerState;
 class AGFVoxelWorld;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FGFOnLandChanged);
-/** Server: ServerClaimFaction succeeded (FactionId None means they left). Jail records claim order from this. */
+/** Server: ServerClaimFaction succeeded (FactionId None means they left). Social records jail claim order from this. */
 DECLARE_MULTICAST_DELEGATE_TwoParams(FGFOnFactionChanged, AGFPlayerState* /*Player*/, FName /*FactionId*/);
 
 /** Server only: a pack-up waiting for the guest to confirm they stored the blueprint. */
