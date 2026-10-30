@@ -3,6 +3,7 @@
 
 #include "Misc/AutomationTest.h"
 #include "GFEnvironmentDirector.h"
+#include "GFVoxelWorld.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/LightComponent.h"
 #include "Components/PostProcessComponent.h"
@@ -13,7 +14,6 @@
 #include "GameFramework/WorldSettings.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/FileHelper.h"
-#include "Misc/OutputDevice.h"
 #include "Misc/Paths.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -56,38 +56,6 @@ namespace GFWorldLightingTests
 			}
 		}
 	};
-
-	struct FLogCapture : FOutputDevice
-	{
-		FString Text;
-
-		virtual void Serialize(const TCHAR* V, ELogVerbosity::Type, const FName&) override
-		{
-			Text += V;
-			Text += LINE_TERMINATOR;
-		}
-	};
-
-	struct FLogScope
-	{
-		FLogCapture Capture;
-
-		FLogScope()
-		{
-			if (GLog)
-			{
-				GLog->AddOutputDevice(&Capture);
-			}
-		}
-
-		~FLogScope()
-		{
-			if (GLog)
-			{
-				GLog->RemoveOutputDevice(&Capture);
-			}
-		}
-	};
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFLumenExposureWindowTest, "GFGame.World.LumenExposureWindow", GFWorldLightingTests::Flags)
@@ -125,7 +93,32 @@ bool FGFLumenExposureWindowTest::RunTest(const FString&)
 		const float ExposureEV = GFFixedExposureEV(Defaults->ExposureBias);
 		TestTrue(TEXT("Shipped bias is still about 0"), FMath::IsNearlyZero(Defaults->ExposureBias, 0.05f));
 		TestTrue(TEXT("Shipped exposure sits in the offset-0 window"), GFLumenCachedLightingCovers(0.f, ExposureEV));
+		TestTrue(TEXT("Manual exposure min and max match"), FMath::IsNearlyEqual(Defaults->ExposureMinBrightness, Defaults->ExposureMaxBrightness, 0.01f));
+		TestTrue(TEXT("Manual exposure brightness is sane"), Defaults->ExposureMinBrightness > 0.f && Defaults->ExposureMaxBrightness < 4.f);
 	}
+
+	const FString GameIni = FPaths::Combine(FPaths::ProjectConfigDir(), TEXT("DefaultGame.ini"));
+	FString GameText;
+	if (TestTrue(TEXT("DefaultGame.ini readable"), FFileHelper::LoadFileToString(GameText, *GameIni)))
+	{
+		TestTrue(TEXT("Sun stays at 10 lux"), GameText.Contains(TEXT("SunIntensity=10.000000")));
+		TestTrue(TEXT("Exposure bias stays 0"), GameText.Contains(TEXT("ExposureBias=0.000000")));
+		TestTrue(TEXT("Exposure min brightness is 1"), GameText.Contains(TEXT("ExposureMinBrightness=1.000000")));
+		TestTrue(TEXT("Exposure max brightness is 1"), GameText.Contains(TEXT("ExposureMaxBrightness=1.000000")));
+	}
+
+	// Near-white grid and ice debug colours must land in a mid albedo, or the fixed exposure paints the floor white.
+	const FLinearColor White = GFClampBlockAlbedo(FLinearColor::White);
+	TestTrue(TEXT("White albedo lands near 0.5"), FMath::IsNearlyEqual(White.GetLuminance(), 0.5f, 0.02f));
+	const FLinearColor Grass = GFClampBlockAlbedo(FLinearColor(0.30f, 0.65f, 0.25f, 1.f));
+	const float GrassLuma = Grass.GetLuminance();
+	TestTrue(TEXT("Grass albedo stays in 0.2 to 0.5"), GrassLuma + KINDA_SMALL_NUMBER >= 0.20f && GrassLuma <= 0.50f + 0.01f);
+	const FLinearColor Ice = GFClampBlockAlbedo(FLinearColor(0.75f, 0.88f, 0.96f, 1.f));
+	TestTrue(TEXT("Ice albedo is no longer near white"), Ice.GetLuminance() <= 0.51f);
+	const FLinearColor Black = GFClampBlockAlbedo(FLinearColor::Black);
+	TestTrue(TEXT("Black albedo stays black"), FMath::IsNearlyZero(Black.GetLuminance()));
+	const FLinearColor Mid = GFClampBlockAlbedo(FLinearColor(0.30f, 0.30f, 0.30f, 1.f));
+	TestTrue(TEXT("A mid albedo is left alone"), Mid.Equals(FLinearColor(0.30f, 0.30f, 0.30f, 1.f), 0.001f));
 
 	return true;
 }
@@ -141,7 +134,6 @@ bool FGFRuntimeLightsAreMovableTest::RunTest(const FString&)
 		return false;
 	}
 
-	FLogScope Log;
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	AGFEnvironmentDirector* Director = Env.World->SpawnActor<AGFEnvironmentDirector>(AGFEnvironmentDirector::StaticClass(), FTransform::Identity, Params);
@@ -201,6 +193,16 @@ bool FGFRuntimeLightsAreMovableTest::RunTest(const FString&)
 	{
 		TestTrue(TEXT("Bias override is on"), Exposure->Settings.bOverride_AutoExposureBias);
 		TestTrue(TEXT("Applied bias matches the director"), FMath::IsNearlyEqual(Exposure->Settings.AutoExposureBias, Director->ExposureBias));
+		TestTrue(TEXT("Exposure method override is on"), Exposure->Settings.bOverride_AutoExposureMethod);
+		TestEqual(TEXT("Exposure method is manual"), Exposure->Settings.AutoExposureMethod, EAutoExposureMethod::AEM_Manual);
+		TestTrue(TEXT("Physical camera exposure stays off"),
+			Exposure->Settings.bOverride_AutoExposureApplyPhysicalCameraExposure && !Exposure->Settings.AutoExposureApplyPhysicalCameraExposure);
+		TestTrue(TEXT("Min and max brightness overrides are on"),
+			Exposure->Settings.bOverride_AutoExposureMinBrightness && Exposure->Settings.bOverride_AutoExposureMaxBrightness);
+		TestTrue(TEXT("Min and max brightness match"),
+			FMath::IsNearlyEqual(Exposure->Settings.AutoExposureMinBrightness, Exposure->Settings.AutoExposureMaxBrightness, 0.01f));
+		TestTrue(TEXT("Brightness is in a sane range"),
+			Exposure->Settings.AutoExposureMinBrightness > 0.f && Exposure->Settings.AutoExposureMaxBrightness < 4.f);
 	}
 
 	const float ExposureEV = GFNormalizedExposureEV(GFFixedExposureEV(Director->ExposureBias));
@@ -214,10 +216,8 @@ bool FGFRuntimeLightsAreMovableTest::RunTest(const FString&)
 		TestTrue(TEXT("Cvar window covers that exposure"), GFLumenCachedLightingCovers(Offset->GetFloat(), ExposureEV));
 	}
 
-	TestTrue(TEXT("Log says the sun is movable"), Log.Capture.Text.Contains(TEXT("sun=yes")));
-	TestTrue(TEXT("Log says the sky light is movable"), Log.Capture.Text.Contains(TEXT("skylight=yes")));
-	TestTrue(TEXT("Log prints Exposure 0"), Log.Capture.Text.Contains(TEXT("exposure=0.0")));
-	TestFalse(TEXT("Log does not print negative zero"), Log.Capture.Text.Contains(TEXT("exposure=-0.0")));
+	// The director still logs sun=yes / skylight=yes. That line is info only.
+	// Capturing GLog fails whenever another GFGame file is linked in, so mobility is checked on the components above.
 
 	Director->EnsureEnvironment();
 	int32 DirectionalAfter = 0;
