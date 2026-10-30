@@ -1,8 +1,13 @@
 #pragma once
 
-// Faction land as discs that grow with membership. Radius and area come from FGFTerritoryCurve, and the
-// radius number itself is FGFSafeRegion::Radius (base shifted by one step so every member, including the
-// first, adds RadiusPerMember). Inside tests and border queries go through one cached FGFSafeCircles.
+// Faction land as discs that grow with membership. A faction with a RadiusByMembers table uses that
+// radius: the index is the effective member count, and a count past the end uses the last entry. An empty
+// table uses FGFTerritoryCurve. Either way the radius number is FGFSafeRegion::Radius (for the curve, the
+// base is shifted by one step so every member, including the first, adds RadiusPerMember). Inside tests
+// and border queries go through one cached FGFSafeCircles.
+//
+// Hazard boxes live on this map. GetHazardAt returns one only where GetZoneAt is wild, so faction land
+// and the neutral disc both override a hazard. The box is horizontal; Z is ignored. Kind is a name.
 //
 // Overlap rule (nearest center, then size, then name):
 //   A point inside several discs belongs to the faction whose center is closest in the horizontal plane.
@@ -10,7 +15,8 @@
 //   wins. If the member counts match too, the lexicographically smaller faction id wins (case-insensitive),
 //   so the result does not depend on array order and does not flicker. The loser does not own the point.
 //   Overlap does not become neutral. Neutral is only the optional disc, and only where no faction owns.
-//   Z is ignored. A faction with no effective members owns nothing.
+//   Z is ignored. A nameless faction owns nothing. With an empty radius table, a faction with no
+//   effective members owns nothing. A set table uses index 0 for that count.
 //
 // IsSafeFor matches FGFSocialPlayer::Faction to that owner. bHost is carried on the social player and is
 // not a land grant.
@@ -29,6 +35,8 @@ public:
 	FGFTerritoryCurve Curve;
 	FGFNeutralZone Neutral;
 	TArray<FGFTerritoryFaction> Factions;
+	/** Config boxes. GetHazardAt reads these. */
+	TArray<FGFTerritoryHazard> Hazards;
 
 	/**
 	 * Max members that may affect the radius. 0 = do not clamp.
@@ -42,19 +50,31 @@ public:
 
 	int32 EffectiveMembers(int32 Members) const;
 
-	/** The FGFSafeRegion whose Radius() is this faction's land. Empty factions come back with radius 0. */
+	/** The FGFSafeRegion whose Radius() is this faction's land. A nameless faction has radius 0. */
 	FGFSafeRegion RegionFor(const FGFTerritoryFaction& Faction) const;
 	float RadiusOf(const FGFTerritoryFaction& Faction) const;
 	/** Horizontal disc area, PI * radius^2. */
 	float AreaOf(const FGFTerritoryFaction& Faction) const;
 
 	/**
-	 * Owned discs. Members stays the effective head count and BaseRadius is the one-member radius, so
-	 * FGFSafeRegion::Radius() equals the curve. This does not collapse a disc to a single member.
+	 * Owned discs. Members stays the effective head count so overlap can still compare size.
+	 * With an empty RadiusByMembers table, BaseRadius is the one-member curve radius and
+	 * RadiusPerExtraMember is the curve step, so FGFSafeRegion::Radius() equals the curve.
+	 * With a table, BaseRadius and MaxRadius are that count's radius and RadiusPerExtraMember is 0,
+	 * so Radius() is the table value. This does not collapse a disc to a single member.
 	 */
 	TArray<FGFSafeRegion> CopySafeRegions() const;
 
+	/**
+	 * True only when both factions are on the map, both radii are greater than zero, and the horizontal
+	 * distance between their centers is less than or equal to the sum of the radii.
+	 */
+	bool Touches(FName A, FName B) const;
+
 	FGFTerritoryZoneHit GetZoneAt(const FVector& Location) const;
+
+	/** First hazard box that contains Location, and only when GetZoneAt is wild. Z is ignored. */
+	FGFTerritoryHazardHit GetHazardAt(const FVector& Location) const;
 
 	/** True only when FactionId owns this point. None is never safe. */
 	bool IsSafeFor(FName FactionId, const FVector& Location) const;

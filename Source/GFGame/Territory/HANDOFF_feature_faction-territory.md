@@ -6,7 +6,7 @@ Territory logic stays in `Source/GFGame/Territory/`. `Config/DefaultGame.ini` ga
 
 `IsSafeFor` reads `FGFSocialPlayer::Faction` and matches it to the faction that owns the point. `bHost` is copied from `AGFPlayerState` onto that struct and does not add land. A player with no faction is not safe on faction land, in the neutral disc, or in the wild.
 
-`CopySafeRegions` does not bake a disc down to one member. `Members` stays the effective head count, `BaseRadius` is the one-member radius, and `RadiusPerExtraMember` is the curve step, so `FGFSafeRegion::Radius()` equals base + per member × N.
+`CopySafeRegions` does not bake a disc down to one member. `Members` stays the effective head count. With an empty `RadiusByMembers` table, `BaseRadius` is the one-member radius and `RadiusPerExtraMember` is the curve step, so `FGFSafeRegion::Radius()` equals base + per member × N. With a table, `BaseRadius` and `MaxRadius` are that count's radius and `RadiusPerExtraMember` is 0, so `Radius()` is the table value.
 
 ## Build.cs (applied on staging)
 
