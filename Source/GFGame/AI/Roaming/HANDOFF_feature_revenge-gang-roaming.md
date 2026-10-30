@@ -8,7 +8,7 @@ Roaming lives in `Source/GFGame/AI/Roaming/`. Nothing outside this folder was ed
 - `AGFPlayerState`: `PlayerKey`, `bLoggedOut`. Faction ids stay on the player state. Roaming does not name factions.
 - `AGameSession::MaxPlayers` (world session, else the class default from `DefaultGame.ini`). `<= 0` means the gang roster has no cap. This is not `AGFGameState::MaxPerFaction`.
 - Home leash geometry is `FGFSafeCircles` / `FGFSafeRegion` (`IsInsideSafe`, `ClosestSafePoint`). Home dinos stay inside. The giant's stay-out rule is a different use of the same circles.
-- Map packages: `UGFTamingGateSubsystem` (`/Game/Maps/L_Valley`), `UGFMobaGateSubsystem` (`/Game/Maps/L_Arena`), `UGFBeatHopGateSubsystem` (`/Game/Maps/L_Beat`), `UGFFashionGateSubsystem` (`/Game/Maps/L_Runway`). Read them with `GetDefault`, not `NewObject` into the transient package.
+- Map packages: `UGFTamingGateSubsystem` (`/Game/Maps/L_Valley`), `UGFMobaGateSubsystem` (`/Game/Maps/L_Moba`), `UGFBeatHopGateSubsystem` (`/Game/Maps/L_Beat`), `UGFFashionGateSubsystem` (`/Game/Maps/L_Runway`). Read them with `GetDefault`, not `NewObject` into the transient package.
 - `UGFMiniGameGateSubsystem::EnterMiniGame` already broadcasts `OnBeforeEnter` and then `OpenLevel`. That is the travel call.
 
 Not the same feature, left alone: taming `PackId`, `DT_ModeRules.bEmoteAttractsDanger` (emote noise), jail leash.
@@ -31,7 +31,7 @@ Do not point `GFCompanion` at `GFGame` (cycle). `GFGame` already depends on `GFC
 
 `UGFRoamingSubsystem` is a game-instance subsystem, so it survives `OpenLevel`. `BeginTravel` copies the gang only when `TravellerKey` equals the board's target (`UGFTamingComponent::GetTargetKey()`). Anyone else changing maps leaves the board in place.
 
-- Before `OpenLevel` (the `OnBeforeEnter` lambda is the right place, in `UGFMiniGameGateSubsystem::EnterMiniGame` or a subscriber in `GFGame`): `UGFRoamingSubsystem::Get(World)->BeginTravel(Gate->GetMapName(), TravellerKey)`. `EnterMiniGame` only broadcasts when the map package exists. `L_Arena` and `L_Beat` are not in `Content/Maps` yet, so that hook does not run until those maps land. `BeginTravel` / `ConsumeTravel` are what the tests call.
+- Before `OpenLevel` (the `OnBeforeEnter` lambda is the right place, in `UGFMiniGameGateSubsystem::EnterMiniGame` or a subscriber in `GFGame`): `UGFRoamingSubsystem::Get(World)->BeginTravel(Gate->GetMapName(), TravellerKey)`. `EnterMiniGame` only broadcasts when the map package exists. Empty mode maps are listed in `Tools/create_maps.py`. `BeginTravel` / `ConsumeTravel` are what the tests call.
 - On the destination map, once (`AGFGameMode::InitGame` in `Source/GFGame/Private/GFGameMode.cpp`): `UGFRoamingSubsystem::Get(this)->ConsumeTravel()`. A second call is a no-op. The spent record leaves the target key on the new board.
 
 `GFCore` cannot include `GFGame`. Keep the two calls in `GFGame`.

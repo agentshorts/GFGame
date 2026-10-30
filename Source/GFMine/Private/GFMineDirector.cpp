@@ -1,4 +1,5 @@
 #include "GFMineDirector.h"
+#include "GFMiniGameCatalog.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFInventoryComponent.h"
@@ -30,7 +31,8 @@ AGFMineDirector* AGFMineDirector::Get(UWorld* World, bool bSpawn)
 	{
 		FActorSpawnParameters P;
 		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		return World->SpawnActor<AGFMineDirector>(P);
+		const FVector At = FGFMiniGameCatalog::DefaultSpawn(ModeName);
+		return World->SpawnActor<AGFMineDirector>(AGFMineDirector::StaticClass(), FTransform(At), P);
 	}
 	return nullptr;
 }

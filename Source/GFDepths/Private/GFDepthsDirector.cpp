@@ -1,4 +1,5 @@
 #include "GFDepthsDirector.h"
+#include "GFMiniGameCatalog.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFRewards.h"
@@ -42,7 +43,8 @@ AGFDepthsDirector* AGFDepthsDirector::Get(UWorld* World, bool bSpawn)
 	{
 		FActorSpawnParameters P;
 		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		return World->SpawnActor<AGFDepthsDirector>(P);
+		const FVector At = FGFMiniGameCatalog::DefaultSpawn(ModeName);
+		return World->SpawnActor<AGFDepthsDirector>(AGFDepthsDirector::StaticClass(), FTransform(At), P);
 	}
 	return nullptr;
 }

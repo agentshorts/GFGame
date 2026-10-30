@@ -1,5 +1,6 @@
 // Home-zone leash, revenge-gang map access, and the travel hand-off.
-// Map names come from the gate class defaults (MOBA = UGFMobaGateSubsystem, platformer = Beat Hop).
+// Map names come from the gate class defaults (MOBA = UGFMobaGateSubsystem on L_Moba, Beat Hop = UGFBeatHopGateSubsystem).
+// The platformer is Depths, a hub sim, not Beat Hop.
 // The roster cap is AGameSession::MaxPlayers. <= 0 means no cap.
 // Faction ids here are test-only (F1-F3). Production roaming code does not name factions.
 
@@ -96,8 +97,9 @@ bool FGFRoamingHomeZoneTest::RunTest(const FString&)
 	using namespace GFRoamingTests;
 	const FMaps Maps;
 	TestEqual(TEXT("Valley map is the taming gate"), Maps.Valley, FName(TEXT("/Game/Maps/L_Valley")));
-	TestEqual(TEXT("MOBA map is the moba gate"), Maps.Arena, FName(TEXT("/Game/Maps/L_Arena")));
-	TestEqual(TEXT("Platformer map is Beat Hop"), Maps.Beat, FName(TEXT("/Game/Maps/L_Beat")));
+	TestEqual(TEXT("MOBA map is L_Moba"), Maps.Arena, FName(TEXT("/Game/Maps/L_Moba")));
+	TestEqual(TEXT("Beat Hop map is the rhythm gate"), Maps.Beat, FName(TEXT("/Game/Maps/L_Beat")));
+	TestNotEqual(TEXT("Beat Hop is not labeled as the platformer"), GetDefault<UGFBeatHopGateSubsystem>()->GetDisplayName().ToString(), FString(TEXT("Depths")));
 
 	const FGFRoamingPolicy Policy = HomeRaptor(Maps.Valley);
 	const FGFRoamZone HomeZone(FName(TEXT("DinoZone")));

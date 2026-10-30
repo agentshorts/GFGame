@@ -25,8 +25,9 @@ struct GFCORE_API FGFMiniGameResult
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGFOnMiniGameFinished, FName, GateId, const FGFMiniGameResult&, Result);
 
 /**
- * Base for the four mini-game gates (taming, fashion, arena, Beat Hop). A gate owns entering its map
+ * Base for the map gates (taming, fashion, MOBA, Beat Hop). A gate owns entering its map
  * from the hub and queueing rewards that the hub grants on return. Stub: no reward tables yet.
+ * Depths, the dino arena, the mine and the lab are hub sims with pads, not subclasses of this.
  */
 UCLASS(Abstract)
 class GFCORE_API UGFMiniGameGateSubsystem : public UGameInstanceSubsystem
@@ -40,6 +41,9 @@ public:
 	/** Map the gate loads, e.g. /Game/Maps/L_Valley. */
 	UFUNCTION(BlueprintPure, Category = "GF|MiniGame")
 	virtual FName GetMapName() const PURE_VIRTUAL(UGFMiniGameGateSubsystem::GetMapName, return NAME_None;);
+
+	/** Sign text. Beat Hop stays "Beat Hop". The platformer is Depths, and it is not this name. */
+	virtual FText GetDisplayName() const;
 
 	UFUNCTION(BlueprintPure, Category = "GF|MiniGame")
 	virtual bool IsUnlocked() const { return true; }

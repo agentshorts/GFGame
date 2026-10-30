@@ -1,4 +1,5 @@
 #include "GFArenaDirector.h"
+#include "GFMiniGameCatalog.h"
 #include "GFWager.h"
 #include "GFEconomy.h"
 #include "GFGameState.h"
@@ -54,7 +55,8 @@ AGFArenaDirector* AGFArenaDirector::Get(UWorld* World, bool bSpawn)
 	{
 		FActorSpawnParameters P;
 		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		return World->SpawnActor<AGFArenaDirector>(P);
+		const FVector At = FGFMiniGameCatalog::DefaultSpawn(ModeName);
+		return World->SpawnActor<AGFArenaDirector>(AGFArenaDirector::StaticClass(), FTransform(At), P);
 	}
 	return nullptr;
 }

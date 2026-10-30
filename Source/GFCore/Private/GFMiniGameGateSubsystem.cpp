@@ -4,6 +4,11 @@
 #include "Engine/GameInstance.h"
 #include "Misc/PackageName.h"
 
+FText UGFMiniGameGateSubsystem::GetDisplayName() const
+{
+	return FText::FromName(GetGateId());
+}
+
 bool UGFMiniGameGateSubsystem::EnterMiniGame()
 {
 	if (!IsUnlocked())
