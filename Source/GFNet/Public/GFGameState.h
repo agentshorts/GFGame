@@ -10,6 +10,8 @@ class AGFPlayerState;
 class AGFVoxelWorld;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FGFOnLandChanged);
+/** Server: ServerClaimFaction succeeded (FactionId None means they left). Jail records claim order from this. */
+DECLARE_MULTICAST_DELEGATE_TwoParams(FGFOnFactionChanged, AGFPlayerState* /*Player*/, FName /*FactionId*/);
 
 /** Server only: a pack-up waiting for the guest to confirm they stored the blueprint. */
 struct FGFPendingPackUp
@@ -188,6 +190,8 @@ public:
 	int32 FactionCount(FName FactionId) const;
 	/** Server, session only: faction per player key, so a rejoin (new player state) keeps its faction. */
 	TMap<FString, FName> SessionFactions;
+	/** Server only. Fired after a successful claim, including leaving (None). */
+	FGFOnFactionChanged OnFactionChanged;
 
 	// ---------------- Chat ----------------
 	/** All chat, newest last (last MaxChat). */

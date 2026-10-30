@@ -338,6 +338,7 @@ FName AGFGameState::ServerClaimFaction(AGFPlayerState* PS, FName FactionId)
 		FactionLeaders.Add(L);
 	}
 	ForceNetUpdate();
+	OnFactionChanged.Broadcast(PS, FactionId);
 	return TEXT("Ok");
 }
 

@@ -26,6 +26,7 @@ void AGFPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(AGFPlayerState, bIsHost);
 	DOREPLIFETIME(AGFPlayerState, ColorIndex);
 	DOREPLIFETIME(AGFPlayerState, FactionId);
+	DOREPLIFETIME(AGFPlayerState, bJailed);
 	DOREPLIFETIME(AGFPlayerState, HeldItem);
 	DOREPLIFETIME(AGFPlayerState, bCharacterReady);
 	DOREPLIFETIME_CONDITION(AGFPlayerState, Companions, COND_OwnerOnly);
@@ -33,6 +34,16 @@ void AGFPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(AGFPlayerState, bShareJournal);
 	DOREPLIFETIME_CONDITION(AGFPlayerState, Mailbox, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(AGFPlayerState, Progress, COND_OwnerOnly);
+}
+
+void AGFPlayerState::SetJailed(bool bNewJailed)
+{
+	if (!HasAuthority() || bJailed == bNewJailed)
+	{
+		return;
+	}
+	bJailed = bNewJailed;
+	ForceNetUpdate();
 }
 
 void AGFPlayerState::BeginPlay()

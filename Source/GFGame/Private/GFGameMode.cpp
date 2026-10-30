@@ -15,6 +15,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "GameFramework/GameSession.h"
 #include "TimerManager.h"
+#include "../Social/GFJailSubsystem.h"
 
 AGFGameMode::AGFGameMode()
 {
@@ -48,6 +49,10 @@ void AGFGameMode::InitGameState()
 			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			GetWorld()->SpawnActor<AActor>(Class, FTransform::Identity, Params);
 		}
+	}
+	if (AGFGameState* GS = GetGameState<AGFGameState>())
+	{
+		UGFJailSubsystem::Ensure(GS);
 	}
 }
 
@@ -118,6 +123,10 @@ void AGFGameMode::PostLogin(APlayerController* NewPlayer)
 	}
 	PS->ForceNetUpdate();
 	PS->UploadLocalCharacterIfNeeded(); // host / standalone: the local profile goes straight in
+	if (UGFJailSubsystem* Jail = UGFJailSubsystem::Get(this))
+	{
+		Jail->NotePlayerJoined(PS);
+	}
 	UE_LOG(LogGF, Log, TEXT("Net: login %s (host=%d colour=%d)"), *Key, PS->bIsHost ? 1 : 0, PS->ColorIndex);
 }
 
