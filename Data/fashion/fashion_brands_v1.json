@@ -1,0 +1,1772 @@
+{
+  "version": 1,
+  "date": "2026-10-30",
+  "disclaimer": "All brand names in this game are fictional; any resemblance to real brands is coincidental or parody.",
+  "status": "placeholder names and materials, to revisit; recipes TBD",
+  "item_types": [
+    "hat/mask",
+    "top",
+    "bottoms",
+    "shoes",
+    "bag/purse",
+    "accessory",
+    "cosmetic",
+    "full suit"
+  ],
+  "trademark_check_note": "Quick web search only (not a formal USPTO/EUIPO clearance). Two clashes were renamed before commit: 'Monclaw' (a real dog-apparel line) became 'Mon-Rimer', and 'Clawverse' (a real claw-machine and games platform) became 'Conversaur'. Names flagged 'revisit' in trademark_check sit close to the original brand. Re-check the final names formally before release.",
+  "brand_count": 44,
+  "item_count": 116,
+  "brands": [
+    {
+      "id": "dirtachi",
+      "name": "Dirtachi",
+      "parody_of": "Gucci",
+      "faction_vibe": "Verdant",
+      "tagline": "Muddy money, double-D monogram.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "dirtachi_01",
+          "name": "Double-D Mud Loafers",
+          "type": "shoes",
+          "materials": [
+            "dead skin",
+            "mud clay",
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "dirtachi_02",
+          "name": "Dirtachi Monogram Purse",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "gold dust"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "dirtachi_03",
+          "name": "Bee-in-the-Bog Cardigan",
+          "type": "top",
+          "materials": [
+            "fur",
+            "moss thread"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "predada",
+      "name": "Predada",
+      "parody_of": "Prada",
+      "faction_vibe": "Cinderwrights",
+      "tagline": "The predator wears Predada.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "predada_01",
+          "name": "Nylon Hunter Backpack",
+          "type": "bag/purse",
+          "materials": [
+            "ash silk",
+            "scales"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "predada_02",
+          "name": "Apex Pointed Boots",
+          "type": "shoes",
+          "materials": [
+            "dead skin",
+            "obsidian"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "predada_03",
+          "name": "Triangle-Tooth Visor",
+          "type": "hat/mask",
+          "materials": [
+            "teeth",
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "lavatonne",
+      "name": "Lava Vuitonne",
+      "parody_of": "Louis Vuitton",
+      "faction_vibe": "Cinderwrights",
+      "tagline": "Monogrammed, molten, mildly on fire.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "lavatonne_01",
+          "name": "Speedy Magma Tote",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "ember core",
+            "gold dust"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "lavatonne_02",
+          "name": "LV Lava Trunk",
+          "type": "bag/purse",
+          "materials": [
+            "obsidian",
+            "scales"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "lavatonne_03",
+          "name": "Ember Monogram Scarf",
+          "type": "accessory",
+          "materials": [
+            "ash silk"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "shardnel",
+      "name": "Shardnel",
+      "parody_of": "Chanel",
+      "faction_vibe": "Rime",
+      "tagline": "No. 5 shards of the finest ice.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "shardnel_01",
+          "name": "Quilted Shard Flap Bag",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "shardnel_02",
+          "name": "No. 5 Frost Perfume",
+          "type": "cosmetic",
+          "materials": [
+            "crystal",
+            "glacier water"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "shardnel_03",
+          "name": "Tweed Rime Jacket",
+          "type": "top",
+          "materials": [
+            "fur",
+            "frost thread"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "shardnel_04",
+          "name": "Pearl-Tooth Necklace",
+          "type": "accessory",
+          "materials": [
+            "teeth",
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "versaurus",
+      "name": "Versaurus",
+      "parody_of": "Versace",
+      "faction_vibe": "Cinderwrights",
+      "tagline": "Gold, loud, and Jurassic.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "versaurus_01",
+          "name": "Medusaur Gold Shirt",
+          "type": "top",
+          "materials": [
+            "ash silk",
+            "gold dust"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "versaurus_02",
+          "name": "Baroque Scale Leggings",
+          "type": "bottoms",
+          "materials": [
+            "scales",
+            "gold dust"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "versaurus_03",
+          "name": "Greek-Key Tail Cuff",
+          "type": "accessory",
+          "materials": [
+            "gold dust",
+            "bone"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "bonenciaga",
+      "name": "Bonenciaga",
+      "parody_of": "Balenciaga",
+      "faction_vibe": "any",
+      "tagline": "Ugly on purpose. Made of bones on purpose.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "bonenciaga_01",
+          "name": "Triple-Bone Chunky Sneakers",
+          "type": "shoes",
+          "materials": [
+            "bone",
+            "scales",
+            "rubber sap"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "bonenciaga_02",
+          "name": "Trash Pouch Clutch",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "junk scrap"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "bonenciaga_03",
+          "name": "Oversized Hoodie of Doom",
+          "type": "top",
+          "materials": [
+            "fur",
+            "ash silk"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "dinor",
+      "name": "Dinor",
+      "parody_of": "Dior",
+      "faction_vibe": "Verdant",
+      "tagline": "J'adore? J'a-dino.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "dinor_01",
+          "name": "Saddle-Back Bag",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "moss thread"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "dinor_02",
+          "name": "Bar Jacket (Spined)",
+          "type": "top",
+          "materials": [
+            "fur",
+            "bone"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "dinor_03",
+          "name": "Rouge Dinor Lip Glow",
+          "type": "cosmetic",
+          "materials": [
+            "berry dye",
+            "glitter"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "hermozoic",
+      "name": "Hermozoic",
+      "parody_of": "Hermès",
+      "faction_vibe": "any",
+      "tagline": "Waitlist: one geological era.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "hermozoic_01",
+          "name": "Birkinosaur Bag",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "gold dust",
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "hermozoic_02",
+          "name": "Kelly Fossil Bag",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "amber"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "hermozoic_03",
+          "name": "H-Is-for-Herbivore Belt",
+          "type": "accessory",
+          "materials": [
+            "dead skin",
+            "gold dust"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "burrowberry",
+      "name": "Burrowberry",
+      "parody_of": "Burberry",
+      "faction_vibe": "Verdant",
+      "tagline": "Plaid that digs.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "burrowberry_01",
+          "name": "Check Trench Coat",
+          "type": "top",
+          "materials": [
+            "fur",
+            "moss thread"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "burrowberry_02",
+          "name": "Burrow Check Scarf",
+          "type": "accessory",
+          "materials": [
+            "fur"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "burrowberry_03",
+          "name": "Bog Wellies",
+          "type": "shoes",
+          "materials": [
+            "rubber sap",
+            "mud clay"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "suprex",
+      "name": "Sup-Rex",
+      "parody_of": "Supreme",
+      "faction_vibe": "any",
+      "tagline": "Red box, tiny arms, huge resale.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "suprex_01",
+          "name": "Box Logo Tee (Tiny Arms Fit)",
+          "type": "top",
+          "materials": [
+            "ash silk",
+            "berry dye"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "suprex_02",
+          "name": "Drop-Day Beanie",
+          "type": "hat/mask",
+          "materials": [
+            "fur"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "suprex_03",
+          "name": "Brick (Literally a Brick) Keychain",
+          "type": "accessory",
+          "materials": [
+            "mud clay"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "spike",
+      "name": "Spike",
+      "parody_of": "Nike",
+      "faction_vibe": "any",
+      "tagline": "Just Dig It.",
+      "trademark_check": "quick check: common word, likely used by other goods; revisit (close to the original)",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "spike_01",
+          "name": "Air Stegos",
+          "type": "shoes",
+          "materials": [
+            "scales",
+            "rubber sap",
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "spike_02",
+          "name": "Tail Swoosh Track Pants",
+          "type": "bottoms",
+          "materials": [
+            "ash silk"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "spike_03",
+          "name": "Spike Sweatband",
+          "type": "accessory",
+          "materials": [
+            "fur"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "raptidas",
+      "name": "Raptidas",
+      "parody_of": "Adidas",
+      "faction_vibe": "any",
+      "tagline": "Three claws, one stripe short of trouble.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "raptidas_01",
+          "name": "Three-Claw Track Suit",
+          "type": "full suit",
+          "materials": [
+            "ash silk",
+            "scales"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "raptidas_02",
+          "name": "Stan Snatch Sneakers",
+          "type": "shoes",
+          "materials": [
+            "dead skin",
+            "rubber sap"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "raptidas_03",
+          "name": "Raptor Slides",
+          "type": "shoes",
+          "materials": [
+            "rubber sap"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "offrime",
+      "name": "Off-Rime",
+      "parody_of": "Off-White",
+      "faction_vibe": "Rime",
+      "tagline": "\"FROSTBITE\" in quotation marks.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "offrime_01",
+          "name": "\"PARKA\" Parka",
+          "type": "top",
+          "materials": [
+            "fur",
+            "frost thread"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "offrime_02",
+          "name": "Industrial Zip-Tie Tag",
+          "type": "accessory",
+          "materials": [
+            "junk scrap",
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "offrime_03",
+          "name": "Arrow-Ice Hoodie",
+          "type": "top",
+          "materials": [
+            "fur",
+            "frost thread"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "fangdi",
+      "name": "Fangdi",
+      "parody_of": "Fendi",
+      "faction_vibe": "Cinderwrights",
+      "tagline": "FF stands for Fang Fang.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "fangdi_01",
+          "name": "Fang Baguette Bag",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "teeth"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "fangdi_02",
+          "name": "Peekaboo Jaw Purse",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "teeth",
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "fangdi_03",
+          "name": "FF Ember Slides",
+          "type": "shoes",
+          "materials": [
+            "rubber sap",
+            "ember core"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "gnawvenchy",
+      "name": "Gnawvenchy",
+      "parody_of": "Givenchy",
+      "faction_vibe": "Rime",
+      "tagline": "Chewed couture.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "gnawvenchy_01",
+          "name": "Antigona Gnaw Bag",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "bone"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "gnawvenchy_02",
+          "name": "Bite-Mark Hoodie",
+          "type": "top",
+          "materials": [
+            "fur",
+            "ash silk"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "gnawvenchy_03",
+          "name": "Frostbitten Lip Balm",
+          "type": "cosmetic",
+          "materials": [
+            "crystal",
+            "glacier water"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "volcantino",
+      "name": "Volcantino",
+      "parody_of": "Valentino",
+      "faction_vibe": "Cinderwrights",
+      "tagline": "Rockstud, but the rocks are lava.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "volcantino_01",
+          "name": "Rockstud Magma Heels",
+          "type": "shoes",
+          "materials": [
+            "obsidian",
+            "ember core"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "volcantino_02",
+          "name": "Volcano Red Gown",
+          "type": "full suit",
+          "materials": [
+            "ash silk",
+            "berry dye",
+            "glitter"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "volcantino_03",
+          "name": "Stud Clutch",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "obsidian"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "monrimer",
+      "name": "Mon-Rimer",
+      "parody_of": "Moncler",
+      "faction_vibe": "Rime",
+      "tagline": "Puffier than a startled Pebbling.",
+      "trademark_check": "renamed from 'Monclaw' (a real dog-apparel line) during the quick check",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "monrimer_01",
+          "name": "Maya Mega-Puffer",
+          "type": "top",
+          "materials": [
+            "fur",
+            "frost thread"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "monrimer_02",
+          "name": "Snowpuff Moon Boots",
+          "type": "shoes",
+          "materials": [
+            "fur",
+            "rubber sap"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "monrimer_03",
+          "name": "Puffer Earmuff Hood",
+          "type": "hat/mask",
+          "materials": [
+            "fur"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "pterogoose",
+      "name": "Ptero Goose",
+      "parody_of": "Canada Goose",
+      "faction_vibe": "Rime",
+      "tagline": "Expedition-grade. Flaps included.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "pterogoose_01",
+          "name": "Expedition Wing Parka",
+          "type": "top",
+          "materials": [
+            "fur",
+            "frost thread",
+            "feathers"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "pterogoose_02",
+          "name": "Fur-Ruff Trapper Hat",
+          "type": "hat/mask",
+          "materials": [
+            "fur",
+            "feathers"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "pangaeagonia",
+      "name": "Pangaeagonia",
+      "parody_of": "Patagonia",
+      "faction_vibe": "Verdant",
+      "tagline": "One supercontinent, one fleece.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "pangaeagonia_01",
+          "name": "Better-Sweater Fleece",
+          "type": "top",
+          "materials": [
+            "fur",
+            "moss thread"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "pangaeagonia_02",
+          "name": "Baggies Swamp Shorts",
+          "type": "bottoms",
+          "materials": [
+            "moss thread"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "pangaeagonia_03",
+          "name": "Synchilla Snap-Jaw Pullover",
+          "type": "top",
+          "materials": [
+            "fur",
+            "teeth"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "northfang",
+      "name": "The North Fang",
+      "parody_of": "The North Face",
+      "faction_vibe": "Rime",
+      "tagline": "Never Stop Exploding... we mean Exploring.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "northfang_01",
+          "name": "Nuptse Fang Puffer",
+          "type": "top",
+          "materials": [
+            "fur",
+            "frost thread"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "northfang_02",
+          "name": "Summit Ice Pants",
+          "type": "bottoms",
+          "materials": [
+            "frost thread",
+            "scales"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "northfang_03",
+          "name": "Base-Camp Duffel",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "rubber sap"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "leafis",
+      "name": "Leafi's",
+      "parody_of": "Levi's",
+      "faction_vibe": "Verdant",
+      "tagline": "Riveted. Rooted. Raw vine denim.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "leafis_01",
+          "name": "501 Vine Jeans",
+          "type": "bottoms",
+          "materials": [
+            "moss thread",
+            "berry dye"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "leafis_02",
+          "name": "Trucker Leaf Jacket",
+          "type": "top",
+          "materials": [
+            "moss thread"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "rexban",
+      "name": "Rex-Ban",
+      "parody_of": "Ray-Ban",
+      "faction_vibe": "any",
+      "tagline": "Shades so cool the T. rex can't see you (it never could).",
+      "trademark_check": "quick check: no brand found; revisit (close to the original)",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "rexban_01",
+          "name": "Way-Fang Sunglasses",
+          "type": "accessory",
+          "materials": [
+            "crystal",
+            "bone"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "rexban_02",
+          "name": "Aviator Ptero Shades",
+          "type": "accessory",
+          "materials": [
+            "crystal",
+            "gold dust"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "clawcs",
+      "name": "Clawcs",
+      "parody_of": "Crocs",
+      "faction_vibe": "Verdant",
+      "tagline": "Ugly-comfy with claw holes.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "clawcs_01",
+          "name": "Classic Claw Clog",
+          "type": "shoes",
+          "materials": [
+            "rubber sap"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "clawcs_02",
+          "name": "Jibbitz Tooth Charms",
+          "type": "accessory",
+          "materials": [
+            "teeth",
+            "glitter"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "conversaur",
+      "name": "Conversaur",
+      "parody_of": "Converse",
+      "faction_vibe": "any",
+      "tagline": "Chuck Raptor All Stars.",
+      "trademark_check": "renamed from 'Clawverse' (a real claw-machine and games platform) during the quick check",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "conversaur_01",
+          "name": "Chuck Raptor High-Tops",
+          "type": "shoes",
+          "materials": [
+            "ash silk",
+            "rubber sap"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "conversaur_02",
+          "name": "Star-Claw Platform",
+          "type": "shoes",
+          "materials": [
+            "ash silk",
+            "rubber sap",
+            "glitter"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "tarpitland",
+      "name": "Tarpitland",
+      "parody_of": "Timberland",
+      "faction_vibe": "Cinderwrights",
+      "tagline": "The yellow boot that survived the tar pit.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "tarpitland_01",
+          "name": "Six-Inch Tar Boot",
+          "type": "shoes",
+          "materials": [
+            "dead skin",
+            "tar",
+            "rubber sap"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "tarpitland_02",
+          "name": "Work Vest of Questionable Safety",
+          "type": "top",
+          "materials": [
+            "ash silk",
+            "junk scrap"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "drraptens",
+      "name": "Dr. Raptens",
+      "parody_of": "Dr. Martens",
+      "faction_vibe": "any",
+      "tagline": "Air-cushioned soles for stomping.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "drraptens_01",
+          "name": "1460 Stompers",
+          "type": "shoes",
+          "materials": [
+            "dead skin",
+            "rubber sap"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "drraptens_02",
+          "name": "Yellow-Stitch Mary Janes",
+          "type": "shoes",
+          "materials": [
+            "dead skin"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "mykelclaws",
+      "name": "Mykel Claws",
+      "parody_of": "Michael Kors",
+      "faction_vibe": "any",
+      "tagline": "Mall-luxe, claw-approved.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "mykelclaws_01",
+          "name": "Jet-Set Claw Tote",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "gold dust"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "mykelclaws_02",
+          "name": "MK Gold Claw Watch",
+          "type": "accessory",
+          "materials": [
+            "gold dust",
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "sephossil",
+      "name": "Sephossil",
+      "parody_of": "Sephora",
+      "faction_vibe": "any",
+      "tagline": "Beauty, carbon-dated.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "sephossil_01",
+          "name": "Amber Highlighter Palette",
+          "type": "cosmetic",
+          "materials": [
+            "amber",
+            "glitter"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "sephossil_02",
+          "name": "Fossil Clay Face Mask",
+          "type": "cosmetic",
+          "materials": [
+            "mud clay"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "sephossil_03",
+          "name": "Glitter Scale Nail Set",
+          "type": "cosmetic",
+          "materials": [
+            "scales",
+            "glitter"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "mawcosmetics",
+      "name": "MAW Cosmetics",
+      "parody_of": "MAC Cosmetics",
+      "faction_vibe": "Cinderwrights",
+      "tagline": "Pro makeup for big mouths.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "mawcosmetics_01",
+          "name": "Ruby Roar Lipstick",
+          "type": "cosmetic",
+          "materials": [
+            "berry dye",
+            "ember core"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "mawcosmetics_02",
+          "name": "Smoky Ash Eyeshadow",
+          "type": "cosmetic",
+          "materials": [
+            "ash",
+            "glitter"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "glossaur",
+      "name": "Glossaur",
+      "parody_of": "Glossier",
+      "faction_vibe": "Verdant",
+      "tagline": "Dewy. Very dewy. Swamp dewy.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "glossaur_01",
+          "name": "Boy-Brow Moss Gel",
+          "type": "cosmetic",
+          "materials": [
+            "moss thread",
+            "sap"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "glossaur_02",
+          "name": "Balm Dot-Saur",
+          "type": "cosmetic",
+          "materials": [
+            "sap",
+            "berry dye"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "glossaur_03",
+          "name": "Pink Pouch Bag",
+          "type": "bag/purse",
+          "materials": [
+            "rubber sap",
+            "berry dye"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "lululava",
+      "name": "Lululava",
+      "parody_of": "Lululemon",
+      "faction_vibe": "Cinderwrights",
+      "tagline": "Hot yoga, actually hot.",
+      "trademark_check": "quick check: name used by a laundry and a hookah-hose product, not fashion; revisit",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "lululava_01",
+          "name": "Align Magma Leggings",
+          "type": "bottoms",
+          "materials": [
+            "ash silk",
+            "ember core"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "lululava_02",
+          "name": "Define Ember Jacket",
+          "type": "top",
+          "materials": [
+            "ash silk"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "lululava_03",
+          "name": "Belt Bag (Heat-Proof)",
+          "type": "bag/purse",
+          "materials": [
+            "scales",
+            "ash silk"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "calvinclaine",
+      "name": "Calvin Claine",
+      "parody_of": "Calvin Klein",
+      "faction_vibe": "any",
+      "tagline": "Minimalist. Maximum claws.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "calvinclaine_01",
+          "name": "Logo Waistband Briefs",
+          "type": "bottoms",
+          "materials": [
+            "ash silk"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "calvinclaine_02",
+          "name": "Obsessed-with-Rocks Cologne",
+          "type": "cosmetic",
+          "materials": [
+            "crystal",
+            "glacier water"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "tommyhillfanger",
+      "name": "Tommy Hillfanger",
+      "parody_of": "Tommy Hilfiger",
+      "faction_vibe": "any",
+      "tagline": "Preppy flags, predator fangs.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "tommyhillfanger_01",
+          "name": "Flag-Fang Polo",
+          "type": "top",
+          "materials": [
+            "ash silk",
+            "berry dye"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "tommyhillfanger_02",
+          "name": "Regatta Chinos",
+          "type": "bottoms",
+          "materials": [
+            "ash silk"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "ralphroarin",
+      "name": "Ralph Roarin'",
+      "parody_of": "Ralph Lauren",
+      "faction_vibe": "any",
+      "tagline": "Polo ponies replaced by polo raptors.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "ralphroarin_01",
+          "name": "Polo Raptor Shirt",
+          "type": "top",
+          "materials": [
+            "ash silk"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "ralphroarin_02",
+          "name": "Cable-Knit Hide Sweater",
+          "type": "top",
+          "materials": [
+            "fur"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "ralphroarin_03",
+          "name": "Big Raptor Cap",
+          "type": "hat/mask",
+          "materials": [
+            "ash silk"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "armorni",
+      "name": "Armorni",
+      "parody_of": "Armani",
+      "faction_vibe": "Rime",
+      "tagline": "Tailored plate, sharp lapels.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "armorni_01",
+          "name": "Ice-Plate Suit",
+          "type": "full suit",
+          "materials": [
+            "scales",
+            "frost thread",
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "armorni_02",
+          "name": "Code Frost Cologne",
+          "type": "cosmetic",
+          "materials": [
+            "crystal",
+            "glacier water"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "shardovski",
+      "name": "Shardovski",
+      "parody_of": "Swarovski",
+      "faction_vibe": "Rime",
+      "tagline": "Every surface, crystal. Every crystal, sharper.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "shardovski_01",
+          "name": "Crystal Swan-Ptero Brooch",
+          "type": "accessory",
+          "materials": [
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "shardovski_02",
+          "name": "Rhinestone Cape",
+          "type": "accessory",
+          "materials": [
+            "crystal",
+            "ash silk"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "shardovski_03",
+          "name": "Sparkle Tiara",
+          "type": "hat/mask",
+          "materials": [
+            "crystal",
+            "gold dust"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "tiffanodon",
+      "name": "Tiffanodon & Co.",
+      "parody_of": "Tiffany & Co.",
+      "faction_vibe": "Verdant",
+      "tagline": "The little moss-blue box.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "tiffanodon_01",
+          "name": "Return-to-Den Tag Necklace",
+          "type": "accessory",
+          "materials": [
+            "gold dust",
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "tiffanodon_02",
+          "name": "Fossil Engagement Ring",
+          "type": "accessory",
+          "materials": [
+            "amber",
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "carnitier",
+      "name": "Carnitier",
+      "parody_of": "Cartier",
+      "faction_vibe": "Cinderwrights",
+      "tagline": "Love bracelets for carnivores.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "carnitier_01",
+          "name": "Love Shackle Bracelet",
+          "type": "accessory",
+          "materials": [
+            "gold dust",
+            "bone"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "carnitier_02",
+          "name": "Panther-Rex Ring",
+          "type": "accessory",
+          "materials": [
+            "gold dust",
+            "obsidian"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "roarlex",
+      "name": "Roarlex",
+      "parody_of": "Rolex",
+      "faction_vibe": "any",
+      "tagline": "A crown for every apex.",
+      "trademark_check": "quick check: only a fan joke name online, no brand; revisit (close to the original)",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "roarlex_01",
+          "name": "Sub-Swamper Dive Watch",
+          "type": "accessory",
+          "materials": [
+            "gold dust",
+            "crystal"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "roarlex_02",
+          "name": "Day-Date Extinction Watch",
+          "type": "accessory",
+          "materials": [
+            "gold dust",
+            "amber"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "bathingrex",
+      "name": "A Bathing Rex",
+      "parody_of": "A Bathing Ape (BAPE)",
+      "faction_vibe": "any",
+      "tagline": "Camo that roars.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "bathingrex_01",
+          "name": "Shark-Jaw Full-Zip Hoodie",
+          "type": "full suit",
+          "materials": [
+            "fur",
+            "teeth"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "bathingrex_02",
+          "name": "Bape-Sta Stompers",
+          "type": "shoes",
+          "materials": [
+            "dead skin",
+            "glitter"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "hidemoss",
+      "name": "Hide & Moss",
+      "parody_of": "H&M",
+      "faction_vibe": "Verdant",
+      "tagline": "Fast fashion, slow dinos.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "hidemoss_01",
+          "name": "Basic Moss Tee",
+          "type": "top",
+          "materials": [
+            "moss thread"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "hidemoss_02",
+          "name": "Hide Mom Jeans",
+          "type": "bottoms",
+          "materials": [
+            "dead skin",
+            "moss thread"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "abercrumble",
+      "name": "Abercrumble & Fetch",
+      "parody_of": "Abercrombie & Fitch",
+      "faction_vibe": "any",
+      "tagline": "Smells like a dino den in a mall.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "abercrumble_01",
+          "name": "Grumble Moose Hoodie",
+          "type": "top",
+          "materials": [
+            "fur",
+            "ash silk"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "abercrumble_02",
+          "name": "Fierce-ish Cologne",
+          "type": "cosmetic",
+          "materials": [
+            "sap",
+            "glacier water"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "abercrumble_03",
+          "name": "Distressed (Clawed) Jeans",
+          "type": "bottoms",
+          "materials": [
+            "moss thread",
+            "teeth"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "hottarpit",
+      "name": "Hot Tarpit",
+      "parody_of": "Hot Topic",
+      "faction_vibe": "Cinderwrights",
+      "tagline": "Emo since the Cretaceous.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "hottarpit_01",
+          "name": "Band Tee (The Extinctions)",
+          "type": "top",
+          "materials": [
+            "ash silk",
+            "ash"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "hottarpit_02",
+          "name": "Chain-Tail Wallet",
+          "type": "bag/purse",
+          "materials": [
+            "dead skin",
+            "junk scrap"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "hottarpit_03",
+          "name": "Spiked Collar Choker",
+          "type": "accessory",
+          "materials": [
+            "dead skin",
+            "bone"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    },
+    {
+      "id": "velociraptorias",
+      "name": "Velociraptoria's Secret",
+      "parody_of": "Victoria's Secret",
+      "faction_vibe": "any",
+      "tagline": "Angel wings? Pterosaur wings.",
+      "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
+      "status": "placeholder",
+      "items": [
+        {
+          "id": "velociraptorias_01",
+          "name": "Ptero Angel Wings",
+          "type": "accessory",
+          "materials": [
+            "feathers",
+            "crystal",
+            "glitter"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "velociraptorias_02",
+          "name": "Bombshell Scale Robe",
+          "type": "full suit",
+          "materials": [
+            "ash silk",
+            "scales"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        },
+        {
+          "id": "velociraptorias_03",
+          "name": "Body Mist: Sweet Swamp",
+          "type": "cosmetic",
+          "materials": [
+            "berry dye",
+            "glacier water"
+          ],
+          "materials_status": "placeholder",
+          "recipe": "TBD"
+        }
+      ]
+    }
+  ]
+}

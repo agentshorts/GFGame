@@ -5,6 +5,7 @@ A cozy co-op dino builder made in Unreal Engine 5.8. Build a chunky voxel home a
 - Plan: see [PLAN.md](PLAN.md) (milestones, economy, modules, art sourcing, saves, risks, open questions).
 - Status: greybox phase 2 (systems, server rules and headless tests; no maps or final visuals yet). The C++ modules build (UE 5.8.4, GFGameEditor Win64 Development) and all 86 GFGame.* automation tests pass. See "Status" below.
 - All names, creatures and art are original to this project.
+- All brand names in this game are fictional; any resemblance to real brands is coincidental or parody.
 
 Public source. No open-source license has been chosen yet, so all rights are reserved for now.
 
