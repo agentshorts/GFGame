@@ -25,6 +25,11 @@ struct GFSOCIAL_API FGFEmoteRow : public FTableRowBase
 	 * 0 means it doesn't. Works inside safe land; it is not the wild-dino noise.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|Emote") float TauntRadius = 0.f;
+	/**
+	 * Seconds before this player can play this emote again when it taunts him. 0 uses the floor in
+	 * FGFSocialRules::MinTauntCooldownSeconds. Other emotes ignore this and use the shared emote cooldown.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|Emote") float TauntCooldown = 0.f;
 };
 
 /** Per-mode social rules (Data/CSV/DT_ModeRules.csv), keyed by mode id. Unknown modes: no noise. */
@@ -243,6 +248,12 @@ struct GFSOCIAL_API FGFSocialRules
 	static bool EmoteMakesNoise(bool bSafe, FName Mode);
 	/** TauntRadius above 0: the emote calls Big Grumble toward the player. */
 	static bool EmoteTauntsGiant(const FGFEmoteRow& Row);
+	/**
+	 * A re-taunt cannot extend the look. The floor matches FGFGiantTuning::TauntInterestSeconds. A row may set a
+	 * longer TauntCooldown. Other emotes use SharedSeconds (the social tuning cooldown).
+	 */
+	static constexpr float MinTauntCooldownSeconds = 15.f;
+	static float EmoteReuseSeconds(const FGFEmoteRow& Row, float SharedSeconds);
 	static const FGFEmoteRow* FindEmote(FName EmoteId);
 	/** All emote ids in the table, in row order. */
 	static TArray<FName> EmoteIds();

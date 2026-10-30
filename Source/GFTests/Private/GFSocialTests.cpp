@@ -936,8 +936,8 @@ bool FGFSocialProtectionProvidersTest::RunTest(const FString&)
 
 // Big Grumble in a world with faction land: the event's land zone answers protection through the land owner (so an
 // unprotected visitor on faction land is exposed, a member or a protected visitor isn't), the player views carry the
-// faction and host flag, the event goes for the exposed visitor, a protected attacker isn't eaten, and the jail cell is
-// a no-entry box (registered at spawn, gone with the cell) that puts a jailed player out of reach.
+// faction and host flag, a protected attacker isn't eaten, and the jail cell is a no-entry box (registered at spawn,
+// gone with the cell). A jailed player is exposed and can be the target; the box still blocks the bite.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialGiantProtectionTest, "GFGame.Social.GiantProtection", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FGFSocialGiantProtectionTest::RunTest(const FString&)
 {
@@ -1001,7 +1001,8 @@ bool FGFSocialGiantProtectionTest::RunTest(const FString&)
 	TestEqual(TEXT("The cell is a no-entry box"), Boxes.Num(), 1);
 	const FGFGiantPlayerView Jailed = View(TEXT("M"));
 	TestTrue(TEXT("The jailed member stands inside it"), FGFNoEntry::IsInside(Boxes, Jailed.Location));
-	TestFalse(TEXT("The jailed member is out of reach"), FGFGiantRules::IsExposed(Zone, Boxes, Jailed));
+	TestTrue(TEXT("The jailed member is exposed"), FGFGiantRules::IsExposed(Zone, Boxes, Jailed));
+	TestFalse(TEXT("The box still blocks a bite"), FGFGiantRules::CanTouch(Zone, Boxes, Jailed));
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	AGFJailCell* Extra = W.World->SpawnActor<AGFJailCell>(AGFJailCell::StaticClass(), FTransform(FVector(9000.f, 0.f, 0.f)), Params);
@@ -1013,9 +1014,10 @@ bool FGFSocialGiantProtectionTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("A destroyed cell drops its box"), Giant->GetNoEntry().Num(), 1);
 
-	// The event goes for the exposed visitor; the protected leader hitting it isn't eaten, the visitor is.
+	// The jailed member is exposed too, and with equal newness they come first in the player list. The visitor is
+	// still eaten if they attack. The box blocks the bite on the member.
 	TestTrue(TEXT("Event starts"), Giant->ServerStartEvent());
-	TestEqual(TEXT("Targets the unprotected visitor on faction land"), Giant->GetSim().TargetKey, FString(TEXT("V")));
+	TestEqual(TEXT("Targets the jailed member"), Giant->GetSim().TargetKey, FString(TEXT("M")));
 	TestFalse(TEXT("Protected leader isn't eaten"), Giant->ServerOnAttacked(L));
 	TestFalse(TEXT("Jailed member isn't eaten"), Giant->ServerOnAttacked(M));
 	TestTrue(TEXT("Still running"), Giant->bEventActive && Giant->GetSim().IsActive());
@@ -1081,6 +1083,18 @@ bool FGFSocialGiantHandoffTest::RunTest(const FString&)
 	TestTrue(TEXT("Revoke is recent"), VV->DragAgeSeconds >= 0.f && VV->DragAgeSeconds < 30.f);
 	TestTrue(TEXT("Grab is visible to him"), VV->bHeld && VV->HolderKey == TEXT("L") && VV->HolderName == L->GetPlayerName());
 	TestTrue(TEXT("The visitor is a handoff"), FGFGiantRules::IsHandoffCandidate(Giant->Tuning, *VV));
+	TestEqual(TEXT("Leader drops the grab"), S->ServerDrop(L), C::Ok);
+	{
+		const TArray<FGFGiantPlayerView> Dropped = Giant->GatherPlayers();
+		const FGFGiantPlayerView* DroppedV = Dropped.FindByPredicate([](const FGFGiantPlayerView& P) { return P.Key == TEXT("V"); });
+		if (!TestNotNull(TEXT("Visitor view after the drop"), DroppedV))
+		{
+			return false;
+		}
+		TestFalse(TEXT("Dropping the grab clears the held flag"), DroppedV->bHeld);
+		TestTrue(TEXT("Holder key is cleared"), DroppedV->HolderKey.IsEmpty());
+		TestTrue(TEXT("The revoke still counts"), FGFGiantRules::IsHandoffCandidate(Giant->Tuning, *DroppedV));
+	}
 	TestFalse(TEXT("The wild player is not"), FGFGiantRules::IsHandoffCandidate(Giant->Tuning, *WV));
 	TestEqual(TEXT("Ordinary pick would be the wild player"), FGFGiantRules::PickTarget(Giant->Tuning, Giant->GetLandZone(), Views, Giant->GetNoEntry()),
 		Views.IndexOfByPredicate([](const FGFGiantPlayerView& P) { return P.Key == TEXT("W"); }));
@@ -1090,6 +1104,11 @@ bool FGFSocialGiantHandoffTest::RunTest(const FString&)
 	TestEqual(TEXT("The call was raised"), S->GiantTauntsRaised, 1);
 	TestEqual(TEXT("Safe land: no wild-dino noise"), S->NoisesRaised, Noises);
 	TestFalse(TEXT("He does not store a taunt while he is away"), Giant->GetSim().bTaunt);
+	TestEqual(TEXT("Same player cannot re-taunt yet"), S->ServerEmote(M, TEXT("Taunt")), C::Cooldown);
+	TestEqual(TEXT("A rejected taunt does not call him"), S->GiantTauntsRaised, 1);
+	TestEqual(TEXT("Another player on safe land can taunt"), S->ServerEmote(V, TEXT("Taunt")), C::Ok);
+	TestEqual(TEXT("The other call was raised"), S->GiantTauntsRaised, 2);
+	TestEqual(TEXT("Still no noise from safe land"), S->NoisesRaised, Noises);
 
 	TestTrue(TEXT("Event starts"), Giant->ServerStartEvent());
 	TestEqual(TEXT("He goes for the handoff, not the wild player"), Giant->GetSim().TargetKey, FString(TEXT("V")));
@@ -1119,18 +1138,29 @@ bool FGFSocialGiantHandoffTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("One thanks"), Thanks, 1);
 
-	TestEqual(TEXT("Taunt while he is out"), S->ServerEmote(M, TEXT("Taunt")), C::Ok);
-	TestEqual(TEXT("Second call"), S->GiantTauntsRaised, 2);
+	TestEqual(TEXT("Taunt while he is out"), S->ServerEmote(L, TEXT("Taunt")), C::Ok);
+	TestEqual(TEXT("Third call"), S->GiantTauntsRaised, 3);
 	TestEqual(TEXT("Still no noise from safe land"), S->NoisesRaised, Noises);
 	TestTrue(TEXT("He noticed"), Giant->GetSim().bTaunt);
 	TestEqual(TEXT("Radius from the emote"), Giant->GetSim().TauntRadius, 4500.f);
-	TestTrue(TEXT("Pulled toward the taunter"), FVector::Dist2D(Giant->GetSim().TauntAt, M->GetPawn()->GetActorLocation()) < 1.f);
+	TestTrue(TEXT("Pulled toward the taunter"), FVector::Dist2D(Giant->GetSim().TauntAt, L->GetPawn()->GetActorLocation()) < 1.f);
+	TestEqual(TEXT("The first player is still cooling"), S->ServerEmote(M, TEXT("Taunt")), C::Cooldown);
 	TestEqual(TEXT("Heart is not a taunt"), S->ServerEmote(L, TEXT("Heart")), C::Ok);
-	TestEqual(TEXT("Heart did not call him"), S->GiantTauntsRaised, 2);
+	TestEqual(TEXT("Heart did not call him"), S->GiantTauntsRaised, 3);
+	{
+		const FGFEmoteRow* TauntRow = FGFSocialRules::FindEmote(TEXT("Taunt"));
+		const int32 Ticks = TauntRow ? FMath::CeilToInt(TauntRow->TauntCooldown) + 1 : 31;
+		for (int32 i = 0; i < Ticks; ++i)
+		{
+			W.World->Tick(LEVELTICK_All, 1.f);
+		}
+		TestEqual(TEXT("After the cooldown the same player can taunt"), S->ServerEmote(M, TEXT("Taunt")), C::Ok);
+		TestEqual(TEXT("That call was raised"), S->GiantTauntsRaised, 4);
+	}
 
 	TestEqual(TEXT("Leader jails a member"), S->ServerJail(L, M), C::Ok);
 	TestEqual(TEXT("No taunt from the jail"), S->ServerEmote(M, TEXT("Taunt")), C::Jailed);
-	TestEqual(TEXT("No call from the jail"), S->GiantTauntsRaised, 2);
+	TestEqual(TEXT("No call from the jail"), S->GiantTauntsRaised, 4);
 	TestFalse(TEXT("Protected leader isn't eaten"), Giant->ServerOnAttacked(L));
 	Zones->SetOverride(nullptr);
 	return true;

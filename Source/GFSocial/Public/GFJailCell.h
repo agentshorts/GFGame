@@ -3,7 +3,8 @@
 // Greybox underground jail cell: a floor, four walls and a ceiling (block-all boxes) around a spot far below the hub.
 // Replicated so clients collide with it too. Art replaces the boxes later.
 // The whole cell (walls included) is a no-entry box in UGFSafeZoneSubsystem while it exists: walkers that don't
-// collide (e.g. the giant) can come up to it but never into it, and anyone inside is out of their reach.
+// collide (e.g. the giant) can come up to it but never into it. A jailed player can be his target; he cannot shove
+// or eat them through the box.
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GFJailCell.generated.h"

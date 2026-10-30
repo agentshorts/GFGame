@@ -510,11 +510,12 @@ bool FGFGiantSafeZoneTest::RunTest(const FString&)
 	FGFGiantStepOut Out;
 	Sim.Begin(TC, FGFGiantLines::Load(), Z, P, false, 17, Out);
 	float MaxEdgeGap = 0.f;
-	int32 Inside = 0;
+	int32 Inside = 0, HerdedLines = 0;
 	for (int32 Step = 0; Step < 600; ++Step)
 	{
 		FGFGiantStepOut S;
 		Sim.Step(0.1f, P, S);
+		HerdedLines += CountPhase(S.Chat, EGFGiantLinePhase::Herded);
 		Inside += Z.IsInsideSafe(Sim.Location) || !FGFSafeZone::IsClear(Z, Sim.Location, TC.GiantRadius) ? 1 : 0;
 		if (Step > 300)
 		{
@@ -522,6 +523,7 @@ bool FGFGiantSafeZoneTest::RunTest(const FString&)
 		}
 	}
 	TestTrue(TEXT("Circling with everyone home"), Sim.State == EGFGiantState::Circling);
+	TestEqual(TEXT("Already home: no Herded line"), HerdedLines, 0);
 	TestEqual(TEXT("Edge-walking never enters a region"), Inside, 0);
 	TestTrue(TEXT("Edge-walking hugs a border"), MaxEdgeGap <= TC.GiantRadius + 200.f);
 	return true;

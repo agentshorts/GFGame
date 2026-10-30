@@ -11,6 +11,7 @@
 // - Emotes (Data/CSV/DT_Emotes.csv): anywhere, replicated, short cooldown. Outside safety, in a mode whose
 //   DT_ModeRules row has bEmoteAttractsDanger, the emote raises a noise (FGFNoise) that draws nearby wild dinos.
 //   A row with TauntRadius > 0 also calls Big Grumble toward the player (FGFAttention), inside safety too.
+//   That call has its own per-player cooldown (the row's TauntCooldown, at least 15s) so re-taunting cannot park him.
 // Verbs (AGFPlayerState::RequestMode, Mode "Social"; target players by Ints[0] = PlayerId):
 //   Grow, Shrink, Grab      powers on the target
 //   Drop                    let go of whoever the sender is pulling

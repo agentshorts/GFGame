@@ -119,9 +119,39 @@ FGFSafeRegion FGFGiantRules::DefaultRegion(const FGFGiantTuning& T, const FVecto
 	return R;
 }
 
-bool FGFGiantRules::IsExposed(const IGFSafeZoneQuery& Zone, const TArray<FBox>& NoEntry, const FGFGiantPlayerView& P)
+bool FGFGiantRules::IsExposed(const IGFSafeZoneQuery& Zone, const TArray<FBox>& /*NoEntry*/, const FGFGiantPlayerView& P)
 {
-	return !FGFNoEntry::IsInside(NoEntry, P.Location) && !Zone.IsSafeFor(P.Subject(), P.Location);
+	// A jail box does not hide a player. Jailed players are not protected, so he can target them and run up to the box.
+	return !Zone.IsSafeFor(P.Subject(), P.Location);
+}
+
+bool FGFGiantRules::CanTouch(const IGFSafeZoneQuery& Zone, const TArray<FBox>& NoEntry, const FGFGiantPlayerView& P)
+{
+	return IsExposed(Zone, NoEntry, P) && !FGFNoEntry::IsInside(NoEntry, P.Location);
+}
+
+FVector FGFGiantRules::NoEntryApproach(const FGFGiantTuning& T, const TArray<FBox>& NoEntry, const FVector& From, const FVector& Target)
+{
+	const FBox* Box = nullptr;
+	for (const FBox& B : NoEntry)
+	{
+		if (B.IsValid && B.IsInsideOrOn(Target))
+		{
+			Box = &B;
+			break;
+		}
+	}
+	if (!Box)
+	{
+		return Target;
+	}
+	const float R = FMath::Max(0.f, T.GiantRadius);
+	const float MinX = Box->Min.X - R;
+	const float MaxX = Box->Max.X + R;
+	const float MinY = Box->Min.Y - R;
+	const float MaxY = Box->Max.Y + R;
+	// Closest point on the expanded rectangle. From outside, that point is on the edge he can actually stand on.
+	return FVector(FMath::Clamp(From.X, MinX, MaxX), FMath::Clamp(From.Y, MinY, MaxY), From.Z);
 }
 
 bool FGFGiantRules::AnyoneOutside(const IGFSafeZoneQuery& Zone, const TArray<FGFGiantPlayerView>& Players, const TArray<FBox>& NoEntry)
@@ -207,13 +237,17 @@ FString FGFGiantRules::SetupName(const FGFGiantPlayerView& P)
 	return !P.Dragger.IsEmpty() ? P.Dragger : P.HolderName;
 }
 
-FGFGiantPick FGFGiantRules::PickInterest(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const TArray<FGFGiantPlayerView>& Players, const TArray<FBox>& NoEntry, const FGFGiantNotice* Notice)
+FGFGiantPick FGFGiantRules::PickInterest(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const TArray<FGFGiantPlayerView>& Players, const TArray<FBox>& NoEntry, const FGFGiantNotice* Notice, const TSet<FString>* Skip)
 {
 	FGFGiantPick Out;
 	TArray<int32> Exposed;
 	TArray<int32> Handoffs;
 	for (int32 i = 0; i < Players.Num(); ++i)
 	{
+		if (Skip && Skip->Contains(Players[i].Key) && FGFNoEntry::IsInside(NoEntry, Players[i].Location))
+		{
+			continue;
+		}
 		if (!IsExposed(Zone, NoEntry, Players[i]))
 		{
 			continue;
@@ -447,6 +481,18 @@ void FGFGiantSim::Begin(const FGFGiantTuning& InT, const FGFGiantLines& InLines,
 	TauntAt = FVector::ZeroVector;
 	TauntRadius = 0.f;
 	Thanked.Reset();
+	BlockedKey.Reset();
+	BlockedSeconds = 0.f;
+	Passed.Reset();
+	WasExposed.Reset();
+	bHerdedSomeone = false;
+	for (const FGFGiantPlayerView& P : Players)
+	{
+		if (FGFGiantRules::IsExposed(*Zone, NoEntry, P))
+		{
+			WasExposed.Add(P.Key);
+		}
+	}
 
 	const FGFGiantPick Pick = FGFGiantRules::PickInterest(T, *Zone, Players, NoEntry, nullptr);
 	const int32 Ti = Pick.Index;
@@ -518,11 +564,32 @@ bool FGFGiantSim::Attacked(const FString& Key, const TArray<FGFGiantPlayerView>&
 {
 	// It never attacks a protected player (or one out of reach), even one who hits it.
 	const FGFGiantPlayerView* P = Find(Players, Key);
-	if (!Zone || !P || !FGFGiantRules::IsExposed(*Zone, NoEntry, *P))
+	if (!Zone || !P || !FGFGiantRules::CanTouch(*Zone, NoEntry, *P))
 	{
 		return false;
 	}
 	return Eat(Key, Players, Out);
+}
+
+void FGFGiantSim::NoteHomecomings(const TArray<FGFGiantPlayerView>& Players)
+{
+	if (!Zone)
+	{
+		return;
+	}
+	TSet<FString> Now;
+	for (const FGFGiantPlayerView& P : Players)
+	{
+		if (FGFGiantRules::IsExposed(*Zone, NoEntry, P))
+		{
+			Now.Add(P.Key);
+		}
+		else if (WasExposed.Contains(P.Key) && Zone->IsSafeFor(P.Subject(), P.Location))
+		{
+			bHerdedSomeone = true;
+		}
+	}
+	WasExposed = MoveTemp(Now);
 }
 
 void FGFGiantSim::MoveToward(const FVector& Goal, float StepLen, bool bMayEnterSafe)
@@ -567,6 +634,22 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 	const IGFSafeZoneQuery& Safe = *Zone;
 	Elapsed += Dt;
 	SinceLastLine += Dt;
+	NoteHomecomings(Players);
+	{
+		TArray<FString> Free;
+		for (const FString& Key : Passed)
+		{
+			const FGFGiantPlayerView* Held = Find(Players, Key);
+			if (!Held || !FGFNoEntry::IsInside(NoEntry, Held->Location))
+			{
+				Free.Add(Key);
+			}
+		}
+		for (const FString& Key : Free)
+		{
+			Passed.Remove(Key);
+		}
+	}
 	if (bTaunt)
 	{
 		TauntLeft -= Dt;
@@ -615,7 +698,7 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 		Notice.At = TauntAt;
 		Notice.Radius = TauntRadius;
 	}
-	const FGFGiantPick Pick = FGFGiantRules::PickInterest(T, Safe, Players, NoEntry, bTaunt ? &Notice : nullptr);
+	const FGFGiantPick Pick = FGFGiantRules::PickInterest(T, Safe, Players, NoEntry, bTaunt ? &Notice : nullptr, &Passed);
 	const int32 Ti = Pick.Index;
 	ChatIn -= Dt;
 	if (Pick.Reason == EGFGiantInterest::Look)
@@ -640,10 +723,14 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 	}
 	if (Ti == INDEX_NONE)
 	{
-		// Everyone is home: grumble along the edge.
+		// Everyone he can chase is home, or he gave up on a box and nobody else is out.
 		if (State == EGFGiantState::Chase)
 		{
-			Say(EGFGiantLinePhase::Herded, FString(), FString(), Out);
+			if (bHerdedSomeone)
+			{
+				Say(EGFGiantLinePhase::Herded, FString(), FString(), Out);
+				bHerdedSomeone = false;
+			}
 			State = EGFGiantState::Circling;
 			ChatIn = Rng.FRandRange(T.CirclingChatMinSeconds, T.CirclingChatMaxSeconds);
 			TargetKey.Reset();
@@ -696,10 +783,38 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 
 	// Herd: get behind the target (away from safety) and push it toward safety. Slides along borders while the target
 	// is outside; walks into safe territory only after an exposed target standing there (unprotected on that land).
+	// A target inside a no-entry box is met at the edge. He waits, then leaves them for someone else.
 	const float Speed = FGFGiantRules::ChaseSpeed(T, Target.RunSpeed, TimeOnTarget);
 	LastSpeed = Speed;
-	const FVector Goal = FGFGiantRules::HerdGoal(T, Safe, Target.Location);
-	MoveToward(Goal, Speed * Dt, Safe.IsInsideSafe(Target.Location));
+	const bool bBoxed = FGFNoEntry::IsInside(NoEntry, Target.Location);
+	if (bBoxed)
+	{
+		if (BlockedKey != Target.Key)
+		{
+			BlockedKey = Target.Key;
+			BlockedSeconds = 0.f;
+		}
+		const FVector Goal = FGFGiantRules::NoEntryApproach(T, NoEntry, Location, Target.Location);
+		MoveToward(Goal, Speed * Dt, Safe.IsInsideSafe(Target.Location));
+		if (FVector::Dist2D(Location, Goal) <= 50.f)
+		{
+			BlockedSeconds += Dt;
+			if (BlockedSeconds >= T.JailDwellSeconds)
+			{
+				Passed.Add(Target.Key);
+			}
+		}
+	}
+	else
+	{
+		if (BlockedKey == Target.Key)
+		{
+			BlockedKey.Reset();
+			BlockedSeconds = 0.f;
+		}
+		const FVector Goal = FGFGiantRules::HerdGoal(T, Safe, Target.Location);
+		MoveToward(Goal, Speed * Dt, Safe.IsInsideSafe(Target.Location));
+	}
 
 	if (Pick.Reason == EGFGiantInterest::Handoff && Thank(Target, Out))
 	{
@@ -710,7 +825,7 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 	bool bShoved = false;
 	for (const FGFGiantPlayerView& P : Players)
 	{
-		if (!FGFGiantRules::IsExposed(Safe, NoEntry, P) || FVector::Dist2D(P.Location, Location) > T.ShoveRange)
+		if (!FGFGiantRules::CanTouch(Safe, NoEntry, P) || FVector::Dist2D(P.Location, Location) > T.ShoveRange)
 		{
 			continue;
 		}
@@ -731,7 +846,7 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 
 	// The (exposed) target standing still near it: a warning taunt, then a snack.
 	const float* TargetSpeed = Speeds.Find(Target.Key);
-	const bool bIdle = T.bEatIdleTarget && !Target.bBusy && TargetSpeed && *TargetSpeed < T.IdleSpeedThreshold
+	const bool bIdle = T.bEatIdleTarget && !Target.bBusy && FGFGiantRules::CanTouch(Safe, NoEntry, Target) && TargetSpeed && *TargetSpeed < T.IdleSpeedThreshold
 		&& FVector::Dist2D(Location, Target.Location) <= T.IdleRange;
 	if (bIdle)
 	{

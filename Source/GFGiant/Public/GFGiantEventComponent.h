@@ -5,15 +5,15 @@
 // the body later.
 // Server side of the giant dino event (Big Grumble; name and look in Data/CSV/DT_GiantDino.csv).
 // - Trigger: every MinRealSecondsBetween of real time, once players have played MinPlaySecondsSinceLast in total
-//   since the last event, and only while someone is exposed (FGFGiantRules::IsExposed: unprotected where they stand
-//   and not inside a no-entry box). Clock and play time are saved with
+//   since the last event, and only while someone is exposed (FGFGiantRules::IsExposed: unprotected where they stand,
+//   including a player in a no-entry box). Clock and play time are saved with
 //   the world (mode blob "Giant").
 // - While it runs, FGFGiantSim decides everything; this actor applies it: moves the replicated AGFGiantDino, shoves
 //   pawns (LaunchCharacter, never damage), posts lines to the replicated Chat log, and handles a snack (belly cam
 //   for BellyCamSeconds, then IGFFaintHandler). Nothing here touches the ledger.
 // - A handoff (protection just turned off, or a grab still holding) is preferred, and he thanks that player once.
 //   A taunt emote (FGFAttention) pulls him toward that spot while he is already out. He still never takes a
-//   protected player or enters a no-entry box.
+//   protected player or enters a no-entry box. A jailed player can be the target; he stops at the box edge.
 // - Safety is only ever asked through IGFSafeZoneQuery (GetSafeZone; also published to UGFSafeZoneSubsystem): by default one circle region at
 //   DefaultSafeCenter growing with the player count; the territory system replaces it with SetSafeRegions (any number
 //   of circle regions, each growing with its own member count) or SetSafeZone (any implementation).

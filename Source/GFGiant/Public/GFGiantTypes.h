@@ -7,9 +7,10 @@
 // target stands still near it.
 // Safety is always asked through IGFSafeZoneQuery (GFSafeZone.h): any number of regions, no hard-coded circle.
 // Who it may take is asked per player (IGFSafeZoneQuery::IsSafeFor, i.e. protection): a player is "exposed" when
-// that says unsafe and they are not inside a no-entry box (FGFNoEntry, e.g. a jail cell). It only ever targets,
-// shoves or eats exposed players. Movement: it skirts safe territory, except that it walks in after an exposed
-// target standing there (an unprotected visitor on someone's land); it never enters a no-entry box.
+// that says unsafe. A jailed player is not protected, so they can be a target. A no-entry box (FGFNoEntry, e.g. a
+// jail cell) still blocks the body and the bite: he paths to the edge, waits JailDwellSeconds, then picks someone
+// else, and he never shoves or eats through the box. Movement: it skirts safe territory, except that it walks in
+// after an exposed target standing there (an unprotected visitor on someone's land); it never enters a no-entry box.
 // Handoff: an exposed player someone else just unprotected, or is holding with a grab, is taken ahead of anyone
 // else. He thanks that player once (Handoff lines; {Dragger} and {Target}). A taunt (NoticeTaunt) pulls him toward
 // that spot so he notices exposed players there. He still never takes a protected player or enters a no-entry box.
@@ -168,6 +169,11 @@ struct GFGIANT_API FGFGiantTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handoff") float TauntInterestSeconds = 15.f;
 	/** Radius (cm) used when a taunt doesn't carry one. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handoff") float TauntNoticeRadius = 4500.f;
+	/**
+	 * Once he has reached the edge of a no-entry box and the target is still inside, he waits this long, then
+	 * leaves that player for someone else. While they stay in the box he does not come back this visit.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Handoff") float JailDwellSeconds = 8.f;
 };
 
 /** Tunables as a data asset (create one in the editor to tweak; the director uses defaults if none is set). */
@@ -344,11 +350,18 @@ struct GFGIANT_API FGFGiantRules
 	/** The default region (tunables) at Center for Members players. */
 	static FGFSafeRegion DefaultRegion(const FGFGiantTuning& T, const FVector& Center, int32 Members);
 	/**
-	 * The giant may take P: not safe for P where they stand (Zone.IsSafeFor, so protection counts) and not inside a
-	 * no-entry box (out of reach, e.g. jailed). Only exposed players are ever targeted, shoved or eaten.
+	 * The giant may target P: not safe for P where they stand (Zone.IsSafeFor, so protection counts). A jailed player
+	 * is not protected, so the no-entry box does not hide them. Shoves and bites use CanTouch.
 	 */
 	static bool IsExposed(const IGFSafeZoneQuery& Zone, const TArray<FBox>& NoEntry, const FGFGiantPlayerView& P);
-	/** Anyone exposed (the trigger's "someone is out there"). */
+	/** Exposed, and not standing inside a no-entry box. The only players he shoves or eats. */
+	static bool CanTouch(const IGFSafeZoneQuery& Zone, const TArray<FBox>& NoEntry, const FGFGiantPlayerView& P);
+	/**
+	 * Where he stands to reach a target inside a no-entry box: the nearest point on that box, GiantRadius outside it.
+	 * Target's own location when they are not in a box.
+	 */
+	static FVector NoEntryApproach(const FGFGiantTuning& T, const TArray<FBox>& NoEntry, const FVector& From, const FVector& Target);
+	/** Anyone exposed (the trigger's "someone is out there", including a player inside a no-entry box). */
 	static bool AnyoneOutside(const IGFSafeZoneQuery& Zone, const TArray<FGFGiantPlayerView>& Players, const TArray<FBox>& NoEntry = TArray<FBox>());
 	/** Moves P (horizontally) out until its body (GiantRadius) is clear of safe territory. */
 	static FVector ClampOutside(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const FVector& P);
@@ -365,8 +378,9 @@ struct GFGIANT_API FGFGiantRules
 	 * Who he goes for. Handoff candidates first (a hold beats a revoke, a newer revoke beats an older one, then the
 	 * usual newest-exposed tiebreak), then exposed players inside an active taunt, then PickTarget. A taunt with
 	 * nobody exposed inside it returns Look and no index: walk to the spot, don't peel off to someone farther away.
+	 * Skip names players he already gave up on at a no-entry box; they stay skipped while they remain inside one.
 	 */
-	static FGFGiantPick PickInterest(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const TArray<FGFGiantPlayerView>& Players, const TArray<FBox>& NoEntry = TArray<FBox>(), const FGFGiantNotice* Notice = nullptr);
+	static FGFGiantPick PickInterest(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const TArray<FGFGiantPlayerView>& Players, const TArray<FBox>& NoEntry = TArray<FBox>(), const FGFGiantNotice* Notice = nullptr, const TSet<FString>* Skip = nullptr);
 	/** Where it goes to herd Target: behind it, on the side away from the nearest safety. */
 	static FVector HerdGoal(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const FVector& Target);
 	/** Shove launch velocity for a player at P: horizontally toward the nearest safety. */
@@ -416,7 +430,7 @@ struct GFGIANT_API FGFGiantSim
 
 	/** Safe territory (not owned; the caller keeps it alive and may swap it between steps). */
 	const IGFSafeZoneQuery* Zone = nullptr;
-	/** No-entry boxes (FGFNoEntry; e.g. jail cells): it never walks into one, and players inside are out of reach. Caller-set. */
+	/** No-entry boxes (FGFNoEntry; e.g. jail cells): it never walks into one. Players inside can be targets; he cannot shove or eat them. Caller-set. */
 	TArray<FBox> NoEntry;
 	FVector Location = FVector::ZeroVector;
 	EGFGiantState State = EGFGiantState::None;
@@ -448,6 +462,14 @@ struct GFGIANT_API FGFGiantSim
 	float LeaveLeft = 0.f;
 	/** Targets already thanked this visit (one Handoff line each). */
 	TSet<FString> Thanked;
+	/** Target he is waiting on at a no-entry edge, and how long he has been standing there. */
+	FString BlockedKey;
+	float BlockedSeconds = 0.f;
+	/** Players he gave up on at a box this visit. Dropped when they leave the box. */
+	TSet<FString> Passed;
+	/** Exposed on the previous step. A player who leaves this set by becoming safe was herded. */
+	TSet<FString> WasExposed;
+	bool bHerdedSomeone = false;
 	/** Last chase speed (tests). */
 	float LastSpeed = 0.f;
 	/** It walked into safe territory after a target and is still in (it walks back out instead of jumping). */
@@ -474,4 +496,6 @@ private:
 	 */
 	void MoveToward(const FVector& Goal, float StepLen, bool bMayEnterSafe);
 	const FGFGiantPlayerView* Find(const TArray<FGFGiantPlayerView>& Players, const FString& Key) const;
+	/** Sets bHerdedSomeone when a player who was exposed is now safe. */
+	void NoteHomecomings(const TArray<FGFGiantPlayerView>& Players);
 };
