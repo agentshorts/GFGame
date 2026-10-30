@@ -1,7 +1,9 @@
 #include "GFDino.h"
 #include "GFTamingComponent.h"
 #include "GFAssetMap.h"
+#include "GFSimpleAnimComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
@@ -17,6 +19,21 @@ AGFDino::AGFDino()
 	Body->SetupAttachment(GetCapsuleComponent());
 	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Body->SetCanEverAffectNavigation(false);
+	Art = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("Art"));
+	Art->SetupAttachment(GetCapsuleComponent());
+	Art->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Art->SetCanEverAffectNavigation(false);
+	Art->SetVisibility(false);
+	Art->SetHiddenInGame(true);
+	Art->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+	// The character mesh stays unused; Art is the one DT_AssetMap fills in.
+	if (USkeletalMeshComponent* DefaultMesh = GetMesh())
+	{
+		DefaultMesh->SetVisibility(false);
+		DefaultMesh->SetHiddenInGame(true);
+		DefaultMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+	SimpleAnim = CreateDefaultSubobject<UGFSimpleAnimComponent>(TEXT("SimpleAnim"));
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 }
 
@@ -33,9 +50,9 @@ void AGFDino::SetSpecies(FName InSpecies)
 
 void AGFDino::ApplyPlaceholder()
 {
-	if (Body && !Taming->Species.IsNone())
+	if (!Taming->Species.IsNone())
 	{
-		FGFAssetMap::Apply(Body, AssetKey(Taming->Species));
+		FGFAssetMap::ApplySkeletal(Art, Body, AssetKey(Taming->Species));
 	}
 }
 

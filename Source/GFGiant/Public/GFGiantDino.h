@@ -1,7 +1,8 @@
 #pragma once
 
 // The giant's body: a reusable, replicated greybox actor (DT_AssetMap placeholder for DT_GiantDino.AssetKey, scaled by
-// MeshScale). It knows nothing about the event: whoever drives it (today UGFGiantEventComponent; later e.g. a tamed
+// MeshScale). Art is the skeletal mesh for that same asset key when the row has one; Body stays the placeholder.
+// It knows nothing about the event: whoever drives it (today UGFGiantEventComponent; later e.g. a tamed
 // companion mode owned by the host) moves it with MoveBody and listens to OnAttackedBy. It has no health and never
 // damages anyone.
 #include "CoreMinimal.h"
@@ -11,6 +12,8 @@
 
 class UCapsuleComponent;
 class UStaticMeshComponent;
+class USkeletalMeshComponent;
+class UGFSimpleAnimComponent;
 class AGFPlayerState;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FGFGiantAttackedBy, class AGFGiantDino* /*Dino*/, AGFPlayerState* /*By*/);
@@ -29,6 +32,9 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "GF|Giant") TObjectPtr<UCapsuleComponent> Capsule;
 	UPROPERTY(VisibleAnywhere, Category = "GF|Giant") TObjectPtr<USceneComponent> ScaleRoot;
 	UPROPERTY(VisibleAnywhere, Category = "GF|Giant") TObjectPtr<UStaticMeshComponent> Body;
+	/** Skeletal art under ScaleRoot (MeshScale still scales both). Hidden when the asset key has no skeletal mesh. */
+	UPROPERTY(VisibleAnywhere, Category = "GF|Giant") TObjectPtr<USkeletalMeshComponent> Art;
+	UPROPERTY(VisibleAnywhere, Category = "GF|Giant") TObjectPtr<UGFSimpleAnimComponent> SimpleAnim;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Giant") EGFGiantState State = EGFGiantState::None;
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Giant") FString TargetKey;

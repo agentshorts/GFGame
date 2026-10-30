@@ -7,9 +7,12 @@
 
 class UGFTamingComponent;
 class UStaticMeshComponent;
+class USkeletalMeshComponent;
+class UGFSimpleAnimComponent;
 
 /**
- * Dino base class (greybox: asset-map placeholder "Dino.<Species>", a coloured sphere until the art lands).
+ * Dino base class. Art is the skeletal mesh from DT_AssetMap ("Dino.<Species>") when that row has one.
+ * Body stays the coloured placeholder sphere and is what shows when the art is missing.
  * Server-driven: wild, it attacks whoever its taming machine is hostile at; tamed, it follows its owner.
  * Behaviour is a C++ switch for now; a StateTree (Idle/Follow/Fight/Rest) replaces it later.
  */
@@ -24,9 +27,17 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Dino")
 	TObjectPtr<UGFTamingComponent> Taming;
 
-	/** Placeholder / art mesh, resolved through the asset map. */
+	/** Placeholder sphere. Hidden while Art is showing. Kept so callers that read Body still can. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Dino")
 	TObjectPtr<UStaticMeshComponent> Body;
+
+	/** Skeletal art from the asset map. Hidden when the mesh is missing and Body shows instead. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Dino")
+	TObjectPtr<USkeletalMeshComponent> Art;
+
+	/** Idle / move on Art. Clips come from the species row. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Dino")
+	TObjectPtr<UGFSimpleAnimComponent> SimpleAnim;
 
 	/** Follow when farther than this from the leader (cm). PLAN.md: followers stay 3-8 m away. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Dino")

@@ -121,3 +121,6 @@ BigGrumble.FakeOut_Lunge,/Game/Art/Dinos/BigGrumble/Anims/A_Dino_BigGrumble_Fake
 BigGrumble.Scoop_Toss_Gulp,/Game/Art/Dinos/BigGrumble/Anims/A_Dino_BigGrumble_Scoop_Toss_Gulp.A_Dino_BigGrumble_Scoop_Toss_Gulp,False,True,0.0
 BigGrumble.Satisfied_BellyPat,/Game/Art/Dinos/BigGrumble/Anims/A_Dino_BigGrumble_Satisfied_BellyPat.A_Dino_BigGrumble_Satisfied_BellyPat,False,True,0.0
 BigGrumble.Waddle_Off,/Game/Art/Dinos/BigGrumble/Anims/A_Dino_BigGrumble_Waddle_Off.A_Dino_BigGrumble_Waddle_Off,True,False,0.0
+Raptor.Idle,/Game/Art/Dinos/Raptor/Anims/A_Dino_Raptor_Idle.A_Dino_Raptor_Idle,True,False,0.0
+Raptor.Walk,/Game/Art/Dinos/Raptor/Anims/A_Dino_Raptor_Walk.A_Dino_Raptor_Walk,True,False,0.0
+Raptor.Run,/Game/Art/Dinos/Raptor/Anims/A_Dino_Raptor_Run.A_Dino_Raptor_Run,True,False,0.0

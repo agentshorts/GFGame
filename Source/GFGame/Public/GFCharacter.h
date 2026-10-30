@@ -9,6 +9,7 @@ class USpringArmComponent;
 class UInputAction;
 class UInputMappingContext;
 class UGFInventoryComponent;
+class UGFSimpleAnimComponent;
 class AGFVoxelWorld;
 struct FInputActionValue;
 
@@ -33,6 +34,10 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Camera")
 	TObjectPtr<UCameraComponent> FirstPersonCamera;
+
+	/** Idle / move on the skeletal mesh. Clips come from the Player.Base asset-map row. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Anim")
+	TObjectPtr<UGFSimpleAnimComponent> SimpleAnim;
 
 	UFUNCTION(BlueprintCallable, Category = "GF|Camera")
 	void SetFirstPerson(bool bEnable);

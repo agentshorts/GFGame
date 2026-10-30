@@ -1,7 +1,10 @@
 #include "GFCharacter.h"
 #include "GFPlayerState.h"
 #include "GFLog.h"
+#include "GFAssetMap.h"
+#include "GFSimpleAnimComponent.h"
 #include "GFVoxelWorld.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "EngineUtils.h"
@@ -45,11 +48,27 @@ AGFCharacter::AGFCharacter()
 	FirstPersonCamera->bUsePawnControlRotation = true;
 	FirstPersonCamera->FieldOfView = 90.f;
 	FirstPersonCamera->SetAutoActivate(false);
+
+	// Mannequin fallback (feet at the capsule bottom, mesh facing +Y). Player.Base overwrites this when the row loads.
+	if (USkeletalMeshComponent* MeshComp = GetMesh())
+	{
+		MeshComp->SetRelativeLocation(FVector(0.f, 0.f, -88.f));
+		MeshComp->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+		MeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+		if (const FGFAssetMapRow* Row = FGFAssetMap::Find(TEXT("Player.Base")))
+		{
+			MeshComp->SetRelativeLocation(Row->ArtOffset);
+			MeshComp->SetRelativeRotation(Row->ArtRotation);
+		}
+	}
+	SimpleAnim = CreateDefaultSubobject<UGFSimpleAnimComponent>(TEXT("SimpleAnim"));
 }
 
 void AGFCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	FGFAssetMap::ApplySkeletal(GetMesh(), nullptr, TEXT("Player.Base"));
 	SetFirstPerson(false);
 	if (SelectedBlock.IsNone())
 	{
