@@ -40,7 +40,7 @@ Each of those lines is commented in `DefaultGame.ini`.
 
 `FlightPosition` is a quadratic Bezier. Alpha 0 and 1 are the perch points, not the pad origins. The control point is the chord midpoint plus 1600 cm toward world +Y, with Z = midpoint Z + 2 * CruiseAltitude. Alpha 0.5 is CruiseAltitude above the chord and 800 cm off it. The return trip bulges the same way, toward +Y. The bird stays on the perch, yaw -90, until takeoff frame 10 (10/30 s). After that it faces the Bezier tangent.
 
-The basket stays at the departure basket spot until takeoff frame 22, then its Grip point `(0, 0, 193.75)` is snapped to `FerryGrip` on `talon_l` (SnapToTarget location, KeepWorld rotation). On landing, frame 16 lowers the basket and frame 22 releases it at the arrival basket spot. The rider is on the basket Seat `(-25, 0, 12.5)` for the whole flight.
+The basket stays at the departure basket spot until takeoff frame 22, then its Grip point `(0, 0, 193.75)` is snapped to `FerryGrip` on `talon_l` (SnapToTarget location, KeepWorld rotation). On landing, frame 16 lowers the basket and frame 22 releases it at the arrival basket spot. The rider is snapped to the basket in basket space at the Seat offset `(-25, 0, 12.5)` for the whole flight. Attaching to the Seat socket would leave the relative location at zero.
 
 Boarding uses horizontal distance (`Dist2D`) against `BoardRadius`. The drop is `BoardRadius / 2` past the arrival stop along the route. Drop Z is `To.Z + (riderZ - From.Z)`, using the rider's location before they sit. Movement is disabled for the flight and set back to walking. The rider is detached before the craft is destroyed.
 

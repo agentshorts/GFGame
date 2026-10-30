@@ -53,16 +53,12 @@ namespace GFFerryDirectorPrivate
 		{
 			return;
 		}
+		// Snap to the basket, then to the seat offset in basket space (-25, 0, 12.5).
+		// The Seat socket is authored at that same point. Attaching to the socket stores
+		// a zero relative location, so the rider is on the ferry but not at the seat.
 		const FAttachmentTransformRules Rules(EAttachmentRule::SnapToTarget, EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, false);
-		if (Basket->DoesSocketExist(FGFFerryArt::SeatSocket()))
-		{
-			Rider->AttachToComponent(Basket, Rules, FGFFerryArt::SeatSocket());
-		}
-		else
-		{
-			Rider->AttachToComponent(Basket, Rules);
-			Rider->SetActorRelativeLocation(FGFFerryArt::SeatLocal());
-		}
+		Rider->AttachToComponent(Basket, Rules);
+		Rider->SetActorRelativeLocation(FGFFerryArt::SeatLocal());
 	}
 
 	void GrabBasket(AGFFerryDino* Craft, UStaticMeshComponent* Basket)
