@@ -40,6 +40,20 @@ The other dinos have no spoken rows. Their lab lines only echo `docs/NewDinos_v1
 4. All-chat trash talk between dinos is local to the lab's one window. It does not write `ChatLog` or the giant line log.
 5. If a context model is ever used by a tool again, keep it in this web lab. The game server should keep serving canned lines.
 
+## Persona manager and storage
+
+`#/personas` is the lite manager: list, editor, test chat. It does not replace the chat lab. Classic engines still speak. The test pane uses ELIZA so it works with no download.
+
+Local `npm run dev` never calls the Worker. Leave `VITE_DINO_API` unset. Personas, memory, relationship notes, player-stat mirrors, and the decision log stay in `localStorage`. The username is stored in `localStorage` and a non-HttpOnly cookie because there is no server on that port.
+
+A deployed lab sets `VITE_DINO_API=/api` and serves the Vite build from the Worker assets directory. `PersonaHub` (SQLite, `getByName("global")`) stores users, personas, per-user memory, relationship notes, `player_stats`, `stat_events`, and `decision_log`. `SignupLimiter` (its own SQLite class, also one instance) stores `signups(day, count)` and stops at 100 new usernames per UTC day. Writes need the cookie. Persona reads are public. Only the owner can edit, and a stale `version` returns 409. Persona JSON is capped at 32 KB. Log and stat writes are capped at 60 per user per UTC minute.
+
+Do not deploy this Worker yourself. Do not add an account id, a DNS route, or a credential. Do not point it at the old `4squarebackend` Worker. After review, Cloudflare Bot deploys `Tools/DinoChatLab/wrangler.jsonc`. Run `npm run build` first so `dist/` exists. The Worker never loads WebLLM and stores no model keys.
+
+`src/manager/shim/untilCore.ts` copies the shapes planned for `src/core` (issue #75) until that branch exports them. When `src/core/index.ts` exports `fallbackSummarize` and `clampSummary`, the manager uses those. Rep on `player_stats` stays 0 here. The memory branch owns the rep deltas.
+
+There is still no Unreal wiring. The lab does not subscribe to giant events, and it does not write `ChatLog`.
+
 ## Tests
 
 `npm test` covers FillTarget, the PG filter, persona canon (CSV and `NewDinos_v1.md`), prompts, clipping, the small-model picker against the installed WebLLM list, ELIZA / AIML / RiveScript cue lines, a raw ELIZA override, MegaHAL, transcript version 2, the alignment matrix, the 4096 context budget, a mocked WebLLM client, and the memory core (per-dino budgets, summaries, quotas, the no-reply-to-reply rule, stat rows, the elder digest, and the localStorage adapter). The real model is not downloaded in CI-less local tests.

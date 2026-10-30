@@ -47,6 +47,23 @@ The WebLLM loading pattern (worker, progress callback, `chat.completions.create`
 
 `npm audit` reports issues in old transitive packages under RiveScript. They were left as installed. Do not run `npm audit fix --force`.
 
+## Personas and usernames
+
+The header link **Personas** opens `#/personas`, one screen with a dino list, an editor, and a test chat. Bundled dinos stay read-only. **Duplicate** or **+ New** makes a draft you can test before you save. The editor covers name, description, speech pattern (`CASUAL`, `FORMAL`, `EXPRESSIVE`), topic chips (like, dislike, neutral), friend / rival / family relationships, and the four interest minimums. The test chat runs ELIZA on the draft, including unsaved edits, and shows the decision log plus the dino and relationship memory. **Reset memory** clears those notes for the current player name.
+
+The first visit asks for a username. There is no password.
+
+| Mode | When | Personas, memory, log | Username |
+| --- | --- | --- | --- |
+| Local | `npm run dev`, or `VITE_DINO_API` unset | `localStorage` keys `dcl:personas`, `dcl:memory:<dino>`, `dcl:rel:<dino>:<subject>`, `dcl:stats:<player>`, `dcl:log` | Name in `localStorage` (`dcl:username`) and a `dcl_user` cookie |
+| Deployed | `VITE_DINO_API` set, usually `/api` | `PersonaHub` Durable Object (SQLite, instance `global`) | `POST /api/users` sets an HttpOnly `dcl_user` cookie. The browser also stores the name. `SignupLimiter` allows 100 new names per UTC day |
+
+Losing the cookie means picking a new name. The screen says so. Local play does not apply the daily cap. That cap lives in `SignupLimiter` so it still holds if persona data is split up later.
+
+`worker/` and `wrangler.jsonc` are the Worker. Do not deploy them from this repo, and do not put an account id, a route, or a credential in the config. Cloudflare Bot deploys after review. The Worker does not run a model. WebLLM still runs in the browser. Nothing here is wired into Unreal.
+
+Build the static lab with `npm run build` before a future deploy. `run_worker_first` sends `/api/*` to the Worker and leaves the rest as assets from `dist/`.
+
 ## Personas
 
 JSON files in `personas/`. Spoken lines for Big Grumble are copied from `DT_GiantDinoLines.csv`. Tusksaw, Ripwing, Scythepaw, and Lanternmaw only restate phrases from `docs/NewDinos_v1.md`. Chatty Bird is a lab stand-in: the repo has no named chatty bird, and Ripwing is not that bird. `loreTodo` marks every gap. Do not invent a biography.
