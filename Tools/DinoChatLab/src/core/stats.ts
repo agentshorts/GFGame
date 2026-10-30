@@ -5,6 +5,7 @@
 
 import { clampSummary } from "./memory";
 import {
+  clampInt,
   clampRep,
   DEFAULT_AFFINITY_DELTAS,
   DEFAULT_REP_DELTAS,
@@ -13,6 +14,7 @@ import {
   STAT_KINDS,
   TOTAL_FAMILY_ID,
   repBand,
+  type DinoWork,
   type PlayerStatsRow,
   type RepBand,
   type RepBandEdges,
@@ -45,6 +47,11 @@ export function emptyStats(playerKey: string, familyId: string, at: string): Pla
 export function affinityDeltaFor(kind: StatKind, amount = 1): number {
   const times = Math.max(1, Math.trunc(amount));
   return DEFAULT_AFFINITY_DELTAS[kind] * times;
+}
+
+/** Same function as `affinityDeltaFor`. Kept under the name from the work issue. */
+export function affinityDelta(kind: StatKind, amount = 1): number {
+  return affinityDeltaFor(kind, amount);
 }
 
 function findRow(rows: readonly PlayerStatsRow[], playerKey: string, familyId: string): PlayerStatsRow | undefined {
@@ -143,4 +150,59 @@ export function statsDigest(args: {
 
 export function isStatKind(value: string): value is StatKind {
   return (STAT_KINDS as readonly string[]).includes(value);
+}
+
+export function blankWork(dinoId: string): DinoWork {
+  return {
+    dinoId,
+    employerId: null,
+    employment: null,
+    wagesEarned: 0,
+    mineralsFound: 0,
+    seekingJob: false,
+  };
+}
+
+export function normalizeWork(dinoId: string, value: unknown): DinoWork {
+  const source = value && typeof value === "object" ? value as Partial<DinoWork> : {};
+  const employerId = typeof source.employerId === "string" && source.employerId.trim().length > 0
+    ? source.employerId.trim()
+    : null;
+  const employment = employerId && (source.employment === "rented" || source.employment === "tamed")
+    ? source.employment
+    : null;
+  return {
+    dinoId,
+    employerId,
+    employment,
+    wagesEarned: clampInt(source.wagesEarned, 0, 0, 1_000_000_000),
+    mineralsFound: clampInt(source.mineralsFound, 0, 0, 1_000_000_000),
+    seekingJob: source.seekingJob === true,
+  };
+}
+
+export interface MateRankInput {
+  wagesEarned: number;
+  /** Caller-supplied labor or combat score, in points. */
+  statScore: number;
+  hp: number;
+  maxHp: number;
+}
+
+/**
+ * 0..10. Wages contribute `wagesEarned / 50`, HP contributes up to 20 when maxHp is set,
+ * then the total is divided by 10. Minerals are not part of the rank.
+ */
+export function mateRank(input: MateRankInput): number {
+  const wages = Math.max(0, input.wagesEarned) / 50;
+  const stats = Math.max(0, input.statScore);
+  const hp = input.maxHp > 0
+    ? (Math.max(0, Math.min(input.hp, input.maxHp)) / input.maxHp) * 20
+    : 0;
+  return Math.max(0, Math.min(10, Math.floor((wages + stats + hp) / 10)));
+}
+
+/** True only when the dino wants work, has no employer, and the player is in its territory. */
+export function seekingWorkInTerritory(work: DinoWork, inOwnTerritory: boolean): boolean {
+  return work.seekingJob && work.employerId === null && inOwnTerritory;
 }

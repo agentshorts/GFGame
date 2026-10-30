@@ -16,7 +16,7 @@ Open the URL Vite prints (it serves `http://127.0.0.1:5173` by default).
 
 ELIZA, AIML, RiveScript, and MegaHAL produce the dino's line. They need no download. ELIZA is the default.
 
-WebLLM (`@mlc-ai/web-llm`) is the context layer, not the default voice. It keeps a configurable window (default **4096** estimated tokens, clamped from 128 to 8192) of the chat and the world note, summarizes when that budget fills, and can optionally pick an intent or rephrase the classic line. The meter on the slate panel is that budget. The estimate is four characters to a token. When a model actually runs, its own tokens/sec and runtime stats are shown too.
+WebLLM (`@mlc-ai/web-llm`) is the context layer, not the default voice. Each dino keeps a window (default **4096** estimated tokens, clamped from 128 to 8192). All-chat has its own budget, still per dino. The meter on the slate panel is the focused dino's window. The estimate is four characters to a token. When a model actually runs, its own tokens/sec and runtime stats are shown too. `buildWebLlmMessages` sends only the turns that fit, and leaves room for the reply.
 
 Until a model is loaded, the steer and rephrase checkboxes do nothing and the classic line is what you hear. That path is the one the tests cover.
 
@@ -64,9 +64,19 @@ The chat demo starts with an empty pack and the player 40 ft away, so "why you r
 ## Modes and controls
 
 - 1:1 chat with the focused dino.
-- All-chat: checked dinos share one context window and each answers the same post. Another round hears the latest line.
+- All-chat: checked dinos each keep their own window and answer the same post. Friends speak before strangers. A dino marked ignore stays quiet. Another round hears the latest line, and a dino does not answer the dino who just spoke unless they are rivals or interest is at least 8. A like shows up as "likes that."
 - Game event: one dino answers a line such as "player ran away". Move the player outside smell range if you want the event text, not the world intent, to steer the script.
 
 Also: temperature (context model only), max tokens, system prompt, reset, and JSON export (kind `dino-chat-lab`, version 2). Player chat text is clipped to 200 characters, matching `MaxChatChars`. Replies are filled for `{Target}`, filtered, then clipped.
 
 See `HANDOFF_dino-chat-lab.md` for how a later Unreal hook could use an export without running a model in the game.
+
+## Memory core
+
+Public types live in `src/core/` (`types.ts`, `memory.ts`, `stats.ts`, `storage.ts`). Dinobook sim and the persona manager import those files. The lab stores them in `localStorage` under `dcl:*`. There is no account and no network. A SQLite `CREATE TABLE` script with the same columns is exported as `SQLITE_SCHEMA` for a later worker. This app does not run that SQL and it does not deploy.
+
+Rolling summaries are kept per dino (250 tokens) and per dino-player pair (150 tokens). They update every 6 turns, or when the window passes 80% of its budget. With no model loaded, the fallback keeps the newest lines. Elders (the checkbox on the slate) get a player-record block of at most 200 tokens. Everyone else gets a rep band such as `rep_wary`.
+
+World-event buttons write kills, hits, mango, blocks, rentals, and bounties for the typed player name and family id. Reset chat clears transcripts and those summaries. It leaves the stat rows and the decision log. Nothing here is wired to Unreal.
+
+`DinoWork` is a hook for a later idea: a dino rented or tamed at a factory, with wages, minerals, a job-seeking flag, and a mate rank derived from wages plus a caller-supplied stat and HP. The lab does not run factories, pay anyone, or offer jobs.

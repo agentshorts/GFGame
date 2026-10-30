@@ -42,4 +42,10 @@ The other dinos have no spoken rows. Their lab lines only echo `docs/NewDinos_v1
 
 ## Tests
 
-`npm test` covers FillTarget, the PG filter, persona canon (CSV and `NewDinos_v1.md`), prompts, clipping, the small-model picker against the installed WebLLM list, ELIZA / AIML / RiveScript cue lines, a raw ELIZA override, MegaHAL, transcript version 2, the alignment matrix, the 4096 context budget, and a mocked WebLLM client. The real model is not downloaded in CI-less local tests.
+`npm test` covers FillTarget, the PG filter, persona canon (CSV and `NewDinos_v1.md`), prompts, clipping, the small-model picker against the installed WebLLM list, ELIZA / AIML / RiveScript cue lines, a raw ELIZA override, MegaHAL, transcript version 2, the alignment matrix, the 4096 context budget, a mocked WebLLM client, and the memory core (per-dino budgets, summaries, quotas, the no-reply-to-reply rule, stat rows, the elder digest, and the localStorage adapter). The real model is not downloaded in CI-less local tests.
+
+## Memory
+
+Each dino has a 4096-token window. The shared transcript on screen is only the log. WebLLM is given that dino's turns, trimmed by `buildWebLlmMessages`. Summaries, relationships, player stats, knobs, and the decision log are in `localStorage` (`dcl:memory:`, `dcl:rel:`, `dcl:stats:`, `dcl:log`, `dcl:knobs`). `src/core/storage.ts` exports `SQLITE_SCHEMA` with the same columns. No worker is deployed from this slice, and no Unreal bridge posts the stat events. The slate's world-event buttons are the only writer.
+
+`dino_work` is a hook only: employer factory, rented or tamed, wages, minerals, and a job-seeking flag. Mate rank is computed by `mateRank` and is not a column. There is no payroll and no job dialogue.

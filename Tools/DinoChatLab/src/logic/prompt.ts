@@ -1,3 +1,5 @@
+import { DEFAULT_CONTEXT_BUDGET } from "../core/types";
+import { trimPromptToBudget } from "../core/memory";
 import type { Alignment, ChatMode, Intent, Persona } from "./types";
 
 export function buildSystemPrompt(
@@ -5,7 +7,14 @@ export function buildSystemPrompt(
   mode: ChatMode,
   peerNames: string[],
   playerName: string,
-  extra?: { alignment?: Alignment; intent?: Intent; summary?: string },
+  extra?: {
+    alignment?: Alignment;
+    intent?: Intent;
+    summary?: string;
+    relationship?: string;
+    playerRecord?: string;
+    elder?: boolean;
+  },
 ): string {
   const canon = persona.exampleLinesCanon
     ? "These example lines are copied from the game data."
@@ -15,6 +24,12 @@ export function buildSystemPrompt(
     `Lab alignment: ${extra?.alignment ?? persona.alignment}. This alignment is not from the game data.`,
     extra?.intent ? `Current intent: ${extra.intent}.` : "",
     extra?.summary ? `Memory summary:\n${extra.summary}` : "",
+    extra?.relationship ? `Relationship note:\n${extra.relationship}` : "",
+    extra?.playerRecord
+      ? extra.elder
+        ? `Player record:\n${extra.playerRecord}`
+        : `Standing: ${extra.playerRecord}`
+      : "",
     `Personality: ${persona.personality}`,
     `Speech style: ${persona.speechStyle}`,
     `Content rule: ${persona.pgRule}`,
@@ -54,6 +69,8 @@ export function buildWebLlmMessages(
   systemPrompt: string,
   history: { speaker: string; role: "user" | "dino" | "system"; text: string }[],
   personaName: string,
+  budget = DEFAULT_CONTEXT_BUDGET,
+  replyReserve = 80,
 ): PromptMessage[] {
   const messages: PromptMessage[] = [{ role: "system", content: systemPrompt }];
   for (const message of history) {
@@ -66,5 +83,5 @@ export function buildWebLlmMessages(
       messages.push({ role: "user", content: `${message.speaker}: ${message.text}` });
     }
   }
-  return messages;
+  return trimPromptToBudget(messages, budget, replyReserve);
 }

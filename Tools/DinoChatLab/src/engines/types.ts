@@ -11,6 +11,8 @@ export interface EngineRequest {
   temperature: number;
   maxTokens: number;
   peerNames: string[];
+  /** Per-dino context window. WebLLM trims history to this, leaving maxTokens for the reply. */
+  contextBudget?: number;
 }
 
 export interface EngineReply {

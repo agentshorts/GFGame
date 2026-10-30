@@ -167,7 +167,13 @@ textarea {
 .meta, .filter-note { margin: 0.15rem 0 0; font-size: 0.75rem; color: var(--paper-muted); }
 .composer textarea { min-height: 4.2rem; background: #fffaf2; color: var(--paper-ink); }
 .composer { border-top: 1px solid var(--rule); }
-.presets { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.45rem; }
+.presets, .pills { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.45rem; }
+.pills button { flex: 0 1 auto; font-size: 0.75rem; }
+.delta { align-items: center; margin: 0.25rem 0; }
+.delta span { flex: 1; color: var(--muted); font-size: 0.78rem; }
+.delta input { flex: 0 0 5rem; }
+details { margin: 0.4rem 0 0.8rem; }
+details summary { cursor: pointer; color: var(--muted); }
 .presets button, .composer button { background: #efe4d2; color: var(--paper-ink); }
 
 .intent {

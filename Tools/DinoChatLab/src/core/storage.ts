@@ -4,12 +4,13 @@
  * This adapter stores no passwords, tokens, or API keys.
  */
 
-import { applyStatEvent } from "./stats";
+import { applyStatEvent, normalizeWork } from "./stats";
 import {
   DEFAULT_REP_DELTAS,
   normalizeKnobs,
   type DecisionLogEntry,
   type DinoMemory,
+  type DinoWork,
   type MemoryKnobs,
   type PersonaSave,
   type PlayerStatsRow,
@@ -50,7 +51,26 @@ export interface DinoStorage {
   listEvents(playerKey?: string): StatEvent[];
   getKnobs(): MemoryKnobs;
   putKnobs(knobs: MemoryKnobs): void;
+  /** Factory-wage hook. Absent means the dino has no work row yet. */
+  getWork(dinoId: string): DinoWork | null;
+  putWork(work: DinoWork): void;
+  deleteWork(dinoId: string): void;
 }
+
+/** Full adapter name from the work issue. */
+export type Storage = DinoStorage;
+
+/** Summary and relationship rows only. */
+export type MemoryStore = Pick<
+  DinoStorage,
+  | "getMemory"
+  | "putMemory"
+  | "deleteMemory"
+  | "getRelationship"
+  | "putRelationship"
+  | "listRelationships"
+  | "deleteRelationships"
+>;
 
 export class StorageConflictError extends Error {
   readonly status = 409;
@@ -140,6 +160,14 @@ CREATE TABLE IF NOT EXISTS decision_log (
   prompt_tokens INTEGER,
   completion_tokens INTEGER,
   duration_ms INTEGER
+);
+CREATE TABLE IF NOT EXISTS dino_work (
+  dino_id TEXT PRIMARY KEY,
+  employer_id TEXT,
+  employment TEXT,
+  wages_earned INTEGER NOT NULL DEFAULT 0,
+  minerals_found INTEGER NOT NULL DEFAULT 0,
+  seeking_job INTEGER NOT NULL DEFAULT 0
 );
 `.trim();
 
@@ -253,6 +281,7 @@ export class LocalStorageAdapter implements DinoStorage {
     this.store.setItem(this.key("personas"), JSON.stringify(all));
     this.deleteMemory(id);
     this.deleteRelationships(id);
+    this.deleteWork(id);
   }
 
   getMemory(dinoId: string): DinoMemory | null {
@@ -348,6 +377,24 @@ export class LocalStorageAdapter implements DinoStorage {
 
   putKnobs(knobs: MemoryKnobs): void {
     this.store.setItem(this.key("knobs"), JSON.stringify(normalizeKnobs(knobs)));
+  }
+
+  private workKey(dinoId: string): string {
+    return this.key(`work:${encodeURIComponent(dinoId)}`);
+  }
+
+  getWork(dinoId: string): DinoWork | null {
+    const raw = parseJson<unknown>(this.store.getItem(this.workKey(dinoId)));
+    if (!raw) return null;
+    return normalizeWork(dinoId, raw);
+  }
+
+  putWork(work: DinoWork): void {
+    this.store.setItem(this.workKey(work.dinoId), JSON.stringify(normalizeWork(work.dinoId, work)));
+  }
+
+  deleteWork(dinoId: string): void {
+    this.store.removeItem(this.workKey(dinoId));
   }
 }
 

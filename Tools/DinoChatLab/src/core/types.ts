@@ -98,6 +98,26 @@ export interface RelationshipMemory {
   interactions: number;
 }
 
+export const EMPLOYMENT_KINDS = ["rented", "tamed"] as const;
+
+export type EmploymentKind = (typeof EMPLOYMENT_KINDS)[number];
+
+/**
+ * Hook for a later factory-wage design. This lab does not pay wages or run a factory.
+ * Mate rank is not stored. Call `mateRank`.
+ */
+export interface DinoWork {
+  dinoId: string;
+  /** Factory id. Null when nobody employs this dino. */
+  employerId: string | null;
+  /** Rented shift, or a tame working a factory. Null when unemployed. */
+  employment: EmploymentKind | null;
+  wagesEarned: number;
+  mineralsFound: number;
+  /** When true, the dino may ask for a job while a player is in its territory. */
+  seekingJob: boolean;
+}
+
 export interface SpeechQuota {
   maxPerMinute: number;
   maxPerHour: number;
@@ -213,6 +233,11 @@ export interface DecisionLogEntry {
   completionTokens: number | null;
   durationMs: number | null;
 }
+
+/** Names from the work issue. Same objects as the types above. */
+export type Relationship = RelationshipMemory;
+export type PlayerStats = PlayerStatsRow;
+export type DecisionLogRow = DecisionLogEntry;
 
 export interface StoredPersona {
   id: string;
