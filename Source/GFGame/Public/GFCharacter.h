@@ -17,7 +17,7 @@ struct FInputActionValue;
  * V toggles first-person. LMB removes a block, RMB places the selected block, wheel cycles the hotbar.
  * Input assets are optional: if none are assigned, a default mapping is built in C++ at runtime.
  */
-UCLASS()
+UCLASS(Config = Game)
 class GFGAME_API AGFCharacter : public ACharacter
 {
 	GENERATED_BODY()
@@ -44,6 +44,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Build")
 	float BuildReach = 800.f;
 
+	/**
+	 * Tallest ledge the player walks up without jumping, cm, applied to CharacterMovement MaxStepHeight.
+	 * Slightly over one block (GFBlockSize, 100 cm) so one-block voxel steps, such as Big Grumble's stairwells,
+	 * are walkable. Tune in Blueprint defaults or [/Script/GFGame.GFCharacter] in DefaultGame.ini.
+	 * Capsule limit: UCharacterMovementComponent::StepUp gives up when the hit is above the top of the capsule's
+	 * cylinder (HalfHeight - Radius above its centre), i.e. 2*HalfHeight - Radius above the feet: 136 cm for the
+	 * 40/88 capsule. Keep this under that if the capsule shrinks.
+	 */
+	UPROPERTY(EditDefaultsOnly, Config, BlueprintReadOnly, Category = "GF|Movement", meta = (ClampMin = "0", UIMin = "0"))
+	float PlayerMaxStepHeight = 105.f;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Build")
 	FName SelectedBlock;
 
@@ -69,6 +80,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void PostInitializeComponents() override;
 	virtual void PawnClientRestart() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 

@@ -25,6 +25,8 @@ AGFCharacter::AGFCharacter()
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 540.f, 0.f);
 	GetCharacterMovement()->JumpZVelocity = 520.f; // clears one 100 cm block
 	GetCharacterMovement()->MaxWalkSpeed = 500.f;
+	// Walk up one-block (100 cm) steps without jumping. See PlayerMaxStepHeight for the capsule limit.
+	GetCharacterMovement()->MaxStepHeight = PlayerMaxStepHeight;
 
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
 	SpringArm->SetupAttachment(RootComponent);
@@ -52,6 +54,16 @@ void AGFCharacter::BeginPlay()
 	if (SelectedBlock.IsNone())
 	{
 		CycleBlock(0);
+	}
+}
+
+void AGFCharacter::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	// Re-apply once config and Blueprint defaults have loaded, so a tuned PlayerMaxStepHeight reaches the movement component.
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->MaxStepHeight = PlayerMaxStepHeight;
 	}
 }
 

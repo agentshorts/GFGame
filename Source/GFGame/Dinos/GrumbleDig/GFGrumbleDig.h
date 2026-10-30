@@ -55,9 +55,9 @@ struct GFGAME_API FGFGrumbleDigTuning
 	float MaxPitchDegrees = 45.f;
 	/**
 	 * Tallest stair riser, cm. The carve drops by whole cells that fit inside this, so one block (100 cm) is the
-	 * smallest riser a voxel stair can have; below one cell the carve stays flat. Players (AGFCharacter) keep the
-	 * engine MaxStepHeight (45 cm) and have no auto-step or vault, but their jump clears one block, so the default
-	 * is one block: a hop per step. Never raise it past one block for player stairwells.
+	 * smallest riser a voxel stair can have; below one cell the carve stays flat. Players (AGFCharacter) walk up
+	 * one-block steps without jumping (PlayerMaxStepHeight, 105 cm), so the default is one block. Never raise it past
+	 * one block for player stairwells.
 	 */
 	float MaxStepHeightCm = GFBlockSize;
 	/** Preferred tread along the dig, cm. Shortened when that is what keeps the riser inside MaxStepHeightCm. */

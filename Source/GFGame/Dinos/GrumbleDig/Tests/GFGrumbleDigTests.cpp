@@ -157,7 +157,7 @@ bool FGFGrumbleDigDescentTest::RunTest(const FString&)
 	Tuning.CapsuleHeightCm = 3800.f;
 	Tuning.CapsuleRadiusCm = 150.f;
 	Tuning.MaxPitchDegrees = 45.f;
-	// Default riser: one block, the most a player can climb (a jump; MaxStepHeight is 45 cm, no auto-step).
+	// Default riser: one block, the most a player walks up without jumping (AGFCharacter MaxStepHeight 105 cm).
 	TestEqual(TEXT("Default riser is one block"), Tuning.MaxStepHeightCm, GFBlockSize);
 	Tuning.StepWidthCm = 400.f;
 	Tuning.CellSizeCm = GFBlockSize;
