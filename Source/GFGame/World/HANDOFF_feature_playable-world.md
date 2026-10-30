@@ -50,8 +50,8 @@ The voxel plot stays 64x64x32. The slab is the floor outside it, not a larger bu
 - `SurfaceZ` (default -2, top of the slab)
 - `OverlayLift` (default 1)
 - `SlabColor`
-- `FactionColours` by faction id (Rime pale ice blue, Verdant green, Cinderwrights ash grey)
-- `HazardColours` by hazard id (LavaBridge orange, DeadlyForest dark green)
+- `FactionColours` by faction id (Rime pale ice blue `#9FD8F5`, Verdant leaf green `#8ED47A`, Cinderwrights ember `#D9542B`)
+- `HazardColours` by hazard id (LavaBridge hot gold `#FFC21A`, DeadlyForest deep pine `#26402C`)
 
 Unknown faction ids fall back to those three colours, then neutral grey. Hazard colour matches id, then kind.
 

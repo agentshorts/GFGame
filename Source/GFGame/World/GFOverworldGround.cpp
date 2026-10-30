@@ -38,17 +38,18 @@ namespace
 
 	FLinearColor FallbackFactionColour(FName Id)
 	{
+		// Render swatches from Content/Art, stored as sRGB byte / 255 (same channel convention as before).
 		if (Id == FName(TEXT("Rime")))
 		{
-			return FLinearColor(0.75f, 0.88f, 0.96f, 1.f);
+			return FLinearColor(0.623529f, 0.847059f, 0.960784f, 1.f); // #9FD8F5 pale ice blue
 		}
 		if (Id == FName(TEXT("Verdant")))
 		{
-			return FLinearColor(0.22f, 0.62f, 0.28f, 1.f);
+			return FLinearColor(0.556863f, 0.831373f, 0.478431f, 1.f); // #8ED47A leaf green
 		}
 		if (Id == FName(TEXT("Cinderwrights")))
 		{
-			return GFOverworldCinderColour();
+			return GFOverworldCinderColour(); // #D9542B ember
 		}
 		return FLinearColor(0.60f, 0.60f, 0.60f, 1.f);
 	}
@@ -57,11 +58,11 @@ namespace
 	{
 		if (Id == FName(TEXT("LavaBridge")))
 		{
-			return FLinearColor(0.95f, 0.40f, 0.08f, 1.f);
+			return FLinearColor(1.000000f, 0.760784f, 0.101961f, 1.f); // #FFC21A hot gold
 		}
 		if (Id == FName(TEXT("DeadlyForest")))
 		{
-			return FLinearColor(0.05f, 0.22f, 0.08f, 1.f);
+			return FLinearColor(0.149020f, 0.250980f, 0.172549f, 1.f); // #26402C deep pine
 		}
 		return FLinearColor(0.40f, 0.40f, 0.40f, 1.f);
 	}

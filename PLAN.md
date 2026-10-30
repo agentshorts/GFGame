@@ -1,17 +1,33 @@
 # GFGame: Build Plan (working codename **GFGame**)
 
-GFGame is a **cozy co-op dino builder** (original IP) built in Unreal Engine 5.8.
+GFGame is set on the **Shatter Flats prison planet: a cozy safe circle, dangerous outside** (original IP), built in Unreal Engine 5.8.
 Plan written Oct 29, 2026 for the Unreal, art and coding contributors. All C++ is reviewed before merge.
 
 **Original IP only.** Other games are mood references for this doc only. No other game's names, creature designs, UI, sounds, logos or assets go into the game, its file names, or the prompts used to generate art ("dino", "runway", "block house" are fine; "<other game>-style X" in a generator prompt is not).
 
 ---
 
+## 1. The world
+
+Shatter Flats is a prison planet. The safe circle is cozy. Outside that circle is dangerous. Players build a chunky voxel camp inside the circle, and they leave it to play mini-games and gather materials.
+
+Three faction camps sit on the flats:
+
+| Camp | Role | Colour |
+|---|---|---|
+| **Rime** | Starter zone and default spawn | Pale ice blue `#9FD8F5` |
+| **Verdant** | Neighbour across the deadly forest | Leaf green `#8ED47A` |
+| **Cinderwrights** | Neighbour across the lava bridge | Ember `#D9542B` |
+
+The lava bridge is hot gold `#FFC21A`. The deadly forest is deep pine `#26402C`. Those swatches are the render colours (sRGB byte / 255).
+
+New players with no session faction join Rime. A player who left is not pulled back. A player with no faction is sheltered by the hub circle only. Faction members are not, and that circle is not part of the giant's path. A respawn prefers the player's own faction land, then Rime, then any other ground that is safe for them.
+
 ## 2. Core loop and economy
 
 **Loop:** Home hub (build, garden, craft) → see what you need for the next furniture or decoration → pick a mini-game → earn materials and cosmetic unlocks → craft and place → garden grows while you play → repeat.
 
-Design pillars: cozy, no fail-states in the hub, every mini-game session 3–8 min, the player should always have something to place.
+Design pillars: the safe circle stays cozy, everything outside it is dangerous, every mini-game session 3–8 min, the player should always have something to place.
 
 ### Materials table (all names are placeholders; players can rename them later)
 

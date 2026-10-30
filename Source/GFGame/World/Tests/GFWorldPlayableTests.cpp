@@ -189,7 +189,7 @@ bool FGFOverworldCoversLayoutTest::RunTest(const FString&)
 	TestTrue(TEXT("Rings sit above the slab"), FMath::IsNearlyEqual(Disc->TopZ, -1.f) && FMath::IsNearlyEqual(Box->TopZ, -1.f));
 	TestTrue(TEXT("Tops stay under the voxel ground"), Slab->TopZ < 0.f && Disc->TopZ < 0.f && Box->TopZ < 0.f);
 	TestTrue(TEXT("Config tint is used"), Disc->Color.Equals(RimeTint.Color));
-	TestTrue(TEXT("Known hazard tint fallback"), Box->Color.Equals(FLinearColor(0.95f, 0.40f, 0.08f, 1.f)));
+	TestTrue(TEXT("Known hazard tint fallback"), Box->Color.Equals(FLinearColor(1.000000f, 0.760784f, 0.101961f, 1.f)));
 
 	// Rime ±100, bare (800, 100), lava x 460..540. Bounds X -100..800, Y -100..100. Margin 200 → X -300..1000, Y -300..300.
 	TestTrue(TEXT("Slab centre X"), FMath::IsNearlyEqual(Slab->Center.X, 350.f));
@@ -222,7 +222,7 @@ bool FGFOverworldCoversLayoutTest::RunTest(const FString&)
 	const FGFOverworldShape* FallbackDisc = FindShape(UntintedShapes, EGFOverworldShapeKind::FactionDisc, TEXT("Rime"));
 	if (TestNotNull(TEXT("Fallback disc"), FallbackDisc))
 	{
-		TestTrue(TEXT("Rime defaults to pale ice blue"), FallbackDisc->Color.Equals(FLinearColor(0.75f, 0.88f, 0.96f, 1.f)));
+		TestTrue(TEXT("Rime defaults to pale ice blue"), FallbackDisc->Color.Equals(FLinearColor(0.623529f, 0.847059f, 0.960784f, 1.f)));
 	}
 
 	const UGFTerritorySubsystem* Territory = GetDefault<UGFTerritorySubsystem>();
@@ -232,11 +232,11 @@ bool FGFOverworldCoversLayoutTest::RunTest(const FString&)
 		return false;
 	}
 
-	TestTrue(TEXT("Rime colour is configured"), HasColour(Ground->FactionColours, TEXT("Rime"), FLinearColor(0.75f, 0.88f, 0.96f, 1.f)));
-	TestTrue(TEXT("Verdant colour is configured"), HasColour(Ground->FactionColours, TEXT("Verdant"), FLinearColor(0.22f, 0.62f, 0.28f, 1.f)));
-	TestTrue(TEXT("Cinderwrights colour is ember"), HasColour(Ground->FactionColours, TEXT("Cinderwrights"), FLinearColor(217.f / 255.f, 84.f / 255.f, 43.f / 255.f, 1.f)));
-	TestTrue(TEXT("LavaBridge colour is configured"), HasColour(Ground->HazardColours, TEXT("LavaBridge"), FLinearColor(0.95f, 0.40f, 0.08f, 1.f)));
-	TestTrue(TEXT("DeadlyForest colour is configured"), HasColour(Ground->HazardColours, TEXT("DeadlyForest"), FLinearColor(0.05f, 0.22f, 0.08f, 1.f)));
+	TestTrue(TEXT("Rime colour is configured"), HasColour(Ground->FactionColours, TEXT("Rime"), FLinearColor(0.623529f, 0.847059f, 0.960784f, 1.f)));
+	TestTrue(TEXT("Verdant colour is configured"), HasColour(Ground->FactionColours, TEXT("Verdant"), FLinearColor(0.556863f, 0.831373f, 0.478431f, 1.f)));
+	TestTrue(TEXT("Cinderwrights colour is ember"), HasColour(Ground->FactionColours, TEXT("Cinderwrights"), FLinearColor(0.850980f, 0.329412f, 0.168627f, 1.f)));
+	TestTrue(TEXT("LavaBridge colour is configured"), HasColour(Ground->HazardColours, TEXT("LavaBridge"), FLinearColor(1.000000f, 0.760784f, 0.101961f, 1.f)));
+	TestTrue(TEXT("DeadlyForest colour is configured"), HasColour(Ground->HazardColours, TEXT("DeadlyForest"), FLinearColor(0.149020f, 0.250980f, 0.172549f, 1.f)));
 
 	const FGFOverworldParams Shipped = Ground->CurrentParams();
 	const TArray<FGFOverworldShape> Layout = AGFOverworldGround::BuildShapes(Territory->FactionLayout, Territory->Hazards, Shipped);
