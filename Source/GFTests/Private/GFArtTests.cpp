@@ -461,6 +461,9 @@ static const FGFNewDinoClip GFArtNewDinoClips[] = {
 	{ TEXT("Ripwing"), TEXT("Tamed"), false, false },
 	{ TEXT("Ripwing"), TEXT("Stunned"), true, false },
 	{ TEXT("Ripwing"), TEXT("Cheer"), false, false },
+	{ TEXT("Ripwing"), TEXT("Ferry_Takeoff"), false, true },
+	{ TEXT("Ripwing"), TEXT("Ferry_Carry_Fly"), true, false },
+	{ TEXT("Ripwing"), TEXT("Ferry_Land"), false, true },
 	{ TEXT("Scythepaw"), TEXT("Idle"), true, false },
 	{ TEXT("Scythepaw"), TEXT("Walk"), true, false },
 	{ TEXT("Scythepaw"), TEXT("Run"), true, false },
@@ -518,7 +521,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFArtNewDinosTest, "GFGame.Art.NewDinos", GFAr
 bool FGFArtNewDinosTest::RunTest(const FString&)
 {
 	struct FDino { const TCHAR* Name; int32 Bones; int32 Clips; };
-	const FDino Dinos[] = { { TEXT("Tusksaw"), 27, 21 }, { TEXT("Ripwing"), 24, 27 }, { TEXT("Scythepaw"), 33, 19 }, { TEXT("Lanternmaw"), 28, 20 } };
+	const FDino Dinos[] = { { TEXT("Tusksaw"), 27, 21 }, { TEXT("Ripwing"), 24, 30 }, { TEXT("Scythepaw"), 33, 19 }, { TEXT("Lanternmaw"), 28, 20 } };
 	TMap<FString, USkeleton*> Skels;
 	int32 Rows = 0;
 	for (const FDino& D : Dinos)
@@ -563,13 +566,15 @@ bool FGFArtNewDinosTest::RunTest(const FString&)
 			TestTrue(Key + TEXT(" has length"), Anim->GetPlayLength() > 0.f);
 		}
 	}
-	TestEqual(TEXT("87 new dino DT_AnimMap rows"), Rows, 87);
+	TestEqual(TEXT("90 new dino DT_AnimMap rows"), Rows, 90);
 
 	// Sockets from the manifests; ref-pose positions match the Blender bone-space offsets (UE component space).
 	struct FSock { const TCHAR* Dino; const TCHAR* Socket; const TCHAR* Bone; FVector Local; FVector RefPos; };
 	const FSock Socks[] = {
 		{ TEXT("Lanternmaw"), TEXT("Lure"), TEXT("lure_bulb"), FVector(0.0, 0.0, 9.38), FVector(106.25, 0.0, 121.87) },
 		{ TEXT("Ripwing"), TEXT("Grab"), TEXT("talon_l"), FVector(0.0, 0.0, 7.5), FVector(-12.5, -12.5, 3.125) },
+		// Ripwing v2: midpoint between both closed talons; the ferry basket's Grip socket snaps here.
+		{ TEXT("Ripwing"), TEXT("FerryGrip"), TEXT("talon_l"), FVector(0.0, 12.5, 3.75), FVector(-16.25, 0.0, 3.125) },
 	};
 	for (const FSock& S : Socks)
 	{
@@ -794,6 +799,70 @@ bool FGFArtLedgerTest::RunTest(const FString&)
 		TestTrue(Name + TEXT(" has a ledger row"), HasRow(Name));
 	}
 	TestTrue(TEXT("found imported meshes"), Meshes > 100);
+	return true;
+}
+
+// Ferry kit (ferry_v1): perch and basket props with collision and attach sockets, ferry UI icons,
+// and the crest-tint material instance for ferry Ripwings (clips and FerryGrip are checked in NewDinos).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFArtFerryTest, "GFGame.Art.Ferry", GFArtTestFlags)
+bool FGFArtFerryTest::RunTest(const FString&)
+{
+	struct FSock { const TCHAR* Name; FVector Loc; };
+	struct FProp { const TCHAR* Mesh; const TCHAR* MI; FSock Socks[2]; };
+	const FProp Props[] = {
+		{ TEXT("SM_FerryPerch"), TEXT("MI_FerryPerch"), { { TEXT("PerchPoint"), FVector(-95.0, 0.0, 262.5) }, { TEXT("BasketSpot"), FVector(0.0, 0.0, 12.5) } } },
+		{ TEXT("SM_FerryBasket"), TEXT("MI_FerryBasket"), { { TEXT("Grip"), FVector(0.0, 0.0, 193.75) }, { TEXT("Seat"), FVector(-25.0, 0.0, 12.5) } } },
+	};
+	for (const FProp& P : Props)
+	{
+		UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/Art/Props/Ferry/%s.%s"), P.Mesh, P.Mesh));
+		if (!TestNotNull(FString::Printf(TEXT("%s loads"), P.Mesh), M))
+		{
+			continue;
+		}
+		TestTrue(FString::Printf(TEXT("%s has collision"), P.Mesh), M->GetBodySetup() && M->GetBodySetup()->AggGeom.GetElementCount() > 0);
+		const TArray<FStaticMaterial>& Mats = M->GetStaticMaterials();
+		TestTrue(FString::Printf(TEXT("%s uses %s"), P.Mesh, P.MI), Mats.Num() == 1 && Mats[0].MaterialInterface && Mats[0].MaterialInterface->GetName() == P.MI);
+		for (const FSock& S : P.Socks)
+		{
+			UStaticMeshSocket* Sock = M->FindSocket(FName(S.Name));
+			if (TestNotNull(FString::Printf(TEXT("%s socket %s"), P.Mesh, S.Name), Sock))
+			{
+				TestTrue(FString::Printf(TEXT("%s socket %s at %s"), P.Mesh, S.Name, *Sock->RelativeLocation.ToString()), Sock->RelativeLocation.Equals(S.Loc, 0.01));
+			}
+		}
+	}
+
+	// Ferry UI icons: UserInterface2D, UI group, nearest, no mips, 128x128.
+	TArray<FAssetData> Found;
+	IAssetRegistry::GetChecked().ScanPathsSynchronous({ TEXT("/Game/Art/UI/Ferry") }, true);
+	IAssetRegistry::GetChecked().GetAssetsByPath(TEXT("/Game/Art/UI/Ferry"), Found, false);
+	TestEqual(TEXT("2 UI textures in /Game/Art/UI/Ferry"), Found.Num(), 2);
+	for (const FAssetData& A : Found)
+	{
+		UTexture2D* T = Cast<UTexture2D>(A.GetAsset());
+		if (!TestNotNull(A.AssetName.ToString() + TEXT(" is a Texture2D"), T))
+		{
+			continue;
+		}
+		bool bOk = T->CompressionSettings == TC_EditorIcon && T->LODGroup == TEXTUREGROUP_UI && T->Filter == TF_Nearest && T->SRGB;
+#if WITH_EDITORONLY_DATA
+		bOk = bOk && T->MipGenSettings == TMGS_NoMipmaps && T->Source.GetSizeX() == 128 && T->Source.GetSizeY() == 128;
+#endif
+		TestTrue(T->GetName() + TEXT(" UI settings"), bOk);
+	}
+
+	// Ferry birds: crest (mask R) tinted sunflower #FFC93C on the skeletal dye master.
+	UMaterialInstance* MI = LoadObject<UMaterialInstance>(nullptr, TEXT("/Game/Art/Dinos/Ripwing/Materials/MI_Dino_Ripwing_Ferry.MI_Dino_Ripwing_Ferry"));
+	if (TestNotNull(TEXT("MI_Dino_Ripwing_Ferry loads"), MI))
+	{
+		TestTrue(TEXT("MI_Dino_Ripwing_Ferry parent is M_GF_DyeMask"), MI->Parent && MI->Parent->GetName() == TEXT("M_GF_DyeMask"));
+		FLinearColor Dye;
+		const FLinearColor Want = FLinearColor::FromSRGBColor(FColor(0xFF, 0xC9, 0x3C));
+		TestTrue(TEXT("MI_Dino_Ripwing_Ferry Dye_R is #FFC93C"), MI->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Dye_R")), Dye) && Dye.Equals(Want, 0.003f));
+		UTexture* Mask = nullptr;
+		TestTrue(TEXT("MI_Dino_Ripwing_Ferry Mask is T_Dino_Ripwing_M"), MI->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("Mask")), Mask) && Mask && Mask->GetName() == TEXT("T_Dino_Ripwing_M"));
+	}
 	return true;
 }
 

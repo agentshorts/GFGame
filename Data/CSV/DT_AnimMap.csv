@@ -74,6 +74,9 @@ Ripwing.Refuse,/Game/Art/Dinos/Ripwing/Anims/A_Dino_Ripwing_Refuse.A_Dino_Ripwin
 Ripwing.Tamed,/Game/Art/Dinos/Ripwing/Anims/A_Dino_Ripwing_Tamed.A_Dino_Ripwing_Tamed,False,False,0.0
 Ripwing.Stunned,/Game/Art/Dinos/Ripwing/Anims/A_Dino_Ripwing_Stunned.A_Dino_Ripwing_Stunned,True,False,0.0
 Ripwing.Cheer,/Game/Art/Dinos/Ripwing/Anims/A_Dino_Ripwing_Cheer.A_Dino_Ripwing_Cheer,False,False,0.0
+Ripwing.Ferry_Takeoff,/Game/Art/Dinos/Ripwing/Anims/A_Dino_Ripwing_Ferry_Takeoff.A_Dino_Ripwing_Ferry_Takeoff,False,True,0.0
+Ripwing.Ferry_Carry_Fly,/Game/Art/Dinos/Ripwing/Anims/A_Dino_Ripwing_Ferry_Carry_Fly.A_Dino_Ripwing_Ferry_Carry_Fly,True,False,0.0
+Ripwing.Ferry_Land,/Game/Art/Dinos/Ripwing/Anims/A_Dino_Ripwing_Ferry_Land.A_Dino_Ripwing_Ferry_Land,False,True,0.0
 Scythepaw.Idle,/Game/Art/Dinos/Scythepaw/Anims/A_Dino_Scythepaw_Idle.A_Dino_Scythepaw_Idle,True,False,0.0
 Scythepaw.Walk,/Game/Art/Dinos/Scythepaw/Anims/A_Dino_Scythepaw_Walk.A_Dino_Scythepaw_Walk,True,False,0.0
 Scythepaw.Run,/Game/Art/Dinos/Scythepaw/Anims/A_Dino_Scythepaw_Run.A_Dino_Scythepaw_Run,True,False,0.0
