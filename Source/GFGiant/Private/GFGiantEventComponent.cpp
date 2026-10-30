@@ -13,6 +13,7 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 #include "Net/UnrealNetwork.h"
+#include "GFGiantCheats.h"
 
 const FName UGFGiantEventComponent::ModeName(TEXT("Giant"));
 
@@ -407,6 +408,17 @@ void UGFGiantEventComponent::EndEvent()
 	NetUpdate();
 }
 
+bool UGFGiantEventComponent::ServerEndEvent()
+{
+	if (!IsServer() || !bEventActive)
+	{
+		return false;
+	}
+	EndEvent();
+	UE_LOG(LogGF, Log, TEXT("Giant: event ended."));
+	return true;
+}
+
 void UGFGiantEventComponent::BeginBelly(AGFPlayerState* PS)
 {
 	APawn* Pawn = PS->GetPawn();
@@ -565,6 +577,25 @@ void UGFGiantEventComponent::TickComponent(float DeltaSeconds, ELevelTick TickTy
 		Sim.Step(DeltaSeconds, Players, Out);
 		Apply(Out);
 		return;
+	}
+	// Playtest first event (FGFGiantPlaytest). 0 stays off, so the 2 day / 3 h check below is unchanged.
+	{
+		FGFGiantPlaytestClock Clock;
+		Clock.PlaytestFirstEventSeconds = PlaytestFirstEventSeconds;
+		Clock.SecondsSinceFirstPlayer = PlaytestSecondsSinceFirstPlayer;
+		Clock.bPlayerIn = Players.Num() > 0;
+		Clock.bSessionEventStarted = EventsStarted > 0;
+		Clock = FGFGiantPlaytest::Advance(Clock, DeltaSeconds);
+		PlaytestSecondsSinceFirstPlayer = Clock.SecondsSinceFirstPlayer;
+		if (FGFGiantPlaytest::IsFirstEventDue(Clock))
+		{
+			ServerStartEvent();
+		}
+		// The override owns the first event of the session. The 2 day / 3 h check runs only after that.
+		if (FGFGiantPlaytest::HoldsOffNormalClock(Clock))
+		{
+			return;
+		}
 	}
 	TriggerCheckIn -= DeltaSeconds;
 	if (bAutoTrigger && TriggerCheckIn <= 0.f)

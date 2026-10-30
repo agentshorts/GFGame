@@ -39,7 +39,7 @@ struct FGFGiantTaunt;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGFOnGiantChat, const FGFGiantChatLine&, Line);
 
-UCLASS(ClassGroup = (GF), meta = (BlueprintSpawnableComponent))
+UCLASS(Config = Game, ClassGroup = (GF), meta = (BlueprintSpawnableComponent))
 class GFGIANT_API UGFGiantEventComponent : public UActorComponent, public IGFModeHandler, public IGFSafeZoneProvider
 {
 	GENERATED_BODY()
@@ -122,8 +122,19 @@ public:
 	/** Server: fixed sim seed (0 = random). */
 	int32 ForcedSeed = 0;
 
+	/**
+	 * 0 = off (DefaultGame.ini). Above 0, the first event of this session starts this many seconds after the first
+	 * player is in, ignoring the 2 day / 3 h clock. Later events use that clock. Playtests use gf.Giant.Start.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "GF|Giant")
+	float PlaytestFirstEventSeconds = 0.f;
+	/** Seconds since the first player was in this session. Negative until then. Not saved. */
+	double PlaytestSecondsSinceFirstPlayer = -1.0;
+
 	/** Server: starts an event now (ignores the trigger clock). False if one is running or nobody is in. */
 	bool ServerStartEvent();
+	/** Server: ends the current event the same way a natural end does (body destroyed, bEventActive cleared). False if none is running. */
+	bool ServerEndEvent();
 	/** Server: a player attacked the giant. True if they got eaten. */
 	bool ServerOnAttacked(AGFPlayerState* By);
 	/** Server: per-player and accumulated play time, trigger clock (saved). */
