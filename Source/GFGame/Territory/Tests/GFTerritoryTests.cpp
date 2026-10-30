@@ -270,4 +270,66 @@ bool FGFTerritorySafeTest::RunTest(const FString&)
 	return true;
 }
 
+// Faction protection through IGFSafeZoneQuery::IsSafeFor ("in safe land AND protected") and OwnerAt.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTerritoryProtectionTest, "GFGame.Territory.Protection", GFTerritoryTests::Flags)
+bool FGFTerritoryProtectionTest::RunTest(const FString&)
+{
+	using namespace GFTerritoryTests;
+
+	FGFTerritoryMap Map;
+	Map.Curve.BaseRadius = 0.f;
+	Map.Curve.RadiusPerMember = 100.f;
+	Map.Curve.MaxRadius = 0.f;
+	Map.Neutral.bEnabled = true;
+	Map.Neutral.Center = FVector::ZeroVector;
+	Map.Neutral.Radius = 400.f;
+	Map.Factions = {
+		Disc(F1, FVector(1000.f, 0.f, 0.f), 2),
+		Disc(F2, FVector(-1000.f, 0.f, 0.f), 2)
+	};
+	const FVector Home1(1000.f, 0.f, 30.f);
+	const FVector Home2(-1000.f, 0.f, 30.f);
+	const FVector Hub(0.f, 0.f, 30.f);
+	const FVector Wilds(5000.f, 0.f, 30.f);
+	const IGFSafeZoneQuery& Q = Map;
+
+	TestEqual(TEXT("Owner of home 1"), Q.OwnerAt(Home1), F1);
+	TestEqual(TEXT("Owner of home 2"), Q.OwnerAt(Home2), F2);
+	TestTrue(TEXT("Neutral has no owner"), Q.OwnerAt(Hub).IsNone());
+	TestTrue(TEXT("Wild has no owner"), Q.OwnerAt(Wilds).IsNone());
+
+	const FGFSafeSubject Member1(TEXT("M1"), F1);
+	const FGFSafeSubject Visitor(TEXT("V"), F2);
+	const FGFSafeSubject Loner(TEXT("N"), NAME_None);
+	const FGFSafeSubject Host(TEXT("H"), NAME_None, true);
+	TestTrue(TEXT("Member is always safe on own land"), Q.IsSafeFor(Member1, Home1));
+	TestFalse(TEXT("Visitor starts unprotected"), Q.IsSafeFor(Visitor, Home1));
+	TestFalse(TEXT("No-faction visitor starts unprotected"), Q.IsSafeFor(Loner, Home1));
+	TestTrue(TEXT("Host is always protected on faction land"), Q.IsSafeFor(Host, Home1));
+	TestTrue(TEXT("...on any faction's land"), Q.IsSafeFor(Host, Home2));
+	TestFalse(TEXT("Host is not safe in neutral"), Q.IsSafeFor(Host, Hub));
+	TestFalse(TEXT("Nobody is safe in the wild"), Q.IsSafeFor(Member1, Wilds) || Q.IsSafeFor(Host, Wilds));
+	TestTrue(TEXT("Inside-safe still means any faction land"), Q.IsInsideSafe(Home1));
+
+	Map.Access.FindOrAdd(F1, TEXT("V")).bProtected = true;
+	TestTrue(TEXT("Protected visitor is safe on that land"), Q.IsSafeFor(Visitor, Home1));
+	TestTrue(TEXT("...and on own land"), Q.IsSafeFor(Visitor, Home2));
+	TestFalse(TEXT("Protection is per player"), Q.IsSafeFor(Loner, Home1));
+	TestFalse(TEXT("Own-land query ignores visitor protection"), Map.IsSafeFor(FGFSocialPlayer(TEXT("V"), F2), Home1));
+	Map.Access.FindOrAdd(F1, TEXT("V")).bProtected = false;
+	TestFalse(TEXT("Turned off again"), Q.IsSafeFor(Visitor, Home1));
+	Map.Access.FindOrAdd(F1, TEXT("N")).bGuest = true;
+	TestTrue(TEXT("Guest is protected"), Q.IsSafeFor(Loner, Home1));
+
+	// The world subsystem reads the social component's book live; a null source falls back to Access.
+	FGFFactionAccess Live;
+	Map.AccessSource = [&Live]() -> const FGFFactionAccess* { return &Live; };
+	TestFalse(TEXT("Live book: guest unknown there"), Q.IsSafeFor(Loner, Home1));
+	Live.FindOrAdd(F1, TEXT("V")).bProtected = true;
+	TestTrue(TEXT("Live book counts on the next query"), Q.IsSafeFor(Visitor, Home1));
+	Map.AccessSource = []() -> const FGFFactionAccess* { return nullptr; };
+	TestTrue(TEXT("Null source falls back to Access"), Q.IsSafeFor(Loner, Home1));
+	return true;
+}
+
 #endif

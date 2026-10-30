@@ -20,6 +20,10 @@
 #include "GFSocialTypes.h"
 #include "GFSocialComponent.h"
 #include "GFSocialDirector.h"
+#include "GFGiantDirector.h"
+#include "GFGiantEventComponent.h"
+#include "GFTestZoneProvider.h"
+#include "GameFramework/DefaultPawn.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -664,6 +668,265 @@ bool FGFSocialPlayerCapTest::RunTest(const FString&)
 	TestEqual(TEXT("Four in the first faction"), W.GS->FactionCount(FA), 4);
 	TestEqual(TEXT("Three in the second"), W.GS->FactionCount(FB), 3);
 	TestEqual(TEXT("Three in the third"), W.GS->FactionCount(FC), 3);
+	return true;
+}
+
+namespace GFSocialTest
+{
+	/** Two faction lands split at X = 0 (FA east of +50, FB west of -50, a no-man's strip between), protection from Access. */
+	struct FTwoLands : public IGFSafeZoneQuery
+	{
+		const FGFFactionAccess* Access = nullptr;
+		virtual bool IsInsideSafe(const FVector& L) const override { return !OwnerAt(L).IsNone(); }
+		virtual FVector ClosestSafePoint(const FVector& L) const override { return L; }
+		virtual bool ClosestEdge(const FVector& L, FVector& OutPoint, FVector& OutOutward) const override { return false; }
+		virtual bool HasAnySafe() const override { return true; }
+		virtual FName OwnerAt(const FVector& L) const override { return L.X > 50.f ? FA : (L.X < -50.f ? FB : NAME_None); }
+		virtual bool IsSafeFor(const FGFSafeSubject& Who, const FVector& L) const override
+		{
+			return FGFProtectionRules::IsProtectedOn(Who.Key, Who.GroupId, Who.bHost, OwnerAt(L), *Access);
+		}
+	};
+
+	static const FVector OnA(500.f, 0.f, 0.f);
+	static const FVector OnB(-500.f, 0.f, 0.f);
+	static const FVector Between(0.f, 0.f, 0.f);
+
+	/** Gives PS a plain pawn at At (or moves the one it has), so land and safety are read from a real location. */
+	static void PutAt(UWorld* World, AGFPlayerState* PS, const FVector& At)
+	{
+		if (APawn* Have = PS ? PS->GetPawn() : nullptr)
+		{
+			Have->SetActorLocation(At);
+			return;
+		}
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		if (APawn* Pawn = PS ? World->SpawnActor<ADefaultPawn>(ADefaultPawn::StaticClass(), FTransform(At), Params) : nullptr)
+		{
+			Pawn->SetPlayerState(PS);
+		}
+	}
+}
+
+// Faction protection on the server component (bare world): the verbs' permission checks (leader, grant, guest, the
+// target standing on the setter's land for toggles and guest changes; a granted member may also Guest / Unguest), the Dragger record and timestamp, the config chat line (on by default),
+// the build / break gate, powers (target on safe land and, for a visitor, unprotected; members, guests and the host
+// immune), jailed players never protected, and the IsSafeFor wiring through UGFSafeZoneSubsystem.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialProtectionTest, "GFGame.Social.Protection", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFSocialProtectionTest::RunTest(const FString&)
+{
+	FWorld W;
+	if (!W.Init(*this, TEXT("GFSocialProtection")))
+	{
+		return false;
+	}
+	UGFSocialComponent* S = W.Social;
+	AGFPlayerState* H = W.Add(TEXT("H"), NAME_None, true);
+	AGFPlayerState* L = W.Add(TEXT("L"), FA);
+	AGFPlayerState* M = W.Add(TEXT("M"), FA);
+	AGFPlayerState* V = W.Add(TEXT("V"), FB);
+	AGFPlayerState* N = W.Add(TEXT("N"), NAME_None);
+	TestTrue(TEXT("L leads FA"), S->Describe(L).bLeader);
+	TSharedPtr<FTwoLands> Lands = MakeShared<FTwoLands>();
+	Lands->Access = &S->Access;
+	UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(W.World);
+	Zones->SetOverride(Lands);
+	for (AGFPlayerState* PS : { H, L, M, V, N })
+	{
+		PutAt(W.World, PS, OnA);
+	}
+	TestTrue(TEXT("Pawns in place"), V->GetPawn() != nullptr && S->LandOwnerOf(V) == FA);
+
+	// Config: the chat line is data, on by default.
+	const UGFSocialComponent* Defaults = GetDefault<UGFSocialComponent>();
+	TestTrue(TEXT("Broadcast is on by default (DefaultGame.ini)"), Defaults->bBroadcastProtectionRevoked);
+	TestTrue(TEXT("Revocation line comes from DefaultGame.ini"), Defaults->ProtectionRevokedChat.Contains(TEXT("{Dragger}")) && Defaults->ProtectionRevokedChat.Contains(TEXT("{Target}")));
+	TestEqual(TEXT("The component got the config line"), S->ProtectionRevokedChat, Defaults->ProtectionRevokedChat);
+	TestFalse(TEXT("Holds don't drop on protect by default"), Defaults->bReleaseHoldOnProtect);
+
+	// Toggle permission.
+	TestEqual(TEXT("Member without the grant can't protect"), S->ServerSetProtected(M, V, true), C::NotAllowed);
+	TestEqual(TEXT("Host isn't a toggler by itself"), S->ServerSetProtected(H, V, true), C::NoFaction);
+	PutAt(W.World, V, OnB);
+	TestEqual(TEXT("Target off the leader's land"), S->ServerSetProtected(L, V, true), C::NotOnYourLand);
+	PutAt(W.World, V, Between);
+	TestEqual(TEXT("Target on unowned land"), S->ServerSetProtected(L, V, true), C::NotOnYourLand);
+	PutAt(W.World, V, OnA);
+	TestEqual(TEXT("Leader protects a visitor on FA land"), S->ServerSetProtected(L, V, true), C::Ok);
+	TestTrue(TEXT("Protected on FA land"), S->Access.IsProtected(FA, TEXT("V")));
+	TestEqual(TEXT("Twice: unchanged"), S->ServerSetProtected(L, V, true), C::Unchanged);
+	TestEqual(TEXT("Members can't be unprotected"), S->ServerSetProtected(L, M, false), C::SameFaction);
+	TestEqual(TEXT("The host can't be unprotected"), S->ServerSetProtected(L, H, false), C::TargetIsHost);
+	TestEqual(TEXT("Unprotecting nobody"), S->ServerSetProtected(L, nullptr, false), C::NoSuchPlayer);
+
+	// Dragger and timestamp; the config line goes to all chat (on by default).
+	const int32 ChatBefore = W.GS->ChatLog.Num();
+	const int64 Before = FDateTime::UtcNow().GetTicks();
+	TestEqual(TEXT("Leader unprotects"), S->ServerSetProtected(L, V, false), C::Ok);
+	TestFalse(TEXT("Unprotected"), S->Access.IsProtected(FA, TEXT("V")));
+	TestEqual(TEXT("Dragger recorded on the player"), V->LastDrag.DraggerKey, FString(TEXT("L")));
+	TestEqual(TEXT("Dragger's name"), V->LastDrag.DraggerName, L->GetPlayerName());
+	TestEqual(TEXT("Whose land"), V->LastDrag.LandFaction, FA);
+	TestTrue(TEXT("Timestamp"), V->LastDrag.AtUtcTicks >= Before && V->LastDrag.AtUtcTicks <= FDateTime::UtcNow().GetTicks());
+	const FGFVisitorAccess* Entry = S->Access.Find(FA, TEXT("V"));
+	TestTrue(TEXT("Dragger kept in the replicated book"), Entry && Entry->DraggerKey == TEXT("L") && Entry->DraggedAtUtcTicks == V->LastDrag.AtUtcTicks);
+	const FString Expected = S->FormatProtectionRevoked(L->GetPlayerName(), V->GetPlayerName(), FA);
+	TestFalse(TEXT("Line has no tokens left"), Expected.Contains(TEXT("{")));
+	TestTrue(TEXT("Line names the dragger and the target"), Expected.Contains(L->GetPlayerName()) && Expected.Contains(V->GetPlayerName()));
+	TestTrue(TEXT("Posted to all chat"), W.GS->ChatLog.Num() == ChatBefore + 1 && W.GS->ChatLog.Last().Text == Expected
+		&& W.GS->ChatLog.Last().Channel == FName(TEXT("All")) && W.GS->ChatLog.Last().SenderKey.IsEmpty());
+	TestEqual(TEXT("Unprotecting twice: unchanged"), S->ServerSetProtected(L, V, false), C::Unchanged);
+
+	// Re-protect clears the live record; switched off or empty, nothing is posted.
+	TestEqual(TEXT("Protect again"), S->ServerSetProtected(L, V, true), C::Ok);
+	TestFalse(TEXT("Record cleared while protected"), V->LastDrag.IsSet());
+	S->bBroadcastProtectionRevoked = false;
+	TestEqual(TEXT("Unprotect with the broadcast off"), S->ServerSetProtected(L, V, false), C::Ok);
+	TestEqual(TEXT("No chat with the broadcast off"), W.GS->ChatLog.Num(), ChatBefore + 1);
+	S->bBroadcastProtectionRevoked = true;
+	S->ProtectionRevokedChat.Reset();
+	S->ServerSetProtected(L, V, true);
+	S->ServerSetProtected(L, V, false);
+	TestEqual(TEXT("Empty config line: no chat"), W.GS->ChatLog.Num(), ChatBefore + 1);
+	S->ProtectionRevokedChat = Defaults->ProtectionRevokedChat;
+
+	// Powers: target on safe land and, for a visitor, unprotected. Members at home, the host and guests are immune.
+	TestEqual(TEXT("Power on an unprotected visitor"), S->ServerPower(M, V, EGFSocialPower::Grow), C::Ok);
+	TestEqual(TEXT("Visitor can't power a member at home"), S->ServerPower(V, L, EGFSocialPower::Shrink), C::TargetProtected);
+	S->ServerSetProtected(L, V, true);
+	TestEqual(TEXT("No power on a protected visitor"), S->ServerPower(L, V, EGFSocialPower::Shrink), C::TargetProtected);
+	TestTrue(TEXT("Protecting doesn't undo the earlier Grow"), FMath::IsNearlyEqual(S->ScaleOf(TEXT("V")), S->Tuning.ScaleStep));
+	S->ServerSetProtected(L, V, false);
+
+	// Toggle grant: only the leader grants it, checked on the server. It covers Protect / Unprotect and Guest / Unguest.
+	TestEqual(TEXT("Member can't grant"), S->ServerSetToggleGrant(M, M, true), C::Self);
+	TestEqual(TEXT("Member can't grant the leader"), S->ServerSetToggleGrant(M, L, true), C::NotAllowed);
+	TestEqual(TEXT("Leader can't grant an outsider"), S->ServerSetToggleGrant(L, V, true), C::NotMember);
+	TestEqual(TEXT("Leader grants M"), S->ServerSetToggleGrant(L, M, true), C::Ok);
+	TestEqual(TEXT("Granted member protects"), S->ServerSetProtected(M, V, true), C::Ok);
+	TestEqual(TEXT("Granted member unprotects"), S->ServerSetProtected(M, V, false), C::Ok);
+	TestEqual(TEXT("...and is the Dragger"), V->LastDrag.DraggerKey, FString(TEXT("M")));
+	PutAt(W.World, V, OnB);
+	TestEqual(TEXT("Granted member: own land only too"), S->ServerSetProtected(M, V, true), C::NotOnYourLand);
+	PutAt(W.World, V, OnA);
+	TestEqual(TEXT("Leader revokes"), S->ServerSetToggleGrant(L, M, false), C::Ok);
+	TestEqual(TEXT("Revoked member can't toggle"), S->ServerSetProtected(M, V, true), C::NotAllowed);
+
+	// Guests: the leader or a granted member, target on the setter's faction land; rights plus protection, no
+	// Protect / Unprotect on top.
+	TestEqual(TEXT("Member without the grant can't make a guest"), S->ServerSetGuest(M, V, true), C::NotAllowed);
+	TestEqual(TEXT("Leader grants M again"), S->ServerSetToggleGrant(L, M, true), C::Ok);
+	PutAt(W.World, V, OnB);
+	TestEqual(TEXT("Guest: target off the setter's land"), S->ServerSetGuest(M, V, true), C::NotOnYourLand);
+	PutAt(W.World, V, Between);
+	TestEqual(TEXT("Guest: target on unowned land"), S->ServerSetGuest(L, V, true), C::NotOnYourLand);
+	PutAt(W.World, V, OnA);
+	TestEqual(TEXT("Granted member makes V a guest"), S->ServerSetGuest(M, V, true), C::Ok);
+	TestTrue(TEXT("V is a guest"), S->Access.IsGuest(FA, TEXT("V")));
+	PutAt(W.World, V, OnB);
+	TestEqual(TEXT("Unguest needs the target on your land too"), S->ServerSetGuest(M, V, false), C::NotOnYourLand);
+	TestTrue(TEXT("...so V stays a guest"), S->Access.IsGuest(FA, TEXT("V")));
+	PutAt(W.World, V, OnA);
+	TestEqual(TEXT("Granted member unguests V"), S->ServerSetGuest(M, V, false), C::Ok);
+	TestFalse(TEXT("V is no longer a guest"), S->Access.IsGuest(FA, TEXT("V")));
+	TestEqual(TEXT("...and the granted member is the Dragger"), V->LastDrag.DraggerKey, FString(TEXT("M")));
+	TestEqual(TEXT("Granted member still can't grant others"), S->ServerSetToggleGrant(M, L, true), C::NotAllowed);
+	TestEqual(TEXT("Leader revokes M"), S->ServerSetToggleGrant(L, M, false), C::Ok);
+	TestEqual(TEXT("Revoked member can't make a guest"), S->ServerSetGuest(M, V, true), C::NotAllowed);
+	TestEqual(TEXT("Leader makes V a guest"), S->ServerSetGuest(L, V, true), C::Ok);
+	TestEqual(TEXT("Revoked member can't unguest"), S->ServerSetGuest(M, V, false), C::NotAllowed);
+	TestTrue(TEXT("Guest is protected"), S->Access.IsProtected(FA, TEXT("V")));
+	TestFalse(TEXT("Guest status clears the live drag record"), V->LastDrag.IsSet());
+	TestEqual(TEXT("Guest can't be unprotected"), S->ServerSetProtected(L, V, false), C::TargetIsGuest);
+	TestEqual(TEXT("Guest can't be Protected on top"), S->ServerSetProtected(L, V, true), C::TargetIsGuest);
+	TestEqual(TEXT("Guests are immune to powers"), S->ServerPower(M, V, EGFSocialPower::Shrink), C::TargetProtected);
+
+	// The zone answers per player through IsSafeFor; build and break are gated by land owner.
+	TestEqual(TEXT("Owner via the subsystem"), Zones->OwnerAt(OnA), FA);
+	TestTrue(TEXT("Guest V is safe on FA land"), Zones->IsSafeFor(FGFSafeSubject(TEXT("V"), FB), OnA));
+	TestTrue(TEXT("Guest may build on FA land"), S->EditBlockReason(V, OnA).IsNone());
+	TestTrue(TEXT("Member may build at home"), S->EditBlockReason(M, OnA).IsNone());
+	TestTrue(TEXT("Host may build anywhere"), S->EditBlockReason(H, OnB).IsNone() && S->EditBlockReason(H, OnA).IsNone());
+	TestEqual(TEXT("Plain visitor can't build on FA land"), S->EditBlockReason(N, OnA), C::VisitorNoRights);
+	TestEqual(TEXT("Member of FA can't build on FB land"), S->EditBlockReason(M, OnB), C::VisitorNoRights);
+	TestTrue(TEXT("Unowned land is open"), S->EditBlockReason(N, Between).IsNone());
+	TestEqual(TEXT("The game state gate asks the handler"), W.GS->EditBlockReason(N, OnA), C::VisitorNoRights);
+	TestEqual(TEXT("Unguest"), S->ServerSetGuest(L, V, false), C::Ok);
+	TestFalse(TEXT("Back to an unprotected visitor"), S->Access.IsProtected(FA, TEXT("V")));
+	TestEqual(TEXT("Losing guest status records the Dragger"), V->LastDrag.DraggerKey, FString(TEXT("L")));
+	TestEqual(TEXT("Ex-guest can't build"), S->EditBlockReason(V, OnA), C::VisitorNoRights);
+	TestFalse(TEXT("...and isn't safe"), Zones->IsSafeFor(FGFSafeSubject(TEXT("V"), FB), OnA));
+	TestTrue(TEXT("Host is always safe there"), Zones->IsSafeFor(FGFSafeSubject(TEXT("H"), NAME_None, true), OnA));
+	TestTrue(TEXT("Members are always safe at home"), Zones->IsSafeFor(FGFSafeSubject(TEXT("M"), FA), OnA));
+
+	// Jailed players are never protected, even standing on their own land.
+	TestTrue(TEXT("Member protected at home"), S->IsProtectedNow(M) && S->IsPlayerSafe(M));
+	TestEqual(TEXT("Leader jails a member"), S->ServerJail(L, M), C::Ok);
+	PutAt(W.World, M, OnA);
+	TestFalse(TEXT("Jailed: not safe"), S->IsPlayerSafe(M));
+	TestFalse(TEXT("Jailed: not protected"), S->IsProtectedNow(M) || S->Describe(M).bProtected);
+	TestEqual(TEXT("Leader releases"), S->ServerRelease(L, M), C::Ok);
+	PutAt(W.World, M, OnA);
+	TestTrue(TEXT("Released: protected at home again"), S->IsProtectedNow(M));
+
+	// Joining the faction: the visitor entry and the old faction's grants go.
+	S->ServerSetToggleGrant(L, M, true);
+	W.GS->ServerClaimFaction(M, NAME_None);
+	TestFalse(TEXT("Leaving drops the grant"), S->Access.HasToggleGrant(FA, TEXT("M")));
+	W.GS->ServerClaimFaction(V, FA);
+	TestTrue(TEXT("Joining drops the visitor entry"), S->Access.Find(FA, TEXT("V")) == nullptr);
+	Zones->SetOverride(nullptr);
+	return true;
+}
+
+// Two providers registered: land with protection (registered first) and the giant event's default circle (newest,
+// registered at BeginPlay). IsSafeFor must ask the source that owns the land, like OwnerAt, so the giant's circle
+// can't hide protection; unowned land still answers from the current zone.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialProtectionProvidersTest, "GFGame.Social.ProtectionProviders", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFSocialProtectionProvidersTest::RunTest(const FString&)
+{
+	FWorld W;
+	if (!W.Init(*this, TEXT("GFSocialProtectionProviders")))
+	{
+		return false;
+	}
+	UGFSocialComponent* S = W.Social;
+	UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(W.World);
+	UGFTestZoneProvider* LandProvider = NewObject<UGFTestZoneProvider>(W.World);
+	TSharedPtr<FTwoLands> Lands = MakeShared<FTwoLands>();
+	Lands->Access = &S->Access;
+	LandProvider->Query = Lands;
+	Zones->RegisterProvider(LandProvider);
+	UGFGiantEventComponent* Giant = AGFGiantDirector::GetEvent(W.World, true);
+	if (!TestNotNull(TEXT("Giant event"), Giant))
+	{
+		return false;
+	}
+	const FGFSafeSubject Visitor(TEXT("V"), FB);
+	const FGFSafeSubject Member(TEXT("M"), FA);
+	const FGFSafeSubject Host(TEXT("H"), NAME_None, true);
+	auto Check = [&](const TCHAR* When, bool bGiantNewest)
+	{
+		TestEqual(FString::Printf(TEXT("%s: owner found under the giant's circle"), When), Zones->OwnerAt(OnA), FA);
+		TestFalse(FString::Printf(TEXT("%s: unprotected visitor isn't safe on owned land"), When), Zones->IsSafeFor(Visitor, OnA));
+		TestTrue(FString::Printf(TEXT("%s: member safe at home"), When), Zones->IsSafeFor(Member, OnA));
+		TestTrue(FString::Printf(TEXT("%s: host safe"), When), Zones->IsSafeFor(Host, OnA));
+		if (bGiantNewest)
+		{
+			TestTrue(FString::Printf(TEXT("%s: unowned point inside the giant's circle stays safe"), When), Zones->IsSafeFor(Visitor, Between));
+		}
+		S->Access.FindOrAdd(FA, TEXT("V")).bProtected = true;
+		TestTrue(FString::Printf(TEXT("%s: protected visitor safe"), When), Zones->IsSafeFor(Visitor, OnA));
+		S->Access.FindOrAdd(FA, TEXT("V")).bProtected = false;
+	};
+	TestTrue(TEXT("Giant is the newest provider and covers the test points"), Zones->GetZone() == Giant->GetSafeZoneQuery()
+		&& Zones->IsInsideSafe(OnA) && Zones->IsInsideSafe(Between));
+	Check(TEXT("Giant newest"), true);
+	Zones->RegisterProvider(LandProvider);
+	TestTrue(TEXT("Land provider is now the newest"), Zones->GetZone() == Lands.Get());
+	Check(TEXT("Land newest"), false);
+	Zones->UnregisterProvider(LandProvider);
 	return true;
 }
 

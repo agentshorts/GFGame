@@ -267,6 +267,29 @@ bool FGFTerritoryMap::IsSafeFor(const FGFSocialPlayer& Who, const FVector& Locat
 	return IsSafeFor(Who.Faction, Location);
 }
 
+bool FGFTerritoryMap::IsSafeFor(const FGFSafeSubject& Who, const FVector& Location) const
+{
+	return FGFProtectionRules::IsProtectedOn(Who.Key, Who.GroupId, Who.bHost, OwnerAt(Location), GetAccess());
+}
+
+FName FGFTerritoryMap::OwnerAt(const FVector& Location) const
+{
+	const FGFTerritoryZoneHit Hit = GetZoneAt(Location);
+	return Hit.Zone == EGFTerritoryZone::Faction ? Hit.FactionId : NAME_None;
+}
+
+const FGFFactionAccess& FGFTerritoryMap::GetAccess() const
+{
+	if (AccessSource)
+	{
+		if (const FGFFactionAccess* Live = AccessSource())
+		{
+			return *Live;
+		}
+	}
+	return Access;
+}
+
 bool FGFTerritoryMap::IsInsideSafe(const FVector& Location) const
 {
 	return Circles().IsInsideSafe(Location);

@@ -940,4 +940,44 @@ bool FGFGiantEatTest::RunTest(const FString&)
 	return true;
 }
 
+// {Dragger}: who turned the target's faction protection off (AGFPlayerState::LastDrag) fills lines next to {Target}.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFGiantDraggerTokenTest, "GFGame.Giant.DraggerToken", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFGiantDraggerTokenTest::RunTest(const FString&)
+{
+	using namespace GFGiantTest;
+	FGFGiantLines Custom;
+	Custom.ByPhase.Add(EGFGiantLinePhase::Spotted, { { TEXT("S1"), TEXT("{Dragger} left {Target} out here") } });
+	Custom.ByPhase.Add(EGFGiantLinePhase::Return, { { TEXT("R1"), TEXT("Thanks for {Target}, {Dragger}!") } });
+	FGFGiantTuning T = Quiet();
+	T.bEatIdleTarget = false;
+	TArray<FGFGiantPlayerView> P = { Player(TEXT("K"), FVector(3000, 0, 0), 1.0, 1) };
+	P[0].Name = TEXT("Pip");
+	P[0].Dragger = TEXT("Rex");
+	P[0].DraggedAtUtcTicks = 1;
+	{
+		FGFGiantSim Sim;
+		FGFGiantStepOut Out;
+		const FGFSafeCircles Zone = HomeZone(T, P.Num());
+		Sim.Begin(T, Custom, Zone, P, false, 2, Out);
+		TestEqual(TEXT("Opening line names the dragger and the target"), Out.Chat.Num() > 0 ? Out.Chat[0].Text : FString(), FString(TEXT("Rex left Pip out here")));
+		FGFGiantSim Back;
+		FGFGiantStepOut BackOut;
+		Back.Begin(T, Custom, Zone, P, true, 2, BackOut);
+		TestEqual(TEXT("Return line names both"), BackOut.Chat.Num() > 0 ? BackOut.Chat[0].Text : FString(), FString(TEXT("Thanks for Pip, Rex!")));
+	}
+	P[0].Dragger.Reset();
+	{
+		FGFGiantSim Sim;
+		FGFGiantStepOut Out;
+		const FGFSafeCircles Zone = HomeZone(T, P.Num());
+		Sim.Begin(T, Custom, Zone, P, false, 2, Out);
+		TestEqual(TEXT("Nobody dragged them: the line still reads"), Out.Chat.Num() > 0 ? Out.Chat[0].Text : FString(), FString(TEXT("someone left Pip out here")));
+		FGFGiantSim Back;
+		FGFGiantStepOut BackOut;
+		Back.Begin(T, Custom, Zone, P, true, 2, BackOut);
+		TestEqual(TEXT("Comma lead-in dropped"), BackOut.Chat.Num() > 0 ? BackOut.Chat[0].Text : FString(), FString(TEXT("Thanks for Pip!")));
+	}
+	return true;
+}
+
 #endif

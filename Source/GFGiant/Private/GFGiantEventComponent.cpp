@@ -192,6 +192,8 @@ TArray<FGFGiantPlayerView> UGFGiantEventComponent::GatherPlayers() const
 		V.PlaySeconds = Save.SecondsOf(PS->PlayerKey);
 		V.FirstSeenTicks = Save.FirstSeenOf(PS->PlayerKey);
 		V.bBusy = BusyKeys.Contains(PS->PlayerKey);
+		V.Dragger = PS->LastDrag.DraggerName;
+		V.DraggedAtUtcTicks = PS->LastDrag.AtUtcTicks;
 		if (const ACharacter* C = Cast<ACharacter>(Pawn))
 		{
 			V.RunSpeed = C->GetCharacterMovement() ? C->GetCharacterMovement()->MaxWalkSpeed : 0.f;

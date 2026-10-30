@@ -18,8 +18,9 @@
 //   Z is ignored. A nameless faction owns nothing. With an empty radius table, a faction with no
 //   effective members owns nothing. A set table uses index 0 for that count.
 //
-// IsSafeFor matches FGFSocialPlayer::Faction to that owner. bHost is carried on the social player and is
-// not a land grant.
+// IsSafeFor(FName) and IsSafeFor(FGFSocialPlayer) match the faction to that owner (own land only; dinos use this).
+// The IGFSafeZoneQuery override IsSafeFor(FGFSafeSubject) adds faction protection (FGFProtectionRules): own land
+// always, another faction's land for the host, a protected visitor or a faction guest, never neutral or wild.
 
 #include "CoreMinimal.h"
 #include "GFSafeZone.h"
@@ -78,8 +79,19 @@ public:
 
 	/** True only when FactionId owns this point. None is never safe. */
 	bool IsSafeFor(FName FactionId, const FVector& Location) const;
-	/** Uses Who.Faction. Who.bHost does not add land. */
+	/** Uses Who.Faction. Who.bHost does not add land. Own land only (no visitor protection). */
 	bool IsSafeFor(const FGFSocialPlayer& Who, const FVector& Location) const;
+
+	/** "In safe land AND protected": faction land with FGFProtectionRules::IsProtectedOn (host, protected, guest). */
+	virtual bool IsSafeFor(const FGFSafeSubject& Who, const FVector& Location) const override;
+	/** The faction that owns this point (GetZoneAt), or None for neutral and wild. */
+	virtual FName OwnerAt(const FVector& Location) const override;
+
+	/** Protection book used by IsSafeFor(FGFSafeSubject). Tests fill Access; the world subsystem sets AccessSource. */
+	FGFFactionAccess Access;
+	/** Live book (the social component's replicated copy). Null result falls back to Access. */
+	TFunction<const FGFFactionAccess*()> AccessSource;
+	const FGFFactionAccess& GetAccess() const;
 
 	virtual bool IsInsideSafe(const FVector& Location) const override;
 	virtual FVector ClosestSafePoint(const FVector& Location) const override;

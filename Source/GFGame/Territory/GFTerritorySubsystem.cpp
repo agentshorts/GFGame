@@ -2,6 +2,8 @@
 #include "GFDino.h"
 #include "GFGameState.h"
 #include "GFSafeZone.h"
+#include "GFSocialComponent.h"
+#include "GFSocialDirector.h"
 #include "GFTamingComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
@@ -79,6 +81,24 @@ void UGFTerritorySubsystem::RefreshFromWorld()
 		}
 	}
 	Map.Factions = Next;
+	BindAccess();
+}
+
+void UGFTerritorySubsystem::BindAccess()
+{
+	if (!Map.AccessSource)
+	{
+		// Live read: a toggle on the server (or its replication on a client) counts on the very next query.
+		TWeakObjectPtr<const UGFSocialComponent>* Source = &Social;
+		Map.AccessSource = [Source]() -> const FGFFactionAccess* { return Source->IsValid() ? &Source->Get()->Access : nullptr; };
+	}
+	if (!Social.IsValid())
+	{
+		if (UWorld* World = GetWorld())
+		{
+			Social = AGFSocialDirector::GetSocial(World, false);
+		}
+	}
 }
 
 void UGFTerritorySubsystem::Publish()
@@ -132,13 +152,14 @@ void UGFTerritorySubsystem::DrawHazards() const
 bool UGFTerritorySubsystem::IsSafeFor(const AGFPlayerState* Player, FVector Location)
 {
 	RefreshFromWorld();
-	return Map.IsSafeFor(SubjectFor(Player), Location);
+	const FGFSocialPlayer Who = SubjectFor(Player);
+	return Map.IsSafeFor(FGFSafeSubject(Who.Key, Who.Faction, Who.bHost), Location);
 }
 
 bool UGFTerritorySubsystem::IsSafeForDino(const AGFDino* Dino, const FVector& Location)
 {
 	RefreshFromWorld();
-	return Map.IsSafeFor(SubjectFor(Dino), Location);
+	return Map.IsSafeFor(SubjectFor(Dino).Faction, Location);
 }
 
 TArray<FGFSafeRegion> UGFTerritorySubsystem::CopySafeRegions()

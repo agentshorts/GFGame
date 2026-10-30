@@ -91,6 +91,26 @@ struct GFNET_API FGFChatMessage
 	UPROPERTY(BlueprintReadOnly, Category = "GF|Chat") FName Channel;
 };
 
+/**
+ * Who last turned this player's protection off on another faction's land, and when. Replicated on the player
+ * state so chat line templates can fill {Dragger} next to {Target}. Cleared when protection comes back on.
+ */
+USTRUCT(BlueprintType)
+struct GFNET_API FGFDragRecord
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") FString DraggerKey;
+	/** Display name at the time it happened. */
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") FString DraggerName;
+	/** Whose land the protection was for. */
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") FName LandFaction;
+	/** FDateTime::UtcNow().GetTicks() on the server. 0 = no record. */
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") int64 AtUtcTicks = 0;
+
+	bool IsSet() const { return AtUtcTicks != 0; }
+};
+
 /** Per-player progress in the modes; travels with the character (FGFCharacterData). */
 /** What a pebbling is doing (Pebble Mine, PLAN.md M8). */
 UENUM(BlueprintType)
@@ -204,6 +224,11 @@ public:
 	virtual void RestoreModeState(const TArray<uint8>& In) {}
 	/** Chat gate: a reason the player may not send chat right now (e.g. "Muted"), or None. */
 	virtual FName ChatBlockReason(const AGFPlayerState* By) const { return NAME_None; }
+	/**
+	 * Build/break gate (AGFPlayerState::ValidateEdit): a reason By may not place or remove a block at Location
+	 * (e.g. a visitor on another faction's land), or None. Paint does not go through this gate.
+	 */
+	virtual FName EditBlockReason(const AGFPlayerState* By, const FVector& Location) const { return NAME_None; }
 	/** Join gate (PreLogin / PostLogin): true to refuse this player key, with a reason shown to them. */
 	virtual bool RefuseJoin(const FString& PlayerKey, FString& OutWhy) const { return false; }
 };

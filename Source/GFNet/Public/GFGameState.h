@@ -202,6 +202,10 @@ public:
 	static constexpr int32 MaxChatChars = 200;
 	/** Server: one chat line from By. Every mode handler's ChatBlockReason is asked first. Returns "Ok" or why not. */
 	FName ServerHandleChat(AGFPlayerState* By, const FString& Text);
+	/** Server: a line from the game itself (no sender). Text comes from config or data, never from code. */
+	void ServerPostSystemChat(const FString& Text, FName Channel = TEXT("All"));
+	/** Server: every mode handler's EditBlockReason for By editing at Location; first reason wins, None = allowed. */
+	FName EditBlockReason(const AGFPlayerState* By, const FVector& Location) const;
 
 	/** Server: any mode handler refusing this player key (bans). */
 	bool IsJoinRefused(const FString& PlayerKey, FString& OutWhy) const;

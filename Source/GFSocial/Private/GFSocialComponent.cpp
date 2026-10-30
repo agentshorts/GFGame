@@ -3,6 +3,7 @@
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFSafeZone.h"
+#include "GFLineTokens.h"
 #include "GFNoise.h"
 #include "GFAnimMap.h"
 #include "Animation/AnimInstance.h"
@@ -39,6 +40,12 @@ namespace GFSocialVerbs
 	static const FName Ban(TEXT("Ban"));
 	static const FName Unban(TEXT("Unban"));
 	static const FName Emote(TEXT("Emote"));
+	static const FName Protect(TEXT("Protect"));
+	static const FName Unprotect(TEXT("Unprotect"));
+	static const FName Guest(TEXT("Guest"));
+	static const FName Unguest(TEXT("Unguest"));
+	static const FName GrantToggle(TEXT("GrantToggle"));
+	static const FName RevokeToggle(TEXT("RevokeToggle"));
 }
 
 void UGFVoiceMuteStub::SetVoiceMuted(const FString& Key, bool bMuted)
@@ -69,6 +76,7 @@ void UGFSocialComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME(UGFSocialComponent, Scales);
 	DOREPLIFETIME(UGFSocialComponent, Tethers);
 	DOREPLIFETIME(UGFSocialComponent, Emotes);
+	DOREPLIFETIME(UGFSocialComponent, Access);
 }
 
 void UGFSocialComponent::BeginPlay()
@@ -155,7 +163,44 @@ bool UGFSocialComponent::IsPlayerSafe(const AGFPlayerState* PS) const
 {
 	const APawn* Pawn = PS ? PS->GetPawn() : nullptr;
 	const UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(this);
-	return Pawn && Zones && Zones->IsInsideSafe(Pawn->GetActorLocation());
+	if (!Pawn || !Zones || IsJailed(PS->PlayerKey))
+	{
+		return false; // jailed players are never protected
+	}
+	return Zones->IsSafeFor(FGFSafeSubject(PS->PlayerKey, PS->FactionId, PS->bIsHost), Pawn->GetActorLocation());
+}
+
+bool UGFSocialComponent::IsOnSafeLand(const AGFPlayerState* PS) const
+{
+	const APawn* Pawn = PS ? PS->GetPawn() : nullptr;
+	const UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(this);
+	if (!Pawn || !Zones)
+	{
+		return false;
+	}
+	const FVector At = Pawn->GetActorLocation();
+	return Zones->IsInsideSafe(At) || !Zones->OwnerAt(At).IsNone();
+}
+
+bool UGFSocialComponent::IsProtectedNow(const AGFPlayerState* PS) const
+{
+	return !LandOwnerOf(PS).IsNone() && IsPlayerSafe(PS);
+}
+
+bool UGFSocialComponent::PowerStillHolds(const AGFPlayerState* PS) const
+{
+	if (!IsOnSafeLand(PS))
+	{
+		return false;
+	}
+	return !(bReleaseHoldOnProtect && IsProtectedNow(PS));
+}
+
+FName UGFSocialComponent::LandOwnerOf(const AGFPlayerState* PS) const
+{
+	const APawn* Pawn = PS ? PS->GetPawn() : nullptr;
+	const UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(this);
+	return Pawn && Zones ? Zones->OwnerAt(Pawn->GetActorLocation()) : NAME_None;
 }
 
 FGFSocialPlayer UGFSocialComponent::Describe(const AGFPlayerState* PS) const
@@ -166,8 +211,11 @@ FGFSocialPlayer UGFSocialComponent::Describe(const AGFPlayerState* PS) const
 		P.Key = PS->PlayerKey;
 		P.Faction = PS->FactionId;
 		P.bHost = PS->bIsHost;
-		P.bSafe = IsPlayerSafe(PS);
+		P.bSafe = IsOnSafeLand(PS);
 		P.bJailed = IsJailed(PS->PlayerKey);
+		P.LandOwner = LandOwnerOf(PS);
+		P.bProtected = !P.LandOwner.IsNone() && IsPlayerSafe(PS);
+		P.bVisitorNoRights = !FGFProtectionRules::HasVisitorRights(P.Key, P.Faction, P.bHost, P.LandOwner, Access);
 		if (const AGFGameState* G = GS(); G && !P.Faction.IsNone())
 		{
 			TArray<FGFSocialPlayer> Seats;
@@ -193,7 +241,19 @@ FGFSocialPlayer UGFSocialComponent::Describe(const AGFPlayerState* PS) const
 
 void UGFSocialComponent::NoteFactionClaim(AGFPlayerState* PS, FName FactionId)
 {
-	if (!PS || PS->PlayerKey.IsEmpty() || FactionId.IsNone())
+	if (!PS || PS->PlayerKey.IsEmpty())
+	{
+		return;
+	}
+	// Toggle grants belong to the old faction; on the new faction's land they are a member now, not a visitor.
+	const int32 GrantsBefore = Access.Grants.Num();
+	const int32 VisitorsBefore = Access.Visitors.Num();
+	Access.OnFactionChanged(PS->PlayerKey, FactionId);
+	if (Access.Grants.Num() != GrantsBefore || Access.Visitors.Num() != VisitorsBefore)
+	{
+		NetUpdate();
+	}
+	if (FactionId.IsNone())
 	{
 		return;
 	}
@@ -243,6 +303,12 @@ FGFModeResult UGFSocialComponent::HandleModeRequest(AGFPlayerState* By, const FG
 	else if (V == Ban) Code = ServerBan(By, Target);
 	else if (V == Unban) Code = ServerUnban(By, Request.Name(0).ToString());
 	else if (V == Emote) Code = ServerEmote(By, Request.Name(0));
+	else if (V == Protect) Code = ServerSetProtected(By, Target, true);
+	else if (V == Unprotect) Code = ServerSetProtected(By, Target, false);
+	else if (V == Guest) Code = ServerSetGuest(By, Target, true);
+	else if (V == Unguest) Code = ServerSetGuest(By, Target, false);
+	else if (V == GrantToggle) Code = ServerSetToggleGrant(By, Target, true);
+	else if (V == RevokeToggle) Code = ServerSetToggleGrant(By, Target, false);
 	else return FGFModeResult::Fail(TEXT("UnknownVerb"));
 	return Code == FGFSocialCodes::Ok ? FGFModeResult::Ok() : FGFModeResult::Fail(Code);
 }
@@ -462,6 +528,155 @@ void UGFSocialComponent::ApplyJailTo(AGFPlayerState* PS, bool bJail)
 	{
 		Voice->SetVoiceMuted(PS->PlayerKey, bJail);
 	}
+}
+
+// ---------------- Faction protection ----------------
+
+FName UGFSocialComponent::EditBlockReason(const AGFPlayerState* By, const FVector& Location) const
+{
+	const UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(this);
+	if (!By || !Zones)
+	{
+		return NAME_None;
+	}
+	const FName Land = Zones->OwnerAt(Location);
+	return FGFProtectionRules::HasVisitorRights(By->PlayerKey, By->FactionId, By->bIsHost, Land, Access) ? NAME_None : FGFSocialCodes::VisitorNoRights;
+}
+
+FString UGFSocialComponent::FormatProtectionRevoked(const FString& DraggerName, const FString& TargetName, FName LandFaction) const
+{
+	if (ProtectionRevokedChat.IsEmpty())
+	{
+		return FString();
+	}
+	FString Line = FGFLineTokens::FillDragger(ProtectionRevokedChat, DraggerName);
+	Line = FGFLineTokens::Fill(Line, FGFLineTokens::Target, TargetName, TEXT("you"));
+	return FGFLineTokens::Fill(Line, FGFLineTokens::Group, LandFaction.IsNone() ? FString() : LandFaction.ToString(), TEXT("their"));
+}
+
+void UGFSocialComponent::ClearDragRecord(AGFPlayerState* Target, FName Land)
+{
+	if (Target && Target->LastDrag.IsSet() && Target->LastDrag.LandFaction == Land)
+	{
+		Target->LastDrag = FGFDragRecord();
+		Target->ForceNetUpdate();
+	}
+}
+
+void UGFSocialComponent::NoteProtectionRevoked(AGFPlayerState* By, AGFPlayerState* Target, FGFVisitorAccess& Entry)
+{
+	const int64 Now = FDateTime::UtcNow().GetTicks();
+	Entry.DraggerKey = By->PlayerKey;
+	Entry.DraggerName = By->GetPlayerName();
+	Entry.DraggedAtUtcTicks = Now;
+	FGFDragRecord Rec;
+	Rec.DraggerKey = By->PlayerKey;
+	Rec.DraggerName = By->GetPlayerName();
+	Rec.LandFaction = Entry.LandFaction;
+	Rec.AtUtcTicks = Now;
+	Target->LastDrag = Rec;
+	Target->ForceNetUpdate();
+	UE_LOG(LogGFSocial, Log, TEXT("Protection: %s turned off %s on %s land"), *By->PlayerKey, *Target->PlayerKey, *Entry.LandFaction.ToString());
+	if (bBroadcastProtectionRevoked)
+	{
+		const FString Line = FormatProtectionRevoked(Rec.DraggerName, Target->GetPlayerName(), Entry.LandFaction);
+		if (AGFGameState* G = GS(); G && !Line.IsEmpty())
+		{
+			G->ServerPostSystemChat(Line);
+		}
+	}
+}
+
+FName UGFSocialComponent::ServerSetProtected(AGFPlayerState* By, AGFPlayerState* Target, bool bProtect)
+{
+	if (!IsServer() || !By)
+	{
+		return FGFSocialCodes::NotAllowed;
+	}
+	if (!Target)
+	{
+		return FGFSocialCodes::NoSuchPlayer;
+	}
+	const FName Code = FGFProtectionRules::CanToggle(Describe(By), Describe(Target), Access, bProtect);
+	if (Code != FGFSocialCodes::Ok)
+	{
+		return Code;
+	}
+	const FName Land = By->FactionId;
+	const FGFVisitorAccess* Existing = Access.Find(Land, Target->PlayerKey);
+	if ((Existing && Existing->bProtected) == bProtect)
+	{
+		return FGFSocialCodes::Unchanged;
+	}
+	FGFVisitorAccess& Entry = Access.FindOrAdd(Land, Target->PlayerKey);
+	Entry.bProtected = bProtect;
+	if (bProtect)
+	{
+		ClearDragRecord(Target, Land);
+	}
+	else
+	{
+		NoteProtectionRevoked(By, Target, Entry); // a guest can't get here (TargetIsGuest)
+	}
+	NetUpdate();
+	return FGFSocialCodes::Ok;
+}
+
+FName UGFSocialComponent::ServerSetGuest(AGFPlayerState* By, AGFPlayerState* Target, bool bGuest)
+{
+	if (!IsServer() || !By)
+	{
+		return FGFSocialCodes::NotAllowed;
+	}
+	if (!Target)
+	{
+		return FGFSocialCodes::NoSuchPlayer;
+	}
+	const FName Code = FGFProtectionRules::CanSetGuest(Describe(By), Describe(Target), Access);
+	if (Code != FGFSocialCodes::Ok)
+	{
+		return Code;
+	}
+	const FName Land = By->FactionId;
+	if (Access.IsGuest(Land, Target->PlayerKey) == bGuest)
+	{
+		return FGFSocialCodes::Unchanged;
+	}
+	FGFVisitorAccess& Entry = Access.FindOrAdd(Land, Target->PlayerKey);
+	Entry.bGuest = bGuest;
+	if (bGuest)
+	{
+		ClearDragRecord(Target, Land);
+	}
+	else if (!Entry.bProtected)
+	{
+		NoteProtectionRevoked(By, Target, Entry); // back to a plain, unprotected visitor
+	}
+	NetUpdate();
+	return FGFSocialCodes::Ok;
+}
+
+FName UGFSocialComponent::ServerSetToggleGrant(AGFPlayerState* By, AGFPlayerState* Target, bool bAllowed)
+{
+	if (!IsServer() || !By)
+	{
+		return FGFSocialCodes::NotAllowed;
+	}
+	if (!Target)
+	{
+		return FGFSocialCodes::NoSuchPlayer;
+	}
+	const FName Code = FGFProtectionRules::CanGrantToggle(Describe(By), Describe(Target));
+	if (Code != FGFSocialCodes::Ok)
+	{
+		return Code;
+	}
+	if (!Access.SetToggleGrant(By->FactionId, Target->PlayerKey, bAllowed))
+	{
+		return FGFSocialCodes::Unchanged;
+	}
+	NetUpdate();
+	return FGFSocialCodes::Ok;
 }
 
 FName UGFSocialComponent::ServerJail(AGFPlayerState* By, AGFPlayerState* Target)
@@ -788,13 +1003,13 @@ void UGFSocialComponent::TickComponent(float DeltaSeconds, ELevelTick TickType, 
 
 void UGFSocialComponent::TickServer(float Dt)
 {
-	// Leaving safety undoes every power on you.
+	// Leaving safe land undoes every power on you (PowerStillHolds: protection changes alone do not).
 	if (ScaleBook.Entries.Num() > 0)
 	{
 		const TArray<FString> Reverted = ScaleBook.RevertUnsafe([this](const FString& Key)
 		{
 			const AGFPlayerState* PS = FindPS(Key);
-			return PS && IsPlayerSafe(PS);
+			return PS && PowerStillHolds(PS);
 		});
 		if (Reverted.Num() > 0)
 		{
@@ -809,7 +1024,7 @@ void UGFSocialComponent::TickServer(float Dt)
 		AGFPlayerState* Target = FindPS(T.TargetKey);
 		APawn* CP = Caster ? Caster->GetPawn() : nullptr;
 		APawn* TP = Target ? Target->GetPawn() : nullptr;
-		if (!CP || !TP || T.Age > Tuning.TetherMaxSeconds || !IsPlayerSafe(Caster) || !IsPlayerSafe(Target)
+		if (!CP || !TP || T.Age > Tuning.TetherMaxSeconds || !IsOnSafeLand(Caster) || !PowerStillHolds(Target)
 			|| IsJailed(T.CasterKey) || IsJailed(T.TargetKey))
 		{
 			Tethers.RemoveAt(i);

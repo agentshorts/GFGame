@@ -1,5 +1,6 @@
 #include "GFGiantTypes.h"
 #include "GFDataTables.h"
+#include "GFLineTokens.h"
 
 const TCHAR* FGFGiantRules::TargetToken = TEXT("{Target}");
 
@@ -267,7 +268,7 @@ const FGFGiantPlayerView* FGFGiantSim::Find(const TArray<FGFGiantPlayerView>& Pl
 	return Players.FindByPredicate([&](const FGFGiantPlayerView& P) { return P.Key == Key; });
 }
 
-void FGFGiantSim::Say(EGFGiantLinePhase Phase, const FString& TargetName, const FString& AimedAt, FGFGiantStepOut& Out)
+void FGFGiantSim::Say(EGFGiantLinePhase Phase, const FString& TargetName, const FString& AimedAt, FGFGiantStepOut& Out, const FString& DraggerName)
 {
 	FName Id;
 	FString Text;
@@ -279,7 +280,7 @@ void FGFGiantSim::Say(EGFGiantLinePhase Phase, const FString& TargetName, const 
 	C.Seq = NextSeq++;
 	C.LineId = Id;
 	C.Phase = Phase;
-	C.Text = FGFGiantRules::FillTarget(Text, TargetName);
+	C.Text = FGFLineTokens::FillDragger(FGFGiantRules::FillTarget(Text, TargetName), DraggerName);
 	C.Speaker = Speaker;
 	C.Channel = Channel;
 	C.TargetKey = AimedAt;
@@ -299,11 +300,11 @@ void FGFGiantSim::ChaseChat(const FGFGiantPlayerView* Target, FGFGiantStepOut& O
 	const bool bTarget = Target && Lines.Num(EGFGiantLinePhase::Target) > 0 && Rng.FRand() < T.TargetLineWeight;
 	if (bTarget)
 	{
-		Say(EGFGiantLinePhase::Target, Target->Name, Target->Key, Out);
+		Say(EGFGiantLinePhase::Target, Target->Name, Target->Key, Out, Target->Dragger);
 	}
 	else
 	{
-		Say(EGFGiantLinePhase::Chase, Target ? Target->Name : FString(), FString(), Out);
+		Say(EGFGiantLinePhase::Chase, Target ? Target->Name : FString(), FString(), Out, Target ? Target->Dragger : FString());
 	}
 }
 
@@ -345,7 +346,7 @@ void FGFGiantSim::Begin(const FGFGiantTuning& InT, const FGFGiantLines& InLines,
 		LastPositions.Add(P.Key, P.Location);
 	}
 	const FGFGiantPlayerView* Target = Ti != INDEX_NONE ? &Players[Ti] : nullptr;
-	Say(bReturnVisit ? EGFGiantLinePhase::Return : EGFGiantLinePhase::Spotted, Target ? Target->Name : FString(), FString(), Out);
+	Say(bReturnVisit ? EGFGiantLinePhase::Return : EGFGiantLinePhase::Spotted, Target ? Target->Name : FString(), FString(), Out, Target ? Target->Dragger : FString());
 	ChatIn = Rng.FRandRange(T.ChaseChatMinSeconds, T.ChaseChatMaxSeconds);
 }
 
@@ -370,7 +371,7 @@ bool FGFGiantSim::Eat(const FString& Key, const TArray<FGFGiantPlayerView>& Play
 	}
 	const FGFGiantPlayerView* P = Find(Players, Key);
 	EatenKey = Key;
-	Say(EGFGiantLinePhase::Snacked, P ? P->Name : Key, Key, Out);
+	Say(EGFGiantLinePhase::Snacked, P ? P->Name : Key, Key, Out, P ? P->Dragger : FString());
 	State = EGFGiantState::Gone;
 	TargetKey.Reset();
 	Out.Eaten = Key;
@@ -508,7 +509,7 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 	}
 	if (bShoved && SinceLastLine >= T.CloseCallMinGap)
 	{
-		Say(EGFGiantLinePhase::CloseCall, Target.Name, Target.Key, Out);
+		Say(EGFGiantLinePhase::CloseCall, Target.Name, Target.Key, Out, Target.Dragger);
 		ChatIn = Rng.FRandRange(T.ChaseChatMinSeconds, T.ChaseChatMaxSeconds);
 	}
 
@@ -527,7 +528,7 @@ void FGFGiantSim::Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFG
 		if (!bIdleWarned && IdleSeconds >= T.IdleWarnSeconds)
 		{
 			bIdleWarned = true;
-			Say(EGFGiantLinePhase::Target, Target.Name, Target.Key, Out);
+			Say(EGFGiantLinePhase::Target, Target.Name, Target.Key, Out, Target.Dragger);
 			ChatIn = Rng.FRandRange(T.ChaseChatMinSeconds, T.ChaseChatMaxSeconds);
 		}
 	}

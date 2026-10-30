@@ -17,6 +17,15 @@
 //   Kick, Ban               the target
 //   Unban                   Names[0] = the banned player's key
 //   Emote                   Names[0] = DT_Emotes row
+//   Protect, Unprotect      faction protection for an outsider on the sender's faction land (leader, or a member
+//                           the leader allowed)
+//   Guest, Unguest          faction guest status (full rights plus protection; leader, or a member the leader
+//                           allowed; target on the sender's faction land)
+//   GrantToggle, RevokeToggle  allow a member to Protect / Unprotect and Guest / Unguest (leader only)
+// Faction protection (FGFProtectionRules): members are always safe on their own land and the host is always
+// protected; visitors start unprotected. Safety is asked through IGFSafeZoneQuery::IsSafeFor, so this module does not
+// know about territory. Turning protection off records the Dragger (AGFPlayerState::LastDrag) and can post a chat
+// line from config (bBroadcastProtectionRevoked / ProtectionRevokedChat). Session only, not saved.
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "GFModeTypes.h"
@@ -48,7 +57,7 @@ public:
 	int32 Calls = 0;
 };
 
-UCLASS(ClassGroup = (GF), meta = (BlueprintSpawnableComponent))
+UCLASS(Config = Game, ClassGroup = (GF), meta = (BlueprintSpawnableComponent))
 class GFSOCIAL_API UGFSocialComponent : public UActorComponent, public IGFModeHandler
 {
 	GENERATED_BODY()
@@ -69,6 +78,8 @@ public:
 	virtual void RestoreModeState(const TArray<uint8>& In) override;
 	virtual FName ChatBlockReason(const AGFPlayerState* By) const override;
 	virtual bool RefuseJoin(const FString& PlayerKey, FString& OutWhy) const override;
+	/** Visitors without guest status can't build or break on another faction's land (paint is not gated). */
+	virtual FName EditBlockReason(const AGFPlayerState* By, const FVector& Location) const override;
 
 	virtual void TickComponent(float DeltaSeconds, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -76,6 +87,19 @@ public:
 	/** Server: live tuning (tests edit this). */
 	UPROPERTY(EditAnywhere, Category = "GF|Social")
 	FGFSocialTuning Tuning;
+
+	/** Post a chat line to everyone when a visitor's protection is turned off. DefaultGame.ini. */
+	UPROPERTY(Config, EditAnywhere, Category = "GF|Faction")
+	bool bBroadcastProtectionRevoked = false;
+	/** The line. Tokens: {Dragger} (who did it), {Target} (who lost it), {Faction} (whose land). Empty = no line. */
+	UPROPERTY(Config, EditAnywhere, Category = "GF|Faction")
+	FString ProtectionRevokedChat;
+	/**
+	 * Flip switch for PowerStillHolds: when true, a grab or grow / shrink on a player ends as soon as that player
+	 * becomes faction-protected. Off: a hold only ends when someone leaves safe land.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "GF|Faction")
+	bool bReleaseHoldOnProtect = false;
 
 	// ---------------- Replicated state ----------------
 	UPROPERTY(ReplicatedUsing = OnRep_Jailed, BlueprintReadOnly, Category = "GF|Social")
@@ -91,6 +115,9 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_Emotes, BlueprintReadOnly, Category = "GF|Social")
 	TArray<FGFEmoteEvent> Emotes;
 	static constexpr int32 MaxEmotes = 16;
+	/** Faction protection: visitor standing per land and per-member toggle grants (session only). */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Faction")
+	FGFFactionAccess Access;
 
 	UPROPERTY(BlueprintAssignable, Category = "GF|Social")
 	FGFOnEmote OnEmote;
@@ -104,6 +131,14 @@ public:
 	FName ServerBan(AGFPlayerState* By, AGFPlayerState* Target);
 	FName ServerUnban(AGFPlayerState* By, const FString& Key);
 	FName ServerEmote(AGFPlayerState* By, FName EmoteId);
+	/** Protect / Unprotect Target on By's faction land. Turning it off records By as the Dragger. */
+	FName ServerSetProtected(AGFPlayerState* By, AGFPlayerState* Target, bool bProtect);
+	/** Guest / Unguest Target on By's faction land (the leader, or a member with the grant). */
+	FName ServerSetGuest(AGFPlayerState* By, AGFPlayerState* Target, bool bGuest);
+	/** Allow / stop a member of By's faction toggling protection and setting guests (leader only). */
+	FName ServerSetToggleGrant(AGFPlayerState* By, AGFPlayerState* Target, bool bAllowed);
+	/** The chat line for a revocation, filled from ProtectionRevokedChat. */
+	FString FormatProtectionRevoked(const FString& DraggerName, const FString& TargetName, FName LandFaction) const;
 	/** Server: which mode a player is playing (DT_ModeRules key). TODO: set by the mode systems on enter / leave. */
 	void ServerSetPlayerMode(const FString& Key, FName Mode);
 	FName GetPlayerMode(const FString& Key) const;
@@ -112,8 +147,22 @@ public:
 	bool IsJailed(const FString& Key) const { return FindJail(Key) != nullptr; }
 	bool IsBanned(const FString& Key) const;
 	float ScaleOf(const FString& Key) const;
-	/** Inside safe territory (via UGFSafeZoneSubsystem)? False with no pawn or no safe zone. */
+	/**
+	 * Out of danger right now: IGFSafeZoneQuery::IsSafeFor ("in safe land AND protected") through
+	 * UGFSafeZoneSubsystem. False while jailed, with no pawn or no safe zone. Used for danger checks (emote noise).
+	 */
 	bool IsPlayerSafe(const AGFPlayerState* PS) const;
+	/** Standing on safe land (safe circles or any faction's land), protection ignored. Powers and holds use this. */
+	bool IsOnSafeLand(const AGFPlayerState* PS) const;
+	/** Faction-protected where they stand: on faction land and IsPlayerSafe. Powers can't target them. */
+	bool IsProtectedNow(const AGFPlayerState* PS) const;
+	/**
+	 * The one place that decides whether a power already on PS (held by a grab, grown or shrunk) keeps holding.
+	 * Leaving safe land ends it; protection changes do not, unless bReleaseHoldOnProtect is on.
+	 */
+	bool PowerStillHolds(const AGFPlayerState* PS) const;
+	/** Owner of the land the player stands on (None = unowned, no pawn or no territory). */
+	FName LandOwnerOf(const AGFPlayerState* PS) const;
 	FGFSocialPlayer Describe(const AGFPlayerState* PS) const;
 
 	/** Server: voice mute hook (stub until there's voice chat). */
@@ -166,6 +215,9 @@ private:
 	void ShowEmote(const FGFEmoteEvent& E);
 	bool DoKick(AGFPlayerState* Target, const FString& Why);
 	void NoteFactionClaim(AGFPlayerState* PS, FName FactionId);
+	/** Effective protection just went off: record the Dragger and maybe post the chat line. */
+	void NoteProtectionRevoked(AGFPlayerState* By, AGFPlayerState* Target, FGFVisitorAccess& Entry);
+	void ClearDragRecord(AGFPlayerState* Target, FName Land);
 
 	FGFScaleBook ScaleBook;
 	/** "PlayerKey|Faction" -> first claim order this session. */

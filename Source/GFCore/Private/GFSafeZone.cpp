@@ -265,3 +265,48 @@ bool UGFSafeZoneSubsystem::IsInsideSafe(const FVector& Location) const
 	const IGFSafeZoneQuery* Q = GetZone();
 	return Q && Q->HasAnySafe() && Q->IsInsideSafe(Location);
 }
+
+bool UGFSafeZoneSubsystem::IsSafeFor(const FGFSafeSubject& Who, const FVector& Location) const
+{
+	// Owned land answers through its owner (territory knows protection), even when a newer provider (the giant's
+	// circles) would be the current zone. Unowned land falls back to the current zone, as before.
+	FName Owner;
+	const IGFSafeZoneQuery* Q = OwnerZoneAt(Location, Owner);
+	if (!Q)
+	{
+		Q = GetZone();
+	}
+	return Q && Q->HasAnySafe() && Q->IsSafeFor(Who, Location);
+}
+
+FName UGFSafeZoneSubsystem::OwnerAt(const FVector& Location) const
+{
+	FName Owner;
+	OwnerZoneAt(Location, Owner);
+	return Owner;
+}
+
+const IGFSafeZoneQuery* UGFSafeZoneSubsystem::OwnerZoneAt(const FVector& Location, FName& OutOwner) const
+{
+	OutOwner = NAME_None;
+	if (Override.IsValid())
+	{
+		OutOwner = Override->OwnerAt(Location);
+		return OutOwner.IsNone() ? nullptr : Override.Get();
+	}
+	for (int32 i = Providers.Num() - 1; i >= 0; --i)
+	{
+		if (const IGFSafeZoneProvider* P = Cast<IGFSafeZoneProvider>(Providers[i].Get()))
+		{
+			if (const IGFSafeZoneQuery* Q = P->GetSafeZoneQuery())
+			{
+				OutOwner = Q->OwnerAt(Location);
+				if (!OutOwner.IsNone())
+				{
+					return Q;
+				}
+			}
+		}
+	}
+	return nullptr;
+}

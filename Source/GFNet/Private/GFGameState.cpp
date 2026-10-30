@@ -381,6 +381,41 @@ FName AGFGameState::ServerHandleChat(AGFPlayerState* By, const FString& Text)
 	return TEXT("Ok");
 }
 
+void AGFGameState::ServerPostSystemChat(const FString& Text, FName Channel)
+{
+	const FString Clean = Text.TrimStartAndEnd().Left(MaxChatChars);
+	if (!HasAuthority() || Clean.IsEmpty())
+	{
+		return;
+	}
+	FGFChatMessage M;
+	M.Seq = NextChatSeq++;
+	M.Text = Clean;
+	M.Channel = Channel.IsNone() ? FName(TEXT("All")) : Channel;
+	ChatLog.Add(M);
+	if (ChatLog.Num() > MaxChat)
+	{
+		ChatLog.RemoveAt(0, ChatLog.Num() - MaxChat);
+	}
+	ForceNetUpdate();
+}
+
+FName AGFGameState::EditBlockReason(const AGFPlayerState* By, const FVector& Location) const
+{
+	for (const TPair<FName, TWeakObjectPtr<UObject>>& Pair : ModeHandlers)
+	{
+		if (const IGFModeHandler* H = Cast<IGFModeHandler>(Pair.Value.Get()))
+		{
+			const FName Why = H->EditBlockReason(By, Location);
+			if (!Why.IsNone())
+			{
+				return Why;
+			}
+		}
+	}
+	return NAME_None;
+}
+
 bool AGFGameState::IsJoinRefused(const FString& PlayerKey, FString& OutWhy) const
 {
 	for (const TPair<FName, TWeakObjectPtr<UObject>>& Pair : ModeHandlers)

@@ -226,6 +226,9 @@ struct GFGIANT_API FGFGiantPlayerView
 	bool bBusy = false;
 	/** Run speed (cm/s) of this player's pawn; <= 0 uses the tuning fallback. */
 	float RunSpeed = 0.f;
+	/** Who last turned this player's faction protection off (AGFPlayerState::LastDrag); fills {Dragger}. */
+	FString Dragger;
+	int64 DraggedAtUtcTicks = 0;
 };
 
 struct FGFGiantShove
@@ -346,7 +349,8 @@ struct GFGIANT_API FGFGiantSim
 	bool IsActive() const { return State == EGFGiantState::Chase || State == EGFGiantState::Circling || State == EGFGiantState::Leaving; }
 
 private:
-	void Say(EGFGiantLinePhase Phase, const FString& TargetName, const FString& AimedAt, FGFGiantStepOut& Out);
+	/** DraggerName fills {Dragger} (FGFLineTokens); empty drops the token like an empty {Target}. */
+	void Say(EGFGiantLinePhase Phase, const FString& TargetName, const FString& AimedAt, FGFGiantStepOut& Out, const FString& DraggerName = FString());
 	void ChaseChat(const FGFGiantPlayerView* Target, FGFGiantStepOut& Out);
 	bool Eat(const FString& Key, const TArray<FGFGiantPlayerView>& Players, FGFGiantStepOut& Out);
 	void StartLeaving(FGFGiantStepOut& Out);

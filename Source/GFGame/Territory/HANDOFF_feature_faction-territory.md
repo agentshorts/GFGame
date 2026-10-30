@@ -19,9 +19,9 @@ PrivateIncludePaths.Add(System.IO.Path.Combine(ModuleDirectory, "Territory"));
 
 `GFSocial` does not depend on `GFGame`, so the private dependency does not cycle.
 
-## Safe for everyone
+## Protection (superseded)
 
-Intended: all faction land is safe for everyone. TODO: visitors on another faction's land get reduced privileges (to be defined).
+Faction land is no longer safe for everyone. Members and the host are always protected, and visitors start unprotected. Leaders, granted members and guests can change that. See `HANDOFF_feature_gf-protection.md` at the repo root. `FGFTerritoryMap` now also implements `IsSafeFor(FGFSafeSubject)` and `OwnerAt` from GFCore.
 
 ## Cap
 

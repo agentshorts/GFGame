@@ -9,6 +9,21 @@
 #include "UObject/Interface.h"
 #include "GFSafeZone.generated.h"
 
+/**
+ * Who a per-player safety question is about. Opaque ids only (no names in code).
+ * Key is the stable player key (empty for a non-player), GroupId is the player's group (faction) or None,
+ * bHost marks the session host.
+ */
+struct GFCORE_API FGFSafeSubject
+{
+	FString Key;
+	FName GroupId;
+	bool bHost = false;
+
+	FGFSafeSubject() = default;
+	FGFSafeSubject(const FString& InKey, FName InGroupId, bool bInHost = false) : Key(InKey), GroupId(InGroupId), bHost(bInHost) {}
+};
+
 /** Read-only safe-territory query (horizontal: Z is ignored and kept). */
 class GFCORE_API IGFSafeZoneQuery
 {
@@ -16,6 +31,13 @@ public:
 	virtual ~IGFSafeZoneQuery() = default;
 
 	virtual bool IsInsideSafe(const FVector& Location) const = 0;
+	/**
+	 * "In safe land AND protected" for one player. Zones with no per-player rules (plain circles, the giant's
+	 * regions) answer IsInsideSafe. Territory overrides this with land ownership plus visitor protection.
+	 */
+	virtual bool IsSafeFor(const FGFSafeSubject& Who, const FVector& Location) const { return IsInsideSafe(Location); }
+	/** The group that owns the land at Location, or None (unowned, or a zone that has no owners). */
+	virtual FName OwnerAt(const FVector& Location) const { return NAME_None; }
 	/** Nearest point in safe territory (Location itself when already inside). Location when there is no safe area. */
 	virtual FVector ClosestSafePoint(const FVector& Location) const = 0;
 	/**
@@ -109,8 +131,21 @@ public:
 	const IGFSafeZoneQuery* GetZone() const;
 	/** Inside safe territory? False when there is no safe zone at all. */
 	bool IsInsideSafe(const FVector& Location) const;
+	/**
+	 * IGFSafeZoneQuery::IsSafeFor asked of the source that owns the land at Location (same search as OwnerAt), so a
+	 * newer provider without owners can't hide protection. Unowned land: the current zone. False with no safe zone.
+	 */
+	bool IsSafeFor(const FGFSafeSubject& Who, const FVector& Location) const;
+	/**
+	 * Owner of the land at Location. The override answers alone when set. Otherwise providers are asked newest
+	 * first and the first owner wins, so a newer provider without owners (the giant's circles) does not hide land.
+	 */
+	FName OwnerAt(const FVector& Location) const;
 
 private:
+	/** The query that owns the land at Location (override alone when set, else providers newest first), or null. */
+	const IGFSafeZoneQuery* OwnerZoneAt(const FVector& Location, FName& OutOwner) const;
+
 	TArray<TWeakObjectPtr<UObject>> Providers;
 	TSharedPtr<IGFSafeZoneQuery> Override;
 };

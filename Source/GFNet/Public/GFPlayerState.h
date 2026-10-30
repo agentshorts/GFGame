@@ -43,6 +43,10 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Faction")
 	FName FactionId;
 
+	/** Who last turned this player's visitor protection off, and when (server sets it; session only). {Dragger} in lines. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Faction")
+	FGFDragRecord LastDrag;
+
 	/** Name-tag / claim-flag colour slot. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Net")
 	int32 ColorIndex = 0;

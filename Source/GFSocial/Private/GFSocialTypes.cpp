@@ -20,6 +20,12 @@ const FName FGFSocialCodes::NoSuchPlayer(TEXT("NoSuchPlayer"));
 const FName FGFSocialCodes::UnknownEmote(TEXT("UnknownEmote"));
 const FName FGFSocialCodes::NotBanned(TEXT("NotBanned"));
 const FName FGFSocialCodes::Muted(TEXT("Muted"));
+const FName FGFSocialCodes::TargetIsGuest(TEXT("TargetIsGuest"));
+const FName FGFSocialCodes::NotMember(TEXT("NotMember"));
+const FName FGFSocialCodes::VisitorNoRights(TEXT("VisitorNoRights"));
+const FName FGFSocialCodes::Unchanged(TEXT("Unchanged"));
+const FName FGFSocialCodes::NotOnYourLand(TEXT("NotOnYourLand"));
+const FName FGFSocialCodes::TargetProtected(TEXT("TargetProtected"));
 
 FName FGFSocialRules::CheckPower(const FGFSocialPlayer& By, const FGFSocialPlayer& Target, float Distance, bool bOnCooldown, const FGFSocialTuning& T)
 {
@@ -50,6 +56,10 @@ FName FGFSocialRules::CheckPower(const FGFSocialPlayer& By, const FGFSocialPlaye
 	if (By.Faction == Target.Faction)
 	{
 		return FGFSocialCodes::SameFaction;
+	}
+	if (Target.bProtected)
+	{
+		return FGFSocialCodes::TargetProtected; // members at home, the host, guests, protected visitors
 	}
 	if (Distance > T.PowerRange)
 	{
@@ -89,6 +99,10 @@ FName FGFSocialRules::JailPower(const FGFSocialPlayer& By, const FGFSocialPlayer
 	{
 		return FGFSocialCodes::Ok;
 	}
+	if (By.bVisitorNoRights)
+	{
+		return FGFSocialCodes::VisitorNoRights; // on another faction's land without guest status
+	}
 	if (Target.bHost)
 	{
 		return FGFSocialCodes::TargetIsHost;
@@ -98,6 +112,185 @@ FName FGFSocialRules::JailPower(const FGFSocialPlayer& By, const FGFSocialPlayer
 		return FGFSocialCodes::Ok;
 	}
 	return FGFSocialCodes::NotAllowed;
+}
+
+// --- Faction protection ---
+
+const FGFVisitorAccess* FGFFactionAccess::Find(FName Land, const FString& Key) const
+{
+	return Visitors.FindByPredicate([&](const FGFVisitorAccess& V) { return V.LandFaction == Land && V.Key == Key; });
+}
+
+FGFVisitorAccess& FGFFactionAccess::FindOrAdd(FName Land, const FString& Key)
+{
+	if (FGFVisitorAccess* Found = Visitors.FindByPredicate([&](const FGFVisitorAccess& V) { return V.LandFaction == Land && V.Key == Key; }))
+	{
+		return *Found;
+	}
+	FGFVisitorAccess& Added = Visitors.AddDefaulted_GetRef();
+	Added.LandFaction = Land;
+	Added.Key = Key;
+	return Added;
+}
+
+bool FGFFactionAccess::IsProtected(FName Land, const FString& Key) const
+{
+	const FGFVisitorAccess* V = Find(Land, Key);
+	return V && (V->bProtected || V->bGuest);
+}
+
+bool FGFFactionAccess::IsGuest(FName Land, const FString& Key) const
+{
+	const FGFVisitorAccess* V = Find(Land, Key);
+	return V && V->bGuest;
+}
+
+bool FGFFactionAccess::HasToggleGrant(FName Faction, const FString& MemberKey) const
+{
+	return !Faction.IsNone() && Grants.ContainsByPredicate([&](const FGFToggleGrant& G) { return G.Faction == Faction && G.MemberKey == MemberKey; });
+}
+
+bool FGFFactionAccess::SetToggleGrant(FName Faction, const FString& MemberKey, bool bAllowed)
+{
+	if (bAllowed == HasToggleGrant(Faction, MemberKey))
+	{
+		return false;
+	}
+	if (bAllowed)
+	{
+		FGFToggleGrant G;
+		G.Faction = Faction;
+		G.MemberKey = MemberKey;
+		Grants.Add(G);
+	}
+	else
+	{
+		Grants.RemoveAll([&](const FGFToggleGrant& G) { return G.Faction == Faction && G.MemberKey == MemberKey; });
+	}
+	return true;
+}
+
+void FGFFactionAccess::OnFactionChanged(const FString& Key, FName NewFaction)
+{
+	Grants.RemoveAll([&](const FGFToggleGrant& G) { return G.MemberKey == Key; });
+	if (!NewFaction.IsNone())
+	{
+		Visitors.RemoveAll([&](const FGFVisitorAccess& V) { return V.Key == Key && V.LandFaction == NewFaction; });
+	}
+}
+
+FName FGFProtectionRules::CanToggle(const FGFSocialPlayer& By, const FGFSocialPlayer& Target, const FGFFactionAccess& Access, bool bProtect)
+{
+	if (By.Key == Target.Key)
+	{
+		return FGFSocialCodes::Self;
+	}
+	if (By.Faction.IsNone())
+	{
+		return FGFSocialCodes::NoFaction;
+	}
+	if (By.bJailed)
+	{
+		return FGFSocialCodes::Jailed;
+	}
+	if (!By.bLeader && !Access.HasToggleGrant(By.Faction, By.Key))
+	{
+		return FGFSocialCodes::NotAllowed;
+	}
+	if (Target.Faction == By.Faction)
+	{
+		return FGFSocialCodes::SameFaction; // members are always safe on their own land
+	}
+	if (Target.bHost)
+	{
+		return FGFSocialCodes::TargetIsHost; // the host is always protected
+	}
+	if (Access.IsGuest(By.Faction, Target.Key))
+	{
+		// Both ways: a guest is already protected, and an explicit Protect on top would be undone by Unguest anyway.
+		return FGFSocialCodes::TargetIsGuest;
+	}
+	if (Target.LandOwner != By.Faction)
+	{
+		return FGFSocialCodes::NotOnYourLand; // toggles only reach players standing on the toggler's faction land
+	}
+	return FGFSocialCodes::Ok;
+}
+
+FName FGFProtectionRules::CanSetGuest(const FGFSocialPlayer& By, const FGFSocialPlayer& Target, const FGFFactionAccess& Access)
+{
+	if (By.Key == Target.Key)
+	{
+		return FGFSocialCodes::Self;
+	}
+	if (By.Faction.IsNone())
+	{
+		return FGFSocialCodes::NoFaction;
+	}
+	if (By.bJailed)
+	{
+		return FGFSocialCodes::Jailed;
+	}
+	if (!By.bLeader && !Access.HasToggleGrant(By.Faction, By.Key))
+	{
+		return FGFSocialCodes::NotAllowed; // the leader, or a member the leader granted
+	}
+	if (Target.Faction == By.Faction)
+	{
+		return FGFSocialCodes::SameFaction;
+	}
+	if (Target.bHost)
+	{
+		return FGFSocialCodes::TargetIsHost;
+	}
+	if (Target.LandOwner != By.Faction)
+	{
+		return FGFSocialCodes::NotOnYourLand; // like the toggles: the target must stand on the setter's faction land
+	}
+	return FGFSocialCodes::Ok;
+}
+
+FName FGFProtectionRules::CanGrantToggle(const FGFSocialPlayer& By, const FGFSocialPlayer& Target)
+{
+	if (By.Key == Target.Key)
+	{
+		return FGFSocialCodes::Self;
+	}
+	if (By.Faction.IsNone())
+	{
+		return FGFSocialCodes::NoFaction;
+	}
+	if (!By.bLeader)
+	{
+		return FGFSocialCodes::NotAllowed;
+	}
+	if (Target.Faction != By.Faction)
+	{
+		return FGFSocialCodes::NotMember;
+	}
+	return FGFSocialCodes::Ok;
+}
+
+bool FGFProtectionRules::IsProtectedOn(const FString& Key, FName Faction, bool bHost, FName LandOwner, const FGFFactionAccess& Access)
+{
+	if (LandOwner.IsNone())
+	{
+		return false;
+	}
+	if (Faction == LandOwner || bHost)
+	{
+		return true;
+	}
+	return !Key.IsEmpty() && Access.IsProtected(LandOwner, Key);
+}
+
+bool FGFProtectionRules::HasVisitorRights(const FString& Key, FName Faction, bool bHost, FName LandOwner, const FGFFactionAccess& Access)
+{
+	if (LandOwner.IsNone() || bHost || Faction == LandOwner)
+	{
+		return true;
+	}
+	return !Key.IsEmpty() && Access.IsGuest(LandOwner, Key);
 }
 
 FName FGFSocialRules::CanJail(const FGFSocialPlayer& By, const FGFSocialPlayer& Target)

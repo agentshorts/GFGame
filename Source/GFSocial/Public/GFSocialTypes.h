@@ -74,13 +74,22 @@ struct GFSOCIAL_API FGFSocialPlayer
 	FString Key;
 	FName Faction;
 	bool bHost = false;
-	/** Inside safe territory right now. */
+	/** Standing on safe land right now (land only: safe circles or any faction's land). Powers need it. */
 	bool bSafe = false;
+	/**
+	 * Faction-protected right now: on faction land and IGFSafeZoneQuery::IsSafeFor says so (members at home, the host,
+	 * guests, visitors a leader protected). Never while jailed. Powers can't target a protected player.
+	 */
+	bool bProtected = false;
 	bool bJailed = false;
 	/** Leader of their own faction. */
 	bool bLeader = false;
 	/** First claim of Faction. 0 = not recorded, so ChooseLeader sorts them last. */
 	int32 ClaimOrder = 0;
+	/** Faction that owns the land they stand on (None = unowned or no territory). */
+	FName LandOwner;
+	/** On another faction's land without guest status (never the host): no build, break or jail power there. */
+	bool bVisitorNoRights = false;
 
 	FGFSocialPlayer() = default;
 	FGFSocialPlayer(const FString& InKey, FName InFaction, bool bInHost = false, bool bInSafe = true, bool bInLeader = false)
@@ -108,6 +117,90 @@ struct GFSOCIAL_API FGFSocialCodes
 	static const FName UnknownEmote;
 	static const FName NotBanned;
 	static const FName Muted;
+	static const FName TargetIsGuest;   // turn guest status off before turning protection off
+	static const FName NotMember;       // the target isn't in the caster's faction
+	static const FName VisitorNoRights; // a visitor (no guest status) on another faction's land
+	static const FName Unchanged;       // already set that way; nothing recorded
+	static const FName NotOnYourLand;   // Protect / Unprotect: the target isn't standing on the toggler's faction land
+	static const FName TargetProtected; // powers: the target is faction-protected where they stand
+};
+
+/**
+ * One outsider's standing on one faction's land (replicated, session only). Members of LandFaction never have an
+ * entry: they are always safe there. No entry = a plain visitor, unprotected.
+ */
+USTRUCT(BlueprintType)
+struct GFSOCIAL_API FGFVisitorAccess
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") FName LandFaction;
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") FString Key;
+	/** Protected on LandFaction's land (set by the leader or a member the leader allowed). */
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") bool bProtected = false;
+	/** Faction guest: full rights (build, break, jail power) plus protection. Set by the leader or a granted member. */
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") bool bGuest = false;
+	/** The last time protection was turned off: who did it (the Dragger) and when (UTC ticks). Kept as history. */
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") FString DraggerKey;
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") FString DraggerName;
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") int64 DraggedAtUtcTicks = 0;
+};
+
+/** A member the leader allowed to toggle outsider protection and set guests on their faction's land. */
+USTRUCT(BlueprintType)
+struct GFSOCIAL_API FGFToggleGrant
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") FName Faction;
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") FString MemberKey;
+};
+
+/** Faction protection book: visitor standing per land and the per-member toggle permission. Pure; the server owns it. */
+USTRUCT(BlueprintType)
+struct GFSOCIAL_API FGFFactionAccess
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") TArray<FGFVisitorAccess> Visitors;
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Faction") TArray<FGFToggleGrant> Grants;
+
+	const FGFVisitorAccess* Find(FName Land, const FString& Key) const;
+	FGFVisitorAccess& FindOrAdd(FName Land, const FString& Key);
+	/** Protected or guest on Land. */
+	bool IsProtected(FName Land, const FString& Key) const;
+	bool IsGuest(FName Land, const FString& Key) const;
+	/** The leader allowed this member to toggle protection and set guests on Faction's land. */
+	bool HasToggleGrant(FName Faction, const FString& MemberKey) const;
+	/** Returns true when it changed. */
+	bool SetToggleGrant(FName Faction, const FString& MemberKey, bool bAllowed);
+	/** Key changed faction: drop their grants and any visitor entry on their new faction's land. */
+	void OnFactionChanged(const FString& Key, FName NewFaction);
+};
+
+/**
+ * Faction protection (visitors and guests). The land in question is always the caster's own faction's land.
+ *   - Members are always safe on their own faction's land; it can't be turned off. The host is always protected.
+ *   - Visitors start unprotected. The leader can always toggle protection for an outsider, per player; a member can
+ *     too while the leader has granted them the toggle. Only the leader grants or revokes it.
+ *   - A faction guest has full rights plus protection. The leader, or a member with the grant, sets guest status.
+ *   - Toggles and guest changes only reach a target standing on the setter's faction land (NotOnYourLand).
+ */
+struct GFSOCIAL_API FGFProtectionRules
+{
+	/** Protect / Unprotect a target on By's land. Unprotecting a guest is refused (unguest first). */
+	static FName CanToggle(const FGFSocialPlayer& By, const FGFSocialPlayer& Target, const FGFFactionAccess& Access, bool bProtect);
+	/** Guest / Unguest a target on By's land: the leader, or a member the leader granted (same grant as the toggle). */
+	static FName CanSetGuest(const FGFSocialPlayer& By, const FGFSocialPlayer& Target, const FGFFactionAccess& Access);
+	/** Grant / revoke the toggle for a member of By's faction: the leader only. */
+	static FName CanGrantToggle(const FGFSocialPlayer& By, const FGFSocialPlayer& Target);
+	/**
+	 * Safe on land owned by LandOwner (None = not faction land: never safe): own land always; another faction's land
+	 * for the host, a protected visitor or a guest.
+	 */
+	static bool IsProtectedOn(const FString& Key, FName Faction, bool bHost, FName LandOwner, const FGFFactionAccess& Access);
+	/** Build, break and jail power at land owned by LandOwner: false only for a non-host, non-guest outsider. */
+	static bool HasVisitorRights(const FString& Key, FName Faction, bool bHost, FName LandOwner, const FGFFactionAccess& Access);
 };
 
 struct GFSOCIAL_API FGFSocialRules

@@ -26,6 +26,7 @@ void AGFPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(AGFPlayerState, bIsHost);
 	DOREPLIFETIME(AGFPlayerState, ColorIndex);
 	DOREPLIFETIME(AGFPlayerState, FactionId);
+	DOREPLIFETIME(AGFPlayerState, LastDrag);
 	DOREPLIFETIME(AGFPlayerState, HeldItem);
 	DOREPLIFETIME(AGFPlayerState, bCharacterReady);
 	DOREPLIFETIME_CONDITION(AGFPlayerState, Companions, COND_OwnerOnly);
@@ -524,6 +525,15 @@ bool AGFPlayerState::ValidateEdit(const FIntVector& Cell, FName BlockId, FString
 		if (!Pawn || FVector::Dist(Pawn->GetActorLocation(), Voxel->CellToWorld(Cell)) > GS->MaxEditReach)
 		{
 			OutReason = TEXT("out of reach");
+			return false;
+		}
+	}
+	{
+		// Mode rules first (faction land: visitors without guest status can't build or break there).
+		const FName Why = GS->EditBlockReason(this, Voxel->CellToWorld(Cell));
+		if (!Why.IsNone())
+		{
+			OutReason = Why.ToString();
 			return false;
 		}
 	}
