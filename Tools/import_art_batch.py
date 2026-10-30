@@ -15,7 +15,8 @@ import json, math, os, re, traceback
 import unreal
 
 PROJ = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
-INBOX = os.path.join(PROJ, "handoff", "inbox")
+# GFART_INBOX overrides the inbox (e.g. a worktree importing from the main checkout's handoff folder)
+INBOX = os.environ.get("GFART_INBOX", "").strip() or os.path.join(PROJ, "handoff", "inbox")
 OUT = os.path.join(PROJ, "Saved", "ArtImport")
 os.makedirs(OUT, exist_ok=True)
 AT = unreal.AssetToolsHelpers.get_asset_tools()
@@ -66,6 +67,10 @@ ORDER = [
     "SK_Dino_Tusksaw", "SK_Dino_Ripwing", "SK_Dino_Scythepaw", "SK_Dino_Lanternmaw",
     # Big Grumble (batch big_grumble_v1): on the shared SKEL_Dino_Rex (see SHARED_SKELETONS)
     "SK_Dino_BigGrumble",
+    # hazards (batch hazards1): the two set pieces ship the textures, the modular pieces reuse them (textures_shared_from)
+    "SM_Hazard_LavaBridge", "SM_Hazard_DeadlyForest",
+    "SM_Hazard_LavaBridge_Seg4m", "SM_Hazard_ForestTree_A", "SM_Hazard_ForestTree_B", "SM_Hazard_ForestSnag",
+    "SM_Hazard_ForestThornBush", "SM_Hazard_ForestUndergrowth",
 ]
 # Skeletons shared across species live in their own folder, not in the folder of whichever mesh created them.
 # The first import creates the skeleton there; later imports reuse it. Pre-clean never deletes a shared
@@ -90,6 +95,7 @@ CLIP_LIMIT_Z = -5.0  # cm: no clip may sink the posed mesh below this (manifest 
 _probe_path = os.environ.get("GFART_PROBE", "").strip()
 PROBE = json.load(open(_probe_path, encoding="utf-8")) if _probe_path else {}
 PROP_MAT_BATCHES = ("3b", "7")
+HAZARD_MAT_BATCHES = ("hazards1",)  # per-slot materials from unreal_material_hint (M_GF_Prop, M_GF_Lava)
 MAT_DIR = "/Game/Art/Materials"
 BAD_PATH = re.compile(r"[a-z]:[\\/]users[\\/]", re.I)  # source paths must not leak a username
 DIM_TOL = 0.05  # cm
@@ -169,6 +175,11 @@ def import_textures(man, folder, dest):
         name = os.path.splitext(tex)[0]
         t = run_import(os.path.join(folder, tex), dest + "/Textures", name, None)
         try_set(t, "filter", unreal.TextureFilter.TF_NEAREST)
+        if hint_slots(man):
+            # per-slot hints (hazards, banner/trophy v2): pixel-art LOD group, tiling textures wrap
+            try_set(t, "lod_group", unreal.TextureGroup.TEXTUREGROUP_PIXELS2D)
+            try_set(t, "address_x", unreal.TextureAddress.TA_WRAP)
+            try_set(t, "address_y", unreal.TextureAddress.TA_WRAP)
         if name.startswith("T_Icon_"):
             ui_texture(t, name)
         elif name.endswith("_M") or name.endswith("_E"):  # dye masks and greyscale emissive masks are linear
@@ -434,7 +445,11 @@ def do_static(name, man, folder, r):
     chk["tris"] = r["tris"] == man["tri_count"] if r["tris"] is not None else "n/a"
     chk["slots"] = r["material_slots"] == man["material_slots"]
     cnote = re.search(r"Collision: ([^;]*)", man["qa"].get("notes", ""))
-    r["collision_expected"] = len(re.findall(r"UCX_", cnote.group(1))) if cnote else None
+    ncol = re.match(r"\s*(\d+) UCX", cnote.group(1)) if cnote else None
+    if ncol:
+        r["collision_expected"] = int(ncol.group(1))  # "11 UCX boxes (UCX_..._00, UCX_..._01 ...)"
+    else:
+        r["collision_expected"] = len(re.findall(r"UCX_", cnote.group(1))) if cnote else None
     if "/Crops/" in man["unreal_target"]:
         chk["collision"] = "n/a"  # crops get no collision (brief 1.8); count still reported
     elif r["collision_expected"] is not None:
@@ -697,7 +712,12 @@ def owned_assets(man):
         out = [a for a in out if "/Textures/" not in a] + [man["unreal_target"]] + [PLAYER_MAT_DIR + "/" + m for m in PLAYER_MATS] + tex
     elif man["type"] == "static_mesh" and str(man.get("batch")) in PROP_MAT_BATCHES:
         tex = [a for a in out if "/Textures/" in a]
-        out = [a for a in out if "/Textures/" not in a] + [man["unreal_target"], prop_mi_path(man)] + tex
+        out = [a for a in out if "/Textures/" not in a] + [man["unreal_target"], prop_mi_path(man)] + extra_slot_mi_paths(man) + tex
+    elif man["type"] == "static_mesh" and str(man.get("batch")) in HAZARD_MAT_BATCHES:
+        tex = [a for a in out if "/Textures/" in a]
+        own = set(os.path.splitext(t)[0] for t in man["files"].get("textures", []))
+        mis = sorted(set(p for slot, h in hint_slots(man).items() for p in [hazard_mi_path(man, h)] if h.get("texture") in own))
+        out = [a for a in out if "/Textures/" not in a] + [man["unreal_target"]] + mis + tex
     else:
         out.append(man["unreal_target"])
     sk = man.get("skeleton") or {}
@@ -825,6 +845,240 @@ def build_water_master(path):
     EAL.save_loaded_asset(mat)
     return mat
 
+
+def hint_slots(man):
+    """unreal_material_hint entries keyed by material slot name (hazards, banner/trophy v2). Water-style flat hints -> {}."""
+    h = man.get("unreal_material_hint") or {}
+    slots = man.get("material_slots") or []
+    return {k: v for k, v in h.items() if isinstance(v, dict) and k in slots}
+
+def hazard_mi_path(man, h):
+    """One instance per texture set, shared by every hazard piece: T_Hazard_LavaRock_D -> MI_Hazard_LavaRock."""
+    base = h["texture"][2:] if h["texture"].startswith("T_") else h["texture"]
+    if base.endswith("_D"):
+        base = base[:-2]
+    return man["unreal_target"].rsplit("/", 1)[0] + "/Materials/MI_" + base
+
+BANNER_PATTERNS = ("Plain", "Claw", "Egg", "Gem")
+
+def extra_slot_mi_paths(man):
+    """v2 Pattern slot (banner: one instance per default pattern) and Glass slot (trophy case)."""
+    hs = hint_slots(man)
+    d = man["unreal_target"].rsplit("/", 1)[0] + "/Materials/MI_" + man["asset_name"][3:]
+    out = []
+    if "Pattern" in hs:
+        out += [d + "_Pattern_" + p for p in BANNER_PATTERNS]
+    if "Glass" in hs:
+        out.append(d + "_Glass")
+    return out
+
+def _strength(h, default=0.0):
+    m = re.search(r"\*\s*E\s*\*\s*([0-9.]+)", str(h.get("emissive_color", "")))
+    return float(m.group(1)) if m else default
+
+def _srgb_hex(hexs):
+    hexs = hexs.lstrip("#")
+    def lin(c):
+        c = c / 255.0
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    return unreal.LinearColor(lin(int(hexs[0:2], 16)), lin(int(hexs[2:4], 16)), lin(int(hexs[4:6], 16)), 1.0)
+
+def _load_or_create_mi(path):
+    if EAL.does_asset_exist(path):
+        return unreal.load_asset(path)
+    d, n = path.rsplit("/", 1)
+    return AT.create_asset(n, d, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+
+def build_lava_master(path):
+    """M_GF_Lava: opaque lava (hazards1 Lava hint). D and E sampled at panned UVs (PanSpeedU/V UV per second);
+    Base = D; Emissive = D * E.R * (EmissiveStrength + PulseAmount * sin(2 pi PulseHz t)). Defaults pulse 2.0-3.5 at 0.25 Hz."""
+    MEL = unreal.MaterialEditingLibrary
+    white = default_tex("T_GF_DefaultWhite", (255, 255, 255), False)
+    black = default_tex("T_GF_MaskBlack", (0, 0, 0), True)
+    d, n = path.rsplit("/", 1)
+    mat = AT.create_asset(n, d, unreal.Material, unreal.MaterialFactoryNew())
+    uvc = _mexpr(mat, unreal.MaterialExpressionTextureCoordinate, -1300, -200)
+    su = _mexpr(mat, unreal.MaterialExpressionScalarParameter, -1300, 0)
+    su.set_editor_property("parameter_name", "PanSpeedU"); su.set_editor_property("default_value", 0.0)
+    sv = _mexpr(mat, unreal.MaterialExpressionScalarParameter, -1300, 150)
+    sv.set_editor_property("parameter_name", "PanSpeedV"); sv.set_editor_property("default_value", 0.02)
+    app = _mexpr(mat, unreal.MaterialExpressionAppendVector, -1100, 50)
+    MEL.connect_material_expressions(su, "", app, "A"); MEL.connect_material_expressions(sv, "", app, "B")
+    pan = _mexpr(mat, unreal.MaterialExpressionPanner, -900, -100)
+    MEL.connect_material_expressions(uvc, "", pan, "Coordinate"); MEL.connect_material_expressions(app, "", pan, "Speed")
+    td = _tparam(mat, "Diffuse", white, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, -650, -250)
+    te = _tparam(mat, "Emissive", black, unreal.MaterialSamplerType.SAMPLERTYPE_MASKS, -650, 100)
+    MEL.connect_material_expressions(pan, "", td, "UVs"); MEL.connect_material_expressions(pan, "", te, "UVs")
+    MEL.connect_material_property(td, "RGB", unreal.MaterialProperty.MP_BASE_COLOR)
+    tm = _mexpr(mat, unreal.MaterialExpressionTime, -1100, 450)
+    hz = _mexpr(mat, unreal.MaterialExpressionScalarParameter, -1100, 600)
+    hz.set_editor_property("parameter_name", "PulseHz"); hz.set_editor_property("default_value", 0.25)
+    tmul = _mexpr(mat, unreal.MaterialExpressionMultiply, -900, 500)
+    MEL.connect_material_expressions(tm, "", tmul, "A"); MEL.connect_material_expressions(hz, "", tmul, "B")
+    sine = _mexpr(mat, unreal.MaterialExpressionSine, -750, 500)  # period 1: sin(2 pi x)
+    MEL.connect_material_expressions(tmul, "", sine, "")
+    amp = _mexpr(mat, unreal.MaterialExpressionScalarParameter, -750, 650)
+    amp.set_editor_property("parameter_name", "PulseAmount"); amp.set_editor_property("default_value", 0.75)
+    smul = _mexpr(mat, unreal.MaterialExpressionMultiply, -600, 550)
+    MEL.connect_material_expressions(sine, "", smul, "A"); MEL.connect_material_expressions(amp, "", smul, "B")
+    estr = _mexpr(mat, unreal.MaterialExpressionScalarParameter, -600, 750)
+    estr.set_editor_property("parameter_name", "EmissiveStrength"); estr.set_editor_property("default_value", 2.75)
+    add = _mexpr(mat, unreal.MaterialExpressionAdd, -450, 600)
+    MEL.connect_material_expressions(estr, "", add, "A"); MEL.connect_material_expressions(smul, "", add, "B")
+    e1 = _mexpr(mat, unreal.MaterialExpressionMultiply, -400, 200)
+    MEL.connect_material_expressions(td, "RGB", e1, "A"); MEL.connect_material_expressions(te, "R", e1, "B")
+    e2 = _mexpr(mat, unreal.MaterialExpressionMultiply, -250, 350)
+    MEL.connect_material_expressions(e1, "", e2, "A"); MEL.connect_material_expressions(add, "", e2, "B")
+    MEL.connect_material_property(e2, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    rough = _mexpr(mat, unreal.MaterialExpressionConstant, -250, 0)
+    rough.set_editor_property("r", 0.9)
+    MEL.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    MEL.recompile_material(mat)
+    EAL.save_loaded_asset(mat)
+    return mat
+
+def build_glass_master(path):
+    """M_GF_Glass: translucent pane (trophy case Glass hint). Base = Diffuse; Opacity = scalar Opacity (0.3);
+    roughness 0.1, specular 0.5."""
+    MEL = unreal.MaterialEditingLibrary
+    white = default_tex("T_GF_DefaultWhite", (255, 255, 255), False)
+    d, n = path.rsplit("/", 1)
+    mat = AT.create_asset(n, d, unreal.Material, unreal.MaterialFactoryNew())
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    td = _tparam(mat, "Diffuse", white, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, -500, -150)
+    MEL.connect_material_property(td, "RGB", unreal.MaterialProperty.MP_BASE_COLOR)
+    op = _mexpr(mat, unreal.MaterialExpressionScalarParameter, -500, 150)
+    op.set_editor_property("parameter_name", "Opacity"); op.set_editor_property("default_value", 0.3)
+    MEL.connect_material_property(op, "", unreal.MaterialProperty.MP_OPACITY)
+    rough = _mexpr(mat, unreal.MaterialExpressionConstant, -300, 300)
+    rough.set_editor_property("r", 0.1)
+    MEL.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    spec = _mexpr(mat, unreal.MaterialExpressionConstant, -300, 400)
+    spec.set_editor_property("r", 0.5)
+    MEL.connect_material_property(spec, "", unreal.MaterialProperty.MP_SPECULAR)
+    MEL.recompile_material(mat)
+    EAL.save_loaded_asset(mat)
+    return mat
+
+def _tex_paths(man):
+    """Texture short name -> UE path, own textures plus files.textures_shared_from."""
+    dest = man["unreal_target"].rsplit("/", 1)[0]
+    tex = {os.path.splitext(t)[0]: dest + "/Textures/" + os.path.splitext(t)[0] for t in man["files"].get("textures", [])}
+    src = man["files"].get("textures_shared_from")
+    if src:
+        sman = json.load(open(os.path.join(INBOX, src, "manifest.json"), encoding="utf-8"))
+        for t in man["files"].get("textures_shared", []):
+            t = os.path.splitext(t)[0]
+            tex[t] = sman["unreal_target"].rsplit("/", 1)[0] + "/Textures/" + t
+    return tex
+
+def _set_slots(man, by_slot):
+    m = unreal.load_asset(man["unreal_target"])
+    mats = list(m.get_editor_property("static_materials"))
+    for i, sm in enumerate(mats):
+        s = str(sm.get_editor_property("material_slot_name"))
+        if s in by_slot:
+            sm.set_editor_property("material_interface", by_slot[s])
+            mats[i] = sm
+    m.set_editor_property("static_materials", mats)
+    EAL.save_loaded_asset(m)
+    m = unreal.load_asset(man["unreal_target"])
+    return {str(s.material_slot_name): (s.material_interface.get_name() if s.material_interface else None) for s in m.static_materials}
+
+def hazard_materials(name, man, r):
+    """hazards1: one instance per hint slot (shared across pieces by texture). Lava slots (panner hint) -> M_GF_Lava,
+    the rest -> M_GF_Prop (Diffuse, Emissive mask, EmissiveStrength from 'D * E * k')."""
+    MEL = unreal.MaterialEditingLibrary
+    tex = _tex_paths(man)
+    by_slot = {}
+    params = {}
+    ok = True
+    for slot, h in hint_slots(man).items():
+        mi = _load_or_create_mi(hazard_mi_path(man, h))
+        lava = "panner_speed_uv_per_s" in h
+        MEL.set_material_instance_parent(mi, master("M_GF_Lava", build_lava_master) if lava else master("M_GF_Prop", build_prop_master))
+        d = tex.get(h["texture"]); e = tex.get(h.get("emissive")) if h.get("emissive") else None
+        ok = ok and d is not None and EAL.does_asset_exist(d) and (not h.get("emissive") or (e is not None and EAL.does_asset_exist(e)))
+        if d: MEL.set_material_instance_texture_parameter_value(mi, "Diffuse", unreal.load_asset(d))
+        if e: MEL.set_material_instance_texture_parameter_value(mi, "Emissive", unreal.load_asset(e))
+        p = {"mi": mi.get_name(), "parent": "M_GF_Lava" if lava else "M_GF_Prop", "diffuse": h["texture"], "emissive": h.get("emissive")}
+        if lava:
+            spd = list(h["panner_speed_uv_per_s"]) + [0.0, 0.0]
+            MEL.set_material_instance_scalar_parameter_value(mi, "PanSpeedU", float(spd[0]))
+            MEL.set_material_instance_scalar_parameter_value(mi, "PanSpeedV", float(spd[1]))
+            MEL.set_material_instance_scalar_parameter_value(mi, "EmissiveStrength", 2.75)
+            MEL.set_material_instance_scalar_parameter_value(mi, "PulseAmount", 0.75)
+            MEL.set_material_instance_scalar_parameter_value(mi, "PulseHz", 0.25)
+            p["pan_uv"] = [MEL.get_material_instance_scalar_parameter_value(mi, "PanSpeedU"), MEL.get_material_instance_scalar_parameter_value(mi, "PanSpeedV")]
+            ok = ok and abs(p["pan_uv"][1] - float(spd[1])) < 1e-5
+        elif e:
+            k = _strength(h, 1.0)
+            MEL.set_material_instance_scalar_parameter_value(mi, "EmissiveStrength", k)
+            p["emissive_strength"] = MEL.get_material_instance_scalar_parameter_value(mi, "EmissiveStrength")
+        EAL.save_loaded_asset(mi)
+        by_slot[slot] = mi
+        params[slot] = p
+    got = _set_slots(man, by_slot)
+    r["materials"] = got
+    r["material_params"] = params
+    ok = ok and all(got.get(s) == by_slot[s].get_name() for s in by_slot) and set(by_slot) == set(man["material_slots"])
+    r["checks"]["materials"] = ok
+
+def extra_slot_materials(name, man, r):
+    """v2 banner/trophy: Main keeps MI_<Name> on M_GF_Prop (Dye_R is the player/lining colour input, i.e.
+    D * lerp(1, Dye_R, M.R)); Pattern -> MI_<Name>_Pattern_<P> on M_GF_Prop (PatternD/PatternM as Diffuse/DyeMask),
+    Plain assigned; Glass -> MI_<Name>_Glass on M_GF_Glass (Opacity from the hint)."""
+    MEL = unreal.MaterialEditingLibrary
+    hs = hint_slots(man)
+    if not hs:
+        return
+    tex = _tex_paths(man)
+    dmi = man["unreal_target"].rsplit("/", 1)[0] + "/Materials/MI_" + man["asset_name"][3:]
+    by_slot = {}
+    ok = r["checks"].get("materials", True) is True
+    extra = {}
+    main = hs.get("Main")
+    if main:
+        mi = unreal.load_asset(prop_mi_path(man))
+        if main.get("texture") in tex: MEL.set_material_instance_texture_parameter_value(mi, "Diffuse", unreal.load_asset(tex[main["texture"]]))
+        if main.get("mask") in tex: MEL.set_material_instance_texture_parameter_value(mi, "DyeMask", unreal.load_asset(tex[main["mask"]]))
+        lining = (main.get("defaults") or {}).get("LiningColor")
+        if lining:
+            MEL.set_material_instance_vector_parameter_value(mi, "Dye_R", _srgb_hex(lining))
+            extra["Main_Dye_R_default"] = lining
+        EAL.save_loaded_asset(mi)
+    if "Pattern" in hs:
+        pm = {}
+        for pname in BANNER_PATTERNS:
+            mi = _load_or_create_mi(dmi + "_Pattern_" + pname)
+            MEL.set_material_instance_parent(mi, master("M_GF_Prop", build_prop_master))
+            pd, pk = "T_Colo_Banner_Pattern_%s_D" % pname, "T_Colo_Banner_Pattern_%s_M" % pname
+            ok = ok and pd in tex and pk in tex and EAL.does_asset_exist(tex[pd]) and EAL.does_asset_exist(tex[pk])
+            MEL.set_material_instance_texture_parameter_value(mi, "Diffuse", unreal.load_asset(tex[pd]))
+            MEL.set_material_instance_texture_parameter_value(mi, "DyeMask", unreal.load_asset(tex[pk]))
+            EAL.save_loaded_asset(mi)
+            pm[pname] = mi
+        by_slot["Pattern"] = pm["Plain"]
+        extra["Pattern"] = sorted(m.get_name() for m in pm.values())
+    if "Glass" in hs:
+        h = hs["Glass"]
+        mi = _load_or_create_mi(dmi + "_Glass")
+        gm = master("M_GF_Glass", build_glass_master)
+        MEL.set_material_instance_parent(mi, gm)
+        ok = ok and h["texture"] in tex
+        MEL.set_material_instance_texture_parameter_value(mi, "Diffuse", unreal.load_asset(tex[h["texture"]]))
+        MEL.set_material_instance_scalar_parameter_value(mi, "Opacity", float(h.get("opacity", 0.3)))
+        EAL.save_loaded_asset(mi)
+        by_slot["Glass"] = mi
+        extra["Glass"] = {"blend_mode": str(gm.get_editor_property("blend_mode")),
+                          "opacity": MEL.get_material_instance_scalar_parameter_value(mi, "Opacity")}
+        ok = ok and "TRANSLUCENT" in extra["Glass"]["blend_mode"].upper() and abs(extra["Glass"]["opacity"] - float(h.get("opacity", 0.3))) < 1e-4
+    got = _set_slots(man, by_slot)
+    r["materials"] = got
+    r["material_params_v2"] = extra
+    ok = ok and all(got.get(s) == by_slot[s].get_name() for s in by_slot) and got.get("Main") == "MI_" + man["asset_name"][3:]
+    r["checks"]["materials"] = ok
+
 _masters = {}
 def master(name, builder):
     p = MAT_DIR + "/" + name
@@ -945,9 +1199,13 @@ for name in ORDER:
 for name in ORDER:
     man = mans[name]
     r = report["assets"][name]
-    if man["type"] == "static_mesh" and str(man.get("batch")) in PROP_MAT_BATCHES and "error" not in r:
+    if man["type"] == "static_mesh" and str(man.get("batch")) in PROP_MAT_BATCHES + HAZARD_MAT_BATCHES and "error" not in r:
         try:
-            prop_materials(name, man, r)
+            if str(man.get("batch")) in HAZARD_MAT_BATCHES:
+                hazard_materials(name, man, r)
+            else:
+                prop_materials(name, man, r)
+                extra_slot_materials(name, man, r)
         except Exception as e:
             r["error"] = "materials: " + str(e) + "\n" + traceback.format_exc()
         r["pass"] = "error" not in r and all(v is True or v == "n/a" for v in r["checks"].values())
