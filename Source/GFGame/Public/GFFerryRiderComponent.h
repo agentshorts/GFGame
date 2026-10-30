@@ -2,6 +2,7 @@
 
 // Client entry for a ferry trip or a lifetime pass. UI prompts come later.
 // The server work lives on AGFFerryDirector.
+// This header is public so GFTests can call BeginFlightProtection. GFCharacter.h only forward-declares the type.
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
@@ -51,14 +52,19 @@ public:
 
 	void SetLastCode(FName Code) { LastCode = Code; }
 
+	UFUNCTION()
+	void OnRep_SeatAnim();
+
 private:
+	void ApplySeatPose();
+
 	UPROPERTY(Replicated)
 	bool bInFlight = false;
 
 	UPROPERTY(Replicated)
 	FName LastCode;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Ferry", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(ReplicatedUsing = OnRep_SeatAnim, VisibleAnywhere, BlueprintReadOnly, Category = "GF|Ferry", meta = (AllowPrivateAccess = "true"))
 	FName SeatAnim;
 
 	bool bFlightProtected = false;

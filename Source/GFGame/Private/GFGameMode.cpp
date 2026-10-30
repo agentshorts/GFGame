@@ -26,6 +26,7 @@ AGFGameMode::AGFGameMode()
 	DefaultPawnClass = AGFCharacter::StaticClass();
 	PlayerControllerClass = AGFPlayerController::StaticClass();
 	HUDClass = AGFHUD::StaticClass();
+	DefaultSpawnAnchor = TEXT("Rime");
 	GameStateClass = AGFGameState::StaticClass();
 	PlayerStateClass = AGFPlayerState::StaticClass();
 	bDelayedStart = false;
@@ -257,16 +258,28 @@ AActor* AGFGameMode::ChoosePlayerStart_Implementation(AController* Player)
 		return Starts[Index];
 	}
 
-	const FTransform Where = FGFPlayerStartRules::EmptyMapStart();
+	// No PlayerStart. #151 item 5: this is FGFSpawnDefaults::StarterFallback, the starter anchor
+	// centre plus 120 cm. DefaultSpawnAnchor stays Rime, the same id as StarterFaction.
+	// The ferry perch (EmptyMapStart, (0, -300, 100), yaw 36) stays off this path.
+	TArray<FGFTerritoryFaction> Layout;
+	if (const UGFTerritorySubsystem* Live = UGFTerritorySubsystem::Get(this))
+	{
+		Layout = Live->FactionLayout;
+	}
+	else if (const UGFTerritorySubsystem* Defaults = GetDefault<UGFTerritorySubsystem>())
+	{
+		Layout = Defaults->FactionLayout;
+	}
+	const FVector Where = FGFPlayerStartRules::FallbackLocation(DefaultSpawnAnchor, Layout);
 	if (!FallbackStart)
 	{
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		FallbackStart = GetWorld()->SpawnActor<APlayerStart>(APlayerStart::StaticClass(), Where, Params);
+		FallbackStart = GetWorld()->SpawnActor<APlayerStart>(APlayerStart::StaticClass(), FTransform(Where), Params);
 	}
 	else
 	{
-		FallbackStart->SetActorLocationAndRotation(Where.GetLocation(), Where.Rotator());
+		FallbackStart->SetActorLocation(Where);
 	}
 	return FallbackStart;
 }

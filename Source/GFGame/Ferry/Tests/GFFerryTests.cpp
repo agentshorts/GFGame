@@ -9,6 +9,7 @@
 #include "GFFerrySpawn.h"
 #include "GFCharacter.h"
 #include "GFDino.h"
+#include "GFInventoryComponent.h"
 #include "GFTamingComponent.h"
 #include "GFGameMode.h"
 #include "GFGameState.h"
@@ -591,9 +592,11 @@ bool FGFFerrySpawnDefaultAnchorTest::RunTest(const FString&)
 	const FVector Fallback = FGFPlayerStartRules::FallbackLocation(GameMode->DefaultSpawnAnchor, Territory->FactionLayout);
 	const FVector Expected(RimeAnchor->Center.X, RimeAnchor->Center.Y, RimeAnchor->Center.Z + 120.f);
 	TestEqual(TEXT("Anchor fallback is the Rime center plus FallbackZ"), Fallback, Expected);
-	const FTransform Empty = FGFPlayerStartRules::EmptyMapStart();
-	TestEqual(TEXT("Empty map start is the perch"), Empty.GetLocation(), FVector(0.f, -300.f, 100.f));
-	TestTrue(TEXT("Empty map yaw is 36"), FMath::IsNearlyEqual(Empty.Rotator().Yaw, 36.f, 0.1f));
+	TestEqual(TEXT("Shipped Rime empty-map spawn is the origin plus FallbackZ"), Fallback, FVector(0.f, 0.f, 120.f));
+	const FTransform Perch = FGFPlayerStartRules::EmptyMapStart();
+	TestEqual(TEXT("Ferry perch stays at (0, -300, 100)"), Perch.GetLocation(), FVector(0.f, -300.f, 100.f));
+	TestTrue(TEXT("Ferry perch yaw is 36"), FMath::IsNearlyEqual(Perch.Rotator().Yaw, 36.f, 0.1f));
+	TestFalse(TEXT("Empty-map spawn is not the ferry perch"), Fallback.Equals(Perch.GetLocation()));
 
 	TArray<FGFMapPlayerStart> TaggedSecond;
 	FGFMapPlayerStart Untagged;

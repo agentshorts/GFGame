@@ -3,12 +3,19 @@
 #include "GFFerryDirector.h"
 #include "GFFerryRules.h"
 #include "GFProtectedActor.h"
+#include "GFSimpleAnimComponent.h"
 #include "Animation/AnimSequenceBase.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Character.h"
 #include "Net/UnrealNetwork.h"
+
+namespace GFFerryRiderPrivate
+{
+	// Longer than a trip. EndSeat releases it. A looping sit is not left alone by UGFSimpleAnimComponent.
+	constexpr float SeatHoldSeconds = 1.0e6f;
+}
 
 UGFFerryRiderComponent::UGFFerryRiderComponent()
 {
@@ -21,6 +28,7 @@ void UGFFerryRiderComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UGFFerryRiderComponent, bInFlight);
 	DOREPLIFETIME(UGFFerryRiderComponent, LastCode);
+	DOREPLIFETIME(UGFFerryRiderComponent, SeatAnim);
 }
 
 void UGFFerryRiderComponent::RequestTrip(FName FromStop)
@@ -108,18 +116,46 @@ void UGFFerryRiderComponent::EndFlightProtection()
 void UGFFerryRiderComponent::BeginSeat()
 {
 	SeatAnim = FGFFerryArt::SeatAnim();
-	ACharacter* Character = Cast<ACharacter>(GetOwner());
-	USkeletalMeshComponent* Mesh = Character ? Character->GetMesh() : nullptr;
-	UAnimSequenceBase* Clip = Mesh ? FGFAnimMap::Load(SeatAnim) : nullptr;
-	if (!Mesh || !Clip)
-	{
-		return;
-	}
-	Mesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-	Mesh->PlayAnimation(Clip, true);
+	ApplySeatPose();
 }
 
 void UGFFerryRiderComponent::EndSeat()
 {
 	SeatAnim = NAME_None;
+	ApplySeatPose();
+}
+
+void UGFFerryRiderComponent::OnRep_SeatAnim()
+{
+	ApplySeatPose();
+}
+
+void UGFFerryRiderComponent::ApplySeatPose()
+{
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	if (!Character)
+	{
+		return;
+	}
+	UGFSimpleAnimComponent* Simple = Character->FindComponentByClass<UGFSimpleAnimComponent>();
+	if (SeatAnim.IsNone())
+	{
+		if (Simple)
+		{
+			// PauseFor(0) does nothing. A tiny hold expires on the next tick and locomotion starts again.
+			Simple->PauseFor(KINDA_SMALL_NUMBER);
+		}
+		return;
+	}
+
+	USkeletalMeshComponent* Mesh = Character->GetMesh();
+	if (UAnimSequenceBase* Clip = Mesh ? FGFAnimMap::Load(SeatAnim) : nullptr)
+	{
+		Mesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+		Mesh->PlayAnimation(Clip, true);
+	}
+	if (Simple)
+	{
+		Simple->PauseFor(GFFerryRiderPrivate::SeatHoldSeconds);
+	}
 }

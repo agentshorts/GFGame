@@ -50,6 +50,8 @@ AGFCharacter::AGFCharacter()
 	FirstPersonCamera->FieldOfView = 90.f;
 	FirstPersonCamera->SetAutoActivate(false);
 
+	FerryRider = CreateDefaultSubobject<UGFFerryRiderComponent>(TEXT("FerryRider"));
+
 	// Mannequin fallback (feet at the capsule bottom, mesh facing +Y). Player.Base overwrites this when the row loads.
 	if (USkeletalMeshComponent* MeshComp = GetMesh())
 	{
@@ -64,13 +66,17 @@ AGFCharacter::AGFCharacter()
 		}
 	}
 	SimpleAnim = CreateDefaultSubobject<UGFSimpleAnimComponent>(TEXT("SimpleAnim"));
-	FerryRider = CreateDefaultSubobject<UGFFerryRiderComponent>(TEXT("FerryRider"));
 }
 
 void AGFCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	FGFAssetMap::ApplySkeletal(GetMesh(), nullptr, TEXT("Player.Base"));
+	// A replicated seat can arrive before the mesh exists. Play it once the skeletal row is on.
+	if (FerryRider && !FerryRider->GetSeatAnim().IsNone())
+	{
+		FerryRider->BeginSeat();
+	}
 	SetFirstPerson(false);
 	if (SelectedBlock.IsNone())
 	{

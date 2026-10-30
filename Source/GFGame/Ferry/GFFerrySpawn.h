@@ -17,13 +17,14 @@ struct GFGAME_API FGFPlayerStartRules
 	static constexpr float FallbackZ = 120.f;
 
 	/**
-	 * Anchor center + Z FallbackZ. Unknown or empty anchor id is (0, 0, FallbackZ).
+	 * Anchor center + FallbackZ. Unknown or empty anchor id is (0, 0, FallbackZ).
 	 * Layout entries are territory anchors (FactionLayout).
-	 * ChoosePlayerStart does not use this when the map is empty. It uses EmptyMapStart.
+	 * This is the point FGFSpawnDefaults::StarterFallback returns for the same id.
+	 * ChoosePlayerStart uses it when the map has no PlayerStart.
 	 */
 	static FVector FallbackLocation(FName AnchorId, const TArray<FGFTerritoryFaction>& Layout);
 
-	/** Empty-map perch. (0, -300, 100), yaw 36. */
+	/** Ferry perch. (0, -300, 100), yaw 36. Not the no-PlayerStart spawn. */
 	static FVector DefaultPerchLocation();
 	static FRotator DefaultPerchRotation();
 	static FTransform EmptyMapStart();

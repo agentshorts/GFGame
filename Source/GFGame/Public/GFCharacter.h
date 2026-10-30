@@ -36,13 +36,13 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Camera")
 	TObjectPtr<UCameraComponent> FirstPersonCamera;
 
-	/** Idle / move on the skeletal mesh. Clips come from the Player.Base asset-map row. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Anim")
-	TObjectPtr<UGFSimpleAnimComponent> SimpleAnim;
-
 	/** Server RPCs for a ferry trip and a lifetime pass. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Ferry")
 	TObjectPtr<UGFFerryRiderComponent> FerryRider;
+
+	/** Idle / move on the skeletal mesh. Clips come from the Player.Base asset-map row. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Anim")
+	TObjectPtr<UGFSimpleAnimComponent> SimpleAnim;
 
 	UFUNCTION(BlueprintCallable, Category = "GF|Camera")
 	void SetFirstPerson(bool bEnable);

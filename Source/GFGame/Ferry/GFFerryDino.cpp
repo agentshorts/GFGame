@@ -149,6 +149,8 @@ UStaticMesh* AGFFerryDino::LoadStaticQuiet(const TCHAR* Path)
 
 void AGFFerryDino::ApplyBody()
 {
+	// Static placeholder only. ApplySkeletal would copy Dino.Ripwing's capsule offset and Idle/Run
+	// onto this actor. The ferry mesh is placed on the perch point, and the ferry clips are separate.
 	if (Body && !BodyAssetKey.IsNone())
 	{
 		FGFAssetMap::Apply(Body, BodyAssetKey);

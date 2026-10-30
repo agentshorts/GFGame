@@ -29,7 +29,9 @@ public:
 
 	/**
 	 * Faction anchor used when the map has no PlayerStart, or when a PlayerStart is tagged with this id.
-	 * A tagged start wins. Any other map PlayerStart still wins over the empty-map perch at (0, -300, 100), yaw 36.
+	 * Keep this equal to StarterFaction. A tagged start wins. Any other map PlayerStart still wins.
+	 * With no PlayerStart the player stands on that anchor's centre plus 120 cm (StarterFallback).
+	 * The ferry perch at (0, -300, 100), yaw 36, is not this spawn.
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "GF|Spawn")
 	FName DefaultSpawnAnchor;
