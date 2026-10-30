@@ -51,4 +51,4 @@ A UMG / Common UI pass replaces this canvas HUD later. That is a follow-up, not 
 
 ## Issue notes
 
-#105 was opened for the defaults above and points at work issue #82. Comments on #82 were rejected by the token (`Resource not accessible by integration`), so the start note and the final hash could not be posted there.
+#105 was opened for the defaults above and points at work issue #82. Comments on #82 were rejected by the token (`Resource not accessible by integration`). The finish note and hash `22a76e5` are on #110, which mentions #82.
