@@ -3,6 +3,7 @@
 // One mini-game gate. Portals stand on the ring around the Rime hub.
 // Markers stand on a mode map, or on a sim pad, and show that mode's name.
 // Missing gate art falls back to a tinted block so the gate still reads.
+// A sim pad sits outside the voxel floor, so its marker carries a solid slab.
 
 #include "CoreMinimal.h"
 #include "Engine/HitResult.h"
@@ -35,8 +36,9 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_Gate)
 	FName EntryId;
 
+	/** Not named Role: that would shadow AActor::Role and fail UHT. */
 	UPROPERTY(ReplicatedUsing = OnRep_Gate)
-	EGFMiniGameGateRole Role = EGFMiniGameGateRole::Portal;
+	EGFMiniGameGateRole GateRole = EGFMiniGameGateRole::Portal;
 
 	/** Rime anchor the ring and the pads were built from. */
 	UPROPERTY(ReplicatedUsing = OnRep_Gate)
@@ -55,6 +57,8 @@ public:
 	FText GetSignText() const;
 	bool IsUsingPlaceholder() const { return bUsingPlaceholder; }
 	UStaticMeshComponent* GetGateMesh() const { return Mesh; }
+	/** Solid floor under a sim-pad marker. Hidden and non-blocking on portals and mode-map signs. */
+	UStaticMeshComponent* GetPadFloor() const { return PadFloor; }
 
 private:
 	UFUNCTION()
@@ -71,6 +75,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UBoxComponent> Trigger;
+
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UStaticMeshComponent> PadFloor;
 
 	UPROPERTY(VisibleAnywhere)
 	FString Label;
