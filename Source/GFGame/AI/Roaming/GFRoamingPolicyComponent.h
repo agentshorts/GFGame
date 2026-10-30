@@ -11,7 +11,7 @@
 #include "GFRoamingPolicyComponent.generated.h"
 
 class AGFDino;
-class AGFPlayerState;
+class UGFTamingComponent;
 
 UCLASS(ClassGroup = (GF), meta = (BlueprintSpawnableComponent))
 class GFGAME_API UGFRoamingPolicyComponent : public UActorComponent
@@ -22,13 +22,14 @@ public:
 	UGFRoamingPolicyComponent();
 
 	/**
-	 * Adds the component if the dino does not already have one, then copies species (and the companion id,
-	 * when it has been tamed) off AGFDino. MemberId, when set, is kept if BindDino has no companion id.
+	 * Adds the component if the dino does not already have one, then copies species off AGFDino.
+	 * A valid companion id becomes the member id. Otherwise MemberId is kept when the caller set one.
+	 * Species is never used as an id: two wild dinos of the same species would not be unique.
 	 */
-	static UGFRoamingPolicyComponent* AttachToDino(AGFDino* Dino, const FGFDinoHomeZone& Home, FName HomeMap, FName MemberId = NAME_None);
+	static UGFRoamingPolicyComponent* AttachToDino(AGFDino* Dino, const FGFSafeCircles& Home, FName HomeMap, FName MemberId = NAME_None);
 
 	void BindDino(const AGFDino* Dino);
-	void SetHome(const FGFDinoHomeZone& Home, FName HomeMap);
+	void SetHome(const FGFSafeCircles& Home, FName HomeMap);
 	void SetSpecies(FName InSpecies);
 	void SetMemberId(FName InId);
 	void SetRevengeGang(bool bGang);
@@ -55,18 +56,18 @@ public:
 	const FGFRoamingPolicy& GetPolicy() const { return Policy; }
 
 	/**
-	 * Puts this dino on the board, up to the session player cap, and marks it revenge-gang.
-	 * SeatsPerFaction comes from GFRoamingLimits::SeatsPerFaction (AGFGameState::MaxPerFaction).
+	 * Puts this dino on the board and marks it revenge-gang. MaxPlayers <= 0 means no cap.
+	 * Pass GFRoamingLimits::MaxPlayers (AGameSession::MaxPlayers).
 	 */
-	bool JoinGang(const TSharedPtr<FGFRevengeGangBoard>& InBoard, int32 SeatsPerFaction, FName& OutCode);
+	bool JoinGang(const TSharedPtr<FGFRevengeGangBoard>& InBoard, int32 MaxPlayers, FName& OutCode);
 
 	/** Members pick up map access. Anyone else staying on this board remains home-leashed. */
 	bool AdoptBoard(const TSharedPtr<FGFRevengeGangBoard>& InBoard);
 
-	/** Server (or an unregistered component): copies PlayerKey, FactionId, and bIsHost onto the board. */
-	bool SetGangTargetFromPlayer(const AGFPlayerState* PS);
+	/** Server (or an unregistered component): copies Taming->GetTargetKey() onto the board. */
+	bool SetGangTargetFromTaming(const UGFTamingComponent* Taming);
 
-	FGFGangTarget GetGangTarget() const;
+	FString GetGangTargetKey() const;
 	TSharedPtr<FGFRevengeGangBoard> GetBoard() const { return Board; }
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Roaming")

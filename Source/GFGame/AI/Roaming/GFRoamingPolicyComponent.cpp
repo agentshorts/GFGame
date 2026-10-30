@@ -1,14 +1,13 @@
 #include "GFRoamingPolicyComponent.h"
 #include "GFDino.h"
 #include "GFTamingComponent.h"
-#include "GFPlayerState.h"
 
 UGFRoamingPolicyComponent::UGFRoamingPolicyComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
-UGFRoamingPolicyComponent* UGFRoamingPolicyComponent::AttachToDino(AGFDino* Dino, const FGFDinoHomeZone& Home, FName HomeMap, FName InMemberId)
+UGFRoamingPolicyComponent* UGFRoamingPolicyComponent::AttachToDino(AGFDino* Dino, const FGFSafeCircles& Home, FName HomeMap, FName InMemberId)
 {
 	if (!Dino)
 	{
@@ -40,14 +39,10 @@ void UGFRoamingPolicyComponent::BindDino(const AGFDino* Dino)
 	{
 		Policy.SetMemberId(FName(*Dino->Taming->CompanionId.ToString(EGuidFormats::Digits)));
 	}
-	else if (Policy.GetMemberId().IsNone() && !Dino->Taming->Species.IsNone())
-	{
-		Policy.SetMemberId(Dino->Taming->Species);
-	}
 	SyncView();
 }
 
-void UGFRoamingPolicyComponent::SetHome(const FGFDinoHomeZone& Home, FName HomeMap)
+void UGFRoamingPolicyComponent::SetHome(const FGFSafeCircles& Home, FName HomeMap)
 {
 	Policy.SetHome(Home, HomeMap);
 	SyncView();
@@ -81,14 +76,14 @@ bool UGFRoamingPolicyComponent::CanEnterMap(FName MapId) const
 	return CanEnter(FGFRoamMap(MapId));
 }
 
-bool UGFRoamingPolicyComponent::JoinGang(const TSharedPtr<FGFRevengeGangBoard>& InBoard, int32 SeatsPerFaction, FName& OutCode)
+bool UGFRoamingPolicyComponent::JoinGang(const TSharedPtr<FGFRevengeGangBoard>& InBoard, int32 MaxPlayers, FName& OutCode)
 {
 	if (!InBoard || Policy.GetMemberId().IsNone())
 	{
 		OutCode = GFRoamingCodes::NoDino();
 		return false;
 	}
-	if (!InBoard->TryAdd(Policy.GetMemberId(), Policy.GetSpecies(), SeatsPerFaction, OutCode))
+	if (!InBoard->TryAdd(Policy.GetMemberId(), Policy.GetSpecies(), MaxPlayers, OutCode))
 	{
 		return false;
 	}
@@ -111,9 +106,14 @@ bool UGFRoamingPolicyComponent::AdoptBoard(const TSharedPtr<FGFRevengeGangBoard>
 	return bMember;
 }
 
-bool UGFRoamingPolicyComponent::SetGangTargetFromPlayer(const AGFPlayerState* PS)
+bool UGFRoamingPolicyComponent::SetGangTargetFromTaming(const UGFTamingComponent* Taming)
 {
-	if (!Policy.IsRevengeGang() || !Board || !PS || PS->PlayerKey.IsEmpty())
+	if (!Policy.IsRevengeGang() || !Board || !Taming)
+	{
+		return false;
+	}
+	const FString Key = Taming->GetTargetKey();
+	if (Key.IsEmpty())
 	{
 		return false;
 	}
@@ -122,22 +122,30 @@ bool UGFRoamingPolicyComponent::SetGangTargetFromPlayer(const AGFPlayerState* PS
 	{
 		return false;
 	}
-	Board->SetTarget(FGFGangTarget::FromPlayer(*PS));
+	Board->SetTargetKey(Key);
 	SyncView();
 	return true;
 }
 
-FGFGangTarget UGFRoamingPolicyComponent::GetGangTarget() const
+FString UGFRoamingPolicyComponent::GetGangTargetKey() const
 {
-	return Board ? Board->GetTarget() : FGFGangTarget();
+	return Board ? Board->GetTargetKey() : FString();
 }
 
 void UGFRoamingPolicyComponent::SyncView()
 {
-	HomeZoneId = Policy.GetHome().ZoneId;
+	HomeZoneId = NAME_None;
+	for (const FGFSafeRegion& Region : Policy.GetHome().Regions)
+	{
+		if (!Region.Id.IsNone())
+		{
+			HomeZoneId = Region.Id;
+			break;
+		}
+	}
 	HomeMapId = Policy.GetHomeMap();
 	Species = Policy.GetSpecies();
 	MemberId = Policy.GetMemberId();
 	bRevengeGang = Policy.IsRevengeGang();
-	GangTargetKey = Board && Board->GetTarget().IsSet() ? Board->GetTarget().PlayerKey : FString();
+	GangTargetKey = Board ? Board->GetTargetKey() : FString();
 }

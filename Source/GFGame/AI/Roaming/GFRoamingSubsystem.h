@@ -1,8 +1,9 @@
 #pragma once
 
 // Holds the revenge-gang board on the game instance, which stays up across OpenLevel.
-// Travel calls BeginTravel before the map load and ConsumeTravel after it. The pending
-// FGFRoamingHandoff is the only copy that has to survive; BeginTravel drops the live board.
+// Travel calls BeginTravel before the map load and ConsumeTravel after it. BeginTravel runs
+// only when the traveller is the gang's target. The pending FGFRoamingHandoff is the only
+// copy that has to survive; BeginTravel drops the live board.
 // Same include-path note as GFRoamingPolicyComponent.h.
 
 #include "CoreMinimal.h"
@@ -23,10 +24,11 @@ public:
 	const FGFRoamingHandoff& GetPending() const { return Pending; }
 
 	/**
-	 * Copies the gang into Pending and releases the board. False when there is no target
-	 * (the board is left in place). Call before UGFMiniGameGateSubsystem opens its map.
+	 * Copies the gang into Pending and releases the board when TravellerKey is the gang's target.
+	 * Any other traveller leaves the board in place. Call on the server before OpenLevel.
+	 * A client travelling alone does not move this record; the server has to travel with them.
 	 */
-	bool BeginTravel(FName ToMap);
+	bool BeginTravel(FName ToMap, const FString& TravellerKey);
 
 	/**
 	 * Builds a new board from Pending and clears the record. False when nothing is pending,

@@ -26,9 +26,9 @@ TSharedPtr<FGFRevengeGangBoard> UGFRoamingSubsystem::EnsureBoard()
 	return Board;
 }
 
-bool UGFRoamingSubsystem::BeginTravel(FName ToMap)
+bool UGFRoamingSubsystem::BeginTravel(FName ToMap, const FString& TravellerKey)
 {
-	if (!Board)
+	if (!Board || TravellerKey.IsEmpty() || Board->GetTargetKey() != TravellerKey)
 	{
 		return false;
 	}

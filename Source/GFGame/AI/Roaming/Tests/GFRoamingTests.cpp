@@ -1,6 +1,7 @@
 // Home-zone leash, revenge-gang map access, and the travel hand-off.
-// Maps come from the gate subsystems (MOBA = UGFMobaGateSubsystem, platformer = Beat Hop).
-// Session size is faction count times AGFGameState::MaxPerFaction.
+// Map names come from the gate class defaults (MOBA = UGFMobaGateSubsystem, platformer = Beat Hop).
+// The roster cap is AGameSession::MaxPlayers. <= 0 means no cap.
+// Faction ids here are test-only (F1-F3). Production roaming code does not name factions.
 
 #include "Misc/AutomationTest.h"
 #include "../GFRoamingPolicyComponent.h"
@@ -13,11 +14,22 @@
 #include "GFTamingGateSubsystem.h"
 #include "GFFashionGateSubsystem.h"
 #include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "GameFramework/GameSession.h"
 #include "GameFramework/WorldSettings.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "UObject/StrongObjectPtr.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+
+/** Test-only faction ids. Opaque to production roaming code. */
+namespace GFRoamingTestFactions
+{
+	inline FName F1() { return TEXT("F1"); }
+	inline FName F2() { return TEXT("F2"); }
+	inline FName F3() { return TEXT("F3"); }
+}
 
 namespace GFRoamingTests
 {
@@ -32,20 +44,39 @@ namespace GFRoamingTests
 
 		FMaps()
 		{
-			Valley = NewObject<UGFTamingGateSubsystem>(GetTransientPackage())->GetMapName();
-			Arena = NewObject<UGFMobaGateSubsystem>(GetTransientPackage())->GetMapName();
-			Beat = NewObject<UGFBeatHopGateSubsystem>(GetTransientPackage())->GetMapName();
-			Runway = NewObject<UGFFashionGateSubsystem>(GetTransientPackage())->GetMapName();
+			Valley = GetDefault<UGFTamingGateSubsystem>()->GetMapName();
+			Arena = GetDefault<UGFMobaGateSubsystem>()->GetMapName();
+			Beat = GetDefault<UGFBeatHopGateSubsystem>()->GetMapName();
+			Runway = GetDefault<UGFFashionGateSubsystem>()->GetMapName();
 		}
 	};
 
-	static FGFDinoHomeZone DinoZoneHome()
+	/** UGameInstanceSubsystem refuses a transient-package outer on UE 5.8. */
+	struct FSubsystemOuter
 	{
-		FGFDinoHomeZone Zone;
-		Zone.ZoneId = FName(TEXT("DinoZone"));
-		Zone.Center = FVector::ZeroVector;
-		Zone.RadiusCm = 2000.f;
-		return Zone;
+		TStrongObjectPtr<UGameInstance> Instance;
+
+		FSubsystemOuter()
+		{
+			Instance.Reset(NewObject<UGameInstance>(GetTransientPackage()));
+		}
+
+		UGFRoamingSubsystem* NewTravel() const
+		{
+			return NewObject<UGFRoamingSubsystem>(Instance.Get());
+		}
+	};
+
+	static FGFSafeCircles DinoZoneHome()
+	{
+		FGFSafeRegion Region;
+		Region.Id = FName(TEXT("DinoZone"));
+		Region.Center = FVector::ZeroVector;
+		Region.Members = 1;
+		Region.BaseRadius = 2000.f;
+		Region.RadiusPerExtraMember = 0.f;
+		Region.MaxRadius = 2000.f;
+		return FGFSafeCircles({ Region });
 	}
 
 	static FGFRoamingPolicy HomeRaptor(FName HomeMap)
@@ -55,15 +86,6 @@ namespace GFRoamingTests
 		Policy.SetSpecies(FName(TEXT("Raptor")));
 		Policy.SetMemberId(FName(TEXT("Raptor.Home")));
 		return Policy;
-	}
-
-	static FGFGangTarget HostTarget()
-	{
-		FGFGangTarget Target;
-		Target.PlayerKey = TEXT("P1");
-		Target.FactionId = GFRoamingFactions::Cinderwrights();
-		Target.bIsHost = true;
-		return Target;
 	}
 }
 
@@ -172,15 +194,15 @@ bool FGFRoamingHandoffTest::RunTest(const FString&)
 {
 	using namespace GFRoamingTests;
 	const FMaps Maps;
-	const FGFGangTarget Target = HostTarget();
-	const int32 Seats = GFRoamingLimits::SeatsPerFaction(nullptr);
+	const FString Target = TEXT("P1");
+	const int32 Cap = GFRoamingLimits::MaxPlayers(nullptr);
 
 	TSharedPtr<FGFRevengeGangBoard> Live = MakeShared<FGFRevengeGangBoard>();
 	Live->SetMap(Maps.Valley);
-	Live->SetTarget(Target);
+	Live->SetTargetKey(Target);
 	FName Code = NAME_None;
-	TestTrue(TEXT("Raptor joins"), Live->TryAdd(FName(TEXT("Raptor.1")), FName(TEXT("Raptor")), Seats, Code));
-	TestTrue(TEXT("Rex joins"), Live->TryAdd(FName(TEXT("Rex.1")), FName(TEXT("Rex")), Seats, Code));
+	TestTrue(TEXT("Raptor joins"), Live->TryAdd(FName(TEXT("Raptor.1")), FName(TEXT("Raptor")), Cap, Code));
+	TestTrue(TEXT("Rex joins"), Live->TryAdd(FName(TEXT("Rex.1")), FName(TEXT("Rex")), Cap, Code));
 
 	FGFRoamingHandoff Record = Live->ExportHandoff(Maps.Beat);
 	Live.Reset();
@@ -188,36 +210,38 @@ bool FGFRoamingHandoffTest::RunTest(const FString&)
 	TestTrue(TEXT("Record is waiting for travel"), Record.bPending);
 	TestEqual(TEXT("Left the valley"), Record.FromMap, Maps.Valley);
 	TestEqual(TEXT("Going to Beat Hop"), Record.ToMap, Maps.Beat);
-	TestTrue(TEXT("Target copied"), Record.Target.SameAs(Target));
+	TestEqual(TEXT("Target copied"), Record.TargetKey, Target);
 	TestEqual(TEXT("Both members copied"), Record.Members.Num(), 2);
 
 	FGFRevengeGangBoard Arrived;
 	TestTrue(TEXT("Destination consumes the record"), Arrived.ConsumeHandoff(Record));
 	TestFalse(TEXT("Record is spent"), Record.bPending);
-	TestTrue(TEXT("Target survived the map change"), Arrived.GetTarget().SameAs(Target));
+	TestEqual(TEXT("Target survived the map change"), Arrived.GetTargetKey(), Target);
 	TestEqual(TEXT("Board is on Beat Hop"), Arrived.GetMap(), Maps.Beat);
 	TestTrue(TEXT("Raptor still a member"), Arrived.Contains(FName(TEXT("Raptor.1"))));
 	TestTrue(TEXT("Rex still a member"), Arrived.Contains(FName(TEXT("Rex.1"))));
 	TestFalse(TEXT("Second consume does nothing"), Arrived.ConsumeHandoff(Record));
-	TestTrue(TEXT("Target still the host"), Arrived.GetTarget().SameAs(Target));
-	TestTrue(TEXT("Host flag kept"), Arrived.GetTarget().bIsHost);
-	TestEqual(TEXT("Faction kept"), Arrived.GetTarget().FactionId, GFRoamingFactions::Cinderwrights());
+	TestEqual(TEXT("Target still set"), Arrived.GetTargetKey(), Target);
 
-	UGFRoamingSubsystem* Travel = NewObject<UGFRoamingSubsystem>(GetTransientPackage());
+	const FSubsystemOuter Outer;
+	UGFRoamingSubsystem* Travel = Outer.NewTravel();
 	TSharedPtr<FGFRevengeGangBoard> Board = Travel->EnsureBoard();
 	Board->SetMap(Maps.Valley);
-	Board->SetTarget(Target);
-	TestTrue(TEXT("Subsystem roster"), Board->TryAdd(FName(TEXT("Raptor.1")), FName(TEXT("Raptor")), Seats, Code));
-	TestTrue(TEXT("Begin travel"), Travel->BeginTravel(Maps.Beat));
+	Board->SetTargetKey(Target);
+	TestTrue(TEXT("Subsystem roster"), Board->TryAdd(FName(TEXT("Raptor.1")), FName(TEXT("Raptor")), Cap, Code));
+	TestFalse(TEXT("Someone else travelling leaves the gang"), Travel->BeginTravel(Maps.Beat, TEXT("P2")));
+	TestTrue(TEXT("Board kept for another traveller"), Travel->GetBoard().IsValid());
+	TestFalse(TEXT("Pending stays clear"), Travel->GetPending().bPending);
+	TestTrue(TEXT("Begin travel when the target goes"), Travel->BeginTravel(Maps.Beat, Target));
 	Board.Reset();
 	TestFalse(TEXT("Live board dropped"), Travel->GetBoard().IsValid());
-	TestTrue(TEXT("Pending target"), Travel->GetPending().bPending && Travel->GetPending().Target.SameAs(Target));
+	TestTrue(TEXT("Pending target"), Travel->GetPending().bPending && Travel->GetPending().TargetKey == Target);
 	TestTrue(TEXT("Consume travel"), Travel->ConsumeTravel());
 	TestFalse(TEXT("Pending cleared"), Travel->GetPending().bPending);
-	TestTrue(TEXT("New board has the target"), Travel->GetBoard().IsValid() && Travel->GetBoard()->GetTarget().SameAs(Target));
+	TestTrue(TEXT("New board has the target"), Travel->GetBoard().IsValid() && Travel->GetBoard()->GetTargetKey() == Target);
 	TestEqual(TEXT("New board map"), Travel->GetBoard()->GetMap(), Maps.Beat);
 	TestFalse(TEXT("Consume again is a no-op"), Travel->ConsumeTravel());
-	TestTrue(TEXT("Target remains after the extra consume"), Travel->GetBoard()->GetTarget().SameAs(Target));
+	TestEqual(TEXT("Target remains after the extra consume"), Travel->GetBoard()->GetTargetKey(), Target);
 
 	UGFRoamingPolicyComponent* Gang = NewObject<UGFRoamingPolicyComponent>(GetTransientPackage());
 	Gang->SetMemberId(FName(TEXT("Raptor.1")));
@@ -227,7 +251,7 @@ bool FGFRoamingHandoffTest::RunTest(const FString&)
 	TestTrue(TEXT("Adopted member is gang"), Gang->IsRevengeGang());
 	TestTrue(TEXT("Adopted member enters Beat Hop"), Gang->CanEnter(FGFRoamMap(Maps.Beat)));
 	TestTrue(TEXT("Adopted member enters the MOBA"), Gang->CanEnterMap(Maps.Arena));
-	TestTrue(TEXT("Component still names the host"), Gang->GetGangTarget().SameAs(Target));
+	TestEqual(TEXT("Component still names the target"), Gang->GetGangTargetKey(), Target);
 
 	UGFRoamingPolicyComponent* Nipper = NewObject<UGFRoamingPolicyComponent>(GetTransientPackage());
 	Nipper->SetMemberId(FName(TEXT("Nipper.1")));
@@ -237,9 +261,10 @@ bool FGFRoamingHandoffTest::RunTest(const FString&)
 	TestFalse(TEXT("Nipper is not gang"), Nipper->IsRevengeGang());
 	TestFalse(TEXT("Nipper still refused on Beat Hop"), Nipper->CanEnter(FGFRoamMap(Maps.Beat)));
 
-	UGFRoamingSubsystem* Idle = NewObject<UGFRoamingSubsystem>(GetTransientPackage());
+	const FSubsystemOuter IdleOuter;
+	UGFRoamingSubsystem* Idle = IdleOuter.NewTravel();
 	Idle->EnsureBoard();
-	TestFalse(TEXT("No target, no hand-off"), Idle->BeginTravel(Maps.Beat));
+	TestFalse(TEXT("No target, no hand-off"), Idle->BeginTravel(Maps.Beat, Target));
 	TestTrue(TEXT("Board kept when travel has nothing to carry"), Idle->GetBoard().IsValid());
 	return true;
 }
@@ -247,44 +272,63 @@ bool FGFRoamingHandoffTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFRoamingSessionCapTest, "GFGame.Roaming.SessionCap", GFRoamingTests::Flags)
 bool FGFRoamingSessionCapTest::RunTest(const FString&)
 {
-	const int32 Seats = GFRoamingLimits::SeatsPerFaction(nullptr);
-	const AGFGameState* Defaults = GetDefault<AGFGameState>();
-	if (!TestNotNull(TEXT("Game state defaults"), Defaults))
+	const AGameSession* Session = GetDefault<AGameSession>();
+	if (!TestNotNull(TEXT("Game session defaults"), Session))
 	{
 		return false;
 	}
-	TestEqual(TEXT("Seats are MaxPerFaction"), Seats, Defaults->MaxPerFaction);
-	TestTrue(TEXT("Seats read from the class default"), Seats > 0);
-	const int32 Cap = GFRoamingLimits::MaxSessionPlayers(Seats);
-	TestEqual(TEXT("Cap is factions times seats"), Cap, GFRoamingFactions::Count() * Seats);
-	TestEqual(TEXT("Cap follows the seat count"), GFRoamingLimits::MaxSessionPlayers(Seats + 1), GFRoamingFactions::Count() * (Seats + 1));
-	TestTrue(TEXT("Cinderwrights"), GFRoamingFactions::All().Contains(GFRoamingFactions::Cinderwrights()));
-	TestTrue(TEXT("Verdant"), GFRoamingFactions::All().Contains(GFRoamingFactions::Verdant()));
-	TestTrue(TEXT("Rime"), GFRoamingFactions::All().Contains(GFRoamingFactions::Rime()));
+	const int32 Cap = GFRoamingLimits::MaxPlayers(nullptr);
+	TestEqual(TEXT("Cap is MaxPlayers"), Cap, Session->MaxPlayers);
 
-	FGFRevengeGangBoard Board;
 	FName Code = NAME_None;
-	int32 Added = 0;
-	for (int32 Index = 0; Index < Cap; ++Index)
+	FGFRevengeGangBoard Open;
+	const int32 Uncapped = FMath::Max(Cap, 0) + 3;
+	int32 OpenAdded = 0;
+	for (int32 Index = 0; Index < Uncapped; ++Index)
 	{
-		const FName Id(*FString::Printf(TEXT("Raptor.%d"), Index));
-		if (Board.TryAdd(Id, FName(TEXT("Raptor")), Seats, Code))
+		const FName Id(*FString::Printf(TEXT("Raptor.Open.%d"), Index));
+		if (Open.TryAdd(Id, FName(TEXT("Raptor")), 0, Code))
 		{
-			++Added;
+			++OpenAdded;
 		}
 	}
-	TestEqual(TEXT("Roster fills the session"), Added, Cap);
-	TestEqual(TEXT("Last add ok"), Code, GFRoamingCodes::Ok());
-	TestFalse(TEXT("One past the cap is refused"), Board.TryAdd(FName(TEXT("Rex.Extra")), FName(TEXT("Rex")), Seats, Code));
-	TestEqual(TEXT("Full"), Code, GFRoamingCodes::Full());
-	TestEqual(TEXT("Full roster unchanged"), Board.GetMembers().Num(), Cap);
+	TestEqual(TEXT("Zero is no cap"), OpenAdded, Uncapped);
+	TestEqual(TEXT("Zero stays ok"), Code, GFRoamingCodes::Ok());
+	TestTrue(TEXT("Negative is no cap"), Open.TryAdd(FName(TEXT("Rex.Open")), FName(TEXT("Rex")), -1, Code));
+	TestEqual(TEXT("Negative stays ok"), Code, GFRoamingCodes::Ok());
+
 	if (Cap > 0)
 	{
-		TestTrue(TEXT("Same id is not a second seat"), Board.TryAdd(FName(TEXT("Raptor.0")), FName(TEXT("Raptor")), Seats, Code));
+		FGFRevengeGangBoard Board;
+		int32 Added = 0;
+		for (int32 Index = 0; Index < Cap; ++Index)
+		{
+			const FName Id(*FString::Printf(TEXT("Raptor.%d"), Index));
+			if (Board.TryAdd(Id, FName(TEXT("Raptor")), Cap, Code))
+			{
+				++Added;
+			}
+		}
+		TestEqual(TEXT("Roster fills MaxPlayers"), Added, Cap);
+		TestEqual(TEXT("Last add ok"), Code, GFRoamingCodes::Ok());
+		TestFalse(TEXT("One past the cap is refused"), Board.TryAdd(FName(TEXT("Rex.Extra")), FName(TEXT("Rex")), Cap, Code));
+		TestEqual(TEXT("Full"), Code, GFRoamingCodes::Full());
+		TestEqual(TEXT("Full roster unchanged"), Board.GetMembers().Num(), Cap);
+		TestTrue(TEXT("Same id is not a second seat"), Board.TryAdd(FName(TEXT("Raptor.0")), FName(TEXT("Raptor")), Cap, Code));
 		TestEqual(TEXT("Already"), Code, GFRoamingCodes::Already());
 		TestEqual(TEXT("Still at the cap"), Board.GetMembers().Num(), Cap);
 	}
-	TestFalse(TEXT("Missing id"), Board.TryAdd(NAME_None, FName(TEXT("Raptor")), Seats, Code));
+	else
+	{
+		FGFRevengeGangBoard Board;
+		TestTrue(TEXT("Uncapped default adds"), Board.TryAdd(FName(TEXT("Raptor.0")), FName(TEXT("Raptor")), Cap, Code));
+		TestTrue(TEXT("Uncapped default keeps adding"), Board.TryAdd(FName(TEXT("Rex.Extra")), FName(TEXT("Rex")), Cap, Code));
+		TestEqual(TEXT("Uncapped default is not full"), Code, GFRoamingCodes::Ok());
+		TestEqual(TEXT("Both members kept"), Board.GetMembers().Num(), 2);
+	}
+
+	FGFRevengeGangBoard Missing;
+	TestFalse(TEXT("Missing id"), Missing.TryAdd(NAME_None, FName(TEXT("Raptor")), Cap, Code));
 	TestEqual(TEXT("No dino"), Code, GFRoamingCodes::NoDino());
 	return true;
 }
@@ -338,36 +382,60 @@ bool FGFRoamingBindTest::RunTest(const FString&)
 
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	AGFPlayerState* Host = World->SpawnActor<AGFPlayerState>(AGFPlayerState::StaticClass(), FTransform::Identity, Params);
-	if (!TestNotNull(TEXT("Host"), Host))
+	auto SpawnPlayer = [&](const TCHAR* Key, int32 PlayerId, FName Faction) -> AGFPlayerState*
+	{
+		AGFPlayerState* PS = World->SpawnActor<AGFPlayerState>(AGFPlayerState::StaticClass(), FTransform::Identity, Params);
+		if (!PS)
+		{
+			return nullptr;
+		}
+		PS->PlayerKey = Key;
+		PS->bIsHost = PlayerId == 101;
+		PS->SetPlayerId(PlayerId);
+		PS->SetPlayerName(Key);
+		if (GS->PlayerArray.Find(PS) == INDEX_NONE)
+		{
+			GS->AddPlayerState(PS);
+		}
+		TestEqual(TEXT("Claims a test faction"), GS->ServerClaimFaction(PS, Faction), FName(TEXT("Ok")));
+		return PS;
+	};
+	AGFPlayerState* Host = SpawnPlayer(TEXT("P1"), 101, GFRoamingTestFactions::F1());
+	AGFPlayerState* Guest = SpawnPlayer(TEXT("P2"), 102, GFRoamingTestFactions::F2());
+	AGFPlayerState* Third = SpawnPlayer(TEXT("P3"), 103, GFRoamingTestFactions::F3());
+	if (!TestNotNull(TEXT("Host"), Host) || !TestNotNull(TEXT("Guest"), Guest) || !TestNotNull(TEXT("Third"), Third))
 	{
 		return false;
 	}
-	Host->PlayerKey = TEXT("P1");
-	Host->bIsHost = true;
-	Host->SetPlayerId(101);
-	Host->SetPlayerName(TEXT("P1"));
-	if (GS->PlayerArray.Find(Host) == INDEX_NONE)
-	{
-		GS->AddPlayerState(Host);
-	}
-	TestEqual(TEXT("Claims Cinderwrights"), GS->ServerClaimFaction(Host, GFRoamingFactions::Cinderwrights()), FName(TEXT("Ok")));
+	TestEqual(TEXT("F1"), Host->FactionId, GFRoamingTestFactions::F1());
+	TestEqual(TEXT("F2"), Guest->FactionId, GFRoamingTestFactions::F2());
+	TestEqual(TEXT("F3"), Third->FactionId, GFRoamingTestFactions::F3());
 
 	const FVector SpawnAt(0.f, 0.f, 100.f);
 	FActorSpawnParameters Deferred = Params;
 	Deferred.bDeferConstruction = true;
-	AGFDino* Dino = World->SpawnActor<AGFDino>(AGFDino::StaticClass(), SpawnAt, FRotator::ZeroRotator, Deferred);
-	if (!TestNotNull(TEXT("Raptor"), Dino))
+	auto SpawnDino = [&](const FVector& At) -> AGFDino*
+	{
+		AGFDino* Dino = World->SpawnActor<AGFDino>(AGFDino::StaticClass(), At, FRotator::ZeroRotator, Deferred);
+		if (!Dino)
+		{
+			return nullptr;
+		}
+		Dino->AutoPossessAI = EAutoPossessAI::Disabled;
+		Dino->FinishSpawning(FTransform(FRotator::ZeroRotator, At));
+		Dino->SetSpecies(FName(TEXT("Raptor")));
+		if (UCharacterMovementComponent* Move = Dino->GetCharacterMovement())
+		{
+			Move->DisableMovement();
+			Move->GravityScale = 0.f;
+		}
+		return Dino;
+	};
+
+	AGFDino* Dino = SpawnDino(SpawnAt);
+	if (!TestNotNull(TEXT("Raptor"), Dino) || !TestNotNull(TEXT("Taming"), Dino->Taming))
 	{
 		return false;
-	}
-	Dino->AutoPossessAI = EAutoPossessAI::Disabled;
-	Dino->FinishSpawning(FTransform(FRotator::ZeroRotator, SpawnAt));
-	Dino->SetSpecies(FName(TEXT("Raptor")));
-	if (UCharacterMovementComponent* Move = Dino->GetCharacterMovement())
-	{
-		Move->DisableMovement();
-		Move->GravityScale = 0.f;
 	}
 
 	const FMaps Maps;
@@ -380,21 +448,43 @@ bool FGFRoamingBindTest::RunTest(const FString&)
 	TestEqual(TEXT("Species from the dino"), Comp->GetSpecies(), FName(TEXT("Raptor")));
 	TestEqual(TEXT("Stable member id"), Comp->GetMemberId(), MemberId);
 
-	UGFRoamingSubsystem* Travel = NewObject<UGFRoamingSubsystem>(GetTransientPackage());
-	FName Code = NAME_None;
-	const int32 Seats = GFRoamingLimits::SeatsPerFaction(GS);
-	TestTrue(TEXT("Joins the gang"), Comp->JoinGang(Travel->EnsureBoard(), Seats, Code));
-	TestTrue(TEXT("Target is the host player"), Comp->SetGangTargetFromPlayer(Host));
-	TestTrue(TEXT("Target matches the player state"), Comp->GetGangTarget().SameAs(FGFGangTarget::FromPlayer(*Host)));
-	TestTrue(TEXT("Find before travel"), GFRoamingBind::FindTarget(*GS, Comp->GetGangTarget()) == Host);
+	AGFDino* Twin = SpawnDino(SpawnAt + FVector(200.f, 0.f, 0.f));
+	if (!TestNotNull(TEXT("Second raptor"), Twin))
+	{
+		return false;
+	}
+	UGFRoamingPolicyComponent* NoId = UGFRoamingPolicyComponent::AttachToDino(Twin, DinoZoneHome(), Maps.Valley);
+	if (!TestNotNull(TEXT("Second roaming component"), NoId))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Species copied"), NoId->GetSpecies(), FName(TEXT("Raptor")));
+	TestTrue(TEXT("Species is not a member id"), NoId->GetMemberId().IsNone());
 
-	TestTrue(TEXT("Travel to Beat Hop"), Travel->BeginTravel(Maps.Beat));
+	const FSubsystemOuter Outer;
+	UGFRoamingSubsystem* Travel = Outer.NewTravel();
+	FName Code = NAME_None;
+	const int32 Cap = GFRoamingLimits::MaxPlayers(GS);
+	TestTrue(TEXT("Joins the gang"), Comp->JoinGang(Travel->EnsureBoard(), Cap, Code));
+	TestFalse(TEXT("No taming target yet"), Comp->SetGangTargetFromTaming(Dino->Taming));
+	Dino->Taming->ServerForceHostile(Host->PlayerKey);
+	TestEqual(TEXT("Taming target is the host"), Dino->Taming->GetTargetKey(), Host->PlayerKey);
+	TestTrue(TEXT("Gang takes the taming target"), Comp->SetGangTargetFromTaming(Dino->Taming));
+	TestEqual(TEXT("Target key"), Comp->GetGangTargetKey(), Host->PlayerKey);
+	TestTrue(TEXT("Find before travel"), GFRoamingBind::FindTarget(*GS, Comp->GetGangTargetKey()) == Host);
+	TestTrue(TEXT("Guest is not the target"), GFRoamingBind::FindTarget(*GS, Guest->PlayerKey) == Guest);
+	TestTrue(TEXT("Gang is not chasing the guest"), Comp->GetGangTargetKey() != Guest->PlayerKey);
+
+	TestFalse(TEXT("Guest travelling does not take the gang"), Travel->BeginTravel(Maps.Beat, Guest->PlayerKey));
+	TestTrue(TEXT("Board kept"), Travel->GetBoard().IsValid());
+	TestTrue(TEXT("Travel to Beat Hop with the target"), Travel->BeginTravel(Maps.Beat, Host->PlayerKey));
 	TestTrue(TEXT("Arrive"), Travel->ConsumeTravel());
 	if (!TestNotNull(TEXT("Board after travel"), Travel->GetBoard().Get()))
 	{
 		return false;
 	}
-	TestTrue(TEXT("Host still the target"), GFRoamingBind::FindTarget(*GS, Travel->GetBoard()->GetTarget()) == Host);
+	TestEqual(TEXT("Target key survived"), Travel->GetBoard()->GetTargetKey(), Host->PlayerKey);
+	TestTrue(TEXT("Host still the target"), GFRoamingBind::FindTarget(*GS, Travel->GetBoard()->GetTargetKey()) == Host);
 
 	UGFRoamingPolicyComponent* Arrived = NewObject<UGFRoamingPolicyComponent>(GetTransientPackage());
 	Arrived->SetMemberId(MemberId);
@@ -403,11 +493,14 @@ bool FGFRoamingBindTest::RunTest(const FString&)
 	TestTrue(TEXT("Respawned member adopts"), Arrived->AdoptBoard(Travel->GetBoard()));
 	TestTrue(TEXT("Follows onto the platformer"), Arrived->CanEnter(FGFRoamMap(Maps.Beat)));
 	TestTrue(TEXT("And the MOBA"), Arrived->CanEnter(FGFRoamMap(Maps.Arena)));
+	TestEqual(TEXT("Adopted component keeps the key"), Arrived->GetGangTargetKey(), Host->PlayerKey);
 
-	Host->FactionId = GFRoamingFactions::Verdant();
-	TestTrue(TEXT("Faction drift drops the bind"), GFRoamingBind::FindTarget(*GS, Arrived->GetGangTarget()) == nullptr);
-	Host->FactionId = GFRoamingFactions::Cinderwrights();
-	TestTrue(TEXT("Faction restored"), GFRoamingBind::FindTarget(*GS, Arrived->GetGangTarget()) == Host);
+	Host->FactionId = GFRoamingTestFactions::F3();
+	TestTrue(TEXT("Faction change keeps the bind"), GFRoamingBind::FindTarget(*GS, Arrived->GetGangTargetKey()) == Host);
+	Host->bLoggedOut = true;
+	TestTrue(TEXT("Logged-out player is not a target"), GFRoamingBind::FindTarget(*GS, Arrived->GetGangTargetKey()) == nullptr);
+	Host->bLoggedOut = false;
+	TestTrue(TEXT("Login restores the bind"), GFRoamingBind::FindTarget(*GS, Arrived->GetGangTargetKey()) == Host);
 	return true;
 }
 

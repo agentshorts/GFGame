@@ -1,27 +1,29 @@
 #include "GFRoamingPolicy.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
+#include "GameFramework/GameModeBase.h"
+#include "GameFramework/GameSession.h"
 
-bool FGFDinoHomeZone::Contains(const FVector& Point) const
+namespace
 {
-	const float Radius = FMath::Max(0.f, RadiusCm);
-	return FVector::DistSquared2D(Point, Center) <= FMath::Square(Radius);
-}
-
-FVector FGFDinoHomeZone::Clamp(const FVector& Point) const
-{
-	const float Radius = FMath::Max(0.f, RadiusCm);
-	const FVector2D Delta(Point.X - Center.X, Point.Y - Center.Y);
-	const float Dist = Delta.Size();
-	if (Dist <= Radius || Dist < KINDA_SMALL_NUMBER)
+	bool HomeNamesZone(const FGFSafeCircles& Home, FName ZoneId)
 	{
-		return Point;
+		if (ZoneId.IsNone())
+		{
+			return false;
+		}
+		for (const FGFSafeRegion& Region : Home.Regions)
+		{
+			if (!Region.Id.IsNone() && Region.Id == ZoneId)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
-	const FVector2D Edge = FVector2D(Center.X, Center.Y) + Delta * (Radius / Dist);
-	return FVector(Edge.X, Edge.Y, Point.Z);
 }
 
-void FGFRoamingPolicy::SetHome(const FGFDinoHomeZone& InHome, FName InHomeMap)
+void FGFRoamingPolicy::SetHome(const FGFSafeCircles& InHome, FName InHomeMap)
 {
 	Home = InHome;
 	HomeMap = InHomeMap;
@@ -33,7 +35,7 @@ bool FGFRoamingPolicy::CanEnter(const FGFRoamZone& Zone) const
 	{
 		return true;
 	}
-	return !Home.ZoneId.IsNone() && Zone.Id == Home.ZoneId;
+	return HomeNamesZone(Home, Zone.Id);
 }
 
 bool FGFRoamingPolicy::CanEnter(const FGFRoamMap& Map) const
@@ -51,7 +53,7 @@ bool FGFRoamingPolicy::CanPathTo(const FVector& Goal) const
 	{
 		return true;
 	}
-	return Home.Contains(Goal);
+	return Home.IsInsideSafe(Goal);
 }
 
 bool FGFRoamingPolicy::CanFollow(const FGFRoamZone& Zone, const FGFRoamMap& Map) const
@@ -65,7 +67,7 @@ FVector FGFRoamingPolicy::ClampFollowGoal(const FVector& Goal) const
 	{
 		return Goal;
 	}
-	return Home.Clamp(Goal);
+	return Home.ClosestSafePoint(Goal);
 }
 
 FGFFollowDecision FGFRoamingPolicy::DecideFollow(const FVector& RawGoal, const FGFRoamZone& Zone, const FGFRoamMap& Map) const
@@ -95,7 +97,7 @@ bool FGFRevengeGangBoard::Contains(FName DinoId) const
 	return Members.ContainsByPredicate([DinoId](const FGFRoamingMember& Member) { return Member.Id == DinoId; });
 }
 
-bool FGFRevengeGangBoard::TryAdd(FName DinoId, FName Species, int32 SeatsPerFaction, FName& OutCode)
+bool FGFRevengeGangBoard::TryAdd(FName DinoId, FName Species, int32 MaxPlayers, FName& OutCode)
 {
 	if (DinoId.IsNone())
 	{
@@ -107,7 +109,7 @@ bool FGFRevengeGangBoard::TryAdd(FName DinoId, FName Species, int32 SeatsPerFact
 		OutCode = GFRoamingCodes::Already();
 		return true;
 	}
-	if (Members.Num() >= GFRoamingLimits::MaxSessionPlayers(SeatsPerFaction))
+	if (MaxPlayers > 0 && Members.Num() >= MaxPlayers)
 	{
 		OutCode = GFRoamingCodes::Full();
 		return false;
@@ -125,78 +127,48 @@ FGFRoamingHandoff FGFRevengeGangBoard::ExportHandoff(FName ToMap) const
 	FGFRoamingHandoff Handoff;
 	Handoff.FromMap = CurrentMap;
 	Handoff.ToMap = ToMap;
-	Handoff.Target = Target;
+	Handoff.TargetKey = TargetKey;
 	Handoff.Members = Members;
-	Handoff.bPending = Target.IsSet();
+	Handoff.bPending = HasTarget();
 	return Handoff;
 }
 
 bool FGFRevengeGangBoard::ConsumeHandoff(FGFRoamingHandoff& Record)
 {
-	if (!Record.bPending || !Record.Target.IsSet())
+	if (!Record.bPending || Record.TargetKey.IsEmpty())
 	{
 		return false;
 	}
-	Target = Record.Target;
+	TargetKey = Record.TargetKey;
 	Members = Record.Members;
 	CurrentMap = Record.ToMap;
 	Record.bPending = false;
 	return true;
 }
 
-FGFGangTarget FGFGangTarget::FromPlayer(const AGFPlayerState& PS)
+int32 GFRoamingLimits::MaxPlayers(const AGFGameState* GS)
 {
-	FGFGangTarget Target;
-	Target.PlayerKey = PS.PlayerKey;
-	Target.FactionId = PS.FactionId;
-	Target.bIsHost = PS.bIsHost;
-	return Target;
+	if (GS)
+	{
+		const UWorld* World = GS->GetWorld();
+		const AGameModeBase* GM = World ? World->GetAuthGameMode() : nullptr;
+		if (GM && GM->GameSession)
+		{
+			return GM->GameSession->MaxPlayers;
+		}
+	}
+	const AGameSession* Defaults = GetDefault<AGameSession>();
+	return Defaults ? Defaults->MaxPlayers : 0;
 }
 
-FName GFRoamingFactions::Cinderwrights()
+AGFPlayerState* GFRoamingBind::FindTarget(const AGFGameState& GS, const FString& TargetKey)
 {
-	return FName(TEXT("Cinderwrights"));
-}
-
-FName GFRoamingFactions::Verdant()
-{
-	return FName(TEXT("Verdant"));
-}
-
-FName GFRoamingFactions::Rime()
-{
-	return FName(TEXT("Rime"));
-}
-
-const TArray<FName>& GFRoamingFactions::All()
-{
-	static const TArray<FName> Names = { Cinderwrights(), Verdant(), Rime() };
-	return Names;
-}
-
-int32 GFRoamingLimits::SeatsPerFaction(const AGFGameState* GS)
-{
-	const AGFGameState* Source = GS ? GS : GetDefault<AGFGameState>();
-	return Source ? Source->MaxPerFaction : 0;
-}
-
-int32 GFRoamingLimits::MaxSessionPlayers(int32 InSeatsPerFaction)
-{
-	return GFRoamingFactions::Count() * FMath::Max(0, InSeatsPerFaction);
-}
-
-AGFPlayerState* GFRoamingBind::FindTarget(const AGFGameState& GS, const FGFGangTarget& Target)
-{
-	if (!Target.IsSet())
+	if (TargetKey.IsEmpty())
 	{
 		return nullptr;
 	}
-	AGFPlayerState* PS = GS.FindPlayerByKey(Target.PlayerKey);
-	if (!PS || PS->bLoggedOut || PS->bIsHost != Target.bIsHost)
-	{
-		return nullptr;
-	}
-	if (!Target.FactionId.IsNone() && PS->FactionId != Target.FactionId)
+	AGFPlayerState* PS = GS.FindPlayerByKey(TargetKey);
+	if (!PS || PS->bLoggedOut)
 	{
 		return nullptr;
 	}
