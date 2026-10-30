@@ -12,12 +12,14 @@ class UGFInventoryComponent;
 class UGFSimpleAnimComponent;
 class UGFFerryRiderComponent;
 class AGFVoxelWorld;
+class UGFCharacterMovementComponent;
 struct FInputActionValue;
 
 /**
  * The player character. Third-person by default (spring arm ~450 cm, pitch ~-20, FOV 90 per ASSET_BRIEFS),
  * V toggles first-person. LMB removes a block, RMB places the selected block, wheel cycles the hotbar.
  * Input assets are optional: if none are assigned, a default mapping is built in C++ at runtime.
+ * Shift sprints and Ctrl dashes through UGFCharacterMovementComponent. MaxWalkSpeed stays the base run.
  */
 UCLASS(Config = Game)
 class GFGAME_API AGFCharacter : public ACharacter
@@ -25,7 +27,9 @@ class GFGAME_API AGFCharacter : public ACharacter
 	GENERATED_BODY()
 
 public:
-	AGFCharacter();
+	AGFCharacter(const FObjectInitializer& ObjectInitializer);
+
+	UGFCharacterMovementComponent* GetGFMovement() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Camera")
 	TObjectPtr<USpringArmComponent> SpringArm;
@@ -89,6 +93,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> RemoveAction;
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> ToggleViewAction;
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> HotbarAction;
+	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> SprintAction;
+	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> DashAction;
 
 protected:
 	virtual void BeginPlay() override;
@@ -106,6 +112,9 @@ protected:
 	void OnPlace(const FInputActionValue& Value);
 	void OnRemove(const FInputActionValue& Value);
 	void OnHotbar(const FInputActionValue& Value);
+	void OnSprint(const FInputActionValue& Value);
+	void OnSprintStopped(const FInputActionValue& Value);
+	void OnDash(const FInputActionValue& Value);
 
 	bool bFirstPerson = false;
 };

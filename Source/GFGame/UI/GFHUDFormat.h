@@ -32,7 +32,7 @@ namespace GFHUD
 
 	inline const TCHAR* ControlsHint()
 	{
-		return TEXT("WASD move, Space jump, LMB dig, RMB place, wheel block, V view, Enter chat");
+		return TEXT("WASD move, Shift sprint, Ctrl dash, Space jump, LMB dig, RMB place, wheel block, V view, Enter chat");
 	}
 }
 

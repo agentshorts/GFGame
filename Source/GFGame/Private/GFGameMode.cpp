@@ -16,7 +16,10 @@
 #include "GFShardhop.h"
 #include "GFZoneCatalog.h"
 #include "GFRecipeTypes.h"
+#include "GFKindleRing.h"
 #include "GFLog.h"
+#include "GFMovementPolicy.h"
+#include "GFMovementTuning.h"
 #include "Engine/DataTable.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -24,6 +27,34 @@
 #include "GameFramework/PlayerStart.h"
 #include "GameFramework/GameSession.h"
 #include "TimerManager.h"
+
+namespace GFGameModeKindleSpawn
+{
+	void GFEnsureHubKindleRing(const AGFGameMode* Mode)
+	{
+		UWorld* World = Mode ? Mode->GetWorld() : nullptr;
+		if (!World || World->GetNetMode() == NM_Client || GFMovementPolicy::IsMiniGameWorld(World))
+		{
+			return;
+		}
+		for (TActorIterator<AGFKindleRing> It(World); It; ++It)
+		{
+			return;
+		}
+		const UGFMovementTuning* Tuning = GetDefault<UGFMovementTuning>();
+		if (!Tuning)
+		{
+			return;
+		}
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AGFKindleRing* Ring = World->SpawnActor<AGFKindleRing>(AGFKindleRing::StaticClass(), Tuning->KindleRingLocation, FRotator::ZeroRotator, Params);
+		if (Ring)
+		{
+			Ring->ApplyRadius(Tuning->KindleRingRadius);
+		}
+	}
+}
 
 AGFGameMode::AGFGameMode()
 {
@@ -66,6 +97,7 @@ void AGFGameMode::InitGameState()
 			GetWorld()->SpawnActor<AActor>(Class, FTransform::Identity, Params);
 		}
 	}
+	GFGameModeKindleSpawn::GFEnsureHubKindleRing(this);
 }
 
 void AGFGameMode::PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)
