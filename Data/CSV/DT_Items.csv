@@ -69,3 +69,4 @@ CalmingMist,"NSLOCTEXT(""GFItems"", ""CalmingMist"", ""Calming Mist"")",None,Too
 LabCoat,"NSLOCTEXT(""GFItems"", ""LabCoat"", ""Lab Coat"")",None,Outfit,1,Uncommon,,0,0,None,False,False,None
 SafetyGoggles,"NSLOCTEXT(""GFItems"", ""SafetyGoggles"", ""Safety Goggles"")",None,Outfit,1,Common,,0,0,None,False,False,None
 BurrowLantern,"NSLOCTEXT(""GFItems"", ""BurrowLantern"", ""Burrow Lantern"")",None,Furniture,99,Uncommon,,0,0,None,False,False,None
+BigGrumbleTame,"NSLOCTEXT(""GFItems"", ""BigGrumbleTame"", ""Grumble Tamestone"")",None,Material,99,Rare,,4,20,Rare,False,False,None
