@@ -2,12 +2,15 @@
 import { computed, onMounted, ref } from "vue";
 import { loadBundledPersonas } from "../data/loadPersonas";
 import {
+  clampShiftPay,
   createLocalCore,
+  creditPayday,
   DINOBOOK_EVENTS,
   LAB_TREE,
   LAB_FACTORIES,
   loadCorePort,
   runDinobookEvent,
+  seedWageCards,
   type AllChatLine,
   type DinobookCorePort,
   type DinobookEventId,
@@ -28,8 +31,10 @@ const roster = personas.map((persona) => ({
 const core = ref<DinobookCorePort>(createLocalCore());
 const playerName = ref("Pip");
 const familyId = ref(LAB_TREE.families[0]?.familyId ?? "swamp");
-const briefs = ref<FamilyBrief[]>(core.value.briefs(playerName.value));
-const wages = ref<WageCard[]>(core.value.wages(playerName.value));
+const briefs = ref<FamilyBrief[]>([]);
+const wages = ref<WageCard[]>([]);
+/** Shift pay is not stored on a work row. It stays here until Payday credits it. */
+const shiftPay = ref<Record<string, number>>({});
 const posts = ref<DinobookPost[]>([]);
 const chatLines = ref<AllChatLine[]>([]);
 const last = ref<RunResult | null>(null);
@@ -53,22 +58,58 @@ function familyName(id: string | null): string {
 
 function syncBriefs() {
   briefs.value = core.value.briefs(playerName.value);
-  wages.value = core.value.wages(playerName.value);
+  const shifts = shiftPay.value;
+  wages.value = core.value.wages(playerName.value).map((card) => {
+    const saved = shifts[card.dinoId];
+    return saved === undefined ? card : { ...card, shiftPay: saved };
+  });
 }
 
 function onPlayer() {
   syncBriefs();
 }
 
+const ledgerLocked = computed(() => core.value.source === "src/core");
+
 function setNumber(brief: FamilyBrief, field: keyof FamilyBrief, raw: string) {
+  if (ledgerLocked.value) return;
   const value = Number(raw);
   core.value.setBrief(playerName.value, { ...brief, [field]: Number.isFinite(value) ? value : 0 });
   syncBriefs();
 }
 
-function setWage(card: WageCard, field: "shiftPay" | "lifetimeEarnings" | "factoryId", raw: string) {
-  const next = { ...card, [field]: field === "factoryId" ? raw : Number(raw) };
-  core.value.setWage(playerName.value, next);
+function setShift(card: WageCard, raw: string) {
+  const value = Number(raw);
+  shiftPay.value = {
+    ...shiftPay.value,
+    [card.dinoId]: clampShiftPay(Number.isFinite(value) ? value : 0),
+  };
+  syncBriefs();
+}
+
+function setFactory(card: WageCard, factoryId: string) {
+  core.value.setWage(playerName.value, {
+    ...card,
+    factoryId,
+    shiftPay: shiftPay.value[card.dinoId] ?? card.shiftPay,
+  });
+  syncBriefs();
+}
+
+function setEmployment(card: WageCard, raw: string) {
+  core.value.setWage(playerName.value, {
+    ...card,
+    employment: raw === "rented" ? "rented" : "tamed",
+    shiftPay: shiftPay.value[card.dinoId] ?? card.shiftPay,
+  });
+  syncBriefs();
+}
+
+function seedCrew() {
+  core.value.seedLabCrew(playerName.value);
+  const next = { ...shiftPay.value };
+  for (const card of seedWageCards()) next[card.dinoId] = card.shiftPay;
+  shiftPay.value = next;
   syncBriefs();
 }
 
@@ -109,8 +150,11 @@ function run(event: DinobookEventId) {
     core.value.remember(dinoId, line);
   }
   if (event === "payday") {
-    for (const card of result.wages) core.value.setWage(playerName.value, card);
-    wages.value = core.value.wages(playerName.value);
+    creditPayday(core.value, playerName.value, wages.value);
+    for (const post of result.posts) {
+      if (post.role === "mineral-find") core.value.noteMineral(playerName.value, post.authorId);
+    }
+    syncBriefs();
   }
 }
 
@@ -128,7 +172,8 @@ function resetFeed() {
 }
 
 function resetStats() {
-  core.value = createLocalCore();
+  shiftPay.value = {};
+  if (core.value.source === "local") core.value = createLocalCore();
   syncBriefs();
 }
 
@@ -148,11 +193,8 @@ function linkLabel(post: DinobookPost): string {
 }
 
 onMounted(async () => {
-  const loaded = await loadCorePort();
-  if (loaded.source === "src/core") {
-    core.value = loaded;
-    syncBriefs();
-  }
+  core.value = await loadCorePort();
+  syncBriefs();
 });
 
 const lastChat = computed(() => (last.value ? last.value.allChat : []));
@@ -244,40 +286,49 @@ const lastSummary = computed(() => {
         <p class="hint">Default is one line, the leader's demand. Posts stay at about 80 tokens.</p>
 
         <h3>Wages</h3>
-        <p class="hint">Payday adds the shift to lifetime earnings. Mate rank is the crew place from mateRank: 1 is first pick. Earnings only go up. A blank factory means they are looking.</p>
+        <p class="hint">Payday calls creditWages for the shift. Lifetime is the core total and only goes up. Mate rank is the crew place from mateRank: 1 is first pick. A blank factory means they are looking. Rented and tamed both count.</p>
+        <button type="button" @click="seedCrew">Seed lab crew</button>
+        <p class="hint" v-if="wages.length === 0">No payroll in the core yet.</p>
         <div v-for="card in wages" :key="card.dinoId" class="stat-card">
           <p class="who">{{ dinoName(card.dinoId) }} · mate rank {{ card.mateRank }}</p>
           <div class="stat-grid">
-            <label>Shift <input :value="card.shiftPay" type="number" min="0" max="10000" @change="setWage(card, 'shiftPay', ($event.target as HTMLInputElement).value)" /></label>
-            <label>Lifetime <input :value="card.lifetimeEarnings" type="number" min="0" max="100000" @change="setWage(card, 'lifetimeEarnings', ($event.target as HTMLInputElement).value)" /></label>
+            <label>Shift <input :value="card.shiftPay" type="number" min="0" max="10000" @change="setShift(card, ($event.target as HTMLInputElement).value)" /></label>
+            <label>Lifetime <input :value="card.lifetimeEarnings" type="number" readonly tabindex="-1" aria-readonly="true" /></label>
             <label class="span-2">Factory
-              <select :value="card.factoryId" @change="setWage(card, 'factoryId', ($event.target as HTMLSelectElement).value)">
+              <select :value="card.factoryId" @change="setFactory(card, ($event.target as HTMLSelectElement).value)">
                 <option value="">Looking</option>
                 <option v-for="factory in LAB_FACTORIES" :key="factory.id" :value="factory.id">{{ factory.name }}</option>
+              </select>
+            </label>
+            <label v-if="card.factoryId" class="span-2">Employment
+              <select :value="card.employment ?? 'tamed'" @change="setEmployment(card, ($event.target as HTMLSelectElement).value)">
+                <option value="tamed">Tamed</option>
+                <option value="rented">Rented</option>
               </select>
             </label>
           </div>
         </div>
 
         <h3>What elders would tell Big Grumble</h3>
+        <p class="hint" v-if="briefs.length === 0">No family rows in the core yet.</p>
         <div v-for="brief in briefs" :key="brief.familyId" class="stat-card">
           <p class="who">{{ familyName(brief.familyId) }} · {{ brief.band }} · rep {{ brief.rep }}</p>
           <div class="stat-grid">
-            <label>Rep <input :value="brief.rep" type="number" min="-100" max="100" @change="setNumber(brief, 'rep', ($event.target as HTMLInputElement).value)" /></label>
-            <label>Kills <input :value="brief.kills" type="number" min="0" @change="setNumber(brief, 'kills', ($event.target as HTMLInputElement).value)" /></label>
-            <label>Elder kills <input :value="brief.elderKills" type="number" min="0" @change="setNumber(brief, 'elderKills', ($event.target as HTMLInputElement).value)" /></label>
-            <label>Bounties <input :value="brief.bountiesOnPlayer" type="number" min="0" @change="setNumber(brief, 'bountiesOnPlayer', ($event.target as HTMLInputElement).value)" /></label>
-            <label>Claimed <input :value="brief.bountiesClaimed" type="number" min="0" @change="setNumber(brief, 'bountiesClaimed', ($event.target as HTMLInputElement).value)" /></label>
-            <label>Rentals down <input :value="brief.rentalsDowned" type="number" min="0" @change="setNumber(brief, 'rentalsDowned', ($event.target as HTMLInputElement).value)" /></label>
-            <label>Mango refused <input :value="brief.mangoRefused" type="number" min="0" @change="setNumber(brief, 'mangoRefused', ($event.target as HTMLInputElement).value)" /></label>
-            <label>Mango given <input :value="brief.mangoGiven" type="number" min="0" @change="setNumber(brief, 'mangoGiven', ($event.target as HTMLInputElement).value)" /></label>
+            <label>Rep <input :value="brief.rep" type="number" min="-100" max="100" :disabled="ledgerLocked" @change="setNumber(brief, 'rep', ($event.target as HTMLInputElement).value)" /></label>
+            <label>Kills <input :value="brief.kills" type="number" min="0" :disabled="ledgerLocked" @change="setNumber(brief, 'kills', ($event.target as HTMLInputElement).value)" /></label>
+            <label>Elder kills <input :value="brief.elderKills" type="number" min="0" :disabled="ledgerLocked" @change="setNumber(brief, 'elderKills', ($event.target as HTMLInputElement).value)" /></label>
+            <label>Bounties <input :value="brief.bountiesOnPlayer" type="number" min="0" :disabled="ledgerLocked" @change="setNumber(brief, 'bountiesOnPlayer', ($event.target as HTMLInputElement).value)" /></label>
+            <label>Claimed <input :value="brief.bountiesClaimed" type="number" min="0" :disabled="ledgerLocked" @change="setNumber(brief, 'bountiesClaimed', ($event.target as HTMLInputElement).value)" /></label>
+            <label>Rentals down <input :value="brief.rentalsDowned" type="number" min="0" :disabled="ledgerLocked" @change="setNumber(brief, 'rentalsDowned', ($event.target as HTMLInputElement).value)" /></label>
+            <label>Mango refused <input :value="brief.mangoRefused" type="number" min="0" :disabled="ledgerLocked" @change="setNumber(brief, 'mangoRefused', ($event.target as HTMLInputElement).value)" /></label>
+            <label>Mango given <input :value="brief.mangoGiven" type="number" min="0" :disabled="ledgerLocked" @change="setNumber(brief, 'mangoGiven', ($event.target as HTMLInputElement).value)" /></label>
           </div>
         </div>
         <div class="row">
           <button type="button" @click="resetFeed">Clear feed</button>
           <button type="button" @click="resetStats">Reset stats</button>
         </div>
-        <p class="hint">Rep bands come from REP_BAND_THRESHOLDS: friendly at 20, wary at -8, hostile at -40. {{ core.source === "src/core" ? "Storage methods are bound. A ledger row replaces the lab seed for that family, and the ledger starts at zero." : "No src/core in this build." }}</p>
+        <p class="hint">Rep bands come from REP_BAND_THRESHOLDS: friendly at 20, wary at -8, hostile at -40. {{ core.source === "src/core" ? "The core is the only record. Seed lab crew writes the demo. Payday uses creditWages. Lifetime only goes up." : "No src/core in this build." }}</p>
       </div>
 
       <div class="book-feed">
@@ -386,7 +437,8 @@ const lastSummary = computed(() => {
   font-size: 0.75rem;
   color: var(--muted);
 }
-.stat-grid input { width: 100%; }
+.stat-grid input, .stat-grid select { width: 100%; }
+.stat-grid input[readonly] { background: transparent; color: var(--ink); }
 .book-feed {
   background: var(--paper);
   color: var(--paper-ink);

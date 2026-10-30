@@ -65,6 +65,8 @@ export interface WageCard {
   shiftPay: number;
   /** Lifetime total from `getWork().lifetimeEarnings`. Not this shift's pay. */
   lifetimeEarnings: number;
+  /** Core employment. Null while they are looking. */
+  employment: "rented" | "tamed" | null;
   /** Place in the crew. 1 is first pick. 0 means this card is not in a pool yet. */
   mateRank: number;
   /** When they were hired. Null while they are looking. */

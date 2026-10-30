@@ -27,12 +27,14 @@ export const LAB_FACTORIES: readonly Factory[] = [
 export const LAB_HIRED_AT = "2026-01-01T00:00:00.000Z";
 
 const SEED: readonly WageCard[] = [
-  { dinoId: "lanternmaw", factoryId: "scales-yard", factoryName: "Scales yard", shiftPay: 40, lifetimeEarnings: 40, mateRank: 0, hiredAt: LAB_HIRED_AT, mineralsFound: 0 },
-  { dinoId: "tusksaw", factoryId: "fossil-pit", factoryName: "Fossil pit", shiftPay: 20, lifetimeEarnings: 20, mateRank: 0, hiredAt: LAB_HIRED_AT, mineralsFound: 0 },
-  { dinoId: "scythepaw", factoryId: "bone-works", factoryName: "Bone works", shiftPay: 500, lifetimeEarnings: 0, mateRank: 0, hiredAt: LAB_HIRED_AT, mineralsFound: 0 },
-  { dinoId: "ripwing", factoryId: "amber-kiln", factoryName: "Amber kiln", shiftPay: 10, lifetimeEarnings: 10, mateRank: 0, hiredAt: LAB_HIRED_AT, mineralsFound: 0 },
-  { dinoId: "chatty-bird", factoryId: "", factoryName: "", shiftPay: 0, lifetimeEarnings: 0, mateRank: 0, hiredAt: null, mineralsFound: 0 },
+  { dinoId: "lanternmaw", factoryId: "scales-yard", factoryName: "Scales yard", shiftPay: 40, lifetimeEarnings: 40, mateRank: 0, hiredAt: LAB_HIRED_AT, mineralsFound: 0, employment: "tamed" },
+  { dinoId: "tusksaw", factoryId: "fossil-pit", factoryName: "Fossil pit", shiftPay: 20, lifetimeEarnings: 20, mateRank: 0, hiredAt: LAB_HIRED_AT, mineralsFound: 0, employment: "tamed" },
+  { dinoId: "scythepaw", factoryId: "bone-works", factoryName: "Bone works", shiftPay: 500, lifetimeEarnings: 0, mateRank: 0, hiredAt: LAB_HIRED_AT, mineralsFound: 0, employment: "tamed" },
+  { dinoId: "ripwing", factoryId: "amber-kiln", factoryName: "Amber kiln", shiftPay: 10, lifetimeEarnings: 10, mateRank: 0, hiredAt: LAB_HIRED_AT, mineralsFound: 0, employment: "tamed" },
+  { dinoId: "chatty-bird", factoryId: "", factoryName: "", shiftPay: 0, lifetimeEarnings: 0, mateRank: 0, hiredAt: null, mineralsFound: 0, employment: null },
 ];
+
+export const LAB_CREW_IDS: readonly string[] = SEED.map((card) => card.dinoId);
 
 export function clampShiftPay(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -85,6 +87,7 @@ export function finishWage(partial: Partial<WageCard> & { dinoId: string }): Wag
       mateRank: 0,
       hiredAt: null,
       mineralsFound,
+      employment: null,
     };
   }
   const hired = typeof partial.hiredAt === "string" && partial.hiredAt.trim().length > 0
@@ -99,6 +102,7 @@ export function finishWage(partial: Partial<WageCard> & { dinoId: string }): Wag
     mateRank: 0,
     hiredAt: hired,
     mineralsFound,
+    employment: partial.employment === "rented" ? "rented" : "tamed",
   };
 }
 
@@ -236,6 +240,7 @@ export function wageFromUnknown(raw: unknown, dinoId: string): Partial<WageCard>
   const hiredAt = "hiredAt" in row
     ? (typeof row.hiredAt === "string" && row.hiredAt.trim().length > 0 ? row.hiredAt : null)
     : undefined;
+  const employment = row.employment === "rented" || row.employment === "tamed" ? row.employment : undefined;
   if (lifetime == null && shift == null && minerals == null && factoryId == null && !factoryName && hiredAt === undefined) {
     return null;
   }
@@ -247,5 +252,6 @@ export function wageFromUnknown(raw: unknown, dinoId: string): Partial<WageCard>
     ...(factoryId == null ? {} : { factoryId }),
     ...(factoryName == null ? {} : { factoryName }),
     ...(hiredAt === undefined ? {} : { hiredAt }),
+    ...(employment == null ? {} : { employment }),
   };
 }

@@ -2,7 +2,7 @@ import type { DinoWork, StatKind } from "../core/types";
 import { clampRep, REP_BAND_THRESHOLDS, repBand as coreRepBand } from "../core/types";
 import type { DinobookEventId, FamilyBrief, RepBand, WageCard } from "./types";
 import { LAB_TREE, type FamilyTree } from "./tree";
-import { finishWage, seedWageCards, wageFromUnknown, withMateRanks } from "./wages";
+import { clampShiftPay, finishWage, LAB_CREW_IDS, seedWageCards, wageFromUnknown, withMateRanks } from "./wages";
 
 export { clampRep, REP_BAND_THRESHOLDS };
 
@@ -12,10 +12,9 @@ export function repBand(rep: number): RepBand {
 }
 
 /**
- * Binds Dinobook to `src/core` storage methods (`getStats`, `bumpStats`,
- * `getMemory`, `putMemory`, `getWork`, `putWork`). Wages are per dino:
- * `getWork(dinoId).lifetimeEarnings`, not `getWages`. `putMemory` takes a
- * `DinoMemory` object.
+ * Binds Dinobook to `src/core` storage methods. A bound port reads only those
+ * methods. Seeds stay out until `seedLabCrew`. A shift is `creditWages(dinoId, shiftPay)`,
+ * not a `putWork` of the new total. `putMemory` takes a `DinoMemory` object.
  */
 
 function num(value: unknown): number {
@@ -105,6 +104,19 @@ export interface DinobookCorePort {
   remember(dinoId: string, line: string): void;
   wages(playerKey: string): WageCard[];
   setWage(playerKey: string, card: WageCard): void;
+  /** Add this shift to the core total. Does not rewrite the total. */
+  creditShift(playerKey: string, dinoId: string, shiftPay: number): void;
+  /** One mineral find. Does not change lifetime earnings. */
+  noteMineral(playerKey: string, dinoId: string): void;
+  /** Write the lab demo into storage. A second call does not add it again. */
+  seedLabCrew(playerKey: string): void;
+}
+
+/** Payday persistence: one `creditWages` per positive shift. Cards' lifetime fields are ignored. */
+export function creditPayday(port: DinobookCorePort, playerKey: string, cards: readonly WageCard[]): void {
+  for (const card of cards) {
+    if (card.shiftPay > 0) port.creditShift(playerKey, card.dinoId, card.shiftPay);
+  }
 }
 
 export function createLocalCore(tree: FamilyTree = LAB_TREE): DinobookCorePort {
@@ -165,6 +177,27 @@ export function createLocalCore(tree: FamilyTree = LAB_TREE): DinobookCorePort {
       const index = list.findIndex((row) => row.dinoId === next.dinoId);
       if (index < 0) list.push(next);
       else list[index] = next;
+    },
+    creditShift(playerKey, dinoId, shiftPay) {
+      const shift = clampShiftPay(shiftPay);
+      if (shift <= 0) return;
+      const list = payRows(playerKey);
+      const index = list.findIndex((row) => row.dinoId === dinoId);
+      if (index < 0) return;
+      const card = list[index]!;
+      list[index] = finishWage({ ...card, lifetimeEarnings: card.lifetimeEarnings + shift });
+    },
+    noteMineral(playerKey, dinoId) {
+      const list = payRows(playerKey);
+      const index = list.findIndex((row) => row.dinoId === dinoId);
+      if (index < 0) return;
+      const card = list[index]!;
+      list[index] = finishWage({ ...card, mineralsFound: card.mineralsFound + 1 });
+    },
+    seedLabCrew(playerKey) {
+      const key = playerKey.trim() || "local";
+      stats.set(key, tree.families.map((family) => seedBrief(family.familyId)));
+      payroll.set(key, seedWageCards());
     },
   };
 }
@@ -248,6 +281,7 @@ interface StorageMethods {
   putMemory?: (memory: unknown) => void;
   getWork?: (dinoId: string) => unknown;
   putWork?: (work: unknown) => void;
+  creditWages?: (dinoId: string, amount: number) => unknown;
 }
 
 function bindFn<T>(row: Record<string, unknown>, name: string): T | undefined {
@@ -266,13 +300,15 @@ function methodBag(value: unknown): StorageMethods | null {
   const putMemory = bindFn<NonNullable<StorageMethods["putMemory"]>>(row, "putMemory");
   const getWork = bindFn<NonNullable<StorageMethods["getWork"]>>(row, "getWork");
   const putWork = bindFn<NonNullable<StorageMethods["putWork"]>>(row, "putWork");
+  const creditWages = bindFn<NonNullable<StorageMethods["creditWages"]>>(row, "creditWages");
   if (getStats) bag.getStats = getStats;
   if (bumpStats) bag.bumpStats = bumpStats;
   if (getMemory) bag.getMemory = getMemory;
   if (putMemory) bag.putMemory = putMemory;
   if (getWork) bag.getWork = getWork;
   if (putWork) bag.putWork = putWork;
-  if (!bag.getStats && !bag.bumpStats && !bag.getMemory && !bag.putMemory && !bag.getWork && !bag.putWork) {
+  if (creditWages) bag.creditWages = creditWages;
+  if (!bag.getStats && !bag.bumpStats && !bag.getMemory && !bag.putMemory && !bag.getWork && !bag.putWork && !bag.creditWages) {
     return null;
   }
   return bag;
@@ -306,18 +342,12 @@ function workRecord(card: WageCard): DinoWork {
   return {
     dinoId: card.dinoId,
     employerId: employed ? card.factoryId : null,
-    employment: employed ? "tamed" : null,
+    employment: employed ? (card.employment === "rented" ? "rented" : "tamed") : null,
     lifetimeEarnings: card.lifetimeEarnings,
     hiredAt: card.hiredAt,
     mineralsFound: card.mineralsFound,
     seekingJob: !employed,
   };
-}
-
-function overlayWork(raw: unknown, base: WageCard): WageCard {
-  const parsed = wageFromUnknown(raw, base.dinoId);
-  if (!parsed) return base;
-  return finishWage({ ...base, ...parsed, dinoId: parsed.dinoId || base.dinoId });
 }
 
 function memorySummary(raw: unknown): string | null {
@@ -328,72 +358,119 @@ function memorySummary(raw: unknown): string | null {
   return null;
 }
 
+function cardFromWork(raw: unknown, dinoId: string): WageCard | null {
+  const parsed = wageFromUnknown(raw, dinoId);
+  if (!parsed) return null;
+  const card = finishWage({
+    dinoId: parsed.dinoId || dinoId,
+    shiftPay: 0,
+    lifetimeEarnings: 0,
+    mineralsFound: 0,
+    hiredAt: null,
+    factoryId: "",
+    factoryName: "",
+    employment: null,
+    mateRank: 0,
+    ...parsed,
+  });
+  // Shift pay is not a core column. The panel keeps it beside the row.
+  return { ...card, shiftPay: 0 };
+}
+
+function coreBriefs(bound: StorageMethods, playerKey: string): FamilyBrief[] {
+  if (typeof bound.getStats !== "function") return [];
+  return asRows(bound.getStats(playerKey))
+    .map((row) => briefFromCoreStats(row))
+    .filter((row) => row.familyId !== "*");
+}
+
+function bump(bound: StorageMethods, playerKey: string, familyId: string, kind: StatKind, amount: number, delta: number): void {
+  if (typeof bound.bumpStats !== "function") return;
+  bound.bumpStats({
+    at: new Date().toISOString(),
+    playerKey,
+    familyId,
+    dinoId: "",
+    kind,
+    amount,
+    note: "dinobook",
+  }, { [kind]: delta });
+}
+
 /**
  * Bind a storage instance, or a module that can build one.
  * A bag with no storage methods returns null.
+ * The result does not keep a local seed, a local memory, or a pinned stat.
  */
-export function portFromCore(modules: CoreModuleBag, tree: FamilyTree = LAB_TREE): DinobookCorePort | null {
+export function portFromCore(modules: CoreModuleBag, _tree: FamilyTree = LAB_TREE): DinobookCorePort | null {
   const bound = bindStorage(modules);
   if (!bound) return null;
-
-  const local = createLocalCore(tree);
-  const pinned = new Set<string>();
-  const pinKey = (playerKey: string, familyId: string) => `${playerKey.trim() || "local"}:${familyId}`;
 
   return {
     source: "src/core",
     briefs(playerKey) {
-      const base = local.briefs(playerKey);
-      if (typeof bound.getStats !== "function") return base;
-      const stored = asRows(bound.getStats(playerKey))
-        .map((row) => briefFromCoreStats(row))
-        .filter((row) => row.familyId !== "*");
-      if (stored.length === 0) return base;
-      const known = new Set(base.map((row) => row.familyId));
-      const merged = base.map((row) => {
-        if (pinned.has(pinKey(playerKey, row.familyId))) return row;
-        return stored.find((item) => item.familyId === row.familyId) ?? row;
-      });
-      for (const extra of stored) {
-        if (!known.has(extra.familyId)) merged.push(extra);
-      }
-      return merged;
+      return coreBriefs(bound, playerKey.trim() || "local");
     },
     apply(playerKey, familyId, event) {
-      local.apply(playerKey, familyId, event);
-      pinned.delete(pinKey(playerKey, familyId));
       const kind = LEDGER_KIND[event];
-      if (!kind || typeof bound.bumpStats !== "function") return;
-      bound.bumpStats({
-        at: new Date().toISOString(),
-        playerKey: playerKey.trim() || "local",
-        familyId,
-        dinoId: "",
-        kind,
-        amount: 1,
-        note: event,
-      });
+      if (!kind) return;
+      const delta = event === "attacked" ? -8 : event === "refused-mango" ? -2 : -6;
+      bump(bound, playerKey.trim() || "local", familyId, kind, 1, delta);
     },
-    setBrief(playerKey, brief) {
-      local.setBrief(playerKey, brief);
-      pinned.add(pinKey(playerKey, brief.familyId));
+    setBrief() {
+      // Absolute edits are not a core method. The seed button and event bumps are.
     },
-    wages(playerKey) {
-      const cards = local.wages(playerKey);
-      if (typeof bound.getWork !== "function") return cards;
-      return withMateRanks(cards.map((card) => overlayWork(bound.getWork!(card.dinoId), card)));
+    wages() {
+      if (typeof bound.getWork !== "function") return [];
+      const cards: WageCard[] = [];
+      for (const dinoId of LAB_CREW_IDS) {
+        const card = cardFromWork(bound.getWork(dinoId), dinoId);
+        if (card) cards.push(card);
+      }
+      return withMateRanks(cards);
     },
-    setWage(playerKey, card) {
+    setWage(_playerKey, card) {
+      if (typeof bound.putWork !== "function") return;
       const next = finishWage(card);
-      local.setWage(playerKey, next);
-      if (typeof bound.putWork === "function") bound.putWork(workRecord(next));
+      const current = typeof bound.getWork === "function" ? cardFromWork(bound.getWork(next.dinoId), next.dinoId) : null;
+      bound.putWork(workRecord({
+        ...next,
+        lifetimeEarnings: current?.lifetimeEarnings ?? next.lifetimeEarnings,
+        mineralsFound: next.mineralsFound,
+      }));
+    },
+    creditShift(_playerKey, dinoId, shiftPay) {
+      const shift = clampShiftPay(shiftPay);
+      if (shift <= 0 || typeof bound.creditWages !== "function") return;
+      bound.creditWages(dinoId, shift);
+    },
+    noteMineral(_playerKey, dinoId) {
+      if (typeof bound.getWork !== "function" || typeof bound.putWork !== "function") return;
+      const card = cardFromWork(bound.getWork(dinoId), dinoId);
+      if (!card) return;
+      bound.putWork(workRecord({ ...card, mineralsFound: card.mineralsFound + 1 }));
+    },
+    seedLabCrew(playerKey) {
+      const key = playerKey.trim() || "local";
+      if (typeof bound.putWork === "function" && typeof bound.getWork === "function") {
+        for (const card of seedWageCards()) {
+          if (bound.getWork(card.dinoId)) continue;
+          bound.putWork(workRecord(card));
+        }
+      }
+      const have = new Set(coreBriefs(bound, key).map((row) => row.familyId));
+      if (!have.has("swamp")) {
+        bump(bound, key, "swamp", "kill", 1, -50);
+        bump(bound, key, "swamp", "mango_refused", 1, 0);
+      }
+      if (!have.has("sickle")) bump(bound, key, "sickle", "hit_taken", 1, 4);
+      if (!have.has("roost")) bump(bound, key, "roost", "mango_given", 2, 18);
     },
     recall(dinoId) {
-      if (typeof bound.getMemory !== "function") return local.recall(dinoId);
-      return memorySummary(bound.getMemory(dinoId)) ?? local.recall(dinoId);
+      if (typeof bound.getMemory !== "function") return "";
+      return memorySummary(bound.getMemory(dinoId)) ?? "";
     },
     remember(dinoId, line) {
-      local.remember(dinoId, line);
       if (typeof bound.putMemory !== "function") return;
       const previous = typeof bound.getMemory === "function" ? bound.getMemory(dinoId) : null;
       const turns = previous && typeof previous === "object" && "turnsSinceSummary" in previous

@@ -14,6 +14,7 @@ export {
   briefFromCoreStats,
   clampRep,
   createLocalCore,
+  creditPayday,
   REP_BAND_THRESHOLDS,
   emptyBrief,
   finishBrief,
