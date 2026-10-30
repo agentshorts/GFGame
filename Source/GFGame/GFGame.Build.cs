@@ -1,3 +1,4 @@
+using System.IO;
 using UnrealBuildTool;
 
 public class GFGame : ModuleRules
@@ -7,6 +8,7 @@ public class GFGame : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "GFCore", "GFVoxel", "GFBuild", "GFGarden", "GFCompanion", "GFFashion", "GFMoba", "GFRhythm", "GFSave", "GFNet", "VoxelFinish" });
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
+		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "AI/Roaming"));
 
 	}
 }
