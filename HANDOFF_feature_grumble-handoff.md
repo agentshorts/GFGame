@@ -25,6 +25,7 @@ Defaults are written up so they can be changed later:
 - #70 — one Handoff line per target; the dragger's name, otherwise the holder's.
 - #83 — at a jail he waits 8 seconds on the box edge, then picks someone else. A jailed player can be the target. #67's line that a player inside a no-entry box is never a handoff is superseded. The box still blocks the bite.
 - #84 — a taunt's per-player cooldown is 30 seconds, from `DT_Emotes`, and never under the 15 second look.
+- #112 — wild-dino emote noise follows safe land (inside a safe area, or on owned land), not giant protection. An unprotected visitor on a plot stays quiet for wild dinos and can still be his target.
 
 ## How to test
 
@@ -38,9 +39,9 @@ That is four sim tests plus the world wiring test:
 - `GFGame.Giant.Handoff.Priority` — fresh revoke, live grab, stale revoke, he switches off his current target, one thanks, a second target gets their own.
 - `GFGame.Giant.Handoff.Taunt` — the taunt pulls him onto the exposed player there, a handoff beats it, he does not enter land when only protected players are in the taunt, and he goes back to hunting when the taunt ends. With shoves and eating on, an exposed player and a protected player both inside the taunt: only the exposed one is shoved or eaten.
 - `GFGame.Giant.Handoff.Jail` — a jailed handoff is the target. He stops at the box edge, does not enter, does not shove or eat them, waits out `JailDwellSeconds`, then takes the free player. The event is still running when they hit him. Alone at the jail he circles and does not say Herded.
-- `GFGame.Giant.Handoff.Wiring` — unprotect plus grab on the social component, he prefers that visitor, the thanks line is filled, dropping the grab clears the held flag he sees, the taunt emote calls him from safe land without dino noise, a second taunt from the same player is on cooldown until `TauntCooldown`, a taunt before he is out is dropped, and a jailed player cannot taunt.
+- `GFGame.Giant.Handoff.Wiring` — unprotect plus grab on the social component, he prefers that visitor, the thanks line is filled, dropping the grab clears the held flag he sees, the taunt emote calls him from safe land without dino noise, a second taunt from the same player is on cooldown until `TauntCooldown`, a taunt before he is out is dropped, and a jailed player cannot taunt. The wild player stands on the unowned strip past his hub circle. The cooldown check advances `GetTimeSeconds` in steps that fit the frame-time cap.
 
-`GFGame.Giant.Lines` now expects 86 lines and the three extra `{Target}` handoff rows. `GFGame.Giant.SafeZone` expects no Herded line when everyone was already home. `GFGame.Giant.Protection.Rules` and `Protection.NoEntry` expect a player in a no-entry box to be targetable and still untouchable. `GFGame.Social.GiantProtection` expects the jailed member to be the target when they win the tie, and still not eaten.
+`GFGame.Giant.Lines` now expects 86 lines and the three extra `{Target}` handoff rows. `GFGame.Giant.SafeZone` expects no Herded line when everyone was already home. `GFGame.Giant.Protection.Rules` and `Protection.NoEntry` expect a player in a no-entry box to be targetable and still untouchable. `GFGame.Social.GiantProtection` expects the jailed member to be the target when they win the tie, and still not eaten. The cell is on the unowned strip past his hub circle, because the default cell under the origin sits inside that circle and would count as safe.
 
 In a session: on your land, turn a visitor's protection off (or grab them on the land), taunt with the Taunt emote while he is already out, and he should thank you in all chat and come for that visitor. A protected neighbour stays off the menu. A player in the jail can be the target: he runs up to the cell and cannot get in. The same player cannot taunt again for 30 seconds.
 

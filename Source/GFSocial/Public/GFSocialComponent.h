@@ -8,8 +8,10 @@
 //   the jailed player's client (stub cue). Release teleports them back. Kept for the whole session (also on rejoin).
 // - Kick / ban (FGFSocialRules::CanKickOrBan, host only today). Bans are saved with the host's world by stable player
 //   key and refused at join (IGFModeHandler::RefuseJoin, AGFGameMode PreLogin / PostLogin). Unban by key.
-// - Emotes (Data/CSV/DT_Emotes.csv): anywhere, replicated, short cooldown. Outside safety, in a mode whose
+// - Emotes (Data/CSV/DT_Emotes.csv): anywhere, replicated, short cooldown. Off safe land, in a mode whose
 //   DT_ModeRules row has bEmoteAttractsDanger, the emote raises a noise (FGFNoise) that draws nearby wild dinos.
+//   Safe land means inside a safe area or on owned land. Giant protection is separate: an unprotected visitor
+//   on a plot stays quiet for wild dinos and can still be exposed to Big Grumble.
 //   A row with TauntRadius > 0 also calls Big Grumble toward the player (FGFAttention), inside safety too.
 //   That call has its own per-player cooldown (the row's TauntCooldown, at least 15s) so re-taunting cannot park him.
 // Verbs (AGFPlayerState::RequestMode, Mode "Social"; target players by Ints[0] = PlayerId):

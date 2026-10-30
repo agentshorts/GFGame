@@ -902,7 +902,7 @@ FName UGFSocialComponent::ServerEmote(AGFPlayerState* By, FName EmoteId)
 	const bool bTaunt = FGFSocialRules::EmoteTauntsGiant(*Row);
 	// A taunt has its own per-player clock, so a Heart is not stuck behind it and a re-taunt cannot refresh the look.
 	// The noise tag stays Emote: wild dinos already listen for that.
-	const FName Action = bTaunt ? FName(TEXT("Taunt")) : Emote;
+	const FName Action = bTaunt ? FName(TEXT("Taunt")) : GFSocialVerbs::Emote;
 	const double Now = GetWorld()->GetTimeSeconds();
 	if (Cooldowns.IsCooling(By->PlayerKey, Action, Now))
 	{
@@ -919,7 +919,9 @@ FName UGFSocialComponent::ServerEmote(AGFPlayerState* By, FName EmoteId)
 	E.Seconds = Row->Seconds;
 	const APawn* Pawn = By->GetPawn();
 	const FName Mode = GetPlayerMode(By->PlayerKey);
-	E.bNoise = Pawn && FGFSocialRules::EmoteMakesNoise(IsPlayerSafe(By), Mode);
+	// Wild dinos listen for the ground, not for giant protection. Owned land and a safe circle are quiet,
+	// so an unprotected visitor on a plot can still taunt him without calling the wilds.
+	E.bNoise = Pawn && FGFSocialRules::EmoteMakesNoise(IsOnSafeLand(By), Mode);
 	Emotes.Add(E);
 	if (Emotes.Num() > MaxEmotes)
 	{
@@ -934,7 +936,7 @@ FName UGFSocialComponent::ServerEmote(AGFPlayerState* By, FName EmoteId)
 		Noise.Location = Pawn->GetActorLocation();
 		Noise.Radius = Rules ? Rules->NoiseRadius : 0.f;
 		Noise.SourceKey = By->PlayerKey;
-		Noise.Tag = Emote;
+		Noise.Tag = GFSocialVerbs::Emote;
 		++NoisesRaised;
 		FGFNoise::Raise(GetWorld(), Noise);
 	}

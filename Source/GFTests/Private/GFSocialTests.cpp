@@ -995,7 +995,10 @@ bool FGFSocialGiantProtectionTest::RunTest(const FString&)
 	TestTrue(TEXT("Trigger: the visitor is exposed again"), FGFGiantRules::AnyoneOutside(Zone, Giant->GatherPlayers(), Giant->GetNoEntry()));
 
 	// The jail cell: a no-entry box from spawn; the jailed member is out of reach.
+	// His hub circle is centred on the origin and ignores height, so the default cell at (0, 0, -5000) sits inside
+	// it and would count as safe. Park the cell on the unowned strip, past CircleMaxRadius (3200).
 	TestEqual(TEXT("No cell yet"), Giant->GetNoEntry().Num(), 0);
+	S->Tuning.JailCellLocation = FVector(0.f, 5000.f, -5000.f);
 	TestEqual(TEXT("Leader jails a member"), S->ServerJail(L, M), C::Ok);
 	const TArray<FBox> Boxes = Giant->GetNoEntry();
 	TestEqual(TEXT("The cell is a no-entry box"), Boxes.Num(), 1);
@@ -1211,11 +1214,14 @@ bool FGFSocialGiantHandoffTest::RunTest(const FString&)
 	Zones->SetOverride(Lands);
 
 	// W is added first and stands off every plot, so an ordinary tie picks W. V is the setup.
+	// Between (0, 0, 0) is the hub circle's centre, and that circle is part of his shape, so it is safe.
+	// The unowned strip is |X| <= 50. Y = 5000 is past CircleMaxRadius (3200) and still unowned.
 	AGFPlayerState* Wild = W.Add(TEXT("W"), FB);
 	AGFPlayerState* L = W.Add(TEXT("L"), FA);
 	AGFPlayerState* V = W.Add(TEXT("V"), FB);
 	AGFPlayerState* M = W.Add(TEXT("M"), FA);
-	PutAt(W.World, Wild, Between);
+	const FVector OffHub(0.f, 5000.f, 0.f);
+	PutAt(W.World, Wild, OffHub);
 	for (AGFPlayerState* PS : { L, V, M })
 	{
 		PutAt(W.World, PS, OnA);
@@ -1313,11 +1319,26 @@ bool FGFSocialGiantHandoffTest::RunTest(const FString&)
 	TestEqual(TEXT("Heart did not call him"), S->GiantTauntsRaised, 3);
 	{
 		const FGFEmoteRow* TauntRow = FGFSocialRules::FindEmote(TEXT("Taunt"));
-		const int32 Ticks = TauntRow ? FMath::CeilToInt(TauntRow->TauntCooldown) + 1 : 31;
-		for (int32 i = 0; i < Ticks; ++i)
+		const float Cooldown = TauntRow ? FGFSocialRules::EmoteReuseSeconds(*TauntRow, S->Tuning.EmoteCooldownSeconds) : 30.f;
+		// ServerEmote reads GetTimeSeconds. A 1s Tick is clamped to MaxUndilatedFrameTime (0.4s by default),
+		// so 31 of those steps never reach a 30s cooldown. Step under that cap, and raise the cap too.
+#if WITH_EDITOR
+		W.World->bDebugPauseExecution = false;
+#endif
+		if (AWorldSettings* Settings = W.World->GetWorldSettings())
 		{
-			W.World->Tick(LEVELTICK_All, 1.f);
+			Settings->SetPauserPlayerState(nullptr);
+			Settings->MaxUndilatedFrameTime = FMath::Max(Settings->MaxUndilatedFrameTime, 1.f);
 		}
+		const double Started = W.World->GetTimeSeconds();
+		const double Goal = Started + Cooldown + 0.05;
+		const float Step = 0.25f;
+		const int32 Limit = FMath::CeilToInt((Cooldown + 1.f) / Step) + 4;
+		for (int32 i = 0; i < Limit && W.World->GetTimeSeconds() < Goal; ++i)
+		{
+			W.World->Tick(LEVELTICK_All, Step);
+		}
+		TestTrue(TEXT("World time passed the taunt cooldown"), W.World->GetTimeSeconds() + KINDA_SMALL_NUMBER >= Started + Cooldown);
 		TestEqual(TEXT("After the cooldown the same player can taunt"), S->ServerEmote(M, TEXT("Taunt")), C::Ok);
 		TestEqual(TEXT("That call was raised"), S->GiantTauntsRaised, 4);
 	}
