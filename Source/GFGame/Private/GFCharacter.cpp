@@ -1,4 +1,5 @@
 #include "GFCharacter.h"
+#include "GFFerryRiderComponent.h"
 #include "GFPlayerState.h"
 #include "GFLog.h"
 #include "GFAssetMap.h"
@@ -63,6 +64,7 @@ AGFCharacter::AGFCharacter()
 		}
 	}
 	SimpleAnim = CreateDefaultSubobject<UGFSimpleAnimComponent>(TEXT("SimpleAnim"));
+	FerryRider = CreateDefaultSubobject<UGFFerryRiderComponent>(TEXT("FerryRider"));
 }
 
 void AGFCharacter::BeginPlay()
