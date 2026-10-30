@@ -34,6 +34,8 @@ void AGFPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(AGFPlayerState, bShareJournal);
 	DOREPLIFETIME_CONDITION(AGFPlayerState, Mailbox, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(AGFPlayerState, Progress, COND_OwnerOnly);
+	DOREPLIFETIME(AGFPlayerState, CurrentZoneId);
+	DOREPLIFETIME(AGFPlayerState, bVillainMode);
 }
 
 void AGFPlayerState::BeginPlay()
@@ -320,6 +322,58 @@ void AGFPlayerState::MarkCharacterChanged()
 void AGFPlayerState::ClientLandResult_Implementation(int32 RequestId, EGFLandResult Result)
 {
 	LandResults.Add(RequestId, Result);
+}
+
+void AGFPlayerState::SetCurrentZoneId(FName NewId)
+{
+	if (!HasAuthority() || CurrentZoneId == NewId)
+	{
+		return;
+	}
+	const FName Old = CurrentZoneId;
+	CurrentZoneId = NewId;
+	ObservedZoneId = NewId;
+	OnZoneChanged.Broadcast(Old, NewId);
+	ForceNetUpdate();
+}
+
+void AGFPlayerState::OnRep_CurrentZoneId()
+{
+	OnZoneChanged.Broadcast(ObservedZoneId, CurrentZoneId);
+	ObservedZoneId = CurrentZoneId;
+}
+
+void AGFPlayerState::SetVillainMode(bool bOn)
+{
+	if (!HasAuthority() || bVillainMode == bOn)
+	{
+		return;
+	}
+	bVillainMode = bOn;
+	ForceNetUpdate();
+}
+
+void AGFPlayerState::NotifyTookDamage(bool bFromPlayerInPvPZone)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	++DamageSerial;
+	if (bFromPlayerInPvPZone && GetWorld())
+	{
+		LastPvPDamageSeconds = GetWorld()->GetTimeSeconds();
+	}
+}
+
+void AGFPlayerState::UnlockShardstone(FName StoneId)
+{
+	if (!HasAuthority() || StoneId.IsNone() || Progress.UnlockedShardstones.Contains(StoneId))
+	{
+		return;
+	}
+	Progress.UnlockedShardstones.Add(StoneId);
+	MarkCharacterChanged();
 }
 
 void AGFPlayerState::NotifyLand(const FString& Notice)

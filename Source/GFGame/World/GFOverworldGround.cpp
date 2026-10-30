@@ -6,6 +6,8 @@
 #include "GFLog.h"
 #include "GFOverworldBuild.h"
 #include "GFTerritorySubsystem.h"
+#include "GFZoneCatalog.h"
+#include "GFZoneTypes.h"
 
 namespace
 {
@@ -95,6 +97,35 @@ namespace
 	FVector ShapeCenter(const FVector2D& XY, float TopZ, float Thickness)
 	{
 		return FVector(XY.X, XY.Y, TopZ - Thickness * 0.5f);
+	}
+
+	void DrawFlat(AGFOverworldGround* Owner, EGFPlaceholderShape MeshKind, const FVector& WorldCenter, const FVector& Scale, const FLinearColor& Color, bool bBlock)
+	{
+		UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(Owner);
+		Mesh->SetupAttachment(Owner->GetRootComponent());
+		if (UStaticMesh* Asset = FGFAssetMap::PlaceholderMesh(MeshKind))
+		{
+			Mesh->SetStaticMesh(Asset);
+		}
+		if (UMaterialInterface* Tint = FGFAssetMap::MakeTint(Mesh, Color))
+		{
+			Mesh->SetMaterial(0, Tint);
+		}
+		Mesh->SetRelativeLocation(Owner->GetActorTransform().InverseTransformPosition(WorldCenter));
+		Mesh->SetRelativeScale3D(Scale);
+		Mesh->SetMobility(EComponentMobility::Static);
+		Mesh->SetCanEverAffectNavigation(false);
+		if (bBlock)
+		{
+			Mesh->SetCollisionProfileName(TEXT("BlockAll"));
+			Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		}
+		else
+		{
+			Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
+		Owner->AddInstanceComponent(Mesh);
+		Mesh->RegisterComponent();
 	}
 }
 
@@ -288,6 +319,25 @@ void AGFOverworldGround::BeginPlay()
 	}
 
 	const bool bHub = IsVoxelOverworldMap(GetWorld());
+	if (bHub)
+	{
+		const float ThicknessCm = FMath::Max(1.f, Thickness);
+		const float SlabTop = SurfaceZ;
+		const FVector SlabCenter(0.f, 0.f, SlabTop - ThicknessCm * 0.5f);
+		const float SlabScale = (FGFZoneConstants::RimRadiusCm * 2.f) / EngineShapeCm;
+		DrawFlat(this, EGFPlaceholderShape::Cube, SlabCenter, FVector(SlabScale, SlabScale, ThicknessCm / EngineShapeCm), SlabColor, true);
+		const float DiscTop = SurfaceZ + OverlayLift;
+		const FVector DiscScaleBase(0.f, 0.f, ThicknessCm / EngineShapeCm);
+		for (const FGFPorchDisc& Disc : FGFZoneCatalog::Get().PorchDiscs())
+		{
+			const float Diameter = FMath::Max(EngineShapeCm, Disc.RadiusCm * 2.f);
+			FVector Scale = DiscScaleBase;
+			Scale.X = Diameter / EngineShapeCm;
+			Scale.Y = Diameter / EngineShapeCm;
+			const FVector Center(Disc.Center.X, Disc.Center.Y, DiscTop - ThicknessCm * 0.5f);
+			DrawFlat(this, EGFPlaceholderShape::Cylinder, Center, Scale, Disc.Color, false);
+		}
+	}
 	const TArray<FGFOverworldShape> Shapes = BuildShapes(Territory->FactionLayout, Territory->Hazards, CurrentParams());
 	int32 Drawn = 0;
 	for (const FGFOverworldShape& Shape : Shapes)

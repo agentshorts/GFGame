@@ -199,6 +199,8 @@ struct GFNET_API FGFPlayerProgress
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") int32 DepthsReached = 0;
 	/** Pebble Mine crew (unlocks after the first tame). */
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") FGFMineCrew Crew;
+	/** Shardstones this player may hop to. Empty on older saves. A row that starts unlocked still counts. */
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") TArray<FName> UnlockedShardstones;
 };
 
 UINTERFACE(MinimalAPI, meta = (CannotImplementInterfaceInBlueprint))

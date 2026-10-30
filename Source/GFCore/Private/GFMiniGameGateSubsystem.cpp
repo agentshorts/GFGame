@@ -6,6 +6,7 @@
 
 bool UGFMiniGameGateSubsystem::EnterMiniGame()
 {
+	LastEnterMessage.Reset();
 	if (!IsUnlocked())
 	{
 		UE_LOG(LogGF, Warning, TEXT("Gate %s is locked"), *GetGateId().ToString());
@@ -15,6 +16,7 @@ bool UGFMiniGameGateSubsystem::EnterMiniGame()
 	UGameInstance* GI = GetGameInstance();
 	if (Map.IsNone() || !GI || !GI->GetWorld() || !FPackageName::DoesPackageExist(Map.ToString()))
 	{
+		LastEnterMessage = TEXT("Under construction, check back soon");
 		UE_LOG(LogGF, Warning, TEXT("Gate %s has no map yet (stub)"), *GetGateId().ToString());
 		return false;
 	}

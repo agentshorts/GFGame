@@ -54,6 +54,15 @@ struct GFGAME_API FGFHUDSlotRect
  */
 GFGAME_API FString GFFormatZoneLabel(EGFTerritoryZone Zone, FName FactionId, bool bSafe, bool bHazard, FName HazardName);
 
+/** World-zone line. Tier 0 appends " · safe". Empty display name stays empty. */
+GFGAME_API FString GFFormatWorldZoneLabel(const FString& DisplayName, int32 DangerTier);
+
+/**
+ * Compass icon X for a view-relative yaw. ±100 degrees spans the strip.
+ * Yaw past that pins to the nearer edge, so a marker behind the player stays on the strip.
+ */
+GFGAME_API float GFCompassIconX(float RelativeYawDeg, float CanvasW);
+
 /** 1 until ChatHoldSeconds, then a linear fade to 0. Negative ages stay fully visible. */
 GFGAME_API float GFChatLineAlpha(float AgeSeconds);
 

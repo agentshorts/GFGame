@@ -78,6 +78,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GF|Build")
 	void CycleBlock(int32 Direction);
 
+	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
+
 	// Optional input assets (thin BP / data). Null = built in C++.
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputMappingContext> MappingContext;
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> MoveAction;

@@ -48,6 +48,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GF|MiniGame")
 	virtual bool EnterMiniGame();
 
+	/** Player-facing line when the map package is missing. Cleared on a successful enter. */
+	UPROPERTY(BlueprintReadOnly, Category = "GF|MiniGame")
+	FString LastEnterMessage;
+
 	/** Called by the mini-game when a run ends. Queues rewards for the hub. */
 	UFUNCTION(BlueprintCallable, Category = "GF|MiniGame")
 	virtual void ReportResult(const FGFMiniGameResult& Result);

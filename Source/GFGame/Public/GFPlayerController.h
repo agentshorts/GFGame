@@ -8,7 +8,7 @@ class UInputAction;
 class UInputMappingContext;
 class UVoxelFinishPainterComponent;
 
-/** Thin controller. Movement input lives on AGFCharacter. Enter, Esc and H drive AGFHUD until Common UI. */
+/** Thin controller. Movement input lives on AGFCharacter. Enter, Esc and H drive AGFHUD until Common UI. F starts a Shardhop. */
 UCLASS()
 class GFGAME_API AGFPlayerController : public APlayerController
 {
@@ -23,16 +23,24 @@ public:
 
 	UVoxelFinishPainterComponent* GetPainter() const { return Painter; }
 
+	/** Local call. On the server it starts the channel directly. F uses PickDestination. */
+	void RequestShardhop(FName DestId);
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestShardhop(FName DestId);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnRep_PlayerState() override;
 	virtual void SetupInputComponent() override;
 
-	/** Enter, Esc and H. Kept off AGFCharacter so that file stays untouched. */
 	void EnsureHudInput();
 	void HandleChatKey();
 	void HandleHintKey();
 	void HandleCloseChatKey();
+	void HandleShardhopKey();
+	void TickShardhop();
+	void FinishShardhop(FName DestId);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputMappingContext> HudMapping;
@@ -45,6 +53,15 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> CloseChatAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> ShardhopAction;
+
+	FTimerHandle ShardhopTimer;
+	bool bShardhopActive = false;
+	FName ShardhopDest;
+	double ShardhopStartedAt = 0.0;
+	int32 ShardhopSerial = 0;
 
 	bool bHudActionsBound = false;
 	bool bHudMappingAdded = false;
