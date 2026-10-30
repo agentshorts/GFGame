@@ -61,6 +61,16 @@ A neutral-evil dino that smells a wanted material within 30 ft attacks when it t
 
 The chat demo starts with an empty pack and the player 40 ft away, so "why you running" stays a chat cue.
 
+## Dinobook feed
+
+The band under the three columns is a lab simulator. It is not a social system in the game. Elders post first, family members reply under their elder, and friendly dinos attach as side links. Event buttons are player joined, attacked, refused mango, rental downed, and summon Big Grumble.
+
+On an event the dinos post and read the feed before all-chat. A leader picks a plan from alignment and family (a toll, a cover, a welcome, or a rental demand). Other dinos take a turn at a role such as blocking the path or taking a hit. All-chat is budgeted and, by default, only the leader's demand is spoken. Identical lines are dropped, each event caps the number of speakers, and a later post names someone who already spoke.
+
+Summoning Big Grumble polls every elder. Each reply quotes that family's rep, kills, bounties, and rentals. His all-chat line follows those replies. The numbers start as a local stand-in. If `src/core` from the memory work is in the tree, the panel reads it. The family tree (Swamp, Sickle, Roost) is a lab posting order, not a biography.
+
+Payday is the shift bell. Dinos work lab factories named for materials in `DT_Items` (Fossil pit, Amber kiln, Scales yard, Bone works). The wage is added to mate rank. The feed can brag about pay, post a mineral find, complain about the work, or say "looking for a job at" a factory. `src/core` on `feature/dino-chat-memory` does not have wage or mate-rank fields yet, so the panel keeps a stub and will read those fields if a later core row grows them.
+
 ## Modes and controls
 
 - 1:1 chat with the focused dino.
