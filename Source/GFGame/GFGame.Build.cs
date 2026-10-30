@@ -7,7 +7,8 @@ public class GFGame : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "GFCore", "GFVoxel", "GFBuild", "GFGarden", "GFCompanion", "GFFashion", "GFMoba", "GFRhythm", "GFSave", "GFNet", "VoxelFinish" });
-		PrivateDependencyModuleNames.AddRange(new string[] {  });
+		PrivateDependencyModuleNames.AddRange(new string[] { "GFSocial" });
+		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "Territory"));
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "AI/Roaming"));
 
 	}
