@@ -26,9 +26,10 @@ public:
 	/**
 	 * Drops finishes with no painted blocks and no blueprint refs.
 	 * BlockUses is the count of cells currently storing each id (from the mesh source).
+	 * Only the ids in OnlyIds are considered when it is given.
 	 * Returns how many slots were freed.
 	 */
-	int32 CollectGarbage(const TMap<uint16, int32>& BlockUses);
+	int32 CollectGarbage(const TMap<uint16, int32>& BlockUses, const TSet<uint16>* OnlyIds = nullptr);
 
 	/** Places a replicated slot at a server-assigned id. */
 	void ApplySlot(uint16 FinishId, const FFinish& Finish, int32 BlueprintRefs);

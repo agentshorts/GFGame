@@ -9,6 +9,7 @@
 #include "GFCompanionRoster.h"
 #include "GFNetTypes.h"
 #include "GFEconomy.h"
+#include "VoxelFinishTypes.h"
 #include "GFSaveGame.generated.h"
 
 /** Save versions (PLAN.md section 7). Add one per format change and a step in UGFSaveSubsystem::Migrate. */
@@ -24,6 +25,8 @@ enum class EGFSaveVersion : int32
 	LandAndMail = 4,
 	/** Mini-game mode state (mine rooms, crews, depots, ...) as per-mode blobs. */
 	ModeStates = 5,
+	/** Block paint (VoxelFinish palette + painted cells). Older saves load with no paint. */
+	BlockPaint = 6,
 
 	// keep last
 	VersionPlusOne,
@@ -59,6 +62,8 @@ public:
 	UPROPERTY(SaveGame) TArray<FGFPlotBlueprint> PackedBlueprints;
 	/** v5: persistent mini-game state by mode name (e.g. "Mine"). */
 	UPROPERTY(SaveGame) TMap<FName, FGFModeBlob> ModeStates;
+	/** v6: block paint on the hub's voxel blocks. Empty in older saves (they load unpainted). */
+	UPROPERTY(SaveGame) FVoxelFinishSaveData Paint;
 
 	// --- v1 fields (single-player save). Read only by the v1 -> v2 migration. ---
 	UPROPERTY(SaveGame) FGFInventory Inventory;

@@ -1,5 +1,6 @@
-// Block paint over the network (VoxelFinish + AGFPaintVolume): dye cost through the ledger, server-side reach and
-// solid-block checks, and the per-player rate limit. One-process PIE, listen server + client, runs under -nullrhi.
+// Block paint over the network (VoxelFinish + AGFPaintVolume): dye cost through the ledger, server-side reach (the game
+// state's build reach) and solid-block checks, and the per-player rate limit (dropped quietly, no rejection). One-process PIE, listen server + client,
+// runs under -nullrhi.
 #include "GFNetTestUtils.h"
 #include "GFDyes.h"
 #include "GFGameState.h"
@@ -68,6 +69,13 @@ namespace GFNetPaint
 		}
 	}
 
+	static const UVoxelFinishPainterComponent* ServerPainterFor(const FString& Key)
+	{
+		const AGFPlayerState* OnServer = PlayerStateByKey(ServerWorld(), Key);
+		const AGFPlayerController* PC = OnServer ? Cast<AGFPlayerController>(OnServer->GetOwningController()) : nullptr;
+		return PC ? PC->GetPainter() : nullptr;
+	}
+
 	static uint16 ServerFinishAt(const FIntVector& Cell)
 	{
 		const AGFPaintVolume* Vol = AGFPaintVolume::Find(ServerWorld());
@@ -110,7 +118,8 @@ bool FGFNetPaintTest::RunTest(const FString&)
 		{
 			return;
 		}
-		TestEqual(TEXT("Reach is 600 cm"), ServerPC->GetPainter()->MaxReachCm, 600.f);
+		TestTrue(TEXT("The game state has a build reach"), GS->MaxEditReach > 0.f);
+		TestEqual(TEXT("Paint reach is the game state's build reach"), ServerPC->GetPainter()->GetEffectiveMaxReachCm(), GS->MaxEditReach);
 		TestEqual(TEXT("Rate limit is 10 per second"), ServerPC->GetPainter()->MaxPaintsPerSecond, 10.f);
 
 		// Cells around the client's pawn, measured the way the server measures them.
@@ -143,12 +152,14 @@ bool FGFNetPaintTest::RunTest(const FString&)
 			}
 		}
 		bool bFar = false;
+		const float Reach = GS->MaxEditReach;
+		const int32 FarFrom = FMath::CeilToInt(Reach / GFBlockSize) + 2;
 		for (const FIntVector& Dir : { FIntVector(1, 0, 0), FIntVector(-1, 0, 0), FIntVector(0, 1, 0), FIntVector(0, -1, 0) })
 		{
-			for (int32 Dist = 9; Dist <= 12 && !bFar; ++Dist)
+			for (int32 Dist = FarFrom; Dist <= FarFrom + 6 && !bFar; ++Dist)
 			{
 				FIntVector C;
-				if (TopSolid(P.X + Dir.X * Dist, P.Y + Dir.Y * Dist, C) && FVector::Dist(PawnAt, Center(C)) > 750.f)
+				if (TopSolid(P.X + Dir.X * Dist, P.Y + Dir.Y * Dist, C) && FVector::Dist(PawnAt, Center(C)) > Reach + 150.f)
 				{
 					S->Far = C;
 					bFar = true;
@@ -224,12 +235,29 @@ bool FGFNetPaintTest::RunTest(const FString&)
 		TestEqual(TEXT("Painting created no voxel chunk"), Grid.HasChunk(FGFVoxelGrid::CellToChunk(S->Air)), S->bAirChunkBefore);
 		TestEqual(TEXT("Voxel chunk count unchanged"), Grid.GetChunkCoords().Num(), S->SolidChunksBefore);
 		TestNull(TEXT("Painting outside the world created no paint chunk"), Vol->GetSession().GetGrid().GetChunkUseCounts(VoxelFinish::CellToChunk(S->Outside)));
+
+		// The client draws the replicated paint on its own voxel blocks.
+		AGFPaintVolume* ClientVol = AGFPaintVolume::Find(ClientWorlds()[0]);
+		AGFVoxelWorld* ClientVoxel = Voxel(ClientWorlds()[0]);
+		if (TestNotNull(TEXT("Client paint volume"), ClientVol) && TestNotNull(TEXT("Client voxel world"), ClientVoxel))
+		{
+			ClientVol->FlushPaintDisplay();
+			ClientVoxel->FlushMeshes();
+			FLinearColor Shown;
+			TestTrue(TEXT("Client overlay has the painted cell"), ClientVoxel->GetCellPaint(S->Near[0], Shown));
+			TestTrue(TEXT("...in the paint colour"), Shown.Equals(FLinearColor(0.9f, 0.1f, 0.1f), 0.01f));
+			TestEqual(TEXT("Client overlay has only that cell"), ClientVoxel->NumPaintedCells(), 1);
+			const FIntVector Chunk = FGFVoxelGrid::CellToChunk(S->Near[0]);
+			TestEqual(TEXT("Client draws the block with a painted mesh"),
+				ClientVoxel->CountDrawnInstances(Chunk, ClientVoxel->GetBlock(S->Near[0]), true, FLinearColor(0.9f, 0.1f, 0.1f)), 1);
+		}
 		SetCount(GS, OnServer, Rose, 2); // 7 credits + 16 blocks: plenty for the burst below
 		S->RejectedBefore = S->Rejected.Num();
 	});
 	Wait(Ctx, 1.2f); // the bucket refills (10 tokens, 10 per second)
 
-	// Rate limit: 15 paints in one frame, at most 10 (+1 for frame spread) get through.
+	// Rate limit: 15 paints in one frame, at most 10 (+1 for frame spread) get through. The rest are dropped on the
+	// server without a reply, so the client hears nothing back for them.
 	Do(Ctx, [S, Red]()
 	{
 		UVoxelFinishPainterComponent* Painter = ClientPainter();
@@ -242,7 +270,7 @@ bool FGFNetPaintTest::RunTest(const FString&)
 			Painter->RequestPaint(S->Near[i], Solid(Red));
 		}
 	});
-	WaitUntil(Ctx, TEXT("the burst is answered"), 10.f, [S]()
+	WaitUntil(Ctx, TEXT("the server has handled the burst"), 10.f, [S]()
 	{
 		if (!S->Ready())
 		{
@@ -253,8 +281,10 @@ bool FGFNetPaintTest::RunTest(const FString&)
 		{
 			Painted += ServerFinishAt(S->Near[i]) != 0 ? 1 : 0;
 		}
-		return Painted + (S->Rejected.Num() - S->RejectedBefore) >= 15;
+		const UVoxelFinishPainterComponent* ServerPainter = ServerPainterFor(S->Key);
+		return ServerPainter && Painted + ServerPainter->GetNumRateLimited() >= 15;
 	});
+	Wait(Ctx, 0.5f); // time for any (wrong) rejection to reach the client
 	Do(Ctx, [this, S]()
 	{
 		if (!S->Ready())
@@ -266,13 +296,69 @@ bool FGFNetPaintTest::RunTest(const FString&)
 		{
 			Painted += ServerFinishAt(S->Near[i]) != 0 ? 1 : 0;
 		}
-		const int32 Limited = CountRejected(*S, EVoxelFinishPaintResult::RejectedRateLimited, S->RejectedBefore);
+		const UVoxelFinishPainterComponent* ServerPainter = ServerPainterFor(S->Key);
 		TestTrue(*FString::Printf(TEXT("10 (or 11) of the 15 painted, got %d"), Painted), Painted >= 10 && Painted <= 11);
-		TestEqual(TEXT("The rest were rate limited"), Limited, 15 - Painted);
-		TestEqual(TEXT("Nothing else was rejected"), S->Rejected.Num() - S->RejectedBefore, Limited);
+		TestEqual(TEXT("The rest were rate limited on the server"), ServerPainter ? ServerPainter->GetNumRateLimited() : -1, 15 - Painted);
+		TestEqual(TEXT("Rate-limited paints send no rejection to the client"), S->Rejected.Num() - S->RejectedBefore, 0);
+		TestEqual(TEXT("...and none was a rate-limit rejection"), CountRejected(*S, EVoxelFinishPaintResult::RejectedRateLimited), 0);
 		const AGFPaintVolume* Vol = AGFPaintVolume::Find(ServerWorld());
 		TestEqual(TEXT("Rate-limited paints cost nothing"), Vol->GetCredits().GetCredits(S->Key, Rose)
 			+ PlayerStateByKey(ServerWorld(), S->Key)->Inventory->GetCount(Rose) * FGFDyes::BlocksPerDye, 7 + 2 * FGFDyes::BlocksPerDye - Painted);
+	});
+
+	// Reach is read from the game state at paint time: a build reach of 0 means no limit, so the far block paints.
+	Wait(Ctx, 1.2f);
+	Do(Ctx, [S, Red]()
+	{
+		UVoxelFinishPainterComponent* Painter = ClientPainter();
+		if (!S->Ready() || !Painter)
+		{
+			return;
+		}
+		GameState(ServerWorld())->MaxEditReach = 0.f;
+		S->RejectedBefore = S->Rejected.Num();
+		Painter->RequestPaint(S->Far, Solid(Red));
+	});
+	WaitUntil(Ctx, TEXT("the far block is painted"), 10.f, [S]()
+	{
+		return !S->Ready() || ServerFinishAt(S->Far) != 0 || S->Rejected.Num() > S->RejectedBefore;
+	});
+	Do(Ctx, [this, S]()
+	{
+		if (!S->Ready())
+		{
+			return;
+		}
+		TestTrue(TEXT("Build reach 0: the far block paints"), ServerFinishAt(S->Far) != 0);
+		TestEqual(TEXT("...without a rejection"), S->Rejected.Num(), S->RejectedBefore);
+		GameState(ServerWorld())->MaxEditReach = 1200.f;
+
+		// Removing a painted block unpaints its cell on the server, and the client follows.
+		if (AGFPaintVolume* ServerVol = AGFPaintVolume::Find(ServerWorld()))
+		{
+			ServerVol->FlushPaintDisplay(); // listens to the voxel world (the tick has done it already)
+		}
+		TestTrue(TEXT("The far block is removed"), !Voxel(ServerWorld())->RemoveBlock(S->Far).IsNone());
+		TestEqual(TEXT("...and its paint with it"), ServerFinishAt(S->Far), static_cast<uint16>(0));
+	});
+	WaitUntil(Ctx, TEXT("the client drops the removed block's paint"), 10.f, [S]()
+	{
+		const AGFPaintVolume* ClientVol = AGFPaintVolume::Find(ClientWorlds()[0]);
+		return !S->Ready() || ClientVol && ClientVol->GetSession().GetGrid().GetFinishId(S->Far) == 0;
+	});
+	Do(Ctx, [this, S]()
+	{
+		AGFPaintVolume* ClientVol = AGFPaintVolume::Find(ClientWorlds()[0]);
+		AGFVoxelWorld* ClientVoxel = Voxel(ClientWorlds()[0]);
+		if (!S->Ready() || !ClientVol || !ClientVoxel)
+		{
+			return;
+		}
+		ClientVol->FlushPaintDisplay();
+		FLinearColor Shown;
+		TestEqual(TEXT("Client session: the removed block's cell is unpainted"), ClientVol->GetSession().GetGrid().GetFinishId(S->Far), static_cast<uint16>(0));
+		TestFalse(TEXT("Client overlay dropped it"), ClientVoxel->GetCellPaint(S->Far, Shown));
+		TestTrue(TEXT("Other painted blocks keep their paint"), ClientVoxel->GetCellPaint(S->Near[0], Shown));
 	});
 	Stop(Ctx);
 	return true;

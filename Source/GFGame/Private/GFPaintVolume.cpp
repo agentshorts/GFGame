@@ -22,6 +22,11 @@ TArray<FLinearColor> FGFPaintCost::VisibleColors(const FFinish& Finish)
 	return Out;
 }
 
+FLinearColor FGFPaintCost::DisplayColor(const FFinish& Finish)
+{
+	return VisibleColors(Finish)[0];
+}
+
 TArray<FName> FGFPaintCost::DyesFor(const FFinish& Finish)
 {
 	TArray<FName> Out;
@@ -91,6 +96,12 @@ AGFPaintVolume* AGFPaintVolume::Find(const UWorld* World)
 	return nullptr;
 }
 
+AGFPaintVolume::AGFPaintVolume()
+{
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
+}
+
 void AGFPaintVolume::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
@@ -124,8 +135,7 @@ bool AGFPaintVolume::ServerSpend(const FFinish& Finish, APlayerState* Payer)
 
 bool AGFPaintVolume::ResolveTarget(const FIntVector& Cell, FVector& OutCenter) const
 {
-	const AGFGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGFGameState>() : nullptr;
-	const AGFVoxelWorld* Voxel = GS ? GS->GetVoxelWorld() : nullptr;
+	const AGFVoxelWorld* Voxel = FindVoxelWorld();
 	// FGFVoxelGrid::Get is a bounds check plus a chunk lookup: a missing chunk reads as air and is never created.
 	if (!Voxel || !Voxel->GetAuthoritativeGrid().IsSolid(Cell))
 	{
@@ -133,4 +143,144 @@ bool AGFPaintVolume::ResolveTarget(const FIntVector& Cell, FVector& OutCenter) c
 	}
 	OutCenter = Voxel->CellToWorld(Cell) + FVector(0.f, 0.f, GFBlockSize * 0.5f);
 	return true;
+}
+
+// ---------------- Display ----------------
+
+AGFVoxelWorld* AGFPaintVolume::FindVoxelWorld() const
+{
+	const UWorld* World = GetWorld();
+	const AGFGameState* GS = World ? World->GetGameState<AGFGameState>() : nullptr;
+	if (AGFVoxelWorld* Voxel = GS ? GS->GetVoxelWorld() : nullptr)
+	{
+		return Voxel;
+	}
+	if (World)
+	{
+		for (TActorIterator<AGFVoxelWorld> It(const_cast<UWorld*>(World)); It; ++It)
+		{
+			return *It;
+		}
+	}
+	return nullptr;
+}
+
+void AGFPaintVolume::OnPaintChunksChanged(const TArray<FIntVector>& ChunkCoords)
+{
+	PendingChunks.Append(ChunkCoords);
+}
+
+void AGFPaintVolume::OnPaletteSlotChanged(uint16 FinishId)
+{
+	PendingSlots.Add(FinishId);
+}
+
+void AGFPaintVolume::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	FlushPaintDisplay();
+}
+
+void AGFPaintVolume::BindVoxelWorld(AGFVoxelWorld* Voxel)
+{
+	if (!HasAuthority() || !Voxel || BoundTo.Get() == Voxel)
+	{
+		return;
+	}
+	if (AGFVoxelWorld* Old = BoundTo.Get())
+	{
+		Old->OnBlockChanged.RemoveDynamic(this, &AGFPaintVolume::HandleBlockChanged);
+		Old->OnGridReset.Remove(GridResetHandle);
+	}
+	BoundTo = Voxel;
+	Voxel->OnBlockChanged.AddUniqueDynamic(this, &AGFPaintVolume::HandleBlockChanged);
+	GridResetHandle = Voxel->OnGridReset.AddUObject(this, &AGFPaintVolume::HandleGridReset);
+	// Blocks may have gone while nobody was listening.
+	AuthorityClearUnresolvable();
+}
+
+void AGFPaintVolume::HandleBlockChanged(FIntVector Cell, FName BlockId)
+{
+	// A removed or replaced block (FillLayers) loses its paint. A block placed on an empty cell has none to lose.
+	if (HasAuthority())
+	{
+		AuthorityClearCells({ Cell });
+	}
+}
+
+void AGFPaintVolume::HandleGridReset()
+{
+	AuthorityClearUnresolvable();
+}
+
+void AGFPaintVolume::DrawPaintChunk(AGFVoxelWorld* Voxel, const FIntVector& PaintChunk)
+{
+	const FIntVector Min = PaintChunk * VoxelFinish::ChunkSize;
+	Voxel->ClearPaintInRegion(Min, Min + FIntVector(VoxelFinish::ChunkSize - 1));
+	TArray<TPair<uint16, uint16>> Cells;
+	GetSession().GetGrid().ExportChunk(PaintChunk, Cells);
+	for (const TPair<uint16, uint16>& Cell : Cells)
+	{
+		// A client can learn of a cell before its palette slot; the slot's own callback draws it.
+		if (const FFinish* Finish = GetSession().GetPalette().Find(Cell.Value))
+		{
+			Voxel->SetCellPaint(VoxelFinish::ChunkLocalToCell(PaintChunk, Cell.Key), FGFPaintCost::DisplayColor(*Finish));
+		}
+	}
+}
+
+void AGFPaintVolume::FlushPaintDisplay()
+{
+	AGFVoxelWorld* Voxel = FindVoxelWorld();
+	if (!Voxel)
+	{
+		return; // keep the queue: everything is redrawn once a voxel world shows up
+	}
+	if (DrawnOn.Get() != Voxel)
+	{
+		// First fill (or a new voxel world): draw every painted cell.
+		DrawnOn = Voxel;
+		BindVoxelWorld(Voxel);
+		PendingChunks.Reset();
+		PendingSlots.Reset();
+		Voxel->ClearAllPaint();
+		GetSession().GetGrid().ForEachPaintedBlock([this, Voxel](FIntVector Cell, uint16 FinishId)
+		{
+			if (const FFinish* Finish = GetSession().GetPalette().Find(FinishId))
+			{
+				Voxel->SetCellPaint(Cell, FGFPaintCost::DisplayColor(*Finish));
+			}
+		});
+		return;
+	}
+	if (PendingChunks.Num() > 0)
+	{
+		const TSet<FIntVector> Chunks = MoveTemp(PendingChunks);
+		PendingChunks.Reset();
+		for (const FIntVector& Chunk : Chunks)
+		{
+			DrawPaintChunk(Voxel, Chunk);
+		}
+	}
+	if (PendingSlots.Num() > 0)
+	{
+		// One pass over the painted cells for every slot that changed since the last flush.
+		const TSet<uint16> Slots = MoveTemp(PendingSlots);
+		PendingSlots.Reset();
+		GetSession().GetGrid().ForEachPaintedBlock([this, Voxel, &Slots](FIntVector Cell, uint16 FinishId)
+		{
+			if (!Slots.Contains(FinishId))
+			{
+				return;
+			}
+			if (const FFinish* Finish = GetSession().GetPalette().Find(FinishId))
+			{
+				Voxel->SetCellPaint(Cell, FGFPaintCost::DisplayColor(*Finish));
+			}
+			else
+			{
+				Voxel->ClearCellPaint(Cell);
+			}
+		});
+	}
 }

@@ -176,6 +176,34 @@ EVoxelFinishPaintResult FVoxelFinishSession::ServerPaint(const FIntVector& Cell,
 	return EVoxelFinishPaintResult::Applied;
 }
 
+int32 FVoxelFinishSession::ServerClearCells(const TArray<FIntVector>& Cells)
+{
+	if (!Grid.IsAuthority())
+	{
+		return 0;
+	}
+	int32 Cleared = 0;
+	TSet<uint16> Released;
+	for (const FIntVector& Cell : Cells)
+	{
+		const uint16 Id = Grid.GetFinishId(Cell);
+		if (Id == VoxelFinish::UnpaintedId)
+		{
+			continue;
+		}
+		Grid.SetFinishId(Cell, VoxelFinish::UnpaintedId);
+		Grid.MarkChunkDirty(VoxelFinish::CellToChunk(Cell));
+		Released.Add(Id);
+		++Cleared;
+	}
+	if (Released.Num() > 0)
+	{
+		// Only the finishes these cells held: other unused slots stay until the game collects garbage itself.
+		Palette.CollectGarbage(Grid.GetUseCounts(), &Released);
+	}
+	return Cleared;
+}
+
 uint16 FVoxelFinishSession::RestoreBlueprintFinish(const FFinish& Stored)
 {
 	if (!Grid.IsAuthority())

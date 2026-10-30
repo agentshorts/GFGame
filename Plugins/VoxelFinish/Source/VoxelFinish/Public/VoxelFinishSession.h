@@ -49,6 +49,12 @@ public:
 	EVoxelFinishPaintResult ServerPaint(const FIntVector& Cell, const FFinish& Finish, APlayerState* Player);
 
 	/**
+	 * Unpaints Cells (unpainted cells are skipped) and frees the palette slots of finishes that no block and no
+	 * blueprint uses any more. Nothing is refunded. Returns how many cells were unpainted; 0 when not the authority.
+	 */
+	int32 ServerClearCells(const TArray<FIntVector>& Cells);
+
+	/**
 	 * Effect ids a client may paint. Nothing is allowed until registered; INDEX_NONE (no effect) always is.
 	 * AVoxelFinishVolume registers the built-in sparkle id and the effect_index of every accepted starter graph.
 	 */

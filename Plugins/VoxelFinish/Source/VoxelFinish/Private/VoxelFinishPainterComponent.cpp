@@ -17,6 +17,16 @@ void UVoxelFinishPainterComponent::SetVolume(AVoxelFinishVolume* InVolume)
 	Volume = InVolume;
 }
 
+void UVoxelFinishPainterComponent::SetMaxReachProvider(TFunction<float()> InProvider)
+{
+	MaxReachProvider = MoveTemp(InProvider);
+}
+
+float UVoxelFinishPainterComponent::GetEffectiveMaxReachCm() const
+{
+	return MaxReachProvider ? MaxReachProvider() : MaxReachCm;
+}
+
 APlayerState* UVoxelFinishPainterComponent::ResolvePayer() const
 {
 	AActor* Owner = GetOwner();
@@ -100,6 +110,12 @@ void UVoxelFinishPainterComponent::AuthorityHandlePaint(const FIntVector& Cell, 
 		return;
 	}
 	const EVoxelFinishPaintResult Result = AuthorityCheckAndPaint(Cell, Finish);
+	if (Result == EVoxelFinishPaintResult::RejectedRateLimited)
+	{
+		// Dropped quietly: answering every request over the limit would let a flood cost the server an RPC each.
+		++NumRateLimited;
+		return;
+	}
 	if (Result != EVoxelFinishPaintResult::Applied && Result != EVoxelFinishPaintResult::AlreadyPainted)
 	{
 		ClientPaintRejected(Cell, static_cast<uint8>(Result));
@@ -131,7 +147,12 @@ EVoxelFinishPaintResult UVoxelFinishPainterComponent::AuthorityCheckAndPaint(con
 		return EVoxelFinishPaintResult::RejectedNoBlock;
 	}
 	const APawn* Pawn = ResolvePawn();
-	if (!Pawn || FVector::DistSquared(Pawn->GetActorLocation(), Center) > FMath::Square(static_cast<double>(MaxReachCm)))
+	if (!Pawn)
+	{
+		return EVoxelFinishPaintResult::RejectedOutOfReach;
+	}
+	const float Reach = GetEffectiveMaxReachCm();
+	if (Reach > 0.f && FVector::DistSquared(Pawn->GetActorLocation(), Center) > FMath::Square(static_cast<double>(Reach)))
 	{
 		return EVoxelFinishPaintResult::RejectedOutOfReach;
 	}

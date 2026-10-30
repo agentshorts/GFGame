@@ -19,6 +19,7 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FOnVoxelFinishPaintRejected, FIntVector /*C
  * The client never names the payer: the server derives it from this component's owner.
  * Server checks, in order: rate limit, volume, payer, target block (AVoxelFinishVolume::SetPaintTargetResolver),
  * reach, then the volume's own checks and the materials hook. Every request counts against the rate limit.
+ * Reach is read at paint time: the game can supply it live with SetMaxReachProvider, otherwise MaxReachCm is used.
  */
 UCLASS(ClassGroup = (VoxelFinish), meta = (BlueprintSpawnableComponent))
 class VOXELFINISH_API UVoxelFinishPainterComponent : public UActorComponent
@@ -41,16 +42,34 @@ public:
 	/** Pawn the reach check measures from: the owner itself, a controller's pawn, or a PlayerState's pawn. */
 	APawn* ResolvePawn() const;
 
-	/** Server: farthest distance (cm) from the pawn's location to the centre of the painted block. */
+	/**
+	 * Server: farthest distance (cm) from the pawn's location to the centre of the painted block. 0 = no limit.
+	 * Ignored while a reach provider is bound (SetMaxReachProvider).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VoxelFinish|Server", meta = (ClampMin = "0"))
 	float MaxReachCm = 600.f;
+
+	/**
+	 * Server: supplies the reach (cm) live, read at each paint, so the game can keep it in one place
+	 * (e.g. a game-state setting that changes during play). A value <= 0 means no limit. Pass an empty function to unbind.
+	 */
+	void SetMaxReachProvider(TFunction<float()> InProvider);
+
+	/** The reach the next paint is checked against: the provider's value if bound, else MaxReachCm. <= 0 = no limit. */
+	float GetEffectiveMaxReachCm() const;
 
 	/** Server: paint requests accepted per second from this player, with bursts of up to the same number. 0 = no limit. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VoxelFinish|Server", meta = (ClampMin = "0"))
 	float MaxPaintsPerSecond = 10.f;
 
-	/** Fires on the owning client when the server rejects a paint. */
+	/**
+	 * Fires on the owning client when the server rejects a paint. Rate-limited requests are dropped quietly
+	 * (no RPC back), so a flooding client cannot make the server answer every extra request.
+	 */
 	FOnVoxelFinishPaintRejected OnPaintRejected;
+
+	/** Server: how many of this player's requests the rate limit has dropped. */
+	int32 GetNumRateLimited() const { return NumRateLimited; }
 
 protected:
 	UFUNCTION(Server, Reliable)
@@ -65,6 +84,8 @@ private:
 	AVoxelFinishVolume* ResolveVolume();
 
 	FVoxelFinishRateLimiter RateLimiter;
+	TFunction<float()> MaxReachProvider;
+	int32 NumRateLimited = 0;
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<AVoxelFinishVolume> Volume;

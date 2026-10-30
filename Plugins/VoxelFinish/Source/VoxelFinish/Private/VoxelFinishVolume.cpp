@@ -123,6 +123,93 @@ EVoxelFinishPaintResult AVoxelFinishVolume::AuthorityPaint(const FIntVector& Cel
 	return Result;
 }
 
+int32 AVoxelFinishVolume::AuthorityClearCells(const TArray<FIntVector>& Cells)
+{
+	if (!HasAuthority() || Cells.Num() == 0)
+	{
+		return 0;
+	}
+	Session.SetAuthority(true);
+	const int32 Cleared = Session.ServerClearCells(Cells);
+	if (Cleared > 0)
+	{
+		PushSessionChanges();
+	}
+	return Cleared;
+}
+
+int32 AVoxelFinishVolume::AuthorityClearUnresolvable()
+{
+	if (!HasAuthority())
+	{
+		return 0;
+	}
+	TArray<FIntVector> Refused;
+	Session.GetGrid().ForEachPaintedBlock([this, &Refused](FIntVector Cell, uint16)
+	{
+		FVector Center;
+		if (!ResolvePaintTarget(Cell, Center))
+		{
+			Refused.Add(Cell);
+		}
+	});
+	return AuthorityClearCells(Refused);
+}
+
+void AVoxelFinishVolume::AuthorityRestore(const FVoxelFinishSaveData& Data)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	Session.SetAuthority(true);
+	// Everything painted before and after the restore is re-sent and reported to the display hooks.
+	TSet<FIntVector> Chunks;
+	TSet<uint16> Ids;
+	auto Collect = [this, &Chunks, &Ids]()
+	{
+		Session.GetGrid().ForEachPaintedBlock([&Chunks](FIntVector Cell, uint16)
+		{
+			Chunks.Add(VoxelFinish::CellToChunk(Cell));
+		});
+		TArray<uint16> SlotIds;
+		TArray<FFinish> SlotFinishes;
+		TArray<int32> SlotRefs;
+		Session.GetPalette().ExportSparse(SlotIds, SlotFinishes, SlotRefs);
+		Ids.Append(SlotIds);
+	};
+	Collect();
+	Session.RestoreFromSave(Data);
+	Collect();
+
+	for (uint16 Id : Ids)
+	{
+		if (Session.GetPalette().Find(Id))
+		{
+			UpsertPaletteItem(Id);
+		}
+		else
+		{
+			RemovePaletteItem(Id);
+		}
+		MarkLookupDirty(Id);
+	}
+	for (const FIntVector& Chunk : Chunks)
+	{
+		UpsertChunk(Chunk);
+	}
+	FlushLookup();
+	for (uint16 Id : Ids)
+	{
+		OnPaletteSlotChanged(Id);
+	}
+	if (Chunks.Num() > 0)
+	{
+		OnPaintChunksChanged(Chunks.Array());
+	}
+	AuthorityClearUnresolvable();
+}
+
 void AVoxelFinishVolume::PushSessionChanges()
 {
 	TArray<uint16> Upserts;
@@ -144,6 +231,18 @@ void AVoxelFinishVolume::PushSessionChanges()
 		UpsertChunk(Chunk);
 	}
 	FlushLookup();
+	for (uint16 Id : Upserts)
+	{
+		OnPaletteSlotChanged(Id);
+	}
+	for (uint16 Id : Removed)
+	{
+		OnPaletteSlotChanged(Id);
+	}
+	if (Chunks.Num() > 0)
+	{
+		OnPaintChunksChanged(Chunks);
+	}
 }
 
 void AVoxelFinishVolume::UpsertPaletteItem(uint16 FinishId)
@@ -332,6 +431,7 @@ void AVoxelFinishVolume::NotifyPaletteItem(const FVoxelFinishPaletteItem& Item)
 	Session.ApplyReplicatedPaletteSlot(Item.FinishId, Item.Finish, Item.BlueprintRefs);
 	MarkLookupDirty(Item.FinishId);
 	FlushLookup();
+	OnPaletteSlotChanged(Item.FinishId);
 }
 
 void AVoxelFinishVolume::NotifyPaletteItemRemoved(const FVoxelFinishPaletteItem& Item, const FVoxelFinishPaletteArray& InArray)
@@ -348,6 +448,7 @@ void AVoxelFinishVolume::NotifyPaletteItemRemoved(const FVoxelFinishPaletteItem&
 	Session.ApplyReplicatedPaletteRemoval(Item.FinishId);
 	MarkLookupDirty(Item.FinishId);
 	FlushLookup();
+	OnPaletteSlotChanged(Item.FinishId);
 }
 
 void AVoxelFinishVolume::NotifyChunkItem(const FVoxelFinishChunkItem& Item)
@@ -359,4 +460,5 @@ void AVoxelFinishVolume::NotifyChunkItem(const FVoxelFinishChunkItem& Item)
 		Cells.Emplace(Cell.LocalIndex, Cell.FinishId);
 	}
 	Session.ApplyReplicatedChunk(Item.ChunkCoord, Cells);
+	OnPaintChunksChanged({ Item.ChunkCoord });
 }

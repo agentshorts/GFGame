@@ -63,6 +63,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GF|Voxel")
 	FName RemoveBlock(FIntVector Cell);
 
+	/** Server: fills the bottom NumLayers layers with BlockId. OnBlockChanged fires for every block it replaces (not for filled air). */
 	UFUNCTION(BlueprintCallable, Category = "GF|Voxel")
 	void FillLayers(int32 NumLayers, FName BlockId);
 
@@ -119,8 +120,36 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "GF|Voxel")
 	FGFOnBlockChanged OnBlockChanged;
 
+	/** Server: the grid was replaced as a whole (ClearAll, LoadData) without an OnBlockChanged per cell. */
+	FSimpleMulticastDelegate OnGridReset;
+
 	// Called by the fast-array items (clients).
 	void OnChunkReplicated(const FIntVector& ChunkCoord);
+
+	// ---------------- Paint overlay (display only) ----------------
+	// A colour drawn over a cell's block. Any machine; not part of the grid, its save or its replication: whoever owns
+	// the paint (GFGame's AGFPaintVolume) keeps it in sync on each machine. Painted blocks get their own instanced
+	// mesh per (chunk, block, colour), drawn with a copy of the block's material whose PaintColorParameter is set.
+	// A cell keeps its colour while empty, so a block placed there later would show it: owners clear it on removal.
+
+	/** Vector parameter the paint colour is written to on the painted copy of a block's material. */
+	static const FName PaintColorParameter;
+
+	/** Draws Cell's block in Color (opaque; alpha ignored, stored as 8-bit sRGB). */
+	void SetCellPaint(const FIntVector& Cell, const FLinearColor& Color);
+	void ClearCellPaint(const FIntVector& Cell);
+	/** Drops every overlay colour in the box [Min, Max] (inclusive). */
+	void ClearPaintInRegion(const FIntVector& Min, const FIntVector& Max);
+	void ClearAllPaint();
+	bool GetCellPaint(const FIntVector& Cell, FLinearColor& OutColor) const;
+	int32 NumPaintedCells() const { return PaintedCells.Num(); }
+
+	/** Rebuilds dirty chunk meshes now instead of next tick (no-op on a dedicated server). */
+	void FlushMeshes() { RebuildDirtyChunks(); }
+	/** Instances drawn for BlockId in a chunk with the given paint colour (unpainted when bPainted is false). Tests. */
+	int32 CountDrawnInstances(const FIntVector& ChunkCoord, FName BlockId, bool bPainted, const FLinearColor& Color = FLinearColor::Black) const;
+	/** Material on the mesh drawing BlockId in that colour in a chunk, or null. Tests. */
+	UMaterialInterface* GetDrawnMaterial(const FIntVector& ChunkCoord, FName BlockId, bool bPainted, const FLinearColor& Color = FLinearColor::Black) const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -140,8 +169,11 @@ protected:
 	void MarkChunkDirty(const FIntVector& ChunkCoord);
 	void RebuildDirtyChunks();
 	void RebuildChunkMeshes(const FIntVector& ChunkCoord);
-	UInstancedStaticMeshComponent* GetOrCreateIsm(const FIntVector& ChunkCoord, FName BlockId);
+	/** PaintKey 0 = unpainted; otherwise the packed sRGB colour with alpha 255 (see PaintKeyOf). */
+	UInstancedStaticMeshComponent* GetOrCreateIsm(const FIntVector& ChunkCoord, FName BlockId, uint32 PaintKey = 0);
 	UMaterialInterface* GetBlockMaterial(FName BlockId);
+	UMaterialInterface* GetPaintedMaterial(FName BlockId, uint32 PaintKey);
+	static uint32 PaintKeyOf(const FLinearColor& Color);
 	virtual void Tick(float DeltaSeconds) override;
 
 	UPROPERTY(VisibleAnywhere, Category = "GF|Voxel")
@@ -160,7 +192,14 @@ protected:
 	UPROPERTY(Transient)
 	TMap<FName, TObjectPtr<UMaterialInterface>> MaterialByBlock;
 
-	TMap<TTuple<FIntVector, FName>, UInstancedStaticMeshComponent*> IsmIndex;
+	/** Painted copies of block materials, keyed "<Block>_P<RRGGBBAA>". */
+	UPROPERTY(Transient)
+	TMap<FName, TObjectPtr<UMaterialInterface>> PaintedMaterials;
+
+	/** (chunk, block, paint key) -> mesh. Paint key 0 = unpainted. */
+	TMap<TTuple<FIntVector, FName, uint32>, UInstancedStaticMeshComponent*> IsmIndex;
+	/** Overlay colours (sRGB, alpha 255) by cell. */
+	TMap<FIntVector, FColor> PaintedCells;
 	TSet<FIntVector> DirtyChunks;
 
 	FGFVoxelGrid Grid;

@@ -6,6 +6,7 @@
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFLocalProfileSubsystem.h"
+#include "VoxelFinishVolume.h"
 #include "EngineUtils.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -32,6 +33,11 @@ UGFSaveGame* UGFSaveSubsystem::CaptureWorld(UWorld* World)
 	{
 		Save->Voxels = It->SaveData();
 		break; // one hub grid
+	}
+	for (TActorIterator<AVoxelFinishVolume> It(World); It; ++It)
+	{
+		Save->Paint = It->GetSession().ToSaveData();
+		break; // one paint volume, on the hub grid
 	}
 	for (TActorIterator<AGFGardenPlot> It(World); It; ++It)
 	{
@@ -78,6 +84,12 @@ bool UGFSaveSubsystem::ApplyToWorld(UWorld* World, const UGFSaveGame* Save)
 	for (TActorIterator<AGFVoxelWorld> It(World); It; ++It)
 	{
 		bOk &= It->LoadData(Save->Voxels);
+		break;
+	}
+	// Paint after the blocks: cells that are not solid blocks any more load unpainted.
+	for (TActorIterator<AVoxelFinishVolume> It(World); It; ++It)
+	{
+		It->AuthorityRestore(Save->Paint);
 		break;
 	}
 	// Plots: reuse existing actors in order, spawn the rest. TODO(M1): match by stable id.
@@ -201,6 +213,7 @@ bool UGFSaveSubsystem::Migrate(UGFSaveGame* Save)
 		Save->DinoPreferences = FGFDiscoveredDinoPreferences();
 		Save->SaveVersion = static_cast<int32>(EGFSaveVersion::WorldCharacterSplit);
 	}
+	// v2-v5 -> v6: nothing to convert. Paint is empty in those saves, so the world loads with no paint.
 	Save->SaveVersion = static_cast<int32>(EGFSaveVersion::Latest);
 	return true;
 }

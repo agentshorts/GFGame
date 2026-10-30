@@ -162,6 +162,62 @@ bool FVoxelFinishGCBlueprintTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FVoxelFinishClearCellsTest, "VoxelFinish.ClearCells", VoxelFinishTestFlags)
+bool FVoxelFinishClearCellsTest::RunTest(const FString&)
+{
+	FVoxelFinishSession Session(true);
+	AllowAllDyes(Session);
+	auto Make = [](int32 Pattern, const FLinearColor& Color)
+	{
+		FFinish Finish;
+		Finish.PatternId = Pattern;
+		Finish.ColorA = Color;
+		return Finish;
+	};
+	const FFinish Red = Make(1, FLinearColor::Red);
+	const FFinish Green = Make(2, FLinearColor::Green);
+	const FFinish Leftover = Make(5, FLinearColor::Yellow);
+	const FFinish Blueprint = Make(4, FLinearColor::Blue);
+	const FIntVector A(1, 2, 3);
+	const FIntVector B(2, 2, 3);
+	const FIntVector C(40, 2, 3);
+	const int32 Applied = static_cast<int32>(EVoxelFinishPaintResult::Applied);
+	TestEqual(TEXT("A red"), static_cast<int32>(Session.ServerPaint(A, Red, nullptr)), Applied);
+	TestEqual(TEXT("B red"), static_cast<int32>(Session.ServerPaint(B, Red, nullptr)), Applied);
+	TestEqual(TEXT("C leftover"), static_cast<int32>(Session.ServerPaint(C, Leftover, nullptr)), Applied);
+	TestEqual(TEXT("C green (leftover now unused)"), static_cast<int32>(Session.ServerPaint(C, Green, nullptr)), Applied);
+	const uint16 BlueprintId = Session.RestoreBlueprintFinish(Blueprint);
+	TestEqual(TEXT("Blueprint used on a block"), static_cast<int32>(Session.ServerPaint(FIntVector(3, 2, 3), Blueprint, nullptr)), Applied);
+	Session.GetGrid().ClearDirty();
+	TArray<uint16> Ignored;
+	TArray<uint16> IgnoredRemoved;
+	Session.GetPalette().ConsumeChanges(Ignored, IgnoredRemoved);
+	const uint16 RedId = Session.GetPalette().FindExisting(Red);
+	const uint16 LeftoverId = Session.GetPalette().FindExisting(Leftover);
+
+	TestEqual(TEXT("Clearing A (and an unpainted cell) unpaints one cell"), Session.ServerClearCells({ A, FIntVector(9, 9, 9) }), 1);
+	TestEqual(TEXT("A unpainted"), static_cast<int32>(Session.GetGrid().GetFinishId(A)), 0);
+	TestNotNull(TEXT("Red stays while B uses it"), Session.GetPalette().Find(RedId));
+	TArray<FIntVector> Dirty = Session.GetGrid().ConsumeDirtyChunks();
+	TestTrue(TEXT("Only A's chunk is dirty"), Dirty.Num() == 1 && Dirty[0] == VoxelFinish::CellToChunk(A));
+
+	TestEqual(TEXT("Clearing B and the blueprint's block"), Session.ServerClearCells({ B, FIntVector(3, 2, 3) }), 2);
+	TestNull(TEXT("Red is freed with its last block"), Session.GetPalette().Find(RedId));
+	TestNotNull(TEXT("The blueprint's finish stays (blueprint ref)"), Session.GetPalette().Find(BlueprintId));
+	TestNotNull(TEXT("An unrelated unused finish is left for the game's own GC"), Session.GetPalette().Find(LeftoverId));
+	TArray<uint16> Upserts;
+	TArray<uint16> Removed;
+	Session.GetPalette().ConsumeChanges(Upserts, Removed);
+	TestTrue(TEXT("Red is reported as removed"), Removed.Num() == 1 && Removed[0] == RedId);
+	TestEqual(TEXT("Only C stays painted"), Session.GetGrid().NumPainted(), 1);
+
+	FVoxelFinishSession Client(false);
+	Client.GetGrid().WriteReplicated(A, 1);
+	TestEqual(TEXT("A client cannot clear"), Client.ServerClearCells({ A }), 0);
+	TestEqual(TEXT("...and its cell is untouched"), static_cast<int32>(Client.GetGrid().GetFinishId(A)), 1);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FVoxelFinishVertexTest, "VoxelFinish.VertexEncoding", VoxelFinishTestFlags)
 bool FVoxelFinishVertexTest::RunTest(const FString&)
 {
@@ -928,10 +984,10 @@ bool FVoxelFinishPainterGuardsTest::RunTest(const FString&)
 	Painter->RequestPaint(FIntVector(1, 1, 1), Finish);
 	TestEqual(TEXT("No resolver: refused as no block"), LastRejected(), static_cast<int32>(EVoxelFinishPaintResult::RejectedNoBlock));
 
-	// Solid blocks: (1,1,1) next to the pawn, (9,0,0) 900 cm away. Everything else is air.
+	// Solid blocks: (1,1,1) next to the pawn, (9,0,0) 900 cm away, (20,0,0) 2000 cm away. Everything else is air.
 	Volume->SetPaintTargetResolver([](const FIntVector& Cell, FVector& OutCenter)
 	{
-		if (Cell == FIntVector(1, 1, 1) || Cell == FIntVector(9, 0, 0) || Cell == FIntVector(2, 1, 1) || Cell == FIntVector(3, 1, 1))
+		if (Cell == FIntVector(1, 1, 1) || Cell == FIntVector(9, 0, 0) || Cell == FIntVector(2, 1, 1) || Cell == FIntVector(3, 1, 1) || Cell == FIntVector(20, 0, 0))
 		{
 			OutCenter = (FVector(Cell) + FVector(0.5)) * 100.0;
 			return true;
@@ -957,8 +1013,29 @@ bool FVoxelFinishPainterGuardsTest::RunTest(const FString&)
 	Painter->MaxReachCm = 1000.f;
 	Painter->RequestPaint(FIntVector(9, 0, 0), Finish);
 	TestTrue(TEXT("Reach is tunable"), Grid.GetFinishId(FIntVector(9, 0, 0)) != VoxelFinish::UnpaintedId);
+	const int32 OutOfReach = static_cast<int32>(EVoxelFinishPaintResult::RejectedOutOfReach);
+	Painter->RequestPaint(FIntVector(20, 0, 0), Finish);
+	TestEqual(TEXT("A block 2000 cm away is past 1000 cm"), LastRejected(), OutOfReach);
 
-	// A second player-owned painter with 3 requests per second: the 4th and 5th in the same instant are refused.
+	// A bound provider is read at paint time and wins over MaxReachCm; <= 0 means no limit.
+	float ProvidedReach = 500.f;
+	Painter->SetMaxReachProvider([&ProvidedReach]() { return ProvidedReach; });
+	TestEqual(TEXT("Effective reach comes from the provider"), Painter->GetEffectiveMaxReachCm(), 500.f);
+	Rejected.Reset();
+	Painter->RequestPaint(FIntVector(9, 0, 0), Finish);
+	TestEqual(TEXT("Provider reach of 500 cm refuses a block 900 cm away"), LastRejected(), OutOfReach);
+	ProvidedReach = 0.f;
+	Painter->RequestPaint(FIntVector(20, 0, 0), Finish);
+	TestTrue(TEXT("Provider reach of 0 means no limit"), Grid.GetFinishId(FIntVector(20, 0, 0)) != VoxelFinish::UnpaintedId);
+	TestEqual(TEXT("Only the 500 cm request was refused"), Rejected.Num(), 1);
+	Painter->SetMaxReachProvider(nullptr);
+	Painter->MaxReachCm = 0.f;
+	TestEqual(TEXT("Unbound: MaxReachCm again"), Painter->GetEffectiveMaxReachCm(), 0.f);
+	Painter->RequestPaint(FIntVector(20, 0, 0), Finish);
+	TestEqual(TEXT("MaxReachCm of 0 means no limit (already painted, not refused)"), Rejected.Num(), 1);
+	TestEqual(TEXT("Spent for the two applied paints"), Spent, 3);
+
+	// A second player-owned painter with 3 requests per second: the 4th and 5th in the same instant are dropped quietly.
 	UVoxelFinishPainterComponent* Limited = MakePainter(3.f);
 	Listen(Limited);
 	Rejected.Reset();
@@ -967,12 +1044,12 @@ bool FVoxelFinishPainterGuardsTest::RunTest(const FString&)
 	Limited->RequestPaint(FIntVector(5, 5, 5), Finish); // refused (air), still counts against the limit
 	Limited->RequestPaint(FIntVector(1, 1, 1), Finish);
 	Limited->RequestPaint(FIntVector(1, 1, 1), Finish);
-	TestEqual(TEXT("Two over the limit plus the air request"), Rejected.Num(), 3);
-	const int32 RateLimited = static_cast<int32>(EVoxelFinishPaintResult::RejectedRateLimited);
-	TestEqual(TEXT("4th request is rate limited"), Rejected.Num() > 1 ? static_cast<int32>(Rejected[1].Value) : -1, RateLimited);
-	TestEqual(TEXT("5th request is rate limited"), LastRejected(), RateLimited);
+	TestEqual(TEXT("Only the air request is reported back"), Rejected.Num(), 1);
+	TestEqual(TEXT("...as no block"), LastRejected(), static_cast<int32>(EVoxelFinishPaintResult::RejectedNoBlock));
+	TestEqual(TEXT("The 4th and 5th requests were rate limited"), Limited->GetNumRateLimited(), 2);
+	TestEqual(TEXT("The unlimited painter never was"), Painter->GetNumRateLimited(), 0);
 	TestTrue(TEXT("Requests inside the limit were painted"), Grid.GetFinishId(FIntVector(2, 1, 1)) != VoxelFinish::UnpaintedId && Grid.GetFinishId(FIntVector(3, 1, 1)) != VoxelFinish::UnpaintedId);
-	TestEqual(TEXT("Rate-limited requests spend nothing"), Spent, 4);
+	TestEqual(TEXT("Rate-limited requests spend nothing"), Spent, 5);
 
 	GEngine->DestroyWorldContext(World);
 	World->DestroyWorld(false);

@@ -34,6 +34,21 @@ public:
 	void SetCanAffordAndSpend(TFunction<bool(const FFinish&, APlayerState*)> InFn);
 
 	/**
+	 * Server: unpaints Cells, e.g. when their blocks were removed, and frees finishes nothing uses any more
+	 * (FVoxelFinishSession::ServerClearCells). Replicates like a paint. Returns how many cells were unpainted.
+	 */
+	int32 AuthorityClearCells(const TArray<FIntVector>& Cells);
+	/** Server: unpaints every painted cell the paint target resolver refuses (no resolver = every cell). O(painted cells). */
+	int32 AuthorityClearUnresolvable();
+
+	/**
+	 * Server: replaces all paint with a save (FVoxelFinishSession::RestoreFromSave; empty data = no paint) and
+	 * replicates the result. Cells the paint target resolver refuses are then unpainted, so bind it (and load the
+	 * game's blocks) first.
+	 */
+	void AuthorityRestore(const FVoxelFinishSaveData& Data);
+
+	/**
 	 * Game hook for server paint requests: true when Cell is an existing solid block, with that block's world-space
 	 * centre in OutCenter (UVoxelFinishPainterComponent measures reach to it). The hook must only read: it must not
 	 * create a chunk or a block. Until one is bound every request through the painter component is refused
@@ -60,6 +75,17 @@ public:
 	void NotifyPaletteItem(const FVoxelFinishPaletteItem& Item);
 	void NotifyPaletteItemRemoved(const FVoxelFinishPaletteItem& Item, const FVoxelFinishPaletteArray& InArray);
 	void NotifyChunkItem(const FVoxelFinishChunkItem& Item);
+
+protected:
+	/**
+	 * Display hooks for games that draw paint themselves. Both run on every machine: on the server after the session
+	 * changed (and its replication was updated), on clients after the replicated item was applied to the session.
+	 * A palette slot is reported before the chunks that use it on the server; on clients they may arrive in either
+	 * order, so a chunk can name an id whose finish is not known yet (its slot callback follows).
+	 */
+	virtual void OnPaintChunksChanged(const TArray<FIntVector>& ChunkCoords) {}
+	/** A palette slot was written or freed (Find returns null for a freed slot). */
+	virtual void OnPaletteSlotChanged(uint16 FinishId) {}
 
 private:
 	void RegisterAllowedEffects();

@@ -123,13 +123,13 @@ void FVoxelFinishPalette::ReleaseBlueprintRef(uint16 FinishId)
 	DirtyIds.AddUnique(FinishId);
 }
 
-int32 FVoxelFinishPalette::CollectGarbage(const TMap<uint16, int32>& BlockUses)
+int32 FVoxelFinishPalette::CollectGarbage(const TMap<uint16, int32>& BlockUses, const TSet<uint16>* OnlyIds)
 {
 	int32 Freed = 0;
 	for (int32 Id = 1; Id <= VoxelFinish::MaxPaletteEntries; ++Id)
 	{
 		FEntry& Entry = Entries[Id];
-		if (!Entry.bOccupied)
+		if (!Entry.bOccupied || (OnlyIds && !OnlyIds->Contains(static_cast<uint16>(Id))))
 		{
 			continue;
 		}

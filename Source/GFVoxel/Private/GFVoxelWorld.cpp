@@ -6,7 +6,10 @@
 #include "Engine/DataTable.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Net/UnrealNetwork.h"
+
+const FName AGFVoxelWorld::PaintColorParameter(TEXT("Color"));
 
 // ---------------- Fast array callbacks (clients) ----------------
 
@@ -326,13 +329,20 @@ void AGFVoxelWorld::FillLayers(int32 NumLayers, FName BlockId)
 	}
 	EnsureGridSize();
 	const FIntVector S = Grid.GetSize();
+	// Blocks that were already there are replaced: listeners hear about each one (e.g. its paint is cleared).
+	TArray<FIntVector> Overwritten;
 	for (int32 Z = 0; Z < FMath::Min(NumLayers, S.Z); ++Z)
 	{
 		for (int32 Y = 0; Y < S.Y; ++Y)
 		{
 			for (int32 X = 0; X < S.X; ++X)
 			{
-				Grid.Set(FIntVector(X, Y, Z), BlockId);
+				const FIntVector Cell(X, Y, Z);
+				if (Grid.IsSolid(Cell))
+				{
+					Overwritten.Add(Cell);
+				}
+				Grid.Set(Cell, BlockId);
 			}
 		}
 	}
@@ -340,6 +350,10 @@ void AGFVoxelWorld::FillLayers(int32 NumLayers, FName BlockId)
 	for (const FIntVector& C : Grid.GetChunkCoords())
 	{
 		MarkChunkDirty(C);
+	}
+	for (const FIntVector& Cell : Overwritten)
+	{
+		OnBlockChanged.Broadcast(Cell, BlockId);
 	}
 }
 
@@ -393,6 +407,7 @@ void AGFVoxelWorld::ClearAll()
 	}
 	Grid.Clear();
 	ServerRebaseAll();
+	OnGridReset.Broadcast();
 }
 
 bool AGFVoxelWorld::LoadData(const FGFVoxelSaveData& Data)
@@ -412,6 +427,7 @@ bool AGFVoxelWorld::LoadData(const FGFVoxelSaveData& Data)
 	{
 		MarkChunkDirty(C);
 	}
+	OnGridReset.Broadcast();
 	return bOk;
 }
 
@@ -569,15 +585,21 @@ UMaterialInterface* AGFVoxelWorld::GetBlockMaterial(FName BlockId)
 	return Mat;
 }
 
-UInstancedStaticMeshComponent* AGFVoxelWorld::GetOrCreateIsm(const FIntVector& ChunkCoord, FName BlockId)
+UInstancedStaticMeshComponent* AGFVoxelWorld::GetOrCreateIsm(const FIntVector& ChunkCoord, FName BlockId, uint32 PaintKey)
 {
-	const TTuple<FIntVector, FName> Key(ChunkCoord, BlockId);
+	const TTuple<FIntVector, FName, uint32> Key(ChunkCoord, BlockId, PaintKey);
 	if (UInstancedStaticMeshComponent** Found = IsmIndex.Find(Key))
 	{
 		return *Found;
 	}
 	// Same name on server and clients, so movement bases on blocks resolve over the network.
-	const FName IsmName(*FString::Printf(TEXT("Ism_%d_%d_%d_%s"), ChunkCoord.X, ChunkCoord.Y, ChunkCoord.Z, *BlockId.ToString()));
+	// Painted meshes add the colour, which every machine derives from the same replicated paint.
+	FString IsmString = FString::Printf(TEXT("Ism_%d_%d_%d_%s"), ChunkCoord.X, ChunkCoord.Y, ChunkCoord.Z, *BlockId.ToString());
+	if (PaintKey != 0)
+	{
+		IsmString += FString::Printf(TEXT("_P%08X"), PaintKey);
+	}
+	const FName IsmName(*IsmString);
 	const bool bNameFree = FindObjectFast<UObject>(this, IsmName) == nullptr;
 	UInstancedStaticMeshComponent* Ism = NewObject<UInstancedStaticMeshComponent>(this, bNameFree ? IsmName : NAME_None);
 	if (bNameFree)
@@ -590,7 +612,7 @@ UInstancedStaticMeshComponent* AGFVoxelWorld::GetOrCreateIsm(const FIntVector& C
 	const FGFBlockRow* Row = FindBlockRow(BlockId);
 	UStaticMesh* Mesh = Row ? Row->Mesh.LoadSynchronous() : nullptr;
 	Ism->SetStaticMesh(Mesh ? Mesh : FGFAssetMap::PlaceholderMesh(EGFPlaceholderShape::Cube));
-	if (UMaterialInterface* Mat = GetBlockMaterial(BlockId))
+	if (UMaterialInterface* Mat = PaintKey != 0 ? GetPaintedMaterial(BlockId, PaintKey) : GetBlockMaterial(BlockId))
 	{
 		Ism->SetMaterial(0, Mat);
 	}
@@ -600,9 +622,112 @@ UInstancedStaticMeshComponent* AGFVoxelWorld::GetOrCreateIsm(const FIntVector& C
 	return Ism;
 }
 
+uint32 AGFVoxelWorld::PaintKeyOf(const FLinearColor& Color)
+{
+	FColor Packed = FLinearColor(Color.R, Color.G, Color.B, 1.f).GetClamped().ToFColor(/*bSRGB*/ true);
+	Packed.A = 255;
+	return Packed.ToPackedRGBA(); // never 0: alpha is 255
+}
+
+UMaterialInterface* AGFVoxelWorld::GetPaintedMaterial(FName BlockId, uint32 PaintKey)
+{
+	const FName CacheKey(*FString::Printf(TEXT("%s_P%08X"), *BlockId.ToString(), PaintKey));
+	if (TObjectPtr<UMaterialInterface>* Found = PaintedMaterials.Find(CacheKey))
+	{
+		return *Found;
+	}
+	UMaterialInterface* Base = GetBlockMaterial(BlockId);
+	if (!Base)
+	{
+		// Art mesh without a material override: paint over the mesh's own material.
+		const FGFBlockRow* Row = FindBlockRow(BlockId);
+		const UStaticMesh* Mesh = Row ? Row->Mesh.LoadSynchronous() : nullptr;
+		Base = Mesh ? Mesh->GetMaterial(0) : nullptr;
+	}
+	if (const UMaterialInstanceDynamic* Dynamic = Cast<UMaterialInstanceDynamic>(Base))
+	{
+		Base = Dynamic->Parent; // a placeholder tint: copy its parent rather than stacking dynamic instances
+	}
+	UMaterialInstanceDynamic* Painted = Base ? UMaterialInstanceDynamic::Create(Base, this) : nullptr;
+	if (Painted)
+	{
+		Painted->SetVectorParameterValue(PaintColorParameter, FLinearColor(FColor(
+			static_cast<uint8>(PaintKey >> 24), static_cast<uint8>(PaintKey >> 16), static_cast<uint8>(PaintKey >> 8), 255)));
+	}
+	PaintedMaterials.Add(CacheKey, Painted);
+	return Painted;
+}
+
+void AGFVoxelWorld::SetCellPaint(const FIntVector& Cell, const FLinearColor& Color)
+{
+	const uint32 Key = PaintKeyOf(Color);
+	const FColor Packed(static_cast<uint8>(Key >> 24), static_cast<uint8>(Key >> 16), static_cast<uint8>(Key >> 8), 255);
+	FColor& Slot = PaintedCells.FindOrAdd(Cell, FColor(0, 0, 0, 0));
+	if (Slot != Packed)
+	{
+		Slot = Packed;
+		MarkChunkDirty(FGFVoxelGrid::CellToChunk(Cell));
+	}
+}
+
+void AGFVoxelWorld::ClearCellPaint(const FIntVector& Cell)
+{
+	if (PaintedCells.Remove(Cell) > 0)
+	{
+		MarkChunkDirty(FGFVoxelGrid::CellToChunk(Cell));
+	}
+}
+
+void AGFVoxelWorld::ClearPaintInRegion(const FIntVector& Min, const FIntVector& Max)
+{
+	for (auto It = PaintedCells.CreateIterator(); It; ++It)
+	{
+		const FIntVector& C = It.Key();
+		if (C.X >= Min.X && C.Y >= Min.Y && C.Z >= Min.Z && C.X <= Max.X && C.Y <= Max.Y && C.Z <= Max.Z)
+		{
+			MarkChunkDirty(FGFVoxelGrid::CellToChunk(C));
+			It.RemoveCurrent();
+		}
+	}
+}
+
+void AGFVoxelWorld::ClearAllPaint()
+{
+	for (const TPair<FIntVector, FColor>& Pair : PaintedCells)
+	{
+		MarkChunkDirty(FGFVoxelGrid::CellToChunk(Pair.Key));
+	}
+	PaintedCells.Reset();
+}
+
+bool AGFVoxelWorld::GetCellPaint(const FIntVector& Cell, FLinearColor& OutColor) const
+{
+	if (const FColor* Found = PaintedCells.Find(Cell))
+	{
+		OutColor = FLinearColor(*Found);
+		return true;
+	}
+	return false;
+}
+
+int32 AGFVoxelWorld::CountDrawnInstances(const FIntVector& ChunkCoord, FName BlockId, bool bPainted, const FLinearColor& Color) const
+{
+	const TTuple<FIntVector, FName, uint32> Key(ChunkCoord, BlockId, bPainted ? PaintKeyOf(Color) : 0u);
+	const UInstancedStaticMeshComponent* const* Found = IsmIndex.Find(Key);
+	return Found && *Found ? (*Found)->GetInstanceCount() : 0;
+}
+
+UMaterialInterface* AGFVoxelWorld::GetDrawnMaterial(const FIntVector& ChunkCoord, FName BlockId, bool bPainted, const FLinearColor& Color) const
+{
+	const TTuple<FIntVector, FName, uint32> Key(ChunkCoord, BlockId, bPainted ? PaintKeyOf(Color) : 0u);
+	const UInstancedStaticMeshComponent* const* Found = IsmIndex.Find(Key);
+	return Found && *Found ? (*Found)->GetMaterial(0) : nullptr;
+}
+
 void AGFVoxelWorld::RebuildChunkMeshes(const FIntVector& ChunkCoord)
 {
-	TMap<FName, TArray<FTransform>> ByType;
+	using FMeshKey = TTuple<FName, uint32>;
+	TMap<FMeshKey, TArray<FTransform>> ByType;
 	const FIntVector Origin = ChunkCoord * GFChunkSize;
 	if (Grid.HasChunk(ChunkCoord))
 	{
@@ -617,19 +742,21 @@ void AGFVoxelWorld::RebuildChunkMeshes(const FIntVector& ChunkCoord)
 			const FGFBlockRow* Row = FindBlockRow(Id);
 			const bool bBottomPivot = Row && !Row->Mesh.IsNull() && Row->bPivotIsBottomCenter;
 			const FVector MeshPivotOffset = bBottomPivot ? FVector::ZeroVector : FVector(0, 0, GFBlockSize * 0.5f);
-			ByType.FindOrAdd(Id).Emplace(FRotator::ZeroRotator, FVector(Cell.X + 0.5f, Cell.Y + 0.5f, Cell.Z) * GFBlockSize + MeshPivotOffset);
+			const FColor* Paint = PaintedCells.Find(Cell);
+			const uint32 PaintKey = Paint ? Paint->ToPackedRGBA() : 0u;
+			ByType.FindOrAdd(FMeshKey(Id, PaintKey)).Emplace(FRotator::ZeroRotator, FVector(Cell.X + 0.5f, Cell.Y + 0.5f, Cell.Z) * GFBlockSize + MeshPivotOffset);
 		}
 	}
-	for (TPair<TTuple<FIntVector, FName>, UInstancedStaticMeshComponent*>& Pair : IsmIndex)
+	for (TPair<TTuple<FIntVector, FName, uint32>, UInstancedStaticMeshComponent*>& Pair : IsmIndex)
 	{
-		if (Pair.Key.Get<0>() == ChunkCoord && !ByType.Contains(Pair.Key.Get<1>()) && Pair.Value->GetInstanceCount() > 0)
+		if (Pair.Key.Get<0>() == ChunkCoord && !ByType.Contains(FMeshKey(Pair.Key.Get<1>(), Pair.Key.Get<2>())) && Pair.Value->GetInstanceCount() > 0)
 		{
 			Pair.Value->ClearInstances();
 		}
 	}
-	for (TPair<FName, TArray<FTransform>>& Pair : ByType)
+	for (TPair<FMeshKey, TArray<FTransform>>& Pair : ByType)
 	{
-		UInstancedStaticMeshComponent* Ism = GetOrCreateIsm(ChunkCoord, Pair.Key);
+		UInstancedStaticMeshComponent* Ism = GetOrCreateIsm(ChunkCoord, Pair.Key.Get<0>(), Pair.Key.Get<1>());
 		Ism->ClearInstances();
 		Ism->AddInstances(Pair.Value, /*bShouldReturnIndices*/ false, /*bWorldSpace*/ false);
 	}
