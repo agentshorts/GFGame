@@ -53,7 +53,7 @@ FVector AGFHubGateDirector::RimeAnchor(const UWorld* World) const
 
 namespace
 {
-	AGFMiniGameGate* FindGate(UWorld* World, FName Id, EGFMiniGameGateRole GateRole)
+	AGFMiniGameGate* FindPlacedGate(UWorld* World, FName Id, EGFMiniGameGateRole GateRole)
 	{
 		for (TActorIterator<AGFMiniGameGate> It(World); It; ++It)
 		{
@@ -67,7 +67,7 @@ namespace
 
 	AGFMiniGameGate* EnsureGate(UWorld* World, const FGFMiniGameEntry& Entry, EGFMiniGameGateRole GateRole, const FVector& At, const FRotator& Facing, const FVector& Rime)
 	{
-		if (AGFMiniGameGate* Existing = FindGate(World, Entry.Id, GateRole))
+		if (AGFMiniGameGate* Existing = FindPlacedGate(World, Entry.Id, GateRole))
 		{
 			Existing->RimeCenter = Rime;
 			Existing->SetActorLocationAndRotation(At, Facing);
