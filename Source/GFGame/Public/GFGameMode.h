@@ -28,7 +28,7 @@ public:
 
 	/**
 	 * Always-on server actors spawned with the game state (by class path, so this module needn't depend on theirs).
-	 * Default: the social director (safe-zone powers, jail, kick / ban, emotes).
+	 * Default: the social director (safe-zone powers, jail, kick / ban, emotes) and the block paint volume (AGFPaintVolume).
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "GF|Net") TArray<FSoftClassPath> StartupDirectorClasses;
 

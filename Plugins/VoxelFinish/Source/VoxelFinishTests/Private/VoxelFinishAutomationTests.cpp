@@ -6,9 +6,13 @@
 #include "VoxelFinishEffectGraph.h"
 #include "VoxelFinishLookup.h"
 #include "VoxelFinishPainterComponent.h"
+#include "VoxelFinishRateLimiter.h"
 #include "VoxelFinishSession.h"
 #include "VoxelFinishVolume.h"
+#include "Engine/Engine.h"
 #include "Engine/Texture2D.h"
+#include "Engine/World.h"
+#include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionTextureSampleParameter2D.h"
@@ -830,6 +834,148 @@ bool FVoxelFinishContentTest::RunTest(const FString&)
 		TestTrue(FString::Printf(TEXT("%s samples the FinishLookup parameter"), *Master->GetName()), LookupParameters > 0);
 		TestEqual(FString::Printf(TEXT("%s has no direct T_FinishLookup sample"), *Master->GetName()), DirectLookupSamples, 0);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FVoxelFinishRateLimitTest, "VoxelFinish.Paint.RateLimit", VoxelFinishTestFlags)
+bool FVoxelFinishRateLimitTest::RunTest(const FString&)
+{
+	FVoxelFinishRateLimiter Limiter;
+	int32 Allowed = 0;
+	for (int32 i = 0; i < 15; ++i)
+	{
+		Allowed += Limiter.TryConsume(100.0, 10.f) ? 1 : 0;
+	}
+	TestEqual(TEXT("A full bucket lets 10 requests through at once"), Allowed, 10);
+	TestFalse(TEXT("Half a token after 50 ms is not enough"), Limiter.TryConsume(100.05, 10.f));
+	TestTrue(TEXT("One token after 100 ms"), Limiter.TryConsume(100.1, 10.f));
+	TestFalse(TEXT("And only one"), Limiter.TryConsume(100.1, 10.f));
+	TestFalse(TEXT("Time going backwards adds nothing"), Limiter.TryConsume(50.0, 10.f));
+	Allowed = 0;
+	for (int32 i = 0; i < 30; ++i)
+	{
+		Allowed += Limiter.TryConsume(1000.0, 10.f) ? 1 : 0;
+	}
+	TestEqual(TEXT("A long pause refills to the cap, not past it"), Allowed, 10);
+
+	FVoxelFinishRateLimiter Slow;
+	TestTrue(TEXT("Below 1 per second the bucket still holds one request"), Slow.TryConsume(0.0, 0.5f));
+	TestFalse(TEXT("Then it waits"), Slow.TryConsume(1.0, 0.5f));
+	TestTrue(TEXT("Two seconds at 0.5 per second"), Slow.TryConsume(2.0, 0.5f));
+
+	FVoxelFinishRateLimiter Off;
+	Allowed = 0;
+	for (int32 i = 0; i < 100; ++i)
+	{
+		Allowed += Off.TryConsume(0.0, 0.f) ? 1 : 0;
+	}
+	TestEqual(TEXT("A rate of 0 means no limit"), Allowed, 100);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FVoxelFinishPainterGuardsTest, "VoxelFinish.Paint.ServerGuards", VoxelFinishTestFlags)
+bool FVoxelFinishPainterGuardsTest::RunTest(const FString&)
+{
+	// A standalone game world, so the painter's owner has authority and requests take the server path directly.
+	UWorld* World = UWorld::CreateWorld(EWorldType::Game, false);
+	FWorldContext& Context = GEngine->CreateNewWorldContext(EWorldType::Game);
+	Context.SetCurrentWorld(World);
+	World->InitializeActorsForPlay(FURL());
+	World->BeginPlay();
+
+	AVoxelFinishVolume* Volume = World->SpawnActor<AVoxelFinishVolume>();
+	APlayerState* State = World->SpawnActor<APlayerState>();
+	APawn* Pawn = World->SpawnActor<APawn>(FVector::ZeroVector, FRotator::ZeroRotator);
+	if (!TestNotNull(TEXT("Volume"), Volume) || !TestNotNull(TEXT("PlayerState"), State) || !TestNotNull(TEXT("Pawn"), Pawn))
+	{
+		GEngine->DestroyWorldContext(World);
+		World->DestroyWorld(false);
+		return false;
+	}
+	Pawn->SetPlayerState(State);
+	int32 Spent = 0;
+	Volume->SetCanAffordAndSpend([&Spent](const FFinish&, APlayerState* Payer)
+	{
+		++Spent;
+		return Payer != nullptr;
+	});
+
+	auto MakePainter = [&](float Rate)
+	{
+		UVoxelFinishPainterComponent* P = NewObject<UVoxelFinishPainterComponent>(State);
+		P->RegisterComponent();
+		P->SetVolume(Volume);
+		P->MaxPaintsPerSecond = Rate;
+		return P;
+	};
+	TArray<TPair<FIntVector, uint8>> Rejected;
+	auto Listen = [&Rejected](UVoxelFinishPainterComponent* P)
+	{
+		P->OnPaintRejected.AddLambda([&Rejected](FIntVector Cell, uint8 Result) { Rejected.Add({ Cell, Result }); });
+	};
+	auto LastRejected = [&Rejected]() { return Rejected.Num() > 0 ? static_cast<int32>(Rejected.Last().Value) : -1; };
+	const FFinish Finish = [] { FFinish F; F.ColorA = FLinearColor(0.2f, 0.6f, 0.3f); return F; }();
+	const FVoxelFinishGrid& Grid = Volume->GetSession().GetGrid();
+
+	UVoxelFinishPainterComponent* Painter = MakePainter(0.f);
+	Listen(Painter);
+	TestEqual(TEXT("Default reach is 600 cm"), GetDefault<UVoxelFinishPainterComponent>()->MaxReachCm, 600.f);
+	TestEqual(TEXT("Default rate is 10 per second"), GetDefault<UVoxelFinishPainterComponent>()->MaxPaintsPerSecond, 10.f);
+	TestTrue(TEXT("Reach is measured from the PlayerState's pawn"), Painter->ResolvePawn() == Pawn);
+
+	FVector Center;
+	TestFalse(TEXT("No resolver: no cell is a block"), Volume->ResolvePaintTarget(FIntVector(1, 1, 1), Center));
+	Painter->RequestPaint(FIntVector(1, 1, 1), Finish);
+	TestEqual(TEXT("No resolver: refused as no block"), LastRejected(), static_cast<int32>(EVoxelFinishPaintResult::RejectedNoBlock));
+
+	// Solid blocks: (1,1,1) next to the pawn, (9,0,0) 900 cm away. Everything else is air.
+	Volume->SetPaintTargetResolver([](const FIntVector& Cell, FVector& OutCenter)
+	{
+		if (Cell == FIntVector(1, 1, 1) || Cell == FIntVector(9, 0, 0) || Cell == FIntVector(2, 1, 1) || Cell == FIntVector(3, 1, 1))
+		{
+			OutCenter = (FVector(Cell) + FVector(0.5)) * 100.0;
+			return true;
+		}
+		return false;
+	});
+	Painter->RequestPaint(FIntVector(5, 5, 5), Finish);
+	TestEqual(TEXT("Air is refused"), LastRejected(), static_cast<int32>(EVoxelFinishPaintResult::RejectedNoBlock));
+	Painter->RequestPaint(FIntVector(-4000, 7, 7), Finish);
+	TestEqual(TEXT("A far-away empty cell is refused"), LastRejected(), static_cast<int32>(EVoxelFinishPaintResult::RejectedNoBlock));
+	Painter->RequestPaint(FIntVector(9, 0, 0), Finish);
+	TestEqual(TEXT("A block 900 cm away is out of reach"), LastRejected(), static_cast<int32>(EVoxelFinishPaintResult::RejectedOutOfReach));
+	TestEqual(TEXT("Refused requests spend nothing"), Spent, 0);
+	TestEqual(TEXT("Refused requests paint nothing"), Grid.NumPainted(), 0);
+	TestNull(TEXT("Painting air never creates a paint chunk"), Grid.GetChunkUseCounts(VoxelFinish::CellToChunk(FIntVector(-4000, 7, 7))));
+	TestEqual(TEXT("No paint chunk is dirty"), Grid.GetDirtyChunks().Num(), 0);
+
+	const int32 RejectedBefore = Rejected.Num();
+	Painter->RequestPaint(FIntVector(1, 1, 1), Finish);
+	TestEqual(TEXT("A block in reach is painted"), Rejected.Num(), RejectedBefore);
+	TestTrue(TEXT("Cell holds the finish"), Grid.GetFinishId(FIntVector(1, 1, 1)) != VoxelFinish::UnpaintedId);
+	TestEqual(TEXT("Spent once"), Spent, 1);
+	Painter->MaxReachCm = 1000.f;
+	Painter->RequestPaint(FIntVector(9, 0, 0), Finish);
+	TestTrue(TEXT("Reach is tunable"), Grid.GetFinishId(FIntVector(9, 0, 0)) != VoxelFinish::UnpaintedId);
+
+	// A second player-owned painter with 3 requests per second: the 4th and 5th in the same instant are refused.
+	UVoxelFinishPainterComponent* Limited = MakePainter(3.f);
+	Listen(Limited);
+	Rejected.Reset();
+	Limited->RequestPaint(FIntVector(2, 1, 1), Finish);
+	Limited->RequestPaint(FIntVector(3, 1, 1), Finish);
+	Limited->RequestPaint(FIntVector(5, 5, 5), Finish); // refused (air), still counts against the limit
+	Limited->RequestPaint(FIntVector(1, 1, 1), Finish);
+	Limited->RequestPaint(FIntVector(1, 1, 1), Finish);
+	TestEqual(TEXT("Two over the limit plus the air request"), Rejected.Num(), 3);
+	const int32 RateLimited = static_cast<int32>(EVoxelFinishPaintResult::RejectedRateLimited);
+	TestEqual(TEXT("4th request is rate limited"), Rejected.Num() > 1 ? static_cast<int32>(Rejected[1].Value) : -1, RateLimited);
+	TestEqual(TEXT("5th request is rate limited"), LastRejected(), RateLimited);
+	TestTrue(TEXT("Requests inside the limit were painted"), Grid.GetFinishId(FIntVector(2, 1, 1)) != VoxelFinish::UnpaintedId && Grid.GetFinishId(FIntVector(3, 1, 1)) != VoxelFinish::UnpaintedId);
+	TestEqual(TEXT("Rate-limited requests spend nothing"), Spent, 4);
+
+	GEngine->DestroyWorldContext(World);
+	World->DestroyWorld(false);
 	return true;
 }
 

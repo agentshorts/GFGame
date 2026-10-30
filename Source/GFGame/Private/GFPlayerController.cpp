@@ -1,5 +1,13 @@
 #include "GFPlayerController.h"
 #include "GFPlayerState.h"
+#include "VoxelFinishPainterComponent.h"
+
+AGFPlayerController::AGFPlayerController()
+{
+	Painter = CreateDefaultSubobject<UVoxelFinishPainterComponent>(TEXT("Painter"));
+	Painter->MaxReachCm = 600.f;
+	Painter->MaxPaintsPerSecond = 10.f;
+}
 
 void AGFPlayerController::BeginPlay()
 {

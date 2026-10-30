@@ -97,6 +97,17 @@ void AVoxelFinishVolume::SetCanAffordAndSpend(TFunction<bool(const FFinish&, APl
 	Session.SetCanAffordAndSpend(MoveTemp(InFn));
 }
 
+void AVoxelFinishVolume::SetPaintTargetResolver(TFunction<bool(const FIntVector&, FVector&)> InFn)
+{
+	PaintTargetResolver = MoveTemp(InFn);
+}
+
+bool AVoxelFinishVolume::ResolvePaintTarget(const FIntVector& Cell, FVector& OutCenter) const
+{
+	// Fail closed: without a resolver there is no way to know the cell is a real block.
+	return PaintTargetResolver && PaintTargetResolver(Cell, OutCenter);
+}
+
 EVoxelFinishPaintResult AVoxelFinishVolume::AuthorityPaint(const FIntVector& Cell, const FFinish& Finish, APlayerState* Payer)
 {
 	if (!HasAuthority())

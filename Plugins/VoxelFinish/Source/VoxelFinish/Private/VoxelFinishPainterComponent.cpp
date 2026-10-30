@@ -35,6 +35,24 @@ APlayerState* UVoxelFinishPainterComponent::ResolvePayer() const
 	return nullptr;
 }
 
+APawn* UVoxelFinishPainterComponent::ResolvePawn() const
+{
+	AActor* Owner = GetOwner();
+	if (APawn* Pawn = Cast<APawn>(Owner))
+	{
+		return Pawn;
+	}
+	if (const AController* Controller = Cast<AController>(Owner))
+	{
+		return Controller->GetPawn();
+	}
+	if (const APlayerState* State = Cast<APlayerState>(Owner))
+	{
+		return State->GetPawn();
+	}
+	return nullptr;
+}
+
 AVoxelFinishVolume* UVoxelFinishPainterComponent::ResolveVolume()
 {
 	if (AVoxelFinishVolume* Cached = Volume.Get())
@@ -81,21 +99,43 @@ void UVoxelFinishPainterComponent::AuthorityHandlePaint(const FIntVector& Cell, 
 	{
 		return;
 	}
-	APlayerState* Payer = ResolvePayer();
-	AVoxelFinishVolume* Target = ResolveVolume();
-	EVoxelFinishPaintResult Result = EVoxelFinishPaintResult::RejectedNoPayer;
-	if (!Target)
-	{
-		Result = EVoxelFinishPaintResult::RejectedNoVolume;
-	}
-	else if (Payer)
-	{
-		Result = Target->AuthorityPaint(Cell, Finish, Payer);
-	}
+	const EVoxelFinishPaintResult Result = AuthorityCheckAndPaint(Cell, Finish);
 	if (Result != EVoxelFinishPaintResult::Applied && Result != EVoxelFinishPaintResult::AlreadyPainted)
 	{
 		ClientPaintRejected(Cell, static_cast<uint8>(Result));
 	}
+}
+
+EVoxelFinishPaintResult UVoxelFinishPainterComponent::AuthorityCheckAndPaint(const FIntVector& Cell, const FFinish& Finish)
+{
+	const UWorld* World = GetWorld();
+	// Real time: pausing or slowing the game does not change how fast a player may send requests.
+	const double Now = World ? World->GetRealTimeSeconds() : FPlatformTime::Seconds();
+	if (!RateLimiter.TryConsume(Now, MaxPaintsPerSecond))
+	{
+		return EVoxelFinishPaintResult::RejectedRateLimited;
+	}
+	AVoxelFinishVolume* Target = ResolveVolume();
+	if (!Target)
+	{
+		return EVoxelFinishPaintResult::RejectedNoVolume;
+	}
+	APlayerState* Payer = ResolvePayer();
+	if (!Payer)
+	{
+		return EVoxelFinishPaintResult::RejectedNoPayer;
+	}
+	FVector Center = FVector::ZeroVector;
+	if (!Target->ResolvePaintTarget(Cell, Center))
+	{
+		return EVoxelFinishPaintResult::RejectedNoBlock;
+	}
+	const APawn* Pawn = ResolvePawn();
+	if (!Pawn || FVector::DistSquared(Pawn->GetActorLocation(), Center) > FMath::Square(static_cast<double>(MaxReachCm)))
+	{
+		return EVoxelFinishPaintResult::RejectedOutOfReach;
+	}
+	return Target->AuthorityPaint(Cell, Finish, Payer);
 }
 
 void UVoxelFinishPainterComponent::ClientPaintRejected_Implementation(FIntVector Cell, uint8 Result)

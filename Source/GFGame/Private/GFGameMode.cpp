@@ -24,6 +24,7 @@ AGFGameMode::AGFGameMode()
 	PlayerStateClass = AGFPlayerState::StaticClass();
 	bDelayedStart = false;
 	StartupDirectorClasses.Add(FSoftClassPath(TEXT("/Script/GFSocial.GFSocialDirector")));
+	StartupDirectorClasses.Add(FSoftClassPath(TEXT("/Script/GFGame.GFPaintVolume")));
 }
 
 void AGFGameMode::InitGameState()

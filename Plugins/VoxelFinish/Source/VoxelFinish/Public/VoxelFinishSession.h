@@ -20,7 +20,13 @@ enum class EVoxelFinishPaintResult : uint8
 	/** No AVoxelFinishVolume was found for the request. */
 	RejectedNoVolume,
 	/** Non-finite colour or intensity, unknown pattern id, or an effect id that is not registered. */
-	RejectedInvalidFinish
+	RejectedInvalidFinish,
+	/** The player sent more paint requests than UVoxelFinishPainterComponent::MaxPaintsPerSecond allows. */
+	RejectedRateLimited,
+	/** The block is farther than UVoxelFinishPainterComponent::MaxReachCm from the player's pawn, or there is no pawn. */
+	RejectedOutOfReach,
+	/** The cell is not an existing solid block (AVoxelFinishVolume::SetPaintTargetResolver), or no resolver is bound. */
+	RejectedNoBlock
 };
 
 /**
