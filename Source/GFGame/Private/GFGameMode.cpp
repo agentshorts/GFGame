@@ -7,7 +7,10 @@
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFDataTables.h"
+#include "GFOverworldBuild.h"
+#include "GFOverworldGround.h"
 #include "GFRecipeTypes.h"
+#include "GFTerritorySubsystem.h"
 #include "GFLog.h"
 #include "Engine/DataTable.h"
 #include "Engine/GameInstance.h"
@@ -145,27 +148,82 @@ void AGFGameMode::InitGame(const FString& MapName, const FString& Options, FStri
 	}
 }
 
+void AGFGameMode::BindOverworldEditQuery()
+{
+	if (!AGFOverworldGround::IsVoxelOverworldMap(GetWorld()))
+	{
+		return;
+	}
+	AGFGameState* GS = GetGameState<AGFGameState>();
+	if (!GS || GS->OverworldEditQuery.IsBound())
+	{
+		return;
+	}
+	TWeakObjectPtr<AGFGameMode> Weak(this);
+	GS->OverworldEditQuery.BindLambda([Weak](FName FactionId, const FVector& Where)
+	{
+		const AGFGameMode* Mode = Weak.Get();
+		const UWorld* World = Mode ? Mode->GetWorld() : nullptr;
+		UGFTerritorySubsystem* Territory = World ? UGFTerritorySubsystem::Get(World) : nullptr;
+		if (!Territory)
+		{
+			return EGFOverworldEdit::Deny;
+		}
+		Territory->GetZoneAt(Where);
+		return FGFOverworldBuild::Classify(Territory->GetMap(), FactionId, Where);
+	});
+}
+
 AGFVoxelWorld* AGFGameMode::EnsureVoxelWorld()
 {
 	for (TActorIterator<AGFVoxelWorld> It(GetWorld()); It; ++It)
 	{
+		BindOverworldEditQuery();
 		return *It;
 	}
-	const FIntVector Size(64, 64, 32);
-	const int32 Ground = 1;
+
+	const bool bHub = AGFOverworldGround::IsVoxelOverworldMap(GetWorld());
+	FGFOverworldLayout Layout;
+	FIntVector Size(64, 64, 32);
+	int32 Ground = 1;
+	FVector Origin(-Size.X * 50.f, -Size.Y * 50.f, -static_cast<float>(Ground) * 100.f);
+	if (bHub)
+	{
+		const UGFTerritorySubsystem* Territory = GetDefault<UGFTerritorySubsystem>();
+		const AGFOverworldGround* GroundDefaults = GetDefault<AGFOverworldGround>();
+		const float Margin = GroundDefaults ? GroundDefaults->Margin : FGFOverworldBuild::DefaultMarginCm;
+		Layout = Territory
+			? FGFOverworldBuild::Make(Territory->Curve, Territory->FactionLayout, Territory->Hazards, Margin)
+			: FGFOverworldBuild::Make({}, {}, {}, Margin);
+		Size = Layout.GridSize;
+		Ground = 0;
+		Origin = Layout.Origin;
+	}
+
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	Params.bDeferConstruction = true;
-	const FVector Origin(-Size.X * 50.f, -Size.Y * 50.f, -Ground * 100.f);
 	AGFVoxelWorld* Voxel = GetWorld()->SpawnActor<AGFVoxelWorld>(AGFVoxelWorld::StaticClass(), FTransform(Origin), Params);
 	if (Voxel)
 	{
-		Voxel->BlockTable = FGFDataTables::Get(BlockTable, TEXT("DT_Blocks"), FGFBlockRow::StaticStruct());
+		UDataTable* Table = FGFDataTables::Get(BlockTable, TEXT("DT_Blocks"), FGFBlockRow::StaticStruct());
+		if (bHub && (!Table || !Table->FindRow<FGFBlockRow>(FName(TEXT("Ice")), TEXT("GFOverworld"), false)))
+		{
+			Table = FGFDataTables::FromCsv(TEXT("DT_Blocks"), FGFBlockRow::StaticStruct());
+		}
+		Voxel->BlockTable = Table;
 		Voxel->PlotSizeInBlocks = Size;
 		Voxel->StarterGroundLayers = Ground;
 		Voxel->FinishSpawning(FTransform(Origin));
-		UE_LOG(LogGF, Log, TEXT("Spawned hub voxel world (block table: %s)"), *GetNameSafe(Voxel->BlockTable));
+		if (bHub)
+		{
+			const FGFOverworldLayout Stamp = Layout;
+			Voxel->ServerStamp([&Stamp](const FIntVector& Cell) { return Stamp.BlockAt(Cell); });
+		}
+		UE_LOG(LogGF, Log, TEXT("Spawned %s voxel world %dx%dx%d (block table: %s)"),
+			bHub ? TEXT("overworld") : TEXT("starter"), Size.X, Size.Y, Size.Z, *GetNameSafe(Voxel->BlockTable));
 	}
+	BindOverworldEditQuery();
 	return Voxel;
 }
 

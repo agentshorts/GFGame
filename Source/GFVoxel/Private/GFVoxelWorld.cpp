@@ -1,7 +1,7 @@
 #include "GFVoxelWorld.h"
+#include "GFAssetMap.h"
 #include "GFLog.h"
 #include "GFDataTables.h"
-#include "GFAssetMap.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/DataTable.h"
 #include "Engine/StaticMesh.h"
@@ -321,6 +321,38 @@ FName AGFVoxelWorld::RemoveBlock(FIntVector Cell)
 	return ServerApplyEdit(Cell, NAME_None, &Previous) ? Previous : FName();
 }
 
+void AGFVoxelWorld::ServerStamp(TFunctionRef<FName(const FIntVector& Cell)> BlockAt)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	EnsureGridSize();
+	Grid.Clear();
+	const FIntVector S = Grid.GetSize();
+	for (int32 Z = 0; Z < S.Z; ++Z)
+	{
+		for (int32 Y = 0; Y < S.Y; ++Y)
+		{
+			for (int32 X = 0; X < S.X; ++X)
+			{
+				const FIntVector Cell(X, Y, Z);
+				const FName Id = BlockAt(Cell);
+				if (!Id.IsNone())
+				{
+					Grid.Set(Cell, Id);
+				}
+			}
+		}
+	}
+	ServerRebaseAll();
+	for (const FIntVector& C : Grid.GetChunkCoords())
+	{
+		MarkChunkDirty(C);
+	}
+	OnGridReset.Broadcast();
+}
+
 void AGFVoxelWorld::FillLayers(int32 NumLayers, FName BlockId)
 {
 	if (!HasAuthority())
@@ -568,6 +600,81 @@ void AGFVoxelWorld::RebuildDirtyChunks()
 	}
 }
 
+namespace
+{
+	const TCHAR* ArtMeshPath(FName BlockId)
+	{
+		if (BlockId == FName(TEXT("Grass"))) { return TEXT("/Game/Art/Blocks/SM_Block_Grass.SM_Block_Grass"); }
+		if (BlockId == FName(TEXT("Dirt"))) { return TEXT("/Game/Art/Blocks/SM_Block_Dirt.SM_Block_Dirt"); }
+		if (BlockId == FName(TEXT("WoodPlank"))) { return TEXT("/Game/Art/Blocks/SM_Block_WoodPlank.SM_Block_WoodPlank"); }
+		if (BlockId == FName(TEXT("Stone"))) { return TEXT("/Game/Art/Blocks/SM_Block_Stone.SM_Block_Stone"); }
+		if (BlockId == FName(TEXT("Glass"))) { return TEXT("/Game/Art/Blocks/SM_Block_Glass.SM_Block_Glass"); }
+		if (BlockId == FName(TEXT("Fabric"))) { return TEXT("/Game/Art/Blocks/SM_Block_Fabric.SM_Block_Fabric"); }
+		if (BlockId == FName(TEXT("Basalt"))) { return TEXT("/Game/Art/Blocks/SM_Block_Cobblestone.SM_Block_Cobblestone"); }
+		if (BlockId == FName(TEXT("Farmland"))) { return TEXT("/Game/Art/Blocks/SM_Block_Farmland.SM_Block_Farmland"); }
+		if (BlockId == FName(TEXT("Log"))) { return TEXT("/Game/Art/Blocks/SM_Block_Log.SM_Block_Log"); }
+		if (BlockId == FName(TEXT("Leaves"))) { return TEXT("/Game/Art/Blocks/SM_Block_Leaves.SM_Block_Leaves"); }
+		return nullptr;
+	}
+
+	FLinearColor BlockTint(FName BlockId, const FGFBlockRow* Row)
+	{
+		if (Row)
+		{
+			return Row->DebugColor;
+		}
+		if (BlockId == FName(TEXT("Ice")))
+		{
+			return FLinearColor(0.75f, 0.88f, 0.96f, 1.f);
+		}
+		if (BlockId == FName(TEXT("Lava")))
+		{
+			return FLinearColor(217.f / 255.f, 84.f / 255.f, 43.f / 255.f, 1.f);
+		}
+		return FLinearColor(0.3f, 0.7f, 0.3f, 1.f);
+	}
+}
+
+UStaticMesh* AGFVoxelWorld::ResolveDrawMesh(FName BlockId, bool& bOutBottomPivot)
+{
+	if (const FCachedBlockDraw* Cached = DrawCache.Find(BlockId))
+	{
+		if (Cached->bReady)
+		{
+			bOutBottomPivot = Cached->bBottomPivot;
+			return Cached->Mesh;
+		}
+	}
+
+	const FGFBlockRow* Row = FindBlockRow(BlockId);
+	FCachedBlockDraw Draw;
+	if (Row && !Row->Mesh.IsNull())
+	{
+		Draw.Mesh = Row->Mesh.LoadSynchronous();
+		if (Draw.Mesh)
+		{
+			Draw.bBottomPivot = Row->bPivotIsBottomCenter;
+		}
+	}
+	if (!Draw.Mesh)
+	{
+		if (const TCHAR* Path = ArtMeshPath(BlockId))
+		{
+			Draw.Mesh = LoadObject<UStaticMesh>(nullptr, Path);
+			Draw.bBottomPivot = Draw.Mesh != nullptr;
+		}
+	}
+	if (!Draw.Mesh)
+	{
+		Draw.Mesh = FGFAssetMap::PlaceholderMesh(EGFPlaceholderShape::Cube);
+		Draw.bBottomPivot = false;
+	}
+	Draw.bReady = true;
+	DrawCache.Add(BlockId, Draw);
+	bOutBottomPivot = Draw.bBottomPivot;
+	return Draw.Mesh;
+}
+
 UMaterialInterface* AGFVoxelWorld::GetBlockMaterial(FName BlockId)
 {
 	if (TObjectPtr<UMaterialInterface>* Found = MaterialByBlock.Find(BlockId))
@@ -575,11 +682,15 @@ UMaterialInterface* AGFVoxelWorld::GetBlockMaterial(FName BlockId)
 		return *Found;
 	}
 	const FGFBlockRow* Row = FindBlockRow(BlockId);
-	UMaterialInterface* Mat = (Row && !Row->Mesh.IsNull()) ? Row->MaterialOverride.LoadSynchronous() : nullptr;
-	if (!Mat && !(Row && !Row->Mesh.IsNull()))
+	UMaterialInterface* Mat = (Row && !Row->MaterialOverride.IsNull()) ? Row->MaterialOverride.LoadSynchronous() : nullptr;
+	bool bBottomPivot = false;
+	const UStaticMesh* Mesh = ResolveDrawMesh(BlockId, bBottomPivot);
+	const UStaticMesh* Cube = FGFAssetMap::PlaceholderMesh(EGFPlaceholderShape::Cube);
+	const bool bArtMesh = Mesh && Mesh != Cube;
+	if (!Mat && !bArtMesh)
 	{
-		// Placeholder until the SM_Block_* art lands: engine cube tinted with the row's debug colour.
-		Mat = FGFAssetMap::MakeTint(this, Row ? Row->DebugColor : FLinearColor(0.3f, 0.7f, 0.3f));
+		// Ice and lava have no art mesh: engine cube tinted with the row colour.
+		Mat = FGFAssetMap::MakeTint(this, BlockTint(BlockId, Row));
 	}
 	MaterialByBlock.Add(BlockId, Mat);
 	return Mat;
@@ -609,9 +720,10 @@ UInstancedStaticMeshComponent* AGFVoxelWorld::GetOrCreateIsm(const FIntVector& C
 	Ism->SetupAttachment(Root);
 	Ism->SetCollisionProfileName(TEXT("BlockAll"));
 	Ism->SetMobility(EComponentMobility::Static);
-	const FGFBlockRow* Row = FindBlockRow(BlockId);
-	UStaticMesh* Mesh = Row ? Row->Mesh.LoadSynchronous() : nullptr;
+	bool bBottomPivot = false;
+	UStaticMesh* Mesh = ResolveDrawMesh(BlockId, bBottomPivot);
 	Ism->SetStaticMesh(Mesh ? Mesh : FGFAssetMap::PlaceholderMesh(EGFPlaceholderShape::Cube));
+	(void)bBottomPivot;
 	if (UMaterialInterface* Mat = PaintKey != 0 ? GetPaintedMaterial(BlockId, PaintKey) : GetBlockMaterial(BlockId))
 	{
 		Ism->SetMaterial(0, Mat);
@@ -640,8 +752,9 @@ UMaterialInterface* AGFVoxelWorld::GetPaintedMaterial(FName BlockId, uint32 Pain
 	if (!Base)
 	{
 		// Art mesh without a material override: paint over the mesh's own material.
-		const FGFBlockRow* Row = FindBlockRow(BlockId);
-		const UStaticMesh* Mesh = Row ? Row->Mesh.LoadSynchronous() : nullptr;
+		bool bBottomPivot = false;
+		const UStaticMesh* Mesh = ResolveDrawMesh(BlockId, bBottomPivot);
+		(void)bBottomPivot;
 		Base = Mesh ? Mesh->GetMaterial(0) : nullptr;
 	}
 	if (const UMaterialInstanceDynamic* Dynamic = Cast<UMaterialInstanceDynamic>(Base))
@@ -739,8 +852,8 @@ void AGFVoxelWorld::RebuildChunkMeshes(const FIntVector& ChunkCoord)
 			{
 				continue;
 			}
-			const FGFBlockRow* Row = FindBlockRow(Id);
-			const bool bBottomPivot = Row && !Row->Mesh.IsNull() && Row->bPivotIsBottomCenter;
+			bool bBottomPivot = false;
+			ResolveDrawMesh(Id, bBottomPivot);
 			const FVector MeshPivotOffset = bBottomPivot ? FVector::ZeroVector : FVector(0, 0, GFBlockSize * 0.5f);
 			const FColor* Paint = PaintedCells.Find(Cell);
 			const uint32 PaintKey = Paint ? Paint->ToPackedRGBA() : 0u;

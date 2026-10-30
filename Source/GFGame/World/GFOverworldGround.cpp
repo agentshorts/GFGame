@@ -4,6 +4,7 @@
 #include "Engine/World.h"
 #include "GFAssetMap.h"
 #include "GFLog.h"
+#include "GFOverworldBuild.h"
 #include "GFTerritorySubsystem.h"
 
 namespace
@@ -47,7 +48,7 @@ namespace
 		}
 		if (Id == FName(TEXT("Cinderwrights")))
 		{
-			return FLinearColor(0.55f, 0.52f, 0.48f, 1.f);
+			return GFOverworldCinderColour();
 		}
 		return FLinearColor(0.60f, 0.60f, 0.60f, 1.f);
 	}
@@ -243,6 +244,29 @@ TArray<FGFOverworldShape> AGFOverworldGround::BuildShapes(
 	return Shapes;
 }
 
+bool AGFOverworldGround::IsVoxelOverworldMap(const UWorld* World)
+{
+	if (!World)
+	{
+		return false;
+	}
+	if (World->GetMapName().Contains(TEXT("L_Hub")))
+	{
+		return true;
+	}
+	const UPackage* Package = World->GetOutermost();
+	return Package && Package->GetName().Contains(TEXT("L_Hub"));
+}
+
+bool AGFOverworldGround::ShouldDrawShape(EGFOverworldShapeKind Kind, bool bVoxelOverworldMap)
+{
+	if (bVoxelOverworldMap)
+	{
+		return false;
+	}
+	return Kind != EGFOverworldShapeKind::HazardBox;
+}
+
 void AGFOverworldGround::BeginPlay()
 {
 	Super::BeginPlay();
@@ -263,9 +287,16 @@ void AGFOverworldGround::BeginPlay()
 		return;
 	}
 
+	const bool bHub = IsVoxelOverworldMap(GetWorld());
 	const TArray<FGFOverworldShape> Shapes = BuildShapes(Territory->FactionLayout, Territory->Hazards, CurrentParams());
+	int32 Drawn = 0;
 	for (const FGFOverworldShape& Shape : Shapes)
 	{
+		if (!ShouldDrawShape(Shape.Kind, bHub))
+		{
+			continue;
+		}
+		++Drawn;
 		const EGFPlaceholderShape MeshKind = Shape.Kind == EGFOverworldShapeKind::FactionDisc
 			? EGFPlaceholderShape::Cylinder
 			: EGFPlaceholderShape::Cube;
@@ -296,5 +327,5 @@ void AGFOverworldGround::BeginPlay()
 		Mesh->RegisterComponent();
 	}
 
-	UE_LOG(LogGF, Log, TEXT("World: overworld ground built %d shapes on this machine."), Shapes.Num());
+	UE_LOG(LogGF, Log, TEXT("World: overworld ground drew %d of %d shapes on this machine."), Drawn, Shapes.Num());
 }

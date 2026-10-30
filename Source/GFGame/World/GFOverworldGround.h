@@ -1,14 +1,19 @@
-// Walkable floor under the faction layout. Not gameplay: the voxel plot stays the
-// buildable area. Spawned with the game state. Reads UGFTerritorySubsystem live,
-// or its CDO when the subsystem is missing.
-// One slab (layout bounds plus margin), one disc per faction at the largest
-// RadiusByMembers entry, one box per hazard. Tops sit just under Z=0.
+// Placeholder floor under the faction layout. Spawned with the game state.
+// Reads UGFTerritorySubsystem live, or its CDO when the subsystem is missing.
+// BuildShapes still returns one slab, one disc per faction at the largest
+// RadiusByMembers entry, and one box per hazard. Tops sit just under Z=0.
+// Drawing is narrower: L_Hub draws none of them (the voxel world is the floor,
+// and the map already has the hazard props). Other maps draw the slab and the
+// discs, and never the hazard boxes.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GFTerritoryTypes.h"
+
+class UWorld;
+
 #include "GFOverworldGround.generated.h"
 
 /** Config tint. Id is a faction id or a hazard id. */
@@ -99,6 +104,15 @@ public:
 		const TArray<FGFTerritoryFaction>& Factions,
 		const TArray<FGFTerritoryHazard>& Hazards,
 		const FGFOverworldParams& Params);
+
+	/** True when the map name or its package contains L_Hub (including a PIE prefix). */
+	static bool IsVoxelOverworldMap(const UWorld* World);
+
+	/**
+	 * L_Hub draws no placeholder meshes. Other maps draw the slab and discs.
+	 * Hazard boxes are never drawn: L_Hub already places those props.
+	 */
+	static bool ShouldDrawShape(EGFOverworldShapeKind Kind, bool bVoxelOverworldMap);
 
 private:
 	bool bGroundBuilt = false;

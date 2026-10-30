@@ -528,18 +528,34 @@ bool AGFPlayerState::ValidateEdit(const FIntVector& Cell, FName BlockId, FString
 			return false;
 		}
 	}
+	const FVector WorldPoint = Voxel->CellToWorld(Cell);
+	const EGFOverworldEdit Land = GS->OverworldEditQuery.IsBound()
+		? GS->OverworldEditQuery.Execute(FactionId, WorldPoint)
+		: EGFOverworldEdit::Inactive;
+	if (Land == EGFOverworldEdit::Deny)
+	{
+		OutReason = TEXT("outside faction land");
+		return false;
+	}
 	{
 		// Mode rules first (faction land: visitors without guest status can't build or break there).
-		const FName Why = GS->EditBlockReason(this, Voxel->CellToWorld(Cell));
-		if (!Why.IsNone())
+		// The Rime/Verdant overlap is shared farmland: both factions may build, so that one denial is lifted.
+		const FName Why = GS->EditBlockReason(this, WorldPoint);
+		const bool bSharedFarm = Land == EGFOverworldEdit::Shared && Why == FName(TEXT("VisitorNoRights"));
+		if (!Why.IsNone() && !bSharedFarm)
 		{
 			OutReason = Why.ToString();
 			return false;
 		}
 	}
-	if (GS->bEnforcePlotPermissions && !FGFLandRules::CanEdit(GS->Land, PlayerKey, bIsHost, Cell, !BlockId.IsNone(), OutReason))
+	if (GS->bEnforcePlotPermissions)
 	{
-		return false;
+		const bool bOpenFactionGround = (Land == EGFOverworldEdit::Own || Land == EGFOverworldEdit::Shared)
+			&& GS->Land.PlotAt(Cell) == nullptr;
+		if (!bOpenFactionGround && !FGFLandRules::CanEdit(GS->Land, PlayerKey, bIsHost, Cell, !BlockId.IsNone(), OutReason))
+		{
+			return false;
+		}
 	}
 	if (!BlockId.IsNone() && !GS->bFreeBuild && Inventory->GetCount(ItemForBlock(BlockId)) < 1)
 	{

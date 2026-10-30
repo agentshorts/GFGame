@@ -10,6 +10,22 @@ class AGFPlayerState;
 class AGFVoxelWorld;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FGFOnLandChanged);
+
+/**
+ * Hub voxel edits. Inactive on every map except the overworld.
+ * Deny is wild ground. Own is your live disc. Shared is the Rime/Verdant overlap.
+ * Foreign is another faction's disc: visitor rules still apply.
+ */
+enum class EGFOverworldEdit : uint8
+{
+	Inactive,
+	Deny,
+	Own,
+	Shared,
+	Foreign
+};
+
+DECLARE_DELEGATE_RetVal_TwoParams(EGFOverworldEdit, FGFOverworldEditQuery, FName /*FactionId*/, const FVector& /*World*/);
 /** Server: ServerClaimFaction succeeded (FactionId None means they left). Social records jail claim order from this. */
 DECLARE_MULTICAST_DELEGATE_TwoParams(FGFOnFactionChanged, AGFPlayerState* /*Player*/, FName /*FactionId*/);
 
@@ -108,6 +124,12 @@ public:
 	/** Server: guests may only edit inside their own plot. Turned off only by pure voxel / economy tests. */
 	UPROPERTY(EditAnywhere, Category = "GF|Land")
 	bool bEnforcePlotPermissions = true;
+
+	/**
+	 * Hub only. The overworld binds this so wild ground stays unbuildable and the faction radius is the build limit.
+	 * Unbound on other maps (the 64-block test plot).
+	 */
+	FGFOverworldEditQuery OverworldEditQuery;
 
 	/** Server only: every letter (saved with the world). Each player sees theirs in AGFPlayerState::Mailbox. */
 	UPROPERTY()
