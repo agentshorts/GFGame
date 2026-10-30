@@ -78,6 +78,8 @@ AGFEnvironmentDirector::AGFEnvironmentDirector()
 	{
 		SunIntensity = 10.f;
 		ExposureBias = 0.f;
+		ExposureMinBrightness = 1.f;
+		ExposureMaxBrightness = 1.f;
 	}
 }
 
@@ -134,12 +136,23 @@ void AGFEnvironmentDirector::EnsureEnvironment()
 
 			// Only when we own the sun. A hand-lit map keeps its own exposure.
 			// Auto exposure is off, so the bias is fixed. 0 reads right at 10 lux in the packaged hub.
+			// Manual min=max stops a camera from reopening adaptation and washing the floor out.
 			UPostProcessComponent* Exposure = AddEnvComponent<UPostProcessComponent>(this);
 			Exposure->bUnbound = true;
 			Exposure->Priority = 1.f;
 			Exposure->BlendWeight = 1.f;
 			Exposure->Settings.bOverride_AutoExposureBias = true;
 			Exposure->Settings.AutoExposureBias = ExposureBias;
+			Exposure->Settings.bOverride_AutoExposureMethod = true;
+			Exposure->Settings.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
+			Exposure->Settings.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
+			Exposure->Settings.AutoExposureApplyPhysicalCameraExposure = false;
+			const float MinBrightness = FMath::Max(0.01f, ExposureMinBrightness);
+			const float MaxBrightness = FMath::Max(MinBrightness, ExposureMaxBrightness);
+			Exposure->Settings.bOverride_AutoExposureMinBrightness = true;
+			Exposure->Settings.bOverride_AutoExposureMaxBrightness = true;
+			Exposure->Settings.AutoExposureMinBrightness = MinBrightness;
+			Exposure->Settings.AutoExposureMaxBrightness = MaxBrightness;
 			Exposure->RegisterComponent();
 			MatchCachedLightingPreExposure(ExposureBias);
 		}

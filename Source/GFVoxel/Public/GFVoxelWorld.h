@@ -239,3 +239,30 @@ protected:
 	};
 	TMap<int32, FPrediction> Predictions;
 };
+
+/**
+ * Block albedo for the lit floor. Imported meshes ship on the engine grid (near white),
+ * and a few debug colours (ice) are almost white too. Under a fixed exposure that
+ * does not darken them, the ground reads as a white sheet. Keep luminance in 0.2..0.5.
+ * Black stays black. Alpha is forced to 1.
+ */
+inline FLinearColor GFClampBlockAlbedo(FLinearColor Color)
+{
+	Color.A = 1.f;
+	Color.R = FMath::Max(0.f, Color.R);
+	Color.G = FMath::Max(0.f, Color.G);
+	Color.B = FMath::Max(0.f, Color.B);
+	const float Luma = Color.GetLuminance();
+	constexpr float MinLuma = 0.20f;
+	constexpr float MaxLuma = 0.50f;
+	if (Luma > MaxLuma)
+	{
+		Color *= MaxLuma / Luma;
+	}
+	else if (Luma > KINDA_SMALL_NUMBER && Luma < MinLuma)
+	{
+		Color *= MinLuma / Luma;
+	}
+	Color.A = 1.f;
+	return Color;
+}
