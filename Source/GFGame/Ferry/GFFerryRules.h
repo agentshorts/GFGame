@@ -18,6 +18,47 @@ struct GFGAME_API FGFFerryCodes
 	static const FName AlreadyHasPass;
 	static const FName InFlight;
 	static const FName NotAuthority;
+	/** StartFlight did not begin. A fare that was burned for this request is minted back. */
+	static const FName FlightFailed;
+};
+
+/**
+ * Ripwing ferry clip timing and socket offsets. Frame numbers are at 30 fps.
+ * The parked idle stays Ripwing.Perch_Idle. Transit uses the ferry clips, not Glide_Loop.
+ */
+struct GFGAME_API FGFFerryArt
+{
+	static constexpr float FramesPerSecond = 30.f;
+	static constexpr int32 TakeoffFrames = 40;
+	static constexpr int32 LeavePerchFrame = 10;
+	static constexpr int32 GrabBasketFrame = 22;
+	static constexpr int32 LandFrames = 48;
+	static constexpr int32 BasketDownFrame = 16;
+	static constexpr int32 ReleaseFrame = 22;
+	static constexpr float ParkYawDegrees = -90.f;
+	/** Control-point offset past the chord midpoint, toward world +Y. The apex sits halfway, 800 cm off the chord. */
+	static constexpr float RouteBulgeCm = 1600.f;
+
+	static FVector PerchPointLocal() { return FVector(-95.f, 0.f, 262.5f); }
+	static FVector BasketSpotLocal() { return FVector(0.f, 0.f, 12.5f); }
+	static FVector GripLocal() { return FVector(0.f, 0.f, 193.75f); }
+	static FVector SeatLocal() { return FVector(-25.f, 0.f, 12.5f); }
+
+	static FName PerchAnim() { return TEXT("Ripwing.Perch_Idle"); }
+	static FName TakeoffAnim() { return TEXT("Ripwing.Ferry_Takeoff"); }
+	static FName CarryAnim() { return TEXT("Ripwing.Ferry_Carry_Fly"); }
+	static FName LandAnim() { return TEXT("Ripwing.Ferry_Land"); }
+	static FName SeatAnim() { return TEXT("Player.Emote_Sit"); }
+
+	static FName GripSocket() { return TEXT("Grip"); }
+	static FName SeatSocket() { return TEXT("Seat"); }
+	static FName FerryGripSocket() { return TEXT("FerryGrip"); }
+
+	static float FrameSeconds(int32 Frame) { return static_cast<float>(Frame) / FramesPerSecond; }
+	static FRotator ParkRotation() { return FRotator(0.f, ParkYawDegrees, 0.f); }
+	static FTransform PerchTransform(const FVector& StopLocation) { return FTransform(ParkRotation(), StopLocation); }
+	static FVector PerchWorld(const FVector& StopLocation) { return PerchTransform(StopLocation).TransformPosition(PerchPointLocal()); }
+	static FVector BasketSpotWorld(const FVector& StopLocation) { return PerchTransform(StopLocation).TransformPosition(BasketSpotLocal()); }
 };
 
 struct GFGAME_API FGFFerryResult
@@ -57,8 +98,15 @@ struct GFGAME_API FGFFerryRoutePerson
 struct GFGAME_API FGFFerryRules
 {
 	static FName FareReason();
+	static FName FareRefundReason();
 	static FName PassBurnReason();
 	static FName PassGrantReason();
+	static FName PassRollbackReason();
+
+	/** The fare TxId is the request id. Invalid requests stay invalid so a caller cannot fall back to a random id. */
+	static FGuid FareTxId(const FGuid& RequestId);
+	static FGuid FareRefundTx(const FGuid& RequestId);
+	static FGuid PassRollbackTx(const FGuid& RequestId);
 
 	/** 0 when the inventory holds Tuning.PassItem, otherwise FareCount. */
 	static int32 Quote(const FGFInventory& Inventory, const FGFFerryTuning& Tuning);
@@ -114,6 +162,7 @@ struct GFGAME_API FGFFerryRules
 		bool bInFlight,
 		bool bBurnAlreadyApplied,
 		bool bMintAlreadyApplied,
+		bool bRolledBack,
 		const FGuid& RequestId,
 		const FGFFerryStop* Stop,
 		const FVector& RiderLocation,
@@ -136,10 +185,13 @@ struct GFGAME_API FGFFerryRules
 		const FGFFerryTuning& Tuning);
 
 	/**
-	 * Straight lerp from A to B plus a sine arc.
-	 * Alpha 0 and 1 sit on the endpoints. Alpha 0.5 adds Altitude to Z.
+	 * Quadratic Bezier from A to B. Alpha 0 and 1 are the endpoints.
+	 * The control point is the chord midpoint, 1600 cm toward world +Y, with Z = midpoint Z + 2 * Altitude,
+	 * so alpha 0.5 is Altitude above the chord and 800 cm off it. Both directions bulge toward +Y.
 	 */
+	static FVector FlightControl(const FVector& A, const FVector& B, float Altitude);
 	static FVector FlightPosition(const FVector& A, const FVector& B, float Alpha, float Altitude);
+	static FVector FlightTangent(const FVector& A, const FVector& B, float Alpha, float Altitude);
 
 	/** Horizontal distance. BoardRadius is a disc around the stop, so height does not count. */
 	static bool IsWithinBoardRadius(const FVector& RiderLocation, const FVector& StopLocation, float BoardRadius);

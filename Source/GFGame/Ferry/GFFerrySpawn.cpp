@@ -17,6 +17,21 @@ FVector FGFPlayerStartRules::FallbackLocation(FName AnchorId, const TArray<FGFTe
 	return Origin;
 }
 
+FVector FGFPlayerStartRules::DefaultPerchLocation()
+{
+	return FVector(0.f, -300.f, 100.f);
+}
+
+FRotator FGFPlayerStartRules::DefaultPerchRotation()
+{
+	return FRotator(0.f, 36.f, 0.f);
+}
+
+FTransform FGFPlayerStartRules::EmptyMapStart()
+{
+	return FTransform(DefaultPerchRotation(), DefaultPerchLocation());
+}
+
 int32 FGFPlayerStartRules::ChooseStartIndex(const TArray<FGFMapPlayerStart>& Starts, FName AnchorId)
 {
 	if (Starts.Num() == 0)

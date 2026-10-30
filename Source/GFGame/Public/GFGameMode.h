@@ -29,7 +29,7 @@ public:
 
 	/**
 	 * Faction anchor used when the map has no PlayerStart, or when a PlayerStart is tagged with this id.
-	 * A tagged start wins. Any other map PlayerStart still wins over the anchor fallback.
+	 * A tagged start wins. Any other map PlayerStart still wins over the empty-map perch at (0, -300, 100), yaw 36.
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "GF|Spawn")
 	FName DefaultSpawnAnchor;

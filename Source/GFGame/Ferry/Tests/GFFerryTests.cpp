@@ -13,6 +13,7 @@
 #include "GFGameMode.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
+#include "GFLandTypes.h"
 #include "GFProtectedActor.h"
 #include "GFTerritorySubsystem.h"
 #include "Engine/Engine.h"
@@ -178,11 +179,19 @@ bool FGFFerryFareTest::RunTest(const FString&)
 	TestEqual(TEXT("Away inventory unchanged"), CountOf(FarAccounts, RiderKey, Tuning.FareItem), Tuning.FareCount);
 
 	const FVector Peak = FGFFerryRules::FlightPosition(Home->Location, Far->Location, 0.5f, Tuning.CruiseAltitude);
-	const float MidZ = (Home->Location.Z + Far->Location.Z) * 0.5f + Tuning.CruiseAltitude;
+	const FVector Mid = (Home->Location + Far->Location) * 0.5f;
+	const float MidZ = Mid.Z + Tuning.CruiseAltitude;
 	TestEqual(TEXT("Flight starts at the stop"), FGFFerryRules::FlightPosition(Home->Location, Far->Location, 0.f, Tuning.CruiseAltitude), Home->Location);
 	TestEqual(TEXT("Flight ends at the far stop"), FGFFerryRules::FlightPosition(Home->Location, Far->Location, 1.f, Tuning.CruiseAltitude), Far->Location);
 	TestTrue(TEXT("Arc peaks at cruise altitude"), FMath::IsNearlyEqual(Peak.Z, MidZ, 1.f));
 	TestTrue(TEXT("Peak is above either stop"), Peak.Z > Home->Location.Z && Peak.Z > Far->Location.Z);
+	const FVector Lateral(Peak.X - Mid.X, Peak.Y - Mid.Y, 0.f);
+	TestTrue(TEXT("Peak leaves the chord"), Lateral.Size() > 100.f);
+	TestTrue(TEXT("Peak is about 800 cm off the chord"), FMath::IsNearlyEqual(Lateral.Size(), FGFFerryArt::RouteBulgeCm * 0.5f, 1.f));
+	TestTrue(TEXT("Bulge is toward +Y"), Lateral.Y > 0.f);
+	const FVector ReturnPeak = FGFFerryRules::FlightPosition(Far->Location, Home->Location, 0.5f, Tuning.CruiseAltitude);
+	const FVector ReturnLateral(ReturnPeak.X - Mid.X, ReturnPeak.Y - Mid.Y, 0.f);
+	TestTrue(TEXT("Return bulge stays on +Y"), ReturnLateral.Y > 0.f);
 	return true;
 }
 
@@ -321,7 +330,10 @@ bool FGFFerryNoAttackTest::RunTest(const FString&)
 	TestTrue(TEXT("Tag name"), Parked->ActorHasTag(FGFProtectedActor::Tag));
 	TestNull(TEXT("No taming component"), Parked->FindComponentByClass<UGFTamingComponent>());
 	TestEqual(TEXT("Ripwing placeholder"), Parked->BodyAssetKey, FName(TEXT("Dino.Ripwing")));
-	TestEqual(TEXT("Perch anim"), Parked->AnimKey, FName(TEXT("Ripwing.Perch_Idle")));
+	TestEqual(TEXT("Perch anim"), Parked->AnimKey, FGFFerryArt::PerchAnim());
+	const FVector Perch = FGFFerryArt::PerchWorld(Home->Location);
+	TestTrue(TEXT("Parked at the perch point"), Parked->GetActorLocation().Equals(Perch, 1.f));
+	TestTrue(TEXT("Park yaw is -90"), FMath::IsNearlyEqual(FRotator::NormalizeAxis(Parked->GetActorRotation().Yaw), FGFFerryArt::ParkYawDegrees, 1.f));
 
 	AGFDino* Hunter = World->SpawnActor<AGFDino>(AGFDino::StaticClass(), ParkedAt + FVector(0.f, 300.f, 0.f), FRotator::ZeroRotator, Params);
 	if (!TestNotNull(TEXT("Hunter"), Hunter))
@@ -356,7 +368,8 @@ bool FGFFerryNoAttackTest::RunTest(const FString&)
 	}
 	Pawn->SetPlayerState(PS);
 
-	const FGFFerryResult Trip = Director->RequestTrip(Pawn, Home->Id);
+	const FGuid TripId(0xF3220101, 0xF3220102, 0xF3220103, 0xF3220104);
+	const FGFFerryResult Trip = Director->RequestTrip(Pawn, Home->Id, TripId);
 	TestTrue(TEXT("Trip accepted"), Trip.bOk);
 	TestEqual(TEXT("Trip code"), Trip.Code, FGFFerryCodes::Ok);
 	Director->Tick(0.05f);
@@ -365,6 +378,29 @@ bool FGFFerryNoAttackTest::RunTest(const FString&)
 	TestFalse(TEXT("Rider cannot be damaged in flight"), Pawn->CanBeDamaged());
 	Hunter->SetAttackTarget(Pawn);
 	TestNull(TEXT("Dino cannot target a rider in flight"), Hunter->GetAttackTarget());
+
+	AGFFerryDino* Transit = nullptr;
+	for (TActorIterator<AGFFerryDino> TransitIt(World); TransitIt; ++TransitIt)
+	{
+		if (TransitIt->bTransit)
+		{
+			Transit = *TransitIt;
+			break;
+		}
+	}
+	if (!TestNotNull(TEXT("Transit copy"), Transit))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Takeoff anim"), Transit->AnimKey, FGFFerryArt::TakeoffAnim());
+	TestTrue(TEXT("Transit still on the perch at frame 0"), Transit->GetActorLocation().Equals(Perch, 1.f));
+	TestTrue(TEXT("Rider parent is the craft"), Pawn->GetAttachParentActor() == Transit);
+	TestTrue(TEXT("Rider sits at the seat"), Pawn->GetRootComponent() && Pawn->GetRootComponent()->GetRelativeLocation().Equals(FGFFerryArt::SeatLocal(), 1.f));
+	TestEqual(TEXT("Seat emote"), Pawn->FerryRider->GetSeatAnim(), FGFFerryArt::SeatAnim());
+
+	Director->Tick(2.f);
+	TestEqual(TEXT("Carry anim"), Transit->AnimKey, FGFFerryArt::CarryAnim());
+	TestTrue(TEXT("Still flying during the carry"), Pawn->FerryRider->IsInFlight());
 
 	Director->Tick(Director->Tuning.FlightSeconds);
 	TestFalse(TEXT("Flight ended"), Pawn->FerryRider->IsInFlight());
@@ -554,7 +590,10 @@ bool FGFFerrySpawnDefaultAnchorTest::RunTest(const FString&)
 
 	const FVector Fallback = FGFPlayerStartRules::FallbackLocation(GameMode->DefaultSpawnAnchor, Territory->FactionLayout);
 	const FVector Expected(RimeAnchor->Center.X, RimeAnchor->Center.Y, RimeAnchor->Center.Z + 120.f);
-	TestEqual(TEXT("No PlayerStart uses the Rime center"), Fallback, Expected);
+	TestEqual(TEXT("Anchor fallback is the Rime center plus FallbackZ"), Fallback, Expected);
+	const FTransform Empty = FGFPlayerStartRules::EmptyMapStart();
+	TestEqual(TEXT("Empty map start is the perch"), Empty.GetLocation(), FVector(0.f, -300.f, 100.f));
+	TestTrue(TEXT("Empty map yaw is 36"), FMath::IsNearlyEqual(Empty.Rotator().Yaw, 36.f, 0.1f));
 
 	TArray<FGFMapPlayerStart> TaggedSecond;
 	FGFMapPlayerStart Untagged;
@@ -574,6 +613,237 @@ bool FGFFerrySpawnDefaultAnchorTest::RunTest(const FString&)
 
 	TestEqual(TEXT("Unknown anchor"), FGFPlayerStartRules::FallbackLocation(FName(TEXT("NoSuchAnchor")), Territory->FactionLayout), FVector(0.f, 0.f, 120.f));
 	TestEqual(TEXT("No starts"), FGFPlayerStartRules::ChooseStartIndex({}, Rime), INDEX_NONE);
+	return true;
+}
+
+namespace GFFerryTests
+{
+	struct FFailThirdRead : public FGFMapLedgerAccounts
+	{
+		mutable int32 Reads = 0;
+		virtual bool ReadAccount(const FString& Account, FGFInventory& Out) const override
+		{
+			++Reads;
+			if (Reads == 3)
+			{
+				return false;
+			}
+			return FGFMapLedgerAccounts::ReadAccount(Account, Out);
+		}
+	};
+
+	struct FTripWorld
+	{
+		UWorld* World = nullptr;
+		AGFGameState* GS = nullptr;
+		AGFFerryDirector* Director = nullptr;
+		AGFPlayerState* PS = nullptr;
+		AGFCharacter* Pawn = nullptr;
+
+		bool Open(const TCHAR* Name, int32 FareMultiplier)
+		{
+			if (!GEngine)
+			{
+				return false;
+			}
+			World = UWorld::CreateWorld(EWorldType::Game, false, Name);
+			if (!World)
+			{
+				return false;
+			}
+			FWorldContext& Context = GEngine->CreateNewWorldContext(EWorldType::Game);
+			Context.SetCurrentWorld(World);
+			World->InitializeActorsForPlay(FURL());
+			World->BeginPlay();
+			if (!World->HasBegunPlay() && World->GetWorldSettings())
+			{
+				World->GetWorldSettings()->NotifyBeginPlay();
+			}
+			GS = World->SpawnActor<AGFGameState>();
+			if (GS)
+			{
+				World->SetGameState(GS);
+			}
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			Director = World->SpawnActor<AGFFerryDirector>(AGFFerryDirector::StaticClass(), FTransform::Identity, Params);
+			PS = World->SpawnActor<AGFPlayerState>(AGFPlayerState::StaticClass(), FTransform::Identity, Params);
+			if (!GS || !Director || !PS || !PS->Inventory || Director->Stops.Num() == 0)
+			{
+				return false;
+			}
+			PS->PlayerKey = RiderKey;
+			PS->bCharacterReady = true;
+			PS->SetPlayerId(77);
+			if (GS->PlayerArray.Find(PS) == INDEX_NONE)
+			{
+				GS->AddPlayerState(PS);
+			}
+			const FGFFerryStop* Home = HomeStop(*Director);
+			if (!Home)
+			{
+				return false;
+			}
+			Pawn = World->SpawnActor<AGFCharacter>(AGFCharacter::StaticClass(), Home->Location, FRotator::ZeroRotator, Params);
+			if (!Pawn || !Pawn->FerryRider)
+			{
+				return false;
+			}
+			Pawn->SetPlayerState(PS);
+			if (FareMultiplier > 0)
+			{
+				PS->Inventory->AddItem(Director->Tuning.FareItem, Director->Tuning.FareCount * FareMultiplier);
+			}
+			return true;
+		}
+
+		~FTripWorld()
+		{
+			if (World && GEngine)
+			{
+				GEngine->DestroyWorldContext(World);
+				World->DestroyWorld(false);
+			}
+		}
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFFerryDuplicateChargeTest, "GFGame.Ferry.DuplicateCharge", GFFerryTests::Flags)
+bool FGFFerryDuplicateChargeTest::RunTest(const FString&)
+{
+	using namespace GFFerryTests;
+	FTripWorld Trip;
+	if (!TestTrue(TEXT("World"), Trip.Open(TEXT("GFFerryDuplicate"), 2)))
+	{
+		return false;
+	}
+	const FGFFerryStop* Home = HomeStop(*Trip.Director);
+	if (!TestNotNull(TEXT("Home"), Home))
+	{
+		return false;
+	}
+	const int32 Start = Trip.PS->Inventory->GetCount(Trip.Director->Tuning.FareItem);
+	const FGuid Id(0xF3220201, 0xF3220202, 0xF3220203, 0xF3220204);
+	const FGFFerryResult First = Trip.Director->RequestTrip(Trip.Pawn, Home->Id, Id);
+	TestTrue(TEXT("First trip"), First.bOk);
+	Trip.Director->Tick(Trip.Director->Tuning.FlightSeconds);
+	TestFalse(TEXT("First flight ended"), Trip.Pawn->FerryRider->IsInFlight());
+	TestEqual(TEXT("Charged once"), Trip.PS->Inventory->GetCount(Trip.Director->Tuning.FareItem), Start - Trip.Director->Tuning.FareCount);
+
+	const FGFFerryResult Second = Trip.Director->RequestTrip(Trip.Pawn, Home->Id, Id);
+	TestTrue(TEXT("Duplicate is ok"), Second.bOk);
+	TestFalse(TEXT("Duplicate does not fly"), Trip.Pawn->FerryRider->IsInFlight());
+	TestEqual(TEXT("Duplicate does not charge"), Trip.PS->Inventory->GetCount(Trip.Director->Tuning.FareItem), Start - Trip.Director->Tuning.FareCount);
+	TestEqual(TEXT("Ledger burned one fare"), int32(Trip.GS->Ledger.GetBurned(Trip.Director->Tuning.FareItem)), Trip.Director->Tuning.FareCount);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFFerryFareRefundTest, "GFGame.Ferry.FareRefund", GFFerryTests::Flags)
+bool FGFFerryFareRefundTest::RunTest(const FString&)
+{
+	using namespace GFFerryTests;
+	FTripWorld Trip;
+	if (!TestTrue(TEXT("World"), Trip.Open(TEXT("GFFerryRefund"), 1)))
+	{
+		return false;
+	}
+	const FGFFerryStop* Home = HomeStop(*Trip.Director);
+	if (!TestNotNull(TEXT("Home"), Home))
+	{
+		return false;
+	}
+	const int32 Start = Trip.PS->Inventory->GetCount(Trip.Director->Tuning.FareItem);
+	const FGuid Id(0xF3220301, 0xF3220302, 0xF3220303, 0xF3220304);
+	Trip.Director->bFailNextFlight = true;
+	const FGFFerryResult Failed = Trip.Director->RequestTrip(Trip.Pawn, Home->Id, Id);
+	TestFalse(TEXT("Failed start"), Failed.bOk);
+	TestEqual(TEXT("FlightFailed"), Failed.Code, FGFFerryCodes::FlightFailed);
+	TestFalse(TEXT("Not in flight"), Trip.Pawn->FerryRider->IsInFlight());
+	TestEqual(TEXT("Fare restored"), Trip.PS->Inventory->GetCount(Trip.Director->Tuning.FareItem), Start);
+	TestEqual(TEXT("Fare was burned"), int32(Trip.GS->Ledger.GetBurned(Trip.Director->Tuning.FareItem)), Trip.Director->Tuning.FareCount);
+	TestEqual(TEXT("Fare was minted back"), int32(Trip.GS->Ledger.GetMinted(Trip.Director->Tuning.FareItem)), Trip.Director->Tuning.FareCount);
+
+	const FGFFerryResult Again = Trip.Director->RequestTrip(Trip.Pawn, Home->Id, Id);
+	TestFalse(TEXT("Same id stays failed"), Again.bOk);
+	TestEqual(TEXT("Same id is FlightFailed"), Again.Code, FGFFerryCodes::FlightFailed);
+	TestFalse(TEXT("Same id does not fly"), Trip.Pawn->FerryRider->IsInFlight());
+	TestEqual(TEXT("Same id does not charge"), Trip.PS->Inventory->GetCount(Trip.Director->Tuning.FareItem), Start);
+	TestEqual(TEXT("Refund is not minted twice"), int32(Trip.GS->Ledger.GetMinted(Trip.Director->Tuning.FareItem)), Trip.Director->Tuning.FareCount);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFFerryPassRollbackTest, "GFGame.Ferry.PassRollback", GFFerryTests::Flags)
+bool FGFFerryPassRollbackTest::RunTest(const FString&)
+{
+	using namespace GFFerryTests;
+	const AGFFerryDirector* Director = nullptr;
+	if (!TestTrue(TEXT("Shipped ferry config"), LoadFerry(Director)))
+	{
+		return false;
+	}
+	const FGFFerryTuning& Tuning = Director->Tuning;
+	const FGFFerryStop* Home = HomeStop(*Director);
+	if (!TestNotNull(TEXT("Home"), Home))
+	{
+		return false;
+	}
+	FFailThirdRead Accounts;
+	FGFTransferLedger Ledger;
+	Give(Accounts, RiderKey, Tuning.PassMaterialItem, Tuning.PassPrice);
+	const FGuid Id(0xF3220401, 0xF3220402, 0xF3220403, 0xF3220404);
+	const FGFFerryResult Failed = FGFFerryRules::ApplyPass(Accounts, Ledger, Id, RiderKey, true, false, Home, Home->Location, Tuning);
+	TestFalse(TEXT("Mint failure"), Failed.bOk);
+	TestEqual(TEXT("CantAfford"), Failed.Code, FGFFerryCodes::CantAfford);
+	TestEqual(TEXT("Materials restored"), CountOf(Accounts, RiderKey, Tuning.PassMaterialItem), Tuning.PassPrice);
+	TestEqual(TEXT("No pass"), CountOf(Accounts, RiderKey, Tuning.PassItem), 0);
+
+	const FGFFerryResult Again = FGFFerryRules::ApplyPass(Accounts, Ledger, Id, RiderKey, true, false, Home, Home->Location, Tuning);
+	TestFalse(TEXT("Rolled-back id does not mint"), Again.bOk);
+	TestEqual(TEXT("Still no pass"), CountOf(Accounts, RiderKey, Tuning.PassItem), 0);
+	TestEqual(TEXT("Materials stay"), CountOf(Accounts, RiderKey, Tuning.PassMaterialItem), Tuning.PassPrice);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFFerryPassBoundTest, "GFGame.Ferry.PassBound", GFFerryTests::Flags)
+bool FGFFerryPassBoundTest::RunTest(const FString&)
+{
+	using namespace GFFerryTests;
+	FTripWorld Trip;
+	if (!TestTrue(TEXT("World"), Trip.Open(TEXT("GFFerryPassBound"), 0)))
+	{
+		return false;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AGFPlayerState* Other = Trip.World->SpawnActor<AGFPlayerState>(AGFPlayerState::StaticClass(), FTransform::Identity, Params);
+	if (!TestNotNull(TEXT("Other"), Other) || !TestNotNull(TEXT("Other inventory"), Other->Inventory.Get()))
+	{
+		return false;
+	}
+	Other->PlayerKey = TEXT("Other");
+	Other->bCharacterReady = true;
+	Other->SetPlayerId(78);
+	if (Trip.GS->PlayerArray.Find(Other) == INDEX_NONE)
+	{
+		Trip.GS->AddPlayerState(Other);
+	}
+	const FName PassId(TEXT("FerryPass"));
+	const FName DirtId(TEXT("Dirt"));
+	TestTrue(TEXT("Has a pass"), Trip.PS->Inventory->AddItem(PassId, 1));
+	TestTrue(TEXT("Has dirt"), Trip.PS->Inventory->AddItem(DirtId, 3));
+
+	const EGFTxResult PassMove = Trip.GS->ServerTransfer(FGuid(0xF3220501, 0xF3220502, 0xF3220503, 0xF3220504), RiderKey, Other->PlayerKey, { FGFItemStack(PassId, 1) }, NAME_None);
+	TestTrue(TEXT("Pass transfer is account-bound"), PassMove == EGFTxResult::AccountBound);
+	TestEqual(TEXT("Pass stayed"), Trip.PS->Inventory->GetCount(PassId), 1);
+
+	const EGFTxResult DirtMove = Trip.GS->ServerTransfer(FGuid(0xF3220505, 0xF3220506, 0xF3220507, 0xF3220508), RiderKey, Other->PlayerKey, { FGFItemStack(DirtId, 3) }, NAME_None);
+	TestTrue(TEXT("Dirt still transfers"), DirtMove == EGFTxResult::Applied);
+	TestEqual(TEXT("Dirt left"), Trip.PS->Inventory->GetCount(DirtId), 0);
+
+	EGFLandResult Mail = EGFLandResult::Ok;
+	Trip.GS->ServerSendLetter(EGFLetterKind::Gift, RiderKey, Other->PlayerKey, TEXT("pass"), { FGFItemStack(PassId, 1) }, NAME_None, Mail);
+	TestTrue(TEXT("Pass mail is not allowed"), Mail == EGFLandResult::NotAllowed);
+	TestEqual(TEXT("Pass still held after mail"), Trip.PS->Inventory->GetCount(PassId), 1);
 	return true;
 }
 

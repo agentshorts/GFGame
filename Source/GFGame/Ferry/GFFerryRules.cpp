@@ -7,13 +7,16 @@ const FName FGFFerryCodes::CantAfford(TEXT("CantAfford"));
 const FName FGFFerryCodes::AlreadyHasPass(TEXT("AlreadyHasPass"));
 const FName FGFFerryCodes::InFlight(TEXT("InFlight"));
 const FName FGFFerryCodes::NotAuthority(TEXT("NotAuthority"));
+const FName FGFFerryCodes::FlightFailed(TEXT("FlightFailed"));
 
-namespace
+namespace GFFerryRulesPrivate
 {
 	constexpr uint32 PassBurnSalt = 0x50535331;
 	constexpr uint32 PassMintSalt = 0x50535332;
+	constexpr uint32 FareRefundSalt = 0x46524652;
+	constexpr uint32 PassRollbackSalt = 0x50535242;
 
-	FGFFerryResult Fail(FName Code)
+	FGFFerryResult FerryRulesFail(FName Code)
 	{
 		FGFFerryResult Result;
 		Result.bOk = false;
@@ -21,7 +24,7 @@ namespace
 		return Result;
 	}
 
-	FGFFerryResult Succeed()
+	FGFFerryResult FerryRulesSucceed()
 	{
 		FGFFerryResult Result;
 		Result.bOk = true;
@@ -38,21 +41,21 @@ namespace
 	{
 		if (!bAuthority)
 		{
-			return Fail(FGFFerryCodes::NotAuthority);
+			return FerryRulesFail(FGFFerryCodes::NotAuthority);
 		}
 		if (bInFlight)
 		{
-			return Fail(FGFFerryCodes::InFlight);
+			return FerryRulesFail(FGFFerryCodes::InFlight);
 		}
 		if (!Stop || Stop->Id.IsNone())
 		{
-			return Fail(FGFFerryCodes::UnknownStop);
+			return FerryRulesFail(FGFFerryCodes::UnknownStop);
 		}
 		if (!FGFFerryRules::IsWithinBoardRadius(RiderLocation, Stop->Location, Tuning.BoardRadius))
 		{
-			return Fail(FGFFerryCodes::NotAtStop);
+			return FerryRulesFail(FGFFerryCodes::NotAtStop);
 		}
-		return Succeed();
+		return FerryRulesSucceed();
 	}
 
 	bool BurnApplied(EGFTxResult Result)
@@ -66,6 +69,11 @@ FName FGFFerryRules::FareReason()
 	return TEXT("Ferry.Fare");
 }
 
+FName FGFFerryRules::FareRefundReason()
+{
+	return TEXT("Ferry.FareRefund");
+}
+
 FName FGFFerryRules::PassBurnReason()
 {
 	return TEXT("Ferry.Pass");
@@ -76,9 +84,29 @@ FName FGFFerryRules::PassGrantReason()
 	return TEXT("Ferry.PassGrant");
 }
 
+FName FGFFerryRules::PassRollbackReason()
+{
+	return TEXT("Ferry.PassRollback");
+}
+
+FGuid FGFFerryRules::FareTxId(const FGuid& RequestId)
+{
+	return RequestId.IsValid() ? RequestId : FGuid();
+}
+
+FGuid FGFFerryRules::FareRefundTx(const FGuid& RequestId)
+{
+	return RequestId.IsValid() ? DeriveTxId(RequestId, GFFerryRulesPrivate::FareRefundSalt) : FGuid();
+}
+
+FGuid FGFFerryRules::PassRollbackTx(const FGuid& RequestId)
+{
+	return RequestId.IsValid() ? DeriveTxId(RequestId, GFFerryRulesPrivate::PassRollbackSalt) : FGuid();
+}
+
 int32 FGFFerryRules::Quote(const FGFInventory& Inventory, const FGFFerryTuning& Tuning)
 {
-	if (HasPass(Inventory, Tuning))
+	if (GFFerryRulesPrivate::HasPass(Inventory, Tuning))
 	{
 		return 0;
 	}
@@ -98,7 +126,7 @@ FGFFerryResult FGFFerryRules::CanBoard(
 	const FGFInventory& Inventory,
 	const FGFFerryTuning& Tuning)
 {
-	const FGFFerryResult Gate = GateAtStop(bAuthority, bInFlight, Stop, RiderLocation, Tuning);
+	const FGFFerryResult Gate = GFFerryRulesPrivate::GateAtStop(bAuthority, bInFlight, Stop, RiderLocation, Tuning);
 	if (!Gate.bOk)
 	{
 		return Gate;
@@ -106,9 +134,9 @@ FGFFerryResult FGFFerryRules::CanBoard(
 	const int32 Cost = Quote(Inventory, Tuning);
 	if (Cost > 0 && (Tuning.FareItem.IsNone() || Inventory.GetCount(Tuning.FareItem) < Cost))
 	{
-		return Fail(FGFFerryCodes::CantAfford);
+		return GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::CantAfford);
 	}
-	return Succeed();
+	return GFFerryRulesPrivate::FerryRulesSucceed();
 }
 
 TArray<FGFItemStack> FGFFerryRules::ChargeFare(const FGFInventory& Inventory, const FGFFerryTuning& Tuning)
@@ -130,25 +158,25 @@ FGFFerryResult FGFFerryRules::CanBuyPass(
 	const FGFInventory& Inventory,
 	const FGFFerryTuning& Tuning)
 {
-	const FGFFerryResult Gate = GateAtStop(bAuthority, bInFlight, Stop, RiderLocation, Tuning);
+	const FGFFerryResult Gate = GFFerryRulesPrivate::GateAtStop(bAuthority, bInFlight, Stop, RiderLocation, Tuning);
 	if (!Gate.bOk)
 	{
 		return Gate;
 	}
-	if (HasPass(Inventory, Tuning))
+	if (GFFerryRulesPrivate::HasPass(Inventory, Tuning))
 	{
-		return Fail(FGFFerryCodes::AlreadyHasPass);
+		return GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::AlreadyHasPass);
 	}
 	const int32 Price = FMath::Max(0, Tuning.PassPrice);
 	if (Price > 0 && (Tuning.PassMaterialItem.IsNone() || Inventory.GetCount(Tuning.PassMaterialItem) < Price))
 	{
-		return Fail(FGFFerryCodes::CantAfford);
+		return GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::CantAfford);
 	}
 	if (Tuning.PassItem.IsNone())
 	{
-		return Fail(FGFFerryCodes::CantAfford);
+		return GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::CantAfford);
 	}
-	return Succeed();
+	return GFFerryRulesPrivate::FerryRulesSucceed();
 }
 
 FGFFerryFarePlan FGFFerryRules::PlanFare(
@@ -163,12 +191,12 @@ FGFFerryFarePlan FGFFerryRules::PlanFare(
 	FGFFerryFarePlan Plan;
 	if (!bAuthority)
 	{
-		Plan.Result = Fail(FGFFerryCodes::NotAuthority);
+		Plan.Result = GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::NotAuthority);
 		return Plan;
 	}
 	if (bTxAlreadyApplied)
 	{
-		Plan.Result = Succeed();
+		Plan.Result = GFFerryRulesPrivate::FerryRulesSucceed();
 		return Plan;
 	}
 	Plan.Result = CanBoard(bAuthority, bInFlight, Stop, RiderLocation, Inventory, Tuning);
@@ -195,18 +223,18 @@ FGFFerryResult FGFFerryRules::ApplyFare(
 	FGFInventory Inventory;
 	if (!Accounts.ReadAccount(Account, Inventory))
 	{
-		return Fail(FGFFerryCodes::NotAuthority);
+		return GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::NotAuthority);
 	}
 	const FGFFerryFarePlan Plan = PlanFare(bAuthority, bInFlight, Ledger.WasApplied(TxId), Stop, RiderLocation, Inventory, Tuning);
 	if (!Plan.Result.bOk || !Plan.bCharge)
 	{
 		return Plan.Result;
 	}
-	if (!BurnApplied(Ledger.Burn(Accounts, TxId, Account, Plan.Stacks, FareReason())))
+	if (!GFFerryRulesPrivate::BurnApplied(Ledger.Burn(Accounts, TxId, Account, Plan.Stacks, FareReason())))
 	{
-		return Fail(FGFFerryCodes::CantAfford);
+		return GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::CantAfford);
 	}
-	return Succeed();
+	return GFFerryRulesPrivate::FerryRulesSucceed();
 }
 
 FGuid FGFFerryRules::DeriveTxId(const FGuid& RequestId, uint32 Salt)
@@ -225,6 +253,7 @@ FGFFerryPassPlan FGFFerryRules::PlanPass(
 	bool bInFlight,
 	bool bBurnAlreadyApplied,
 	bool bMintAlreadyApplied,
+	bool bRolledBack,
 	const FGuid& RequestId,
 	const FGFFerryStop* Stop,
 	const FVector& RiderLocation,
@@ -232,21 +261,26 @@ FGFFerryPassPlan FGFFerryRules::PlanPass(
 	const FGFFerryTuning& Tuning)
 {
 	FGFFerryPassPlan Plan;
-	Plan.BurnTx = DeriveTxId(RequestId, PassBurnSalt);
-	Plan.MintTx = DeriveTxId(RequestId, PassMintSalt);
+	Plan.BurnTx = DeriveTxId(RequestId, GFFerryRulesPrivate::PassBurnSalt);
+	Plan.MintTx = DeriveTxId(RequestId, GFFerryRulesPrivate::PassMintSalt);
 	if (!bAuthority)
 	{
-		Plan.Result = Fail(FGFFerryCodes::NotAuthority);
+		Plan.Result = GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::NotAuthority);
 		return Plan;
 	}
-	if (HasPass(Inventory, Tuning) || bMintAlreadyApplied)
+	if (GFFerryRulesPrivate::HasPass(Inventory, Tuning) || bMintAlreadyApplied)
 	{
-		Plan.Result = Fail(FGFFerryCodes::AlreadyHasPass);
+		Plan.Result = GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::AlreadyHasPass);
+		return Plan;
+	}
+	if (bRolledBack)
+	{
+		Plan.Result = GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::CantAfford);
 		return Plan;
 	}
 	if (bBurnAlreadyApplied)
 	{
-		Plan.Result = Succeed();
+		Plan.Result = GFFerryRulesPrivate::FerryRulesSucceed();
 		Plan.bMint = !Tuning.PassItem.IsNone();
 		if (Plan.bMint)
 		{
@@ -281,18 +315,24 @@ FGFFerryResult FGFFerryRules::ApplyPass(
 	const FVector& RiderLocation,
 	const FGFFerryTuning& Tuning)
 {
+	if (!RequestId.IsValid())
+	{
+		return GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::NotAuthority);
+	}
 	FGFInventory Inventory;
 	if (!Accounts.ReadAccount(Account, Inventory))
 	{
-		return Fail(FGFFerryCodes::NotAuthority);
+		return GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::NotAuthority);
 	}
-	const FGuid BurnTx = DeriveTxId(RequestId, PassBurnSalt);
-	const FGuid MintTx = DeriveTxId(RequestId, PassMintSalt);
+	const FGuid BurnTx = DeriveTxId(RequestId, GFFerryRulesPrivate::PassBurnSalt);
+	const FGuid MintTx = DeriveTxId(RequestId, GFFerryRulesPrivate::PassMintSalt);
+	const FGuid RollbackTx = PassRollbackTx(RequestId);
 	const FGFFerryPassPlan Plan = PlanPass(
 		bAuthority,
 		bInFlight,
 		Ledger.WasApplied(BurnTx),
 		Ledger.WasApplied(MintTx),
+		Ledger.WasApplied(RollbackTx),
 		RequestId,
 		Stop,
 		RiderLocation,
@@ -302,15 +342,42 @@ FGFFerryResult FGFFerryRules::ApplyPass(
 	{
 		return Plan.Result;
 	}
-	if (Plan.bBurn && !BurnApplied(Ledger.Burn(Accounts, Plan.BurnTx, Account, Plan.BurnStacks, PassBurnReason())))
+	EGFTxResult BurnResult = EGFTxResult::AlreadyApplied;
+	if (Plan.bBurn)
 	{
-		return Fail(FGFFerryCodes::CantAfford);
+		BurnResult = Ledger.Burn(Accounts, Plan.BurnTx, Account, Plan.BurnStacks, PassBurnReason());
+		if (!GFFerryRulesPrivate::BurnApplied(BurnResult))
+		{
+			return GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::CantAfford);
+		}
 	}
-	if (Plan.bMint && !BurnApplied(Ledger.Mint(Accounts, Plan.MintTx, Account, Plan.MintStacks, PassGrantReason())))
+	if (Plan.bMint && !GFFerryRulesPrivate::BurnApplied(Ledger.Mint(Accounts, Plan.MintTx, Account, Plan.MintStacks, PassGrantReason())))
 	{
-		return Fail(FGFFerryCodes::CantAfford);
+		if (BurnResult == EGFTxResult::Applied && Plan.BurnStacks.Num() > 0)
+		{
+			Ledger.Mint(Accounts, RollbackTx, Account, Plan.BurnStacks, PassRollbackReason());
+		}
+		return GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::CantAfford);
 	}
-	return Succeed();
+	return GFFerryRulesPrivate::FerryRulesSucceed();
+}
+
+FVector FGFFerryRules::FlightControl(const FVector& A, const FVector& B, float Altitude)
+{
+	const FVector Mid = (A + B) * 0.5f;
+	FVector Side(- (B.Y - A.Y), B.X - A.X, 0.f);
+	Side = Side.GetSafeNormal2D();
+	if (Side.IsNearlyZero())
+	{
+		Side = FVector(0.f, 1.f, 0.f);
+	}
+	else if (Side.Y < 0.f)
+	{
+		Side = -Side;
+	}
+	FVector Control = Mid + Side * FGFFerryArt::RouteBulgeCm;
+	Control.Z = Mid.Z + 2.f * Altitude;
+	return Control;
 }
 
 FVector FGFFerryRules::FlightPosition(const FVector& A, const FVector& B, float Alpha, float Altitude)
@@ -324,9 +391,17 @@ FVector FGFFerryRules::FlightPosition(const FVector& A, const FVector& B, float 
 	{
 		return B;
 	}
-	FVector Point = FMath::Lerp(A, B, T);
-	Point.Z += FMath::Sin(T * PI) * Altitude;
-	return Point;
+	const FVector Control = FlightControl(A, B, Altitude);
+	const float U = 1.f - T;
+	return (U * U) * A + (2.f * U * T) * Control + (T * T) * B;
+}
+
+FVector FGFFerryRules::FlightTangent(const FVector& A, const FVector& B, float Alpha, float Altitude)
+{
+	const float T = FMath::Clamp(Alpha, 0.f, 1.f);
+	const FVector Control = FlightControl(A, B, Altitude);
+	const FVector Deriv = (2.f * (1.f - T) * (Control - A)) + (2.f * T * (B - Control));
+	return Deriv.GetSafeNormal();
 }
 
 FVector FGFFerryRules::DropPoint(const FVector& From, const FVector& To, const FVector& RiderLocation, float BoardRadius)

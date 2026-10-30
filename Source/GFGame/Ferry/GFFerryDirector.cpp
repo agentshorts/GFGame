@@ -6,17 +6,18 @@
 #include "GFPlayerState.h"
 #include "GFTamingComponent.h"
 #include "GFTerritorySubsystem.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Pawn.h"
 
-namespace
+namespace GFFerryDirectorPrivate
 {
 	/** Capsule lift so a spawned mob's feet are near the hazard's ground Z. */
 	constexpr float MobSpawnLift = 100.f;
 
-	FGFFerryResult Fail(FName Code)
+	FGFFerryResult FerryDirectorFail(FName Code)
 	{
 		FGFFerryResult Result;
 		Result.bOk = false;
@@ -24,7 +25,7 @@ namespace
 		return Result;
 	}
 
-	FGFFerryResult Succeed()
+	FGFFerryResult FerryDirectorSucceed()
 	{
 		FGFFerryResult Result;
 		Result.bOk = true;
@@ -44,6 +45,52 @@ namespace
 			return nullptr;
 		}
 		return Hazards.FindByPredicate([Id](const FGFTerritoryHazard& Hazard) { return Hazard.Id == Id; });
+	}
+
+	void SeatOnBasket(APawn* Rider, USceneComponent* Basket)
+	{
+		if (!Rider || !Basket)
+		{
+			return;
+		}
+		const FAttachmentTransformRules Rules(EAttachmentRule::SnapToTarget, EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, false);
+		if (Basket->DoesSocketExist(FGFFerryArt::SeatSocket()))
+		{
+			Rider->AttachToComponent(Basket, Rules, FGFFerryArt::SeatSocket());
+		}
+		else
+		{
+			Rider->AttachToComponent(Basket, Rules);
+			Rider->SetActorRelativeLocation(FGFFerryArt::SeatLocal());
+		}
+	}
+
+	void GrabBasket(AGFFerryDino* Craft, UStaticMeshComponent* Basket)
+	{
+		if (!Craft || !Basket)
+		{
+			return;
+		}
+		USceneComponent* Target = Craft->GetBird() ? static_cast<USceneComponent*>(Craft->GetBird()) : Craft->GetRootComponent();
+		if (!Target)
+		{
+			return;
+		}
+		const FAttachmentTransformRules Rules(EAttachmentRule::SnapToTarget, EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, false);
+		if (Target->DoesSocketExist(FGFFerryArt::FerryGripSocket()))
+		{
+			Basket->AttachToComponent(Target, Rules, FGFFerryArt::FerryGripSocket());
+		}
+		else
+		{
+			Basket->AttachToComponent(Target, Rules);
+		}
+		FVector Grip = FGFFerryArt::GripLocal();
+		if (Basket->DoesSocketExist(FGFFerryArt::GripSocket()))
+		{
+			Grip = Basket->GetSocketTransform(FGFFerryArt::GripSocket(), RTS_Component).GetLocation();
+		}
+		Basket->AddWorldOffset(-Basket->GetComponentTransform().TransformVector(Grip));
 	}
 }
 
@@ -89,18 +136,29 @@ void AGFFerryDirector::Tick(float DeltaSeconds)
 	TickMobs(DeltaSeconds);
 }
 
-FGFFerryResult AGFFerryDirector::RequestTrip(APawn* Rider, FName FromStop)
+FGFFerryResult AGFFerryDirector::RequestTrip(APawn* Rider, FName FromStop, const FGuid& RequestId)
 {
-	if (!HasAuthority() || !Rider)
+	if (!HasAuthority() || !Rider || !RequestId.IsValid())
 	{
-		return Fail(FGFFerryCodes::NotAuthority);
+		return GFFerryDirectorPrivate::FerryDirectorFail(FGFFerryCodes::NotAuthority);
 	}
 	AGFGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGFGameState>() : nullptr;
 	AGFPlayerState* PS = Rider->GetPlayerState<AGFPlayerState>();
 	if (!GS || !PS || PS->PlayerKey.IsEmpty())
 	{
-		return Fail(FGFFerryCodes::NotAuthority);
+		return GFFerryDirectorPrivate::FerryDirectorFail(FGFFerryCodes::NotAuthority);
 	}
+	const FGuid TxId = FGFFerryRules::FareTxId(RequestId);
+	const FGuid RefundTx = FGFFerryRules::FareRefundTx(RequestId);
+	if (GS->Ledger.WasApplied(RefundTx))
+	{
+		return GFFerryDirectorPrivate::FerryDirectorFail(FGFFerryCodes::FlightFailed);
+	}
+	if (GS->Ledger.WasApplied(TxId))
+	{
+		return GFFerryDirectorPrivate::FerryDirectorSucceed();
+	}
+
 	UGFFerryRiderComponent* Ride = Rider->FindComponentByClass<UGFFerryRiderComponent>();
 	const bool bInFlight = Ride && Ride->IsInFlight();
 	const FGFFerryStop* From = FGFFerryRules::FindStop(Stops, FromStop);
@@ -111,72 +169,51 @@ FGFFerryResult AGFFerryDirector::RequestTrip(APawn* Rider, FName FromStop)
 	FGFInventory Inventory;
 	if (!GS->Accounts().ReadAccount(PS->PlayerKey, Inventory))
 	{
-		return Fail(FGFFerryCodes::NotAuthority);
+		return GFFerryDirectorPrivate::FerryDirectorFail(FGFFerryCodes::NotAuthority);
 	}
-	const FGuid TxId = FGuid::NewGuid();
 	const FGFFerryFarePlan Plan = FGFFerryRules::PlanFare(
-		true, bInFlight, GS->Ledger.WasApplied(TxId), BoardStop, Rider->GetActorLocation(), Inventory, Tuning);
+		true, bInFlight, false, BoardStop, Rider->GetActorLocation(), Inventory, Tuning);
 	if (!Plan.Result.bOk)
 	{
 		return Plan.Result;
 	}
+	EGFTxResult Burned = EGFTxResult::AlreadyApplied;
 	if (Plan.bCharge)
 	{
-		const EGFTxResult Burned = GS->ServerBurn(TxId, PS->PlayerKey, Plan.Stacks, FGFFerryRules::FareReason());
-		if (!ChargeApplied(Burned))
+		Burned = GS->ServerBurn(TxId, PS->PlayerKey, Plan.Stacks, FGFFerryRules::FareReason());
+		if (!GFFerryDirectorPrivate::ChargeApplied(Burned))
 		{
-			return Fail(FGFFerryCodes::CantAfford);
+			return GFFerryDirectorPrivate::FerryDirectorFail(FGFFerryCodes::CantAfford);
 		}
 	}
-	StartFlight(Rider, *From, *To);
-	return Succeed();
+	if (!StartFlight(Rider, *From, *To))
+	{
+		if (Plan.bCharge && Burned == EGFTxResult::Applied)
+		{
+			GS->ServerMint(RefundTx, PS->PlayerKey, Plan.Stacks, FGFFerryRules::FareRefundReason());
+		}
+		return GFFerryDirectorPrivate::FerryDirectorFail(FGFFerryCodes::FlightFailed);
+	}
+	return GFFerryDirectorPrivate::FerryDirectorSucceed();
 }
 
-FGFFerryResult AGFFerryDirector::BuyPass(APawn* Rider, FName AtStop)
+FGFFerryResult AGFFerryDirector::BuyPass(APawn* Rider, FName AtStop, const FGuid& RequestId)
 {
-	if (!HasAuthority() || !Rider)
+	if (!HasAuthority() || !Rider || !RequestId.IsValid())
 	{
-		return Fail(FGFFerryCodes::NotAuthority);
+		return GFFerryDirectorPrivate::FerryDirectorFail(FGFFerryCodes::NotAuthority);
 	}
 	AGFGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGFGameState>() : nullptr;
 	AGFPlayerState* PS = Rider->GetPlayerState<AGFPlayerState>();
 	if (!GS || !PS || PS->PlayerKey.IsEmpty())
 	{
-		return Fail(FGFFerryCodes::NotAuthority);
+		return GFFerryDirectorPrivate::FerryDirectorFail(FGFFerryCodes::NotAuthority);
 	}
 	UGFFerryRiderComponent* Ride = Rider->FindComponentByClass<UGFFerryRiderComponent>();
 	const bool bInFlight = Ride && Ride->IsInFlight();
 	const FGFFerryStop* Stop = FGFFerryRules::FindStop(Stops, AtStop);
-
-	FGFInventory Inventory;
-	if (!GS->Accounts().ReadAccount(PS->PlayerKey, Inventory))
-	{
-		return Fail(FGFFerryCodes::NotAuthority);
-	}
-	const FGuid RequestId = FGuid::NewGuid();
-	const FGFFerryPassPlan Plan = FGFFerryRules::PlanPass(
-		true, bInFlight, false, false, RequestId, Stop, Rider->GetActorLocation(), Inventory, Tuning);
-	if (!Plan.Result.bOk)
-	{
-		return Plan.Result;
-	}
-	if (Plan.bBurn)
-	{
-		const EGFTxResult Burned = GS->ServerBurn(Plan.BurnTx, PS->PlayerKey, Plan.BurnStacks, FGFFerryRules::PassBurnReason());
-		if (!ChargeApplied(Burned))
-		{
-			return Fail(FGFFerryCodes::CantAfford);
-		}
-	}
-	if (Plan.bMint)
-	{
-		const EGFTxResult Minted = GS->ServerMint(Plan.MintTx, PS->PlayerKey, Plan.MintStacks, FGFFerryRules::PassGrantReason());
-		if (!ChargeApplied(Minted))
-		{
-			return Fail(FGFFerryCodes::CantAfford);
-		}
-	}
-	return Succeed();
+	return FGFFerryRules::ApplyPass(
+		GS->Accounts(), GS->Ledger, RequestId, PS->PlayerKey, true, bInFlight, Stop, Rider->GetActorLocation(), Tuning);
 }
 
 void AGFFerryDirector::SpawnStopDinos()
@@ -194,45 +231,47 @@ void AGFFerryDirector::SpawnStopDinos()
 		{
 			continue;
 		}
-		FRotator Face = FRotator::ZeroRotator;
-		if (const FGFFerryRoute* Route = FGFFerryRules::FindRouteFrom(Routes, Stop.Id))
-		{
-			if (const FGFFerryStop* Other = FGFFerryRules::FindStop(Stops, FGFFerryRules::OtherStop(*Route, Stop.Id)))
-			{
-				const FVector Dir = (Other->Location - Stop.Location).GetSafeNormal2D();
-				if (!Dir.IsNearlyZero())
-				{
-					Face = Dir.Rotation();
-				}
-			}
-		}
-		AGFFerryDino* Dino = World->SpawnActor<AGFFerryDino>(AGFFerryDino::StaticClass(), Stop.Location, Face, Params);
+		const FVector Perch = FGFFerryArt::PerchWorld(Stop.Location);
+		AGFFerryDino* Dino = World->SpawnActor<AGFFerryDino>(AGFFerryDino::StaticClass(), Perch, FGFFerryArt::ParkRotation(), Params);
 		if (!Dino)
 		{
 			continue;
 		}
+		Dino->ParkAt(Stop.Location);
 		Dino->SetStopId(Stop.Id);
 		StopDinos.Add(Dino);
 	}
 }
 
-void AGFFerryDirector::StartFlight(APawn* Rider, const FGFFerryStop& From, const FGFFerryStop& To)
+bool AGFFerryDirector::StartFlight(APawn* Rider, const FGFFerryStop& From, const FGFFerryStop& To)
 {
+	if (bFailNextFlight)
+	{
+		bFailNextFlight = false;
+		return false;
+	}
 	UWorld* World = GetWorld();
 	if (!World || !Rider)
 	{
-		return;
+		return false;
 	}
-	const FVector Dir = (To.Location - From.Location).GetSafeNormal2D();
-	const FRotator Face = Dir.IsNearlyZero() ? FRotator::ZeroRotator : Dir.Rotation();
+	const FVector Perch = FGFFerryArt::PerchWorld(From.Location);
+	const FVector RiderAt = Rider->GetActorLocation();
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	AGFFerryDino* Craft = World->SpawnActor<AGFFerryDino>(AGFFerryDino::StaticClass(), From.Location, Face, Params);
+	AGFFerryDino* Craft = World->SpawnActor<AGFFerryDino>(AGFFerryDino::StaticClass(), Perch, FGFFerryArt::ParkRotation(), Params);
 	if (!Craft)
 	{
-		return;
+		return false;
 	}
-	Craft->SetTransit(true);
+	Craft->BeginTransit(Perch);
+	UStaticMeshComponent* Basket = Craft->SpawnBasket();
+	if (!Basket)
+	{
+		Craft->Destroy();
+		return false;
+	}
+	Basket->SetWorldLocation(FGFFerryArt::BasketSpotWorld(From.Location));
 
 	UGFFerryRiderComponent* Ride = Rider->FindComponentByClass<UGFFerryRiderComponent>();
 	if (Ride)
@@ -246,21 +285,27 @@ void AGFFerryDirector::StartFlight(APawn* Rider, const FGFFerryStop& From, const
 		Move->DisableMovement();
 		bDisabledMovement = true;
 	}
-	Rider->AttachToActor(Craft, FAttachmentTransformRules::KeepWorldTransform);
+	GFFerryDirectorPrivate::SeatOnBasket(Rider, Basket);
+	if (Ride)
+	{
+		Ride->BeginSeat();
+	}
 
 	FFlight Flight;
 	Flight.Craft = Craft;
 	Flight.Rider = Rider;
 	Flight.Ride = Ride;
-	Flight.From = From.Location;
-	Flight.To = To.Location;
-	Flight.Drop = FGFFerryRules::DropPoint(From.Location, To.Location, Rider->GetActorLocation(), Tuning.BoardRadius);
+	Flight.Basket = Basket;
+	Flight.From = Perch;
+	Flight.To = FGFFerryArt::PerchWorld(To.Location);
+	Flight.Drop = FGFFerryRules::DropPoint(From.Location, To.Location, RiderAt, Tuning.BoardRadius);
+	Flight.ArriveBasket = FGFFerryArt::BasketSpotWorld(To.Location);
 	Flight.Duration = Tuning.FlightSeconds;
 	Flight.Altitude = Tuning.CruiseAltitude;
-	Flight.RiderLift = Rider->GetActorLocation().Z - From.Location.Z;
 	Flight.bSawController = Rider->GetController() != nullptr;
 	Flight.bDisabledMovement = bDisabledMovement;
 	Flights.Add(Flight);
+	return true;
 }
 
 bool AGFFerryDirector::AdvanceFlight(FFlight& Flight, float DeltaSeconds)
@@ -287,16 +332,78 @@ bool AGFFerryDirector::AdvanceFlight(FFlight& Flight, float DeltaSeconds)
 	}
 
 	Flight.Elapsed += FMath::Max(0.f, DeltaSeconds);
-	const float Alpha = Flight.Duration <= 0.f ? 1.f : FMath::Clamp(Flight.Elapsed / Flight.Duration, 0.f, 1.f);
-	const FVector Body = FGFFerryRules::FlightPosition(Flight.From, Flight.To, Alpha, Flight.Altitude);
-	Craft->SetActorLocation(Body);
-	const FVector Dir = (Flight.To - Flight.From).GetSafeNormal2D();
-	if (!Dir.IsNearlyZero())
+	const float LeaveAt = FGFFerryArt::FrameSeconds(FGFFerryArt::LeavePerchFrame);
+	const float GrabAt = FGFFerryArt::FrameSeconds(FGFFerryArt::GrabBasketFrame);
+	const float TakeoffEnd = FGFFerryArt::FrameSeconds(FGFFerryArt::TakeoffFrames);
+	const float LandLen = FGFFerryArt::FrameSeconds(FGFFerryArt::LandFrames);
+	const float LandStart = FMath::Max(TakeoffEnd, Flight.Duration - LandLen);
+	const bool bFinished = Flight.Duration <= 0.f || Flight.Elapsed >= Flight.Duration - KINDA_SMALL_NUMBER;
+
+	float MoveAlpha = 0.f;
+	if (bFinished || Flight.Duration <= LeaveAt)
 	{
-		Craft->SetActorRotation(Dir.Rotation());
+		MoveAlpha = 1.f;
 	}
-	Rider->SetActorLocation(Body + FVector(0.f, 0.f, Flight.RiderLift));
-	if (Alpha >= 1.f - KINDA_SMALL_NUMBER)
+	else if (Flight.Elapsed > LeaveAt)
+	{
+		MoveAlpha = FMath::Clamp((Flight.Elapsed - LeaveAt) / (Flight.Duration - LeaveAt), 0.f, 1.f);
+	}
+
+	const FVector Body = FGFFerryRules::FlightPosition(Flight.From, Flight.To, MoveAlpha, Flight.Altitude);
+	Craft->SetActorLocation(Body);
+	if (MoveAlpha <= KINDA_SMALL_NUMBER)
+	{
+		Craft->SetActorRotation(FGFFerryArt::ParkRotation());
+	}
+	else
+	{
+		const FVector Tangent = FGFFerryRules::FlightTangent(Flight.From, Flight.To, MoveAlpha, Flight.Altitude);
+		if (!Tangent.IsNearlyZero())
+		{
+			Craft->SetActorRotation(Tangent.Rotation());
+		}
+	}
+
+	FName Phase = FGFFerryArt::TakeoffAnim();
+	if (Flight.Elapsed >= LandStart)
+	{
+		Phase = FGFFerryArt::LandAnim();
+	}
+	else if (Flight.Elapsed >= FMath::Min(TakeoffEnd, LandStart))
+	{
+		Phase = FGFFerryArt::CarryAnim();
+	}
+	Craft->SetAnim(Phase);
+
+	UStaticMeshComponent* Basket = Flight.Basket.Get();
+	if (Basket && !Flight.bBasketGrabbed && Flight.Elapsed >= GrabAt && Flight.Elapsed < LandStart)
+	{
+		GFFerryDirectorPrivate::GrabBasket(Craft, Basket);
+		Flight.bBasketGrabbed = true;
+	}
+	const float DownAt = LandStart + FGFFerryArt::FrameSeconds(FGFFerryArt::BasketDownFrame);
+	const float ReleaseAt = LandStart + FGFFerryArt::FrameSeconds(FGFFerryArt::ReleaseFrame);
+	if (Basket && Flight.Elapsed >= DownAt && !Flight.bBasketReleased)
+	{
+		if (!Flight.bBasketDown)
+		{
+			Basket->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+			Flight.BasketFrom = Basket->GetComponentLocation();
+			Flight.bBasketDown = true;
+		}
+		if (Flight.Elapsed >= ReleaseAt || ReleaseAt <= DownAt)
+		{
+			Basket->SetWorldLocation(Flight.ArriveBasket);
+			Flight.bBasketReleased = true;
+		}
+		else
+		{
+			const float U = (Flight.Elapsed - DownAt) / (ReleaseAt - DownAt);
+			Basket->SetWorldLocation(FMath::Lerp(Flight.BasketFrom, Flight.ArriveBasket, U));
+		}
+	}
+
+	if (bFinished || MoveAlpha >= 1.f - KINDA_SMALL_NUMBER)
 	{
 		FinishFlight(Flight);
 		return true;
@@ -320,6 +427,7 @@ void AGFFerryDirector::FinishFlight(FFlight& Flight)
 	}
 	if (UGFFerryRiderComponent* Ride = Flight.Ride.Get())
 	{
+		Ride->EndSeat();
 		Ride->EndFlightProtection();
 	}
 	if (AGFFerryDino* Craft = Flight.Craft.Get())
@@ -374,7 +482,7 @@ void AGFFerryDirector::TickMobs(float DeltaSeconds)
 			Mobs.RemoveAt(Index);
 			continue;
 		}
-		const FGFTerritoryHazard* Box = FindHazard(Hazards, Mob.HazardId);
+		const FGFTerritoryHazard* Box = GFFerryDirectorPrivate::FindHazard(Hazards, Mob.HazardId);
 		const bool bNear = Box && FGFFerryRouteSpawnRules::IsRouteActive(*Box, MobSpawn.ActivationMargin, People);
 		if (!Box || FGFFerryRouteSpawnRules::ShouldDespawn(*Box, Dino->GetActorLocation(), MobSpawn.ActivationMargin, Mob.Age, MobSpawn.IdleDespawnSeconds, bNear))
 		{
@@ -386,7 +494,7 @@ void AGFFerryDirector::TickMobs(float DeltaSeconds)
 	bool bActive = false;
 	for (const FGFFerryRoute& Route : Routes)
 	{
-		const FGFTerritoryHazard* Box = FindHazard(Hazards, Route.LandRouteHazardId);
+		const FGFTerritoryHazard* Box = GFFerryDirectorPrivate::FindHazard(Hazards, Route.LandRouteHazardId);
 		if (Box && FGFFerryRouteSpawnRules::IsRouteActive(*Box, MobSpawn.ActivationMargin, People))
 		{
 			bActive = true;
@@ -424,7 +532,7 @@ void AGFFerryDirector::TickMobs(float DeltaSeconds)
 
 	for (const FGFFerryRoute& Route : Routes)
 	{
-		const FGFTerritoryHazard* Box = FindHazard(Hazards, Route.LandRouteHazardId);
+		const FGFTerritoryHazard* Box = GFFerryDirectorPrivate::FindHazard(Hazards, Route.LandRouteHazardId);
 		if (!Box || !FGFFerryRouteSpawnRules::IsRouteActive(*Box, MobSpawn.ActivationMargin, People))
 		{
 			continue;
@@ -434,17 +542,31 @@ void AGFFerryDirector::TickMobs(float DeltaSeconds)
 		{
 			continue;
 		}
+		if (Territory->GetZoneAt(Point).Zone != EGFTerritoryZone::Wild)
+		{
+			continue;
+		}
+		const FGFTerritoryHazardHit Live = Territory->GetHazardAt(Point);
+		if (!Live.bHazard || Live.Id != Route.LandRouteHazardId)
+		{
+			continue;
+		}
 		const FName Species = FGFFerryRouteSpawnRules::PickSpecies(MobSpawn.MobSpecies, MobRng);
 		if (Species.IsNone())
 		{
 			return;
 		}
-		Point.Z += MobSpawnLift;
+		Point.Z += GFFerryDirectorPrivate::MobSpawnLift;
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		AGFDino* Dino = GetWorld()->SpawnActor<AGFDino>(AGFDino::StaticClass(), Point, FRotator::ZeroRotator, Params);
-		if (!Dino || !Dino->Taming)
+		if (!Dino)
 		{
+			continue;
+		}
+		if (!Dino->Taming)
+		{
+			Dino->Destroy();
 			continue;
 		}
 		Dino->SetSpecies(Species);

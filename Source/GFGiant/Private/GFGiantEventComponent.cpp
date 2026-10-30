@@ -6,6 +6,7 @@
 #include "GFDataTables.h"
 #include "GFAttention.h"
 #include "GFLog.h"
+#include "GFProtectedActor.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -216,6 +217,10 @@ TArray<FGFGiantPlayerView> UGFGiantEventComponent::GatherPlayers() const
 		{
 			continue;
 		}
+		if (FGFProtectedActor::Is(Pawn))
+		{
+			continue;
+		}
 		FGFGiantPlayerView V;
 		V.Key = PS->PlayerKey;
 		V.Name = PS->GetPlayerName();
@@ -319,6 +324,24 @@ bool UGFGiantEventComponent::ServerOnAttacked(AGFPlayerState* By)
 	return bEaten;
 }
 
+void UGFGiantEventComponent::ApplyShove(APawn* Pawn, const FVector& Velocity)
+{
+	if (!Pawn || FGFProtectedActor::Is(Pawn))
+	{
+		return;
+	}
+	if (ACharacter* C = Cast<ACharacter>(Pawn))
+	{
+		C->LaunchCharacter(Velocity, true, true);
+		++ShovesApplied;
+	}
+	else
+	{
+		Pawn->SetActorLocation(Pawn->GetActorLocation() + Velocity.GetSafeNormal2D() * 200.f);
+		++ShovesApplied;
+	}
+}
+
 void UGFGiantEventComponent::Apply(const FGFGiantStepOut& Out)
 {
 	for (const FGFGiantChatLine& L : Out.Chat)
@@ -337,17 +360,7 @@ void UGFGiantEventComponent::Apply(const FGFGiantStepOut& Out)
 	for (const FGFGiantShove& S : Out.Shoves)
 	{
 		AGFPlayerState* PS = FindPS(S.Key);
-		APawn* Pawn = PS ? PS->GetPawn() : nullptr;
-		if (ACharacter* C = Cast<ACharacter>(Pawn))
-		{
-			C->LaunchCharacter(S.Velocity, true, true);
-			++ShovesApplied;
-		}
-		else if (Pawn)
-		{
-			Pawn->SetActorLocation(Pawn->GetActorLocation() + S.Velocity.GetSafeNormal2D() * 200.f);
-			++ShovesApplied;
-		}
+		ApplyShove(PS ? PS->GetPawn() : nullptr, S.Velocity);
 	}
 	if (!Out.Eaten.IsEmpty())
 	{

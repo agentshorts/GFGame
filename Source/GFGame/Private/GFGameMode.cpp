@@ -257,25 +257,16 @@ AActor* AGFGameMode::ChoosePlayerStart_Implementation(AController* Player)
 		return Starts[Index];
 	}
 
-	TArray<FGFTerritoryFaction> Layout;
-	if (const UGFTerritorySubsystem* Live = UGFTerritorySubsystem::Get(this))
-	{
-		Layout = Live->FactionLayout;
-	}
-	else if (const UGFTerritorySubsystem* Defaults = GetDefault<UGFTerritorySubsystem>())
-	{
-		Layout = Defaults->FactionLayout;
-	}
-	const FVector Where = FGFPlayerStartRules::FallbackLocation(DefaultSpawnAnchor, Layout);
+	const FTransform Where = FGFPlayerStartRules::EmptyMapStart();
 	if (!FallbackStart)
 	{
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		FallbackStart = GetWorld()->SpawnActor<APlayerStart>(APlayerStart::StaticClass(), FTransform(Where), Params);
+		FallbackStart = GetWorld()->SpawnActor<APlayerStart>(APlayerStart::StaticClass(), Where, Params);
 	}
 	else
 	{
-		FallbackStart->SetActorLocation(Where);
+		FallbackStart->SetActorLocationAndRotation(Where.GetLocation(), Where.Rotator());
 	}
 	return FallbackStart;
 }

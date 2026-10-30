@@ -1,10 +1,13 @@
 #include "GFFerryRiderComponent.h"
+#include "GFAnimMap.h"
 #include "GFFerryDirector.h"
 #include "GFFerryRules.h"
 #include "GFProtectedActor.h"
+#include "Animation/AnimSequenceBase.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
-#include "GameFramework/Actor.h"
+#include "GameFramework/Character.h"
 #include "Net/UnrealNetwork.h"
 
 UGFFerryRiderComponent::UGFFerryRiderComponent()
@@ -22,15 +25,15 @@ void UGFFerryRiderComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 
 void UGFFerryRiderComponent::RequestTrip(FName FromStop)
 {
-	ServerRequestTrip(FromStop);
+	ServerRequestTrip(FromStop, FGuid::NewGuid());
 }
 
 void UGFFerryRiderComponent::BuyPass(FName AtStop)
 {
-	ServerBuyPass(AtStop);
+	ServerBuyPass(AtStop, FGuid::NewGuid());
 }
 
-void UGFFerryRiderComponent::ServerRequestTrip_Implementation(FName FromStop)
+void UGFFerryRiderComponent::ServerRequestTrip_Implementation(FName FromStop, FGuid RequestId)
 {
 	AGFFerryDirector* Director = nullptr;
 	if (const UWorld* World = GetWorld())
@@ -46,10 +49,10 @@ void UGFFerryRiderComponent::ServerRequestTrip_Implementation(FName FromStop)
 		LastCode = FGFFerryCodes::UnknownStop;
 		return;
 	}
-	LastCode = Director->RequestTrip(Cast<APawn>(GetOwner()), FromStop).Code;
+	LastCode = Director->RequestTrip(Cast<APawn>(GetOwner()), FromStop, RequestId).Code;
 }
 
-void UGFFerryRiderComponent::ServerBuyPass_Implementation(FName AtStop)
+void UGFFerryRiderComponent::ServerBuyPass_Implementation(FName AtStop, FGuid RequestId)
 {
 	AGFFerryDirector* Director = nullptr;
 	if (const UWorld* World = GetWorld())
@@ -65,7 +68,7 @@ void UGFFerryRiderComponent::ServerBuyPass_Implementation(FName AtStop)
 		LastCode = FGFFerryCodes::UnknownStop;
 		return;
 	}
-	LastCode = Director->BuyPass(Cast<APawn>(GetOwner()), AtStop).Code;
+	LastCode = Director->BuyPass(Cast<APawn>(GetOwner()), AtStop, RequestId).Code;
 }
 
 void UGFFerryRiderComponent::BeginFlightProtection()
@@ -100,4 +103,23 @@ void UGFFerryRiderComponent::EndFlightProtection()
 	bFlightProtected = false;
 	bAddedProtectionTag = false;
 	bInFlight = false;
+}
+
+void UGFFerryRiderComponent::BeginSeat()
+{
+	SeatAnim = FGFFerryArt::SeatAnim();
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	USkeletalMeshComponent* Mesh = Character ? Character->GetMesh() : nullptr;
+	UAnimSequenceBase* Clip = Mesh ? FGFAnimMap::Load(SeatAnim) : nullptr;
+	if (!Mesh || !Clip)
+	{
+		return;
+	}
+	Mesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+	Mesh->PlayAnimation(Clip, true);
+}
+
+void UGFFerryRiderComponent::EndSeat()
+{
+	SeatAnim = NAME_None;
 }

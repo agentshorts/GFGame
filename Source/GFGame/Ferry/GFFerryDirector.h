@@ -12,6 +12,7 @@ class AGFDino;
 class AGFFerryDino;
 class APawn;
 class UGFFerryRiderComponent;
+class UStaticMeshComponent;
 
 UCLASS(Config = Game)
 class GFGAME_API AGFFerryDirector : public AActor
@@ -33,11 +34,17 @@ public:
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "GF|Ferry")
 	FGFFerryMobSpawn MobSpawn;
 
-	/** Server. Charges the fare or accepts a pass, then starts the flight. */
-	FGFFerryResult RequestTrip(APawn* Rider, FName FromStop);
+	/**
+	 * Server. Charges the fare or accepts a pass, then starts the flight.
+	 * RequestId is the fare TxId. A second call with the same id does not charge and does not start another flight.
+	 */
+	FGFFerryResult RequestTrip(APawn* Rider, FName FromStop, const FGuid& RequestId);
 
-	/** Server. Burns the pass material and mints one pass when PlanPass says so. */
-	FGFFerryResult BuyPass(APawn* Rider, FName AtStop);
+	/** Server. Burns the pass material and mints one pass. A failed mint rolls the burn back. */
+	FGFFerryResult BuyPass(APawn* Rider, FName AtStop, const FGuid& RequestId);
+
+	/** Test hook. The next StartFlight returns false and mints the fare back. Cleared when it trips. */
+	bool bFailNextFlight = false;
 
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -49,15 +56,20 @@ private:
 		TWeakObjectPtr<AGFFerryDino> Craft;
 		TWeakObjectPtr<APawn> Rider;
 		TWeakObjectPtr<UGFFerryRiderComponent> Ride;
+		TWeakObjectPtr<UStaticMeshComponent> Basket;
 		FVector From = FVector::ZeroVector;
 		FVector To = FVector::ZeroVector;
 		FVector Drop = FVector::ZeroVector;
+		FVector ArriveBasket = FVector::ZeroVector;
+		FVector BasketFrom = FVector::ZeroVector;
 		float Elapsed = 0.f;
 		float Duration = 0.f;
 		float Altitude = 0.f;
-		float RiderLift = 0.f;
 		bool bSawController = false;
 		bool bDisabledMovement = false;
+		bool bBasketGrabbed = false;
+		bool bBasketDown = false;
+		bool bBasketReleased = false;
 	};
 
 	struct FRouteMob
@@ -68,7 +80,7 @@ private:
 	};
 
 	void SpawnStopDinos();
-	void StartFlight(APawn* Rider, const FGFFerryStop& From, const FGFFerryStop& To);
+	bool StartFlight(APawn* Rider, const FGFFerryStop& From, const FGFFerryStop& To);
 	/** True when the flight entry should be dropped. */
 	bool AdvanceFlight(FFlight& Flight, float DeltaSeconds);
 	void FinishFlight(FFlight& Flight);
