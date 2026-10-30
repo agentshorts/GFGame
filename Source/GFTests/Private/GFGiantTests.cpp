@@ -146,7 +146,7 @@ bool FGFGiantLinesTest::RunTest(const FString&)
 	if (TestNotNull(TEXT("DT_GiantDino row"), Row))
 	{
 		TestEqual(TEXT("Name lives in data"), Row->DisplayName, FString(TEXT("Big Grumble")));
-		TestEqual(TEXT("T. rex placeholder"), Row->AssetKey, FName(TEXT("Dino.Rex")));
+		TestEqual(TEXT("Big Grumble art key"), Row->AssetKey, FName(TEXT("Dino.BigGrumble")));
 		TestEqual(TEXT("3.5x"), Row->MeshScale, 3.5f);
 		TestEqual(TEXT("Art mesh scale lives in data (4x, about 38 m)"), Row->ArtMeshScale, 4.f);
 		TestEqual(TEXT("Art mesh scale default"), FGFGiantInfoRow().ArtMeshScale, 4.f);

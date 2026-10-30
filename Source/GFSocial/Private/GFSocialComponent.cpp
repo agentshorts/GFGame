@@ -7,6 +7,7 @@
 #include "GFNoise.h"
 #include "GFAttention.h"
 #include "GFAnimMap.h"
+#include "GFSimpleAnimComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimSequenceBase.h"
 #include "Components/AudioComponent.h"
@@ -967,6 +968,23 @@ void UGFSocialComponent::OnRep_Emotes()
 	}
 }
 
+static USkeletalMeshComponent* GFSocialArtMesh(const APawn* Pawn)
+{
+	if (!Pawn)
+	{
+		return nullptr;
+	}
+	TInlineComponentArray<USkeletalMeshComponent*> Meshes(Pawn);
+	for (USkeletalMeshComponent* Mesh : Meshes)
+	{
+		if (Mesh && Mesh->GetSkeletalMeshAsset())
+		{
+			return Mesh;
+		}
+	}
+	return Pawn->FindComponentByClass<USkeletalMeshComponent>();
+}
+
 void UGFSocialComponent::ShowEmote(const FGFEmoteEvent& E)
 {
 	++EmotesSeen;
@@ -986,14 +1004,29 @@ void UGFSocialComponent::ShowEmote(const FGFEmoteEvent& E)
 	if (!E.AnimKey.IsNone())
 	{
 		UAnimSequenceBase* Clip = FGFAnimMap::Load(E.AnimKey);
-		const USkeletalMeshComponent* Mesh = Pawn->FindComponentByClass<USkeletalMeshComponent>();
-		UAnimInstance* Anim = Mesh ? Mesh->GetAnimInstance() : nullptr;
-		if (Clip && Anim)
+		USkeletalMeshComponent* Mesh = GFSocialArtMesh(Pawn);
+		if (Clip && Mesh)
 		{
-			const FGFAnimMapRow* Row = FGFAnimMap::Find(E.AnimKey);
-			const int32 Loops = Row && Row->bLoop && Clip->GetPlayLength() > 0.f ? FMath::Max(1, FMath::CeilToInt(E.Seconds / Clip->GetPlayLength())) : 1;
-			Anim->PlaySlotAnimationAsDynamicMontage(Clip, TEXT("DefaultSlot"), 0.2f, 0.2f, 1.f, Loops);
-			return;
+			// Single-node locomotion has no montage slot. Play the clip and hold idle/move off until it finishes.
+			// A looping emote (sit, dance) is held for the emote's own time; a one-shot is held for at least the clip.
+			if (UGFSimpleAnimComponent* Simple = Pawn->FindComponentByClass<UGFSimpleAnimComponent>())
+			{
+				const FGFAnimMapRow* Row = FGFAnimMap::Find(E.AnimKey);
+				const bool bLoop = Row && Row->bLoop;
+				Mesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+				Mesh->PlayAnimation(Clip, bLoop);
+				const float ClipLen = Clip->GetPlayLength();
+				const float Hold = (!bLoop && ClipLen > 0.f) ? FMath::Max(E.Seconds, ClipLen) : E.Seconds;
+				Simple->PauseFor(Hold);
+				return;
+			}
+			if (UAnimInstance* Anim = Mesh->GetAnimInstance())
+			{
+				const FGFAnimMapRow* Row = FGFAnimMap::Find(E.AnimKey);
+				const int32 Loops = Row && Row->bLoop && Clip->GetPlayLength() > 0.f ? FMath::Max(1, FMath::CeilToInt(E.Seconds / Clip->GetPlayLength())) : 1;
+				Anim->PlaySlotAnimationAsDynamicMontage(Clip, TEXT("DefaultSlot"), 0.2f, 0.2f, 1.f, Loops);
+				return;
+			}
 		}
 	}
 	++BubblesShown;

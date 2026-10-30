@@ -1,7 +1,9 @@
 #include "GFGiantDino.h"
 #include "GFAssetMap.h"
+#include "GFSimpleAnimComponent.h"
 #include "GFPlayerState.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
@@ -30,6 +32,14 @@ AGFGiantDino::AGFGiantDino()
 	Body = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Body"));
 	Body->SetupAttachment(ScaleRoot);
 	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	Art = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("Art"));
+	Art->SetupAttachment(ScaleRoot);
+	Art->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Art->SetVisibility(false);
+	Art->SetHiddenInGame(true);
+	Art->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+	SimpleAnim = CreateDefaultSubobject<UGFSimpleAnimComponent>(TEXT("SimpleAnim"));
 }
 
 void AGFGiantDino::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -59,7 +69,7 @@ void AGFGiantDino::ApplyLook()
 {
 	if (!AssetKey.IsNone())
 	{
-		FGFAssetMap::Apply(Body, AssetKey);
+		FGFAssetMap::ApplySkeletal(Art, Body, AssetKey);
 	}
 	ScaleRoot->SetRelativeScale3D(FVector(MeshScale));
 }
