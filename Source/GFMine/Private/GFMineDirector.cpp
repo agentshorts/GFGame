@@ -4,6 +4,7 @@
 #include "GFPlayerState.h"
 #include "GFInventoryComponent.h"
 #include "GFEconomy.h"
+#include "Components/SceneComponent.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
 
@@ -15,6 +16,12 @@ AGFMineDirector::AGFMineDirector()
 	bReplicates = true;
 	bAlwaysRelevant = true;
 	Rng.Initialize(FMath::Rand());
+
+	// GetActorLocation reads the root. Without one it is always the origin, so the four
+	// sims look stacked even when Get() asked for the pad. Movable so the hub can park it later.
+	USceneComponent* PadRoot = CreateDefaultSubobject<USceneComponent>(TEXT("PadRoot"));
+	PadRoot->SetMobility(EComponentMobility::Movable);
+	RootComponent = PadRoot;
 }
 
 AGFMineDirector* AGFMineDirector::Get(UWorld* World, bool bSpawn)
@@ -32,7 +39,12 @@ AGFMineDirector* AGFMineDirector::Get(UWorld* World, bool bSpawn)
 		FActorSpawnParameters P;
 		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		const FVector At = FGFMiniGameCatalog::DefaultSpawn(ModeName);
-		return World->SpawnActor<AGFMineDirector>(AGFMineDirector::StaticClass(), FTransform(At), P);
+		AGFMineDirector* Director = World->SpawnActor<AGFMineDirector>(AGFMineDirector::StaticClass(), FTransform(At), P);
+		if (Director)
+		{
+			Director->SetActorLocation(At);
+		}
+		return Director;
 	}
 	return nullptr;
 }

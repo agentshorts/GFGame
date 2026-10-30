@@ -3,6 +3,7 @@
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFRewards.h"
+#include "Components/SceneComponent.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
@@ -27,6 +28,12 @@ AGFDepthsDirector::AGFDepthsDirector()
 	bReplicates = true;
 	bAlwaysRelevant = true;
 	SetNetUpdateFrequency(30.f);
+
+	// GetActorLocation reads the root. Without one it is always the origin, so the four
+	// sims look stacked even when Get() asked for the pad. Movable so the hub can park it later.
+	USceneComponent* PadRoot = CreateDefaultSubobject<USceneComponent>(TEXT("PadRoot"));
+	PadRoot->SetMobility(EComponentMobility::Movable);
+	RootComponent = PadRoot;
 }
 
 AGFDepthsDirector* AGFDepthsDirector::Get(UWorld* World, bool bSpawn)
@@ -44,7 +51,12 @@ AGFDepthsDirector* AGFDepthsDirector::Get(UWorld* World, bool bSpawn)
 		FActorSpawnParameters P;
 		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		const FVector At = FGFMiniGameCatalog::DefaultSpawn(ModeName);
-		return World->SpawnActor<AGFDepthsDirector>(AGFDepthsDirector::StaticClass(), FTransform(At), P);
+		AGFDepthsDirector* Director = World->SpawnActor<AGFDepthsDirector>(AGFDepthsDirector::StaticClass(), FTransform(At), P);
+		if (Director)
+		{
+			Director->SetActorLocation(At);
+		}
+		return Director;
 	}
 	return nullptr;
 }

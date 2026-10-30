@@ -6,6 +6,7 @@
 #include "GFCraftingSubsystem.h"
 #include "GFRecipeTypes.h"
 #include "GFDataTables.h"
+#include "Components/SceneComponent.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
@@ -17,6 +18,12 @@ AGFLabDirector::AGFLabDirector()
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
 	bAlwaysRelevant = true;
+
+	// GetActorLocation reads the root. Without one it is always the origin, so the four
+	// sims look stacked even when Get() asked for the pad. Movable so the hub can park it later.
+	USceneComponent* PadRoot = CreateDefaultSubobject<USceneComponent>(TEXT("PadRoot"));
+	PadRoot->SetMobility(EComponentMobility::Movable);
+	RootComponent = PadRoot;
 }
 
 void AGFLabDirector::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -40,7 +47,12 @@ AGFLabDirector* AGFLabDirector::Get(UWorld* World, bool bSpawn)
 		FActorSpawnParameters P;
 		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		const FVector At = FGFMiniGameCatalog::DefaultSpawn(ModeName);
-		return World->SpawnActor<AGFLabDirector>(AGFLabDirector::StaticClass(), FTransform(At), P);
+		AGFLabDirector* Director = World->SpawnActor<AGFLabDirector>(AGFLabDirector::StaticClass(), FTransform(At), P);
+		if (Director)
+		{
+			Director->SetActorLocation(At);
+		}
+		return Director;
 	}
 	return nullptr;
 }
