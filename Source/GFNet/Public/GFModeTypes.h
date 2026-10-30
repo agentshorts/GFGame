@@ -104,7 +104,7 @@ enum class EGFPebblingState : uint8
 	Return   // walking back to its room after a haul
 };
 
-/** One pebbling in her crew. Saved with her character. */
+/** One pebbling in a player's crew. Saved with their character. */
 USTRUCT(BlueprintType)
 struct GFNET_API FGFPebbling
 {
@@ -116,12 +116,12 @@ struct GFNET_API FGFPebbling
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Mine") FName Room;
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Mine") EGFPebblingState State = EGFPebblingState::Home;
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Mine") float StateLeft = 0.f;
-	/** Its satchel (not hers until it's carried home). */
+	/** Its satchel (not the player's until it's carried home). */
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Mine") TArray<FGFItemStack> Carry;
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Mine") int32 Loads = 0;
 };
 
-/** Her pebbling crew, mine upgrades and the offline clock. */
+/** A player's pebbling crew, mine upgrades and the offline clock. */
 USTRUCT(BlueprintType)
 struct GFNET_API FGFMineCrew
 {
@@ -164,7 +164,7 @@ struct GFNET_API FGFPlayerProgress
 {
 	GENERATED_BODY()
 
-	/** The recipe she's working toward ("pinned"): arena wagers can't stake what it still needs. */
+	/** The recipe the player is working toward ("pinned"): arena wagers can't stake what it still needs. */
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") FName PinnedRecipe;
 	/** Settings: "Wagers off" (the wager screen is skipped and stakes are refused). */
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") bool bWagersOff = false;

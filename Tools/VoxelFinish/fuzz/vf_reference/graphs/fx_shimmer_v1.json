@@ -1,0 +1,197 @@
+{
+ "schema": "gfgame.effect_graph/1",
+ "id": "fx_shimmer",
+ "effect_index": 1,
+ "name": "Shimmer",
+ "description": "A soft diagonal highlight band sweeps across the face once per loop.",
+ "animated": true,
+ "loop_seconds": 2.0,
+ "nodes": [
+  {
+   "id": "t",
+   "type": "input",
+   "params": {
+    "source": "time"
+   }
+  },
+  {
+   "id": "ux",
+   "type": "input",
+   "params": {
+    "source": "uv",
+    "component": "x"
+   }
+  },
+  {
+   "id": "uy",
+   "type": "input",
+   "params": {
+    "source": "uv",
+    "component": "y"
+   }
+  },
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "pm",
+   "type": "input",
+   "params": {
+    "source": "pattern_mask"
+   }
+  },
+  {
+   "id": "base",
+   "type": "lerp",
+   "inputs": [
+    "pa",
+    "pb",
+    "pm"
+   ]
+  },
+  {
+   "id": "diag",
+   "type": "add",
+   "inputs": [
+    "ux",
+    "uy"
+   ]
+  },
+  {
+   "id": "k_freq",
+   "type": "const",
+   "params": {
+    "value": 3.141593
+   }
+  },
+  {
+   "id": "d1",
+   "type": "mul",
+   "inputs": [
+    "diag",
+    "k_freq"
+   ]
+  },
+  {
+   "id": "k_speed",
+   "type": "const",
+   "params": {
+    "value": -3.141593
+   }
+  },
+  {
+   "id": "tp",
+   "type": "mul",
+   "inputs": [
+    "t",
+    "k_speed"
+   ]
+  },
+  {
+   "id": "ph",
+   "type": "add",
+   "inputs": [
+    "d1",
+    "tp"
+   ]
+  },
+  {
+   "id": "s",
+   "type": "sin",
+   "inputs": [
+    "ph"
+   ]
+  },
+  {
+   "id": "e0",
+   "type": "const",
+   "params": {
+    "value": 0.75
+   }
+  },
+  {
+   "id": "e1",
+   "type": "const",
+   "params": {
+    "value": 1.0
+   }
+  },
+  {
+   "id": "band",
+   "type": "smoothstep",
+   "inputs": [
+    "e0",
+    "e1",
+    "s"
+   ]
+  },
+  {
+   "id": "white",
+   "type": "const",
+   "params": {
+    "value": [
+     1.0,
+     1.0,
+     1.0
+    ]
+   }
+  },
+  {
+   "id": "k_amt",
+   "type": "const",
+   "params": {
+    "value": 0.6
+   }
+  },
+  {
+   "id": "amt",
+   "type": "mul",
+   "inputs": [
+    "band",
+    "k_amt"
+   ]
+  },
+  {
+   "id": "col",
+   "type": "lerp",
+   "inputs": [
+    "base",
+    "white",
+    "amt"
+   ]
+  },
+  {
+   "id": "k_em",
+   "type": "const",
+   "params": {
+    "value": 1.5
+   }
+  },
+  {
+   "id": "em",
+   "type": "mul",
+   "inputs": [
+    "band",
+    "k_em"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "col",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 2
+ }
+}

@@ -143,13 +143,13 @@ bool FGFNetPermissionsTest::RunTest(const FString&)
 	});
 	Do(Ctx, [this]()
 	{
-		TestEqual(TEXT("Her key is the landlord"), SGS()->Land.LandlordKey, Host()->PlayerKey);
+		TestEqual(TEXT("Host key is the landlord"), SGS()->Land.LandlordKey, Host()->PlayerKey);
 		TestTrue(TEXT("Plot permissions are on by default"), SGS()->bEnforcePlotPermissions);
 	});
 	LandA(Ctx, this, []() { return Guest(0); }, Act(EGFLandOp::ClaimPlot, PlotA), EGFLandResult::Ok, TEXT("Guest 1 claims PlotA"));
 	LandA(Ctx, this, []() { return Guest(0); }, Act(EGFLandOp::ClaimPlot, PlotB), EGFLandResult::AlreadyHasPlot, TEXT("One plot per guest"));
 	LandA(Ctx, this, []() { return Guest(1); }, Act(EGFLandOp::ClaimPlot, PlotA), EGFLandResult::PlotTaken, TEXT("PlotA is taken"));
-	LandA(Ctx, this, []() { return Guest(1); }, Act(EGFLandOp::ClaimPlot, HomePlot), EGFLandResult::NotAllowed, TEXT("Her home can't be claimed"));
+	LandA(Ctx, this, []() { return Guest(1); }, Act(EGFLandOp::ClaimPlot, HomePlot), EGFLandResult::NotAllowed, TEXT("Host's home can't be claimed"));
 	LandA(Ctx, this, []() { return Guest(1); }, Act(EGFLandOp::ClaimPlot, TEXT("Nowhere")), EGFLandResult::NoSuchPlot, TEXT("Unknown plot"));
 	LandA(Ctx, this, []() { return Guest(1); }, Act(EGFLandOp::ClaimPlot, PlotB), EGFLandResult::Ok, TEXT("Guest 2 claims PlotB"));
 	LandA(Ctx, this, []() { return Guest(1); }, Rent(PlotB, TEXT("Wood"), 0), EGFLandResult::NotAllowed, TEXT("Guests can't set rent"));
@@ -171,10 +171,10 @@ bool FGFNetPermissionsTest::RunTest(const FString&)
 	{
 		Guest(0)->RequestEdit(FIntVector(40, 10, 1), TEXT("Stone"));     // own plot: ok
 		Guest(0)->RequestEdit(FIntVector(12, 40, 1), TEXT("Stone"));     // PlotB: no
-		Guest(0)->RequestEdit(FIntVector(10, 10, 1), TEXT("Stone"));     // her home: no
+		Guest(0)->RequestEdit(FIntVector(10, 10, 1), TEXT("Stone"));     // the host's home: no
 		Guest(0)->RequestEdit(FIntVector(50, 50, 1), TEXT("Stone"));     // commons: no
 		Guest(1)->RequestEdit(FIntVector(10, 40, 1), TEXT("Stone"));     // own plot: ok
-		Host()->RequestEdit(FIntVector(41, 10, 1), TEXT("WoodPlank"));   // she can help anywhere
+		Host()->RequestEdit(FIntVector(41, 10, 1), TEXT("WoodPlank"));   // the host can help anywhere
 		Host()->RequestEdit(FIntVector(50, 51, 1), TEXT("WoodPlank"));
 		Host()->RequestEdit(FIntVector(5, 5, 1), TEXT("WoodPlank"));
 	});
@@ -185,7 +185,7 @@ bool FGFNetPermissionsTest::RunTest(const FString&)
 	{
 		TestEqual(TEXT("Guest 1 built on PlotA"), BlockAt(FIntVector(40, 10, 1)), FName(TEXT("Stone")));
 		TestEqual(TEXT("Guest 1 couldn't build on PlotB"), BlockAt(FIntVector(12, 40, 1)), FName());
-		TestEqual(TEXT("Guest 1 couldn't build in her home"), BlockAt(FIntVector(10, 10, 1)), FName());
+		TestEqual(TEXT("Guest 1 couldn't build in the host's home"), BlockAt(FIntVector(10, 10, 1)), FName());
 		TestEqual(TEXT("Guest 1 couldn't build in the commons"), BlockAt(FIntVector(50, 50, 1)), FName());
 		TestEqual(TEXT("Guest 2 built on PlotB"), BlockAt(FIntVector(10, 40, 1)), FName(TEXT("Stone")));
 		TestEqual(TEXT("Host built on PlotA"), BlockAt(FIntVector(41, 10, 1)), FName(TEXT("WoodPlank")));
@@ -195,17 +195,17 @@ bool FGFNetPermissionsTest::RunTest(const FString&)
 		TestEqual(TEXT("Guest 1: 3 rejected"), GuestOnServer(0)->GetEditsRejected(), 3);
 		TestEqual(TEXT("Guest 1 only paid for the accepted block"), GuestOnServer(0)->Inventory->GetCount(TEXT("Stone")), 63);
 	});
-	// Builder rights on her common areas.
+	// Builder rights on the host's common areas.
 	Land(Ctx, this, []() { return Guest(0); }, [Keys]() { return ToPlayer(EGFLandOp::GrantBuilder, (*Keys)[2], true); }, EGFLandResult::NotAllowed, TEXT("Guests can't grant builder rights"));
-	Land(Ctx, this, []() { return Host(); }, [Keys]() { return ToPlayer(EGFLandOp::GrantBuilder, (*Keys)[2], true); }, EGFLandResult::Ok, TEXT("She makes guest 2 a builder"));
+	Land(Ctx, this, []() { return Host(); }, [Keys]() { return ToPlayer(EGFLandOp::GrantBuilder, (*Keys)[2], true); }, EGFLandResult::Ok, TEXT("Host makes guest 2 a builder"));
 	Do(Ctx, []() { Guest(1)->RequestEdit(FIntVector(52, 52, 1), TEXT("Stone")); Guest(1)->RequestEdit(FIntVector(5, 6, 1), TEXT("Stone")); });
 	WaitUntil(Ctx, TEXT("builder edits settle"), 15.f, []() { return VoxelsConverged() && GuestOnServer(1)->GetEditsRejected() >= 2; });
 	Do(Ctx, [this]()
 	{
 		TestEqual(TEXT("Builder builds in the commons"), BlockAt(FIntVector(52, 52, 1)), FName(TEXT("Stone")));
-		TestEqual(TEXT("Builder still can't build in her home"), BlockAt(FIntVector(5, 6, 1)), FName());
+		TestEqual(TEXT("Builder still can't build in the host's home"), BlockAt(FIntVector(5, 6, 1)), FName());
 	});
-	Land(Ctx, this, []() { return Host(); }, [Keys]() { return ToPlayer(EGFLandOp::GrantBuilder, (*Keys)[2], false); }, EGFLandResult::Ok, TEXT("She revokes builder"));
+	Land(Ctx, this, []() { return Host(); }, [Keys]() { return ToPlayer(EGFLandOp::GrantBuilder, (*Keys)[2], false); }, EGFLandResult::Ok, TEXT("Host revokes builder"));
 	Do(Ctx, []() { Guest(1)->RequestEdit(FIntVector(52, 52, 1), NAME_None); });
 	WaitUntil(Ctx, TEXT("revoked edit settles"), 15.f, []() { return VoxelsConverged() && GuestOnServer(1)->GetEditsRejected() >= 3; });
 	Do(Ctx, [this]() { TestEqual(TEXT("Revoked builder can't edit the commons"), BlockAt(FIntVector(52, 52, 1)), FName(TEXT("Stone"))); });
@@ -255,7 +255,7 @@ bool FGFNetRentTest::RunTest(const FString&)
 	});
 	WaitUntil(Ctx, TEXT("guest's house is up"), 15.f, []() { return VoxelsConverged() && BlockAt(FIntVector(42, 10, 1)) == FName(TEXT("Stone")); });
 
-	// Day 1: auto-pay (on by default) pays, and a rent letter lands in her mailbox.
+	// Day 1: auto-pay (on by default) pays, and a rent letter lands in the host's mailbox.
 	Do(Ctx, [this, Run]()
 	{
 		SetDay(1);
@@ -263,12 +263,12 @@ bool FGFNetRentTest::RunTest(const FString&)
 		TestEqual(TEXT("Auto-paid: nothing owed"), P->OwedPeriods, 0);
 		CheckEnum(this, TEXT("Auto-paid: Paid"), P->Status, EGFRentStatus::Paid);
 		TestEqual(TEXT("Guest paid 5 wood"), GuestOnServer(0)->Inventory->GetCount(TEXT("Wood")), 7);
-		TestEqual(TEXT("One rent letter for her"), UnclaimedFor(Run->HostKey, EGFLetterKind::Rent), 1);
+		TestEqual(TEXT("One rent letter for the host"), UnclaimedFor(Run->HostKey, EGFLetterKind::Rent), 1);
 		const FGFMailLetter* L = NewestLetter(Run->HostKey, EGFLetterKind::Rent);
 		TestTrue(TEXT("Letter holds the 5 wood"), L && L->Stacks.Num() == 1 && L->Stacks[0].ItemId == FName(TEXT("Wood")) && L->Stacks[0].Count == 5);
 		Run->FirstLetter = L ? L->Id : FGuid();
 		TestEqual(TEXT("Wood conserved (in the letter)"), SGS()->CountEverywhere(TEXT("Wood")), Run->WoodStart + Run->WoodMinted);
-		TestEqual(TEXT("Her mailbox shows it"), Host()->Mailbox.Num(), 1);
+		TestEqual(TEXT("Host's mailbox shows it"), Host()->Mailbox.Num(), 1);
 	});
 	WaitUntil(Ctx, TEXT("guest sees the 'Rent paid' toast and Paid status"), 10.f, []()
 	{
@@ -277,12 +277,12 @@ bool FGFNetRentTest::RunTest(const FString&)
 		return G && CGS && G->LandNotices.ContainsByPredicate([](const FString& N) { return N.StartsWith(TEXT("Rent paid")); })
 			&& CGS->Land.Find(PlotA)->Status == EGFRentStatus::Paid && CGS->Land.Find(PlotA)->LastPaidAmount == 5;
 	});
-	Land(Ctx, this, []() { return Guest(0); }, [Run]() { FGFLandAction A = Act(EGFLandOp::ClaimLetter); A.LetterId = Run->FirstLetter; return A; }, EGFLandResult::NoSuchLetter, TEXT("Guest can't claim her letter"));
-	Land(Ctx, this, []() { return Host(); }, [Run]() { FGFLandAction A = Act(EGFLandOp::ClaimLetter); A.LetterId = Run->FirstLetter; return A; }, EGFLandResult::Ok, TEXT("She claims the rent"));
+	Land(Ctx, this, []() { return Guest(0); }, [Run]() { FGFLandAction A = Act(EGFLandOp::ClaimLetter); A.LetterId = Run->FirstLetter; return A; }, EGFLandResult::NoSuchLetter, TEXT("Guest can't claim the host's letter"));
+	Land(Ctx, this, []() { return Host(); }, [Run]() { FGFLandAction A = Act(EGFLandOp::ClaimLetter); A.LetterId = Run->FirstLetter; return A; }, EGFLandResult::Ok, TEXT("Host claims the rent"));
 	Land(Ctx, this, []() { return Host(); }, [Run]() { FGFLandAction A = Act(EGFLandOp::ClaimLetter); A.LetterId = Run->FirstLetter; return A; }, EGFLandResult::AlreadyClaimed, TEXT("Claiming twice does nothing"));
 	Do(Ctx, [this, Run]()
 	{
-		TestEqual(TEXT("She has the 5 wood"), Host()->Inventory->GetCount(TEXT("Wood")), 5);
+		TestEqual(TEXT("Host has the 5 wood"), Host()->Inventory->GetCount(TEXT("Wood")), 5);
 		TestEqual(TEXT("Wood conserved after claim"), SGS()->CountEverywhere(TEXT("Wood")), Run->WoodStart + Run->WoodMinted);
 	});
 
@@ -345,15 +345,15 @@ bool FGFNetRentTest::RunTest(const FString&)
 	// Forgive and pause.
 	Do(Ctx, [this]() { SetDay(11); TestEqual(TEXT("2 owed"), SPlot(PlotA)->OwedPeriods, 2); });
 	LandA(Ctx, this, []() { return Guest(0); }, Act(EGFLandOp::ForgiveRent, PlotA), EGFLandResult::NotAllowed, TEXT("Guests can't forgive themselves"));
-	LandA(Ctx, this, []() { return Host(); }, Act(EGFLandOp::ForgiveRent, PlotA), EGFLandResult::Ok, TEXT("She forgives the rent"));
+	LandA(Ctx, this, []() { return Host(); }, Act(EGFLandOp::ForgiveRent, PlotA), EGFLandResult::Ok, TEXT("Host forgives the rent"));
 	Do(Ctx, [this]()
 	{
 		TestEqual(TEXT("Forgiven: nothing owed"), SPlot(PlotA)->OwedPeriods, 0);
 		CheckEnum(this, TEXT("Forgiven: Paid"), SPlot(PlotA)->Status, EGFRentStatus::Paid);
 	});
-	Land(Ctx, this, []() { return Host(); }, [] { FGFLandAction A = Act(EGFLandOp::PauseRent, PlotA); A.bFlag = true; return A; }, EGFLandResult::Ok, TEXT("She pauses rent"));
+	Land(Ctx, this, []() { return Host(); }, [] { FGFLandAction A = Act(EGFLandOp::PauseRent, PlotA); A.bFlag = true; return A; }, EGFLandResult::Ok, TEXT("Host pauses rent"));
 	Do(Ctx, [this]() { SetDay(15); TestEqual(TEXT("Paused: nothing accrues"), SPlot(PlotA)->OwedPeriods, 0); });
-	Land(Ctx, this, []() { return Host(); }, [] { FGFLandAction A = Act(EGFLandOp::PauseRent, PlotA); A.bFlag = false; return A; }, EGFLandResult::Ok, TEXT("She resumes rent"));
+	Land(Ctx, this, []() { return Host(); }, [] { FGFLandAction A = Act(EGFLandOp::PauseRent, PlotA); A.bFlag = false; return A; }, EGFLandResult::Ok, TEXT("Host resumes rent"));
 	Do(Ctx, [this]() { SetDay(16); TestEqual(TEXT("Resumed: one day owed"), SPlot(PlotA)->OwedPeriods, 1); });
 
 	// Login: everything missed while away is collected, capped at 3 periods.
@@ -398,12 +398,12 @@ bool FGFNetRentTest::RunTest(const FString&)
 		TestEqual(TEXT("Unclaimed letters restored"), UnclaimedFor(Run->HostKey, EGFLetterKind::Rent), Unclaimed);
 		TestEqual(TEXT("Wood conserved through save/load"), GS->CountEverywhere(TEXT("Wood")), Wood);
 	});
-	LandA(Ctx, this, []() { return Host(); }, Act(EGFLandOp::ClaimAllLetters), EGFLandResult::Ok, TEXT("She claims all rent after load"));
+	LandA(Ctx, this, []() { return Host(); }, Act(EGFLandOp::ClaimAllLetters), EGFLandResult::Ok, TEXT("Host claims all rent after load"));
 	Do(Ctx, [this, Run]()
 	{
 		TestEqual(TEXT("All rent claimed"), UnclaimedFor(Run->HostKey, EGFLetterKind::Rent), 0);
-		TestTrue(TEXT("She got at least every payment we made"), Host()->Inventory->GetCount(TEXT("Wood")) >= 5 + 5 + 10 + 15);
-		TestEqual(TEXT("Every wood is hers or the guest's"), static_cast<int64>(Host()->Inventory->GetCount(TEXT("Wood")) + GuestOnServer(0)->Inventory->GetCount(TEXT("Wood"))), Run->WoodStart + Run->WoodMinted);
+		TestTrue(TEXT("Host got at least every payment we made"), Host()->Inventory->GetCount(TEXT("Wood")) >= 5 + 5 + 10 + 15);
+		TestEqual(TEXT("Every wood is the host's or the guest's"), static_cast<int64>(Host()->Inventory->GetCount(TEXT("Wood")) + GuestOnServer(0)->Inventory->GetCount(TEXT("Wood"))), Run->WoodStart + Run->WoodMinted);
 		TestEqual(TEXT("Nothing left in escrow"), SGS()->Ledger.HeldInEscrow(TEXT("Wood")), static_cast<int64>(0));
 		TestEqual(TEXT("Wood conserved overall"), SGS()->CountEverywhere(TEXT("Wood")), Run->WoodStart + Run->WoodMinted);
 	});
@@ -449,7 +449,7 @@ bool FGFNetMailboxTest::RunTest(const FString&)
 	Land(Ctx, this, []() { return Guest(0); }, Gift(2, TEXT("Stone"), 1000, TEXT("too much")), EGFLandResult::CantAfford, TEXT("Can't gift what you don't have"));
 	Land(Ctx, this, []() { return Guest(0); }, Gift(-1, TEXT("Stone"), 1, TEXT("?")), EGFLandResult::NoSuchPlayer, TEXT("Unknown recipient"));
 	Land(Ctx, this, []() { return Guest(0); }, Gift(2, TEXT("Stone"), 0, TEXT("zero")), EGFLandResult::InvalidStacks, TEXT("Zero items"));
-	Land(Ctx, this, []() { return Host(); }, [Run]() { FGFLandAction A = ToPlayer(EGFLandOp::SendNote, Run->Keys[2]); A.Text = TEXT("welcome to the island!"); return A; }, EGFLandResult::Ok, TEXT("She sends a note"));
+	Land(Ctx, this, []() { return Host(); }, [Run]() { FGFLandAction A = ToPlayer(EGFLandOp::SendNote, Run->Keys[2]); A.Text = TEXT("welcome to the island!"); return A; }, EGFLandResult::Ok, TEXT("Host sends a note"));
 	Land(Ctx, this, []() { return Host(); }, Gift(2, TEXT("Dirt"), 5, TEXT("for the garden")), EGFLandResult::Ok, TEXT("Host sends dirt"));
 	Do(Ctx, [this, Run]()
 	{
@@ -573,16 +573,16 @@ bool FGFNetBlueprintTest::RunTest(const FString&)
 		const FGFPlotBlueprint* BP = P ? FGFLandRules::FindBlueprint(P->GetCharacter().Blueprints, Run->WorldId, PlotA) : nullptr;
 		TestTrue(TEXT("Guest's machine has the blueprint before the clear"), BP && BP->Hash == Run->Hash);
 		TestTrue(TEXT("Guest acked at least the pack-up revision"), GuestOnServer(0)->GetAckedRevision() > 0);
-		TestNotNull(TEXT("Her world keeps a copy too"), FGFLandRules::FindBlueprint(SGS()->PackedBlueprints, Run->WorldId, PlotA));
+		TestNotNull(TEXT("Host's world keeps a copy too"), FGFLandRules::FindBlueprint(SGS()->PackedBlueprints, Run->WorldId, PlotA));
 	});
 	WaitUntil(Ctx, TEXT("cleared plot reaches clients"), 15.f, []() { return VoxelsConverged(); });
 
-	// Free restore on the same plot: needs her OK.
+	// Free restore on the same plot: needs the host's OK.
 	LandA(Ctx, this, []() { return Guest(0); }, Act(EGFLandOp::ClaimPlot, PlotA), EGFLandResult::Ok, TEXT("Guest re-claims PlotA"));
-	Land(Ctx, this, []() { return Guest(0); }, [Run]() { FGFLandAction A = Act(EGFLandOp::RestoreBlueprint, PlotA); A.SourceWorldId = Run->WorldId; A.SourcePlotId = PlotA; return A; }, EGFLandResult::Pending, TEXT("Restore asks her first"));
-	Do(Ctx, [this]() { TestFalse(TEXT("Not restored before her OK"), FGFLandRules::IsBuiltOn(Voxel(ServerWorld())->GetGrid(), *SPlot(PlotA))); });
-	LandA(Ctx, this, []() { return Guest(1); }, Act(EGFLandOp::ApproveRestore, PlotA), EGFLandResult::NotAllowed, TEXT("Only she approves"));
-	LandA(Ctx, this, []() { return Host(); }, Act(EGFLandOp::ApproveRestore, PlotA), EGFLandResult::Ok, TEXT("She approves"));
+	Land(Ctx, this, []() { return Guest(0); }, [Run]() { FGFLandAction A = Act(EGFLandOp::RestoreBlueprint, PlotA); A.SourceWorldId = Run->WorldId; A.SourcePlotId = PlotA; return A; }, EGFLandResult::Pending, TEXT("Restore asks the host first"));
+	Do(Ctx, [this]() { TestFalse(TEXT("Not restored before the host's OK"), FGFLandRules::IsBuiltOn(Voxel(ServerWorld())->GetGrid(), *SPlot(PlotA))); });
+	LandA(Ctx, this, []() { return Guest(1); }, Act(EGFLandOp::ApproveRestore, PlotA), EGFLandResult::NotAllowed, TEXT("Only the host approves"));
+	LandA(Ctx, this, []() { return Host(); }, Act(EGFLandOp::ApproveRestore, PlotA), EGFLandResult::Ok, TEXT("Host approves"));
 	Do(Ctx, [this, Run]()
 	{
 		TestEqual(TEXT("Restored build = blueprint"), PlotHashNow(PlotA), Run->Hash);
@@ -590,10 +590,10 @@ bool FGFNetBlueprintTest::RunTest(const FString&)
 		Run->StoneBefore = GuestOnServer(0)->Inventory->GetCount(TEXT("Stone"));
 	});
 	Land(Ctx, this, []() { return Guest(1); }, [Run]() { FGFLandAction A = Act(EGFLandOp::RestoreBlueprint, PlotA); A.SourceWorldId = Run->WorldId; A.SourcePlotId = PlotA; return A; }, EGFLandResult::NotAllowed, TEXT("Not your plot"));
-	Land(Ctx, this, []() { return Host(); }, [Run]() { FGFLandAction A = Act(EGFLandOp::RestoreBlueprint, PlotA); A.SourceWorldId = Run->WorldId; A.SourcePlotId = PlotA; return A; }, EGFLandResult::NoBlueprint, TEXT("She has no blueprint of her own"));
+	Land(Ctx, this, []() { return Host(); }, [Run]() { FGFLandAction A = Act(EGFLandOp::RestoreBlueprint, PlotA); A.SourceWorldId = Run->WorldId; A.SourcePlotId = PlotA; return A; }, EGFLandResult::NoBlueprint, TEXT("Host has no blueprint of their own"));
 
 	// Paid restore onto another plot: the materials again.
-	Land(Ctx, this, []() { return Host(); }, []() { FGFLandAction A = ToPlayer(EGFLandOp::AssignPlot, Guest(0)->PlayerKey); A.PlotId = PlotB; return A; }, EGFLandResult::Ok, TEXT("She assigns a second plot"));
+	Land(Ctx, this, []() { return Host(); }, []() { FGFLandAction A = ToPlayer(EGFLandOp::AssignPlot, Guest(0)->PlayerKey); A.PlotId = PlotB; return A; }, EGFLandResult::Ok, TEXT("Host assigns a second plot"));
 	Land(Ctx, this, []() { return Guest(0); }, [Run]() { FGFLandAction A = Act(EGFLandOp::RestoreBlueprint, PlotB); A.SourceWorldId = Run->WorldId; A.SourcePlotId = PlotA; return A; }, EGFLandResult::Ok, TEXT("Paid restore onto PlotB"));
 	Do(Ctx, [this, Run]()
 	{

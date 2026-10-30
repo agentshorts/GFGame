@@ -251,7 +251,7 @@ bool FGFDepthsPlatformTest::RunTest(const FString&)
 	const FGFDepthsPlatform& Z = L.Platforms[0];
 	TArray<FGFDepthsSwitch> Sw;
 	TestTrue(TEXT("Rests at A"), FGFDepthsPlatforms::PositionAt(Z, Sw, 5.0).Equals(Z.A));
-	TestTrue(TEXT("Anyone presses Z"), FGFDepthsPlatforms::Press(Sw, TEXT("Z"), 10.0, TEXT("Her")));
+	TestTrue(TEXT("Anyone presses Z"), FGFDepthsPlatforms::Press(Sw, TEXT("Z"), 10.0, TEXT("Owner")));
 	TestFalse(TEXT("0.4 s cooldown per key"), FGFDepthsPlatforms::Press(Sw, TEXT("Z"), 10.2, TEXT("Friend")));
 	TestFalse(TEXT("Only Z, X and C"), FGFDepthsPlatforms::Press(Sw, TEXT("Q"), 10.2, TEXT("Friend")));
 	TestTrue(TEXT("Other keys have their own cooldown"), FGFDepthsPlatforms::Press(Sw, TEXT("C"), 10.2, TEXT("Friend")));
@@ -276,7 +276,7 @@ bool FGFDepthsPlatformTest::RunTest(const FString&)
 	double Now = 20.0;
 	Steps(P, L, B, In(0.f), 3, Now, Lift);
 	TestEqual(TEXT("Standing on the lift"), B.OnPlatform, 1);
-	FGFDepthsPlatforms::Press(Lift, TEXT("X"), Now, TEXT("Her"));
+	FGFDepthsPlatforms::Press(Lift, TEXT("X"), Now, TEXT("Owner"));
 	Steps(P, L, B, In(0.f), 75, Now, Lift);
 	TestTrue(TEXT("Carried to the top"), FMath::IsNearlyEqual(B.Pos.Y, X.B.Y + X.HalfSize.Y + 60.f, 2.f) && B.bGrounded);
 	Steps(P, L, B, In(1.f), 60, Now, Lift);
@@ -325,7 +325,7 @@ bool FGFDepthsRulesTest::RunTest(const FString&)
 	TestFalse(TEXT("Only 2 checkpoints"), FGFDepthsRules::ReachCheckpoint(S, 2, Bank));
 
 	S.Unbanked = { FGFItemStack(TEXT("Moonstone"), 5), FGFItemStack(TEXT("Stone"), 1), FGFItemStack(TEXT("Crystal"), 4) };
-	TestTrue(TEXT("5 damage takes her down"), FGFDepthsRules::Damage(S, 9));
+	TestTrue(TEXT("5 damage takes them down"), FGFDepthsRules::Damage(S, 9));
 	const TArray<FGFItemStack> Lost = FGFDepthsRules::Die(S);
 	TestEqual(TEXT("Loses floor(half): Moonstone 2"), FGFRewards::CountOf(Lost, TEXT("Moonstone")), 2);
 	TestEqual(TEXT("Loses floor(half): Crystal 2"), FGFRewards::CountOf(Lost, TEXT("Crystal")), 2);
@@ -333,7 +333,7 @@ bool FGFDepthsRulesTest::RunTest(const FString&)
 	TestEqual(TEXT("Keeps Moonstone 3"), FGFRewards::CountOf(S.Unbanked, TEXT("Moonstone")), 3);
 	TestEqual(TEXT("Keeps Stone 1"), FGFRewards::CountOf(S.Unbanked, TEXT("Stone")), 1);
 	TestTrue(TEXT("Back to 5 HP and 3 heals"), S.HP == 5 && S.Heals == 3 && S.Deaths == 1);
-	TestEqual(TEXT("Respawns at her checkpoint"), S.Checkpoint, 0);
+	TestEqual(TEXT("Respawns at their checkpoint"), S.Checkpoint, 0);
 	const TArray<FGFItemStack> Home = FGFDepthsRules::LiftHome(S);
 	TestEqual(TEXT("Lift Home banks everything"), FGFRewards::CountOf(Home, TEXT("Moonstone")) + FGFRewards::CountOf(Home, TEXT("Crystal")) + FGFRewards::CountOf(Home, TEXT("Stone")), 6);
 	TestEqual(TEXT("Nothing unbanked after the lift"), S.Unbanked.Num(), 0);

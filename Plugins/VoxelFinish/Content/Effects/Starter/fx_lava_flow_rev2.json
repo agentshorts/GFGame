@@ -1,0 +1,224 @@
+{
+ "schema": "voxelfinish.effect_graph/2",
+ "effect_id": "fx_lava_flow",
+ "effect_index": 3,
+ "name": "Lava Flow",
+ "description": "Two scrolling noise layers; hot cracks (palette_b) glow through a dark crust (palette_a).",
+ "animated": true,
+ "loop_seconds": 4.0,
+ "exposed": [
+  {
+   "name": "heat",
+   "kind": "param",
+   "type": "f",
+   "node": "k_em",
+   "default": 3.0,
+   "min": 0.0,
+   "max": 8.0,
+   "description": "emissive strength of the hot cracks"
+  },
+  {
+   "name": "crack_low",
+   "kind": "param",
+   "type": "f",
+   "node": "e0",
+   "default": 0.45,
+   "min": 0.2,
+   "max": 0.6,
+   "description": "lower crack threshold (lower = more cracks)"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "t",
+   "type": "input",
+   "params": {
+    "source": "time"
+   }
+  },
+  {
+   "id": "uv",
+   "type": "input",
+   "params": {
+    "source": "uv"
+   }
+  },
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "v1",
+   "type": "const",
+   "params": {
+    "value": [
+     0.0,
+     0.25
+    ]
+   }
+  },
+  {
+   "id": "uv1",
+   "type": "scroll_uv",
+   "inputs": [
+    "uv",
+    "v1",
+    "t"
+   ]
+  },
+  {
+   "id": "v2",
+   "type": "const",
+   "params": {
+    "value": [
+     0.25,
+     0.0
+    ]
+   }
+  },
+  {
+   "id": "rot",
+   "type": "const",
+   "params": {
+    "value": 1.570796
+   }
+  },
+  {
+   "id": "uvr",
+   "type": "rotate_uv",
+   "inputs": [
+    "uv",
+    "rot"
+   ]
+  },
+  {
+   "id": "uv2",
+   "type": "scroll_uv",
+   "inputs": [
+    "uvr",
+    "v2",
+    "t"
+   ]
+  },
+  {
+   "id": "n1",
+   "type": "input",
+   "params": {
+    "source": "noise_perlin",
+    "scale": 4,
+    "seed": 11
+   },
+   "inputs": [
+    "uv1"
+   ]
+  },
+  {
+   "id": "n2",
+   "type": "input",
+   "params": {
+    "source": "noise_perlin",
+    "scale": 3,
+    "seed": 29
+   },
+   "inputs": [
+    "uv2"
+   ]
+  },
+  {
+   "id": "ns",
+   "type": "add",
+   "inputs": [
+    "n1",
+    "n2"
+   ]
+  },
+  {
+   "id": "half",
+   "type": "const",
+   "params": {
+    "value": 0.5
+   }
+  },
+  {
+   "id": "n",
+   "type": "mul",
+   "inputs": [
+    "ns",
+    "half"
+   ]
+  },
+  {
+   "id": "e0",
+   "type": "const",
+   "params": {
+    "value": 0.45
+   }
+  },
+  {
+   "id": "e1",
+   "type": "const",
+   "params": {
+    "value": 0.62
+   }
+  },
+  {
+   "id": "hot",
+   "type": "smoothstep",
+   "inputs": [
+    "e0",
+    "e1",
+    "n"
+   ]
+  },
+  {
+   "id": "col",
+   "type": "lerp",
+   "inputs": [
+    "pa",
+    "pb",
+    "hot"
+   ]
+  },
+  {
+   "id": "k_em",
+   "type": "const",
+   "params": {
+    "value": 3.0
+   }
+  },
+  {
+   "id": "em",
+   "type": "mul",
+   "inputs": [
+    "hot",
+    "k_em"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "col",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 0,
+  "palette_a": "#3A3533",
+  "palette_b": "#D9733B"
+ },
+ "rev": {
+  "number": 2,
+  "parent_rev": 1,
+  "hash": "sha256:6eae2d699a8fe8905b936969aad8f47e0d4f92d488aa1a18daf575b08bfa4720",
+  "note": "expose heat and crack_low",
+  "created": "2026-10-30T05:45:00Z"
+ }
+}

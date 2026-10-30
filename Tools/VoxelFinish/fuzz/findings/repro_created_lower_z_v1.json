@@ -1,0 +1,25 @@
+{
+ "schema": "voxelfinish.effect_graph/2",
+ "effect_id": "fx_repro_lower_z",
+ "name": "lower z",
+ "animated": false,
+ "nodes": [
+  {
+   "id": "c",
+   "type": "const",
+   "params": {
+    "value": 0.25
+   }
+  }
+ ],
+ "outputs": {
+  "base_color": "c"
+ },
+ "rev": {
+  "number": 1,
+  "parent_rev": null,
+  "hash": "sha256:d6093c066cae00ce0453d5c7bffda4c48abdb6d9991b9da19182deb3e85017dd",
+  "note": "repro",
+  "created": "2026-10-30T00:00:00z"
+ }
+}

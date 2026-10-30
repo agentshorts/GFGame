@@ -1,6 +1,6 @@
 #pragma once
 
-// Landlord loop (PLAN.md section 2a): her land is split into plots, friends claim one and pay rent in materials,
+// Landlord loop (PLAN.md section 2a): the host's land is split into plots, friends claim one and pay rent in materials,
 // letters arrive in mailboxes, and every guest keeps a blueprint backup of their build.
 // Everything here is pure data + rules (no world), so it can be unit-tested; AGFGameState runs it on the server.
 #include "CoreMinimal.h"
@@ -13,7 +13,7 @@ class UDataTable;
 UENUM(BlueprintType)
 enum class EGFPlotKind : uint8
 {
-	/** Her own plot. Host (and nobody else) builds here. */
+	/** The host's own plot. The host (and nobody else) builds here. */
 	Home,
 	/** Can be rented to a friend. */
 	Rentable
@@ -25,7 +25,7 @@ enum class EGFRentStatus : uint8
 {
 	/** No tenant. */
 	Vacant,
-	/** Tenant, no rent (free, or her own plot). */
+	/** Tenant, no rent (free, or the owner's own plot). */
 	Free,
 	Paid,
 	/** 1 period missed: "Rent due!" sign (grace day). */
@@ -46,7 +46,7 @@ struct GFNET_API FGFLandPlot
 	/** Cell bounds: [Min, Min + Size). Plots are full height. */
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Land") FIntVector Min = FIntVector::ZeroValue;
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Land") FIntVector Size = FIntVector(24, 24, 32);
-	/** She marked it "For rent" (friends can claim it themselves). */
+	/** The host marked it "For rent" (friends can claim it themselves). */
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Land") bool bForRent = false;
 
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Land") FString TenantKey;
@@ -78,16 +78,16 @@ struct GFNET_API FGFLandPlot
 	bool ChargesRent() const { return Kind == EGFPlotKind::Rentable && HasTenant() && !RentItem.IsNone() && RentAmount > 0; }
 };
 
-/** The whole land (replicated to everyone: the Land Board and Rent Board read it). Saved with her world. */
+/** The whole land (replicated to everyone: the Land Board and Rent Board read it). Saved with the host's world. */
 USTRUCT(BlueprintType)
 struct GFNET_API FGFLandState
 {
 	GENERATED_BODY()
 
-	/** Her player key (the host). Rent letters go here. */
+	/** The host's player key. Rent letters go here. */
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Land") FString LandlordKey;
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Land") TArray<FGFLandPlot> Plots;
-	/** Friends she gave Builder rights on her common areas. */
+	/** Friends the host gave Builder rights on their common areas. */
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Land") TArray<FString> Builders;
 	/** Bumped on every change (UI refresh, tests). */
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Land") int32 Revision = 0;
@@ -156,7 +156,7 @@ struct GFNET_API FGFMailLetter
 UENUM(BlueprintType)
 enum class EGFLandOp : uint8
 {
-	// Guests (and her)
+	// Guests (and the host)
 	ClaimPlot,
 	PayRent,
 	SetAutoPay,
@@ -180,7 +180,7 @@ UENUM(BlueprintType)
 enum class EGFLandResult : uint8
 {
 	Ok,
-	/** Accepted, waiting on someone (her OK for a free restore, the guest's ack for a pack-up). */
+	/** Accepted, waiting on someone (the host's OK for a free restore, the guest's ack for a pack-up). */
 	Pending,
 	NotAllowed,
 	NoSuchPlot,
@@ -242,7 +242,7 @@ struct GFNET_API FGFLandRules
 	static FName PlotAId() { return FName(TEXT("PlotA")); }
 	static FName PlotBId() { return FName(TEXT("PlotB")); }
 
-	/** Her home plot + 2 rentable plots (24 x 24, full height) in a 2 x 2 layout; the 4th quarter is the Commons. */
+	/** The host's home plot + 2 rentable plots (24 x 24, full height) in a 2 x 2 layout; the 4th quarter is the Commons. */
 	static FGFLandState MakeDefaultLayout(const FIntVector& WorldSize);
 
 	static EGFRentStatus StatusFor(const FGFLandPlot& Plot);

@@ -291,10 +291,10 @@ bool FGFSaveHostGuestTest::RunTest(const FString&)
 
 		// Character saves: the guest's from its own machine; the host's from the live player state.
 		const UGFCharacterSave* GuestChar = UGFSaveSubsystem::CaptureCharacter(ClientWorlds()[0]->GetGameInstance());
-		TestEqual(TEXT("Guest's own character save has her items"), GuestChar->Character.Inventory.GetCount(TEXT("Wood")), 5);
+		TestEqual(TEXT("Guest's own character save has their items"), GuestChar->Character.Inventory.GetCount(TEXT("Wood")), 5);
 		TestTrue(TEXT("Guest save matches the server's copy"), GuestChar->Character.Inventory == PlayerStateByKey(Server, *GuestKey)->Inventory->GetInventory());
 		const UGFCharacterSave* HostChar = UGFSaveSubsystem::CaptureCharacter(Server->GetGameInstance());
-		TestEqual(TEXT("Host's character paid for her plank"), HostChar->Character.Inventory.GetCount(TEXT("WoodPlank")), 63);
+		TestEqual(TEXT("Host's character paid for their plank"), HostChar->Character.Inventory.GetCount(TEXT("WoodPlank")), 63);
 
 		// Wipe and restore the world from the save.
 		SV->ClearAll();

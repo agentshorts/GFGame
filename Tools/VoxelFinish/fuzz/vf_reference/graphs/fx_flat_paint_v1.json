@@ -1,0 +1,43 @@
+{
+ "schema": "gfgame.effect_graph/1",
+ "id": "fx_flat_paint",
+ "effect_index": 0,
+ "name": "Flat Paint",
+ "description": "Two-colour pattern paint, no effect. Baseline every Finish falls back to.",
+ "animated": false,
+ "nodes": [
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "pm",
+   "type": "input",
+   "params": {
+    "source": "pattern_mask"
+   }
+  },
+  {
+   "id": "col",
+   "type": "lerp",
+   "inputs": [
+    "pa",
+    "pb",
+    "pm"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "col"
+ }
+}

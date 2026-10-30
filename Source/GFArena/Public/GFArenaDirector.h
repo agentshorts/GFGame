@@ -5,7 +5,7 @@
 //
 // Verbs (FGFModeRequest.Verb):
 //   Place      Ids = companion ids, Ints = spots 0..5 (up to 3)       AutoPlace   (best 3, tanks in front)
-//   Wager      Stacks = her stake -> Stacks = counter-bet, Ints = [band, claws]
+//   Wager      Stacks = player's stake -> Stacks = counter-bet, Ints = [band, claws]
 //   Suggest    -> Stacks = a ~10 % stake        Reroll (one free per fight)        NoWager
 //   Fight      (stakes go into escrow, the opponent is built from the band)
 //   SlowTime   (team-shared charge; pressing again ends it)   Command  Ints = [unit, ability 0..2, target unit]

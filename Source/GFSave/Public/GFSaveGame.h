@@ -20,7 +20,7 @@ enum class EGFSaveVersion : int32
 	WorldCharacterSplit = 2,
 	/** Transfer ledger (open escrows, recent transactions, applied ids) saved with the world. */
 	EconomyLedger = 3,
-	/** Land plots (tenants, rent), mail and her copies of packed-up blueprints. */
+	/** Land plots (tenants, rent), mail and the host's copies of packed-up blueprints. */
 	LandAndMail = 4,
 	/** Mini-game mode state (mine rooms, crews, depots, ...) as per-mode blobs. */
 	ModeStates = 5,

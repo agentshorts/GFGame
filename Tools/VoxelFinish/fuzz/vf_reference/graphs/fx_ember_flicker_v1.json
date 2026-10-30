@@ -1,0 +1,224 @@
+{
+ "schema": "gfgame.effect_graph/1",
+ "id": "fx_ember_flicker",
+ "effect_index": 7,
+ "name": "Ember Flicker",
+ "description": "Warm noise rises upward and the glow flickers at 3 and 5 Hz.",
+ "animated": true,
+ "loop_seconds": 1.0,
+ "nodes": [
+  {
+   "id": "t",
+   "type": "input",
+   "params": {
+    "source": "time"
+   }
+  },
+  {
+   "id": "uv",
+   "type": "input",
+   "params": {
+    "source": "uv"
+   }
+  },
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "v",
+   "type": "const",
+   "params": {
+    "value": [
+     0.0,
+     1.0
+    ]
+   }
+  },
+  {
+   "id": "suv",
+   "type": "scroll_uv",
+   "inputs": [
+    "uv",
+    "v",
+    "t"
+   ]
+  },
+  {
+   "id": "n",
+   "type": "input",
+   "params": {
+    "source": "noise_perlin",
+    "scale": 3,
+    "seed": 5
+   },
+   "inputs": [
+    "suv"
+   ]
+  },
+  {
+   "id": "w3",
+   "type": "const",
+   "params": {
+    "value": 18.849556
+   }
+  },
+  {
+   "id": "a3",
+   "type": "mul",
+   "inputs": [
+    "t",
+    "w3"
+   ]
+  },
+  {
+   "id": "s3",
+   "type": "sin",
+   "inputs": [
+    "a3"
+   ]
+  },
+  {
+   "id": "w5",
+   "type": "const",
+   "params": {
+    "value": 31.415927
+   }
+  },
+  {
+   "id": "a5",
+   "type": "mul",
+   "inputs": [
+    "t",
+    "w5"
+   ]
+  },
+  {
+   "id": "s5",
+   "type": "sin",
+   "inputs": [
+    "a5"
+   ]
+  },
+  {
+   "id": "ss",
+   "type": "add",
+   "inputs": [
+    "s3",
+    "s5"
+   ]
+  },
+  {
+   "id": "k_f",
+   "type": "const",
+   "params": {
+    "value": 0.08
+   }
+  },
+  {
+   "id": "fl",
+   "type": "mul",
+   "inputs": [
+    "ss",
+    "k_f"
+   ]
+  },
+  {
+   "id": "e",
+   "type": "add",
+   "inputs": [
+    "n",
+    "fl"
+   ]
+  },
+  {
+   "id": "zero",
+   "type": "const",
+   "params": {
+    "value": 0.0
+   }
+  },
+  {
+   "id": "one",
+   "type": "const",
+   "params": {
+    "value": 1.0
+   }
+  },
+  {
+   "id": "ec",
+   "type": "clamp",
+   "inputs": [
+    "e",
+    "zero",
+    "one"
+   ]
+  },
+  {
+   "id": "e0",
+   "type": "const",
+   "params": {
+    "value": 0.35
+   }
+  },
+  {
+   "id": "e1",
+   "type": "const",
+   "params": {
+    "value": 0.8
+   }
+  },
+  {
+   "id": "m",
+   "type": "smoothstep",
+   "inputs": [
+    "e0",
+    "e1",
+    "ec"
+   ]
+  },
+  {
+   "id": "col",
+   "type": "lerp",
+   "inputs": [
+    "pa",
+    "pb",
+    "m"
+   ]
+  },
+  {
+   "id": "k_em",
+   "type": "const",
+   "params": {
+    "value": 2.5
+   }
+  },
+  {
+   "id": "em",
+   "type": "mul",
+   "inputs": [
+    "ec",
+    "k_em"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "col",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 0,
+  "palette_a": "#B5532E",
+  "palette_b": "#FFD23F"
+ }
+}

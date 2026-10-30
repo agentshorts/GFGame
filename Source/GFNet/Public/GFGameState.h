@@ -20,7 +20,7 @@ struct FGFPendingPackUp
 	int64 Hash = 0;
 };
 
-/** Server only: a guest asked to restore their build onto the same plot for free; waits for her OK. */
+/** Server only: a guest asked to restore their build onto the same plot for free; waits for the host's OK. */
 struct FGFPendingRestore
 {
 	FName PlotId;
@@ -111,7 +111,7 @@ public:
 	UPROPERTY()
 	TArray<FGFMailLetter> Mail;
 
-	/** Server only: her copy of every packed-up plot (saved with the world). */
+	/** Server only: the host's copy of every packed-up plot (saved with the world). */
 	UPROPERTY()
 	TArray<FGFPlotBlueprint> PackedBlueprints;
 

@@ -1,8 +1,8 @@
 #pragma once
 
-// Pebble Mine (PLAN.md M8): a crew of shy pebblings (unlocked by her first tame) mines the room each one is
+// Pebble Mine (PLAN.md M8): a crew of shy pebblings (unlocked by the player's first tame) mines the room each one is
 // assigned to, fills its satchel, and carries the haul home when told (or by itself with Auto-Haul).
-// Upgrades are bought with materials. While she's away the crew keeps gathering at a reduced, capped rate.
+// Upgrades are bought with materials. While the player is away the crew keeps gathering at a reduced, capped rate.
 // Everything here is pure and deterministic; AGFMineDirector runs it on the server.
 #include "CoreMinimal.h"
 #include "Math/RandomStream.h"

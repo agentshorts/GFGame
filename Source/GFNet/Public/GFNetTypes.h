@@ -9,7 +9,7 @@
 #include "GFNetTypes.generated.h"
 
 /**
- * Everything that belongs to a player rather than to a world (PLAN.md sections 2a, 4.1): her inventory,
+ * Everything that belongs to a player rather than to a world (PLAN.md sections 2a, 4.1): their inventory,
  * companions, Field Journal and plot blueprints. Each machine keeps its own copy (UGFCharacterSave); a guest
  * uploads it on join and the host writes it back after changes. Revision is bumped by every write-back, so on
  * rejoin the newer of (client copy, host's cached copy) wins and nothing can be spent twice.

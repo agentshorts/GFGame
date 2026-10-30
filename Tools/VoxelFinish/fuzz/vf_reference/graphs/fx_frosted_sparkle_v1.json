@@ -1,0 +1,126 @@
+{
+ "schema": "voxelfinish.effect_graph/2",
+ "effect_id": "fx_frosted_sparkle",
+ "effect_index": 13,
+ "name": "Frosted Sparkle",
+ "description": "Soft frost patches (tileable noise) over the pattern, with icy twinkles on top. SubEffect: fx_sparkle (latest) with its base wired to the frosted colour.",
+ "animated": true,
+ "loop_seconds": 1.0,
+ "nodes": [
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "pm",
+   "type": "input",
+   "params": {
+    "source": "pattern_mask"
+   }
+  },
+  {
+   "id": "paint",
+   "type": "lerp",
+   "inputs": [
+    "pa",
+    "pb",
+    "pm"
+   ]
+  },
+  {
+   "id": "n",
+   "type": "input",
+   "params": {
+    "source": "noise_perlin",
+    "scale": 2,
+    "seed": 41
+   }
+  },
+  {
+   "id": "f0",
+   "type": "const",
+   "params": {
+    "value": 0.45
+   }
+  },
+  {
+   "id": "f1",
+   "type": "const",
+   "params": {
+    "value": 0.7
+   }
+  },
+  {
+   "id": "frost",
+   "type": "smoothstep",
+   "inputs": [
+    "f0",
+    "f1",
+    "n"
+   ]
+  },
+  {
+   "id": "icy",
+   "type": "const",
+   "params": {
+    "value": [
+     0.86,
+     0.95,
+     1.0
+    ]
+   }
+  },
+  {
+   "id": "frosted",
+   "type": "lerp",
+   "inputs": [
+    "paint",
+    "icy",
+    "frost"
+   ]
+  },
+  {
+   "id": "spark",
+   "type": "subeffect",
+   "params": {
+    "ref": {
+     "effect_id": "fx_sparkle",
+     "rev": "latest"
+    },
+    "args": {
+     "density": 0.85,
+     "sparkle_glow": 3.0
+    },
+    "wires": {
+     "base": "frosted"
+    }
+   }
+  }
+ ],
+ "outputs": {
+  "base_color": "spark.base_color",
+  "emissive_strength": "spark.emissive_strength"
+ },
+ "preview": {
+  "pattern_id": 8,
+  "palette_a": "#4FB3FF",
+  "palette_b": "#2F6F73"
+ },
+ "rev": {
+  "number": 1,
+  "parent_rev": null,
+  "hash": "sha256:4ce22120c6e620567765bdb03048510ed0c5f8f48ffefc140395e8b0736f6026",
+  "note": "initial composite",
+  "created": "2026-10-30T05:45:00Z"
+ }
+}

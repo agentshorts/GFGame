@@ -1,0 +1,99 @@
+{
+ "schema": "gfgame.effect_graph/1",
+ "id": "fx_scroll_stripes",
+ "effect_index": 6,
+ "name": "Scrolling Pattern",
+ "description": "The chosen pattern scrolls sideways one full tile per loop (seamless).",
+ "animated": true,
+ "loop_seconds": 2.0,
+ "nodes": [
+  {
+   "id": "t",
+   "type": "input",
+   "params": {
+    "source": "time"
+   }
+  },
+  {
+   "id": "uv",
+   "type": "input",
+   "params": {
+    "source": "uv"
+   }
+  },
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "v",
+   "type": "const",
+   "params": {
+    "value": [
+     0.5,
+     0.25
+    ]
+   }
+  },
+  {
+   "id": "suv",
+   "type": "scroll_uv",
+   "inputs": [
+    "uv",
+    "v",
+    "t"
+   ]
+  },
+  {
+   "id": "pm",
+   "type": "input",
+   "params": {
+    "source": "pattern_mask"
+   },
+   "inputs": [
+    "suv"
+   ]
+  },
+  {
+   "id": "col",
+   "type": "lerp",
+   "inputs": [
+    "pa",
+    "pb",
+    "pm"
+   ]
+  },
+  {
+   "id": "k_em",
+   "type": "const",
+   "params": {
+    "value": 0.4
+   }
+  },
+  {
+   "id": "em",
+   "type": "mul",
+   "inputs": [
+    "pm",
+    "k_em"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "col",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 0
+ }
+}

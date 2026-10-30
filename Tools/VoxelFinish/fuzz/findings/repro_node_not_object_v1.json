@@ -1,0 +1,19 @@
+{
+ "schema": "voxelfinish.effect_graph/2",
+ "effect_id": "fx_repro_bad_node",
+ "name": "bad node",
+ "animated": false,
+ "nodes": [
+  1
+ ],
+ "outputs": {
+  "base_color": "c"
+ },
+ "rev": {
+  "number": 1,
+  "parent_rev": null,
+  "hash": "sha256:706e8576b855f97f8a02ac6a952b04e30fe72d6894743bea82ee3566dee391af",
+  "note": "repro",
+  "created": "2026-10-30T00:00:00Z"
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "schema": "gfgame.effect_graph/1",
+ "id": "fx_repro_bool_seed",
+ "name": "bool seed",
+ "animated": false,
+ "nodes": [
+  {
+   "id": "n",
+   "type": "input",
+   "params": {
+    "source": "noise_value",
+    "scale": true,
+    "seed": true
+   }
+  },
+  {
+   "id": "c",
+   "type": "const",
+   "params": {
+    "value": 0.25
+   }
+  }
+ ],
+ "outputs": {
+  "base_color": "c"
+ }
+}

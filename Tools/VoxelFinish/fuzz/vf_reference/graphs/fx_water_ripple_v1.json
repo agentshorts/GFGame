@@ -1,0 +1,243 @@
+{
+ "schema": "gfgame.effect_graph/1",
+ "id": "fx_water_ripple",
+ "effect_index": 8,
+ "name": "Water Ripple",
+ "description": "Two crossing sine waves; phase offset by the block's world X/Y so neighbouring blocks line up. Live shader eval (not bakeable).",
+ "animated": true,
+ "loop_seconds": 2.0,
+ "nodes": [
+  {
+   "id": "t",
+   "type": "input",
+   "params": {
+    "source": "time"
+   }
+  },
+  {
+   "id": "ux",
+   "type": "input",
+   "params": {
+    "source": "uv",
+    "component": "x"
+   }
+  },
+  {
+   "id": "uy",
+   "type": "input",
+   "params": {
+    "source": "uv",
+    "component": "y"
+   }
+  },
+  {
+   "id": "bx",
+   "type": "input",
+   "params": {
+    "source": "block_world_pos",
+    "component": "x"
+   }
+  },
+  {
+   "id": "by",
+   "type": "input",
+   "params": {
+    "source": "block_world_pos",
+    "component": "y"
+   }
+  },
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "wx",
+   "type": "add",
+   "inputs": [
+    "ux",
+    "bx"
+   ]
+  },
+  {
+   "id": "wy",
+   "type": "add",
+   "inputs": [
+    "uy",
+    "by"
+   ]
+  },
+  {
+   "id": "k1",
+   "type": "const",
+   "params": {
+    "value": 6.283185
+   }
+  },
+  {
+   "id": "kt",
+   "type": "const",
+   "params": {
+    "value": -3.141593
+   }
+  },
+  {
+   "id": "tp",
+   "type": "mul",
+   "inputs": [
+    "t",
+    "kt"
+   ]
+  },
+  {
+   "id": "d1",
+   "type": "add",
+   "inputs": [
+    "wx",
+    "wy"
+   ]
+  },
+  {
+   "id": "p1",
+   "type": "mul",
+   "inputs": [
+    "d1",
+    "k1"
+   ]
+  },
+  {
+   "id": "q1",
+   "type": "add",
+   "inputs": [
+    "p1",
+    "tp"
+   ]
+  },
+  {
+   "id": "s1",
+   "type": "sin",
+   "inputs": [
+    "q1"
+   ]
+  },
+  {
+   "id": "neg",
+   "type": "const",
+   "params": {
+    "value": -1.0
+   }
+  },
+  {
+   "id": "nwy",
+   "type": "mul",
+   "inputs": [
+    "wy",
+    "neg"
+   ]
+  },
+  {
+   "id": "d2",
+   "type": "add",
+   "inputs": [
+    "wx",
+    "nwy"
+   ]
+  },
+  {
+   "id": "p2",
+   "type": "mul",
+   "inputs": [
+    "d2",
+    "k1"
+   ]
+  },
+  {
+   "id": "q2",
+   "type": "add",
+   "inputs": [
+    "p2",
+    "tp"
+   ]
+  },
+  {
+   "id": "s2",
+   "type": "sin",
+   "inputs": [
+    "q2"
+   ]
+  },
+  {
+   "id": "ss",
+   "type": "add",
+   "inputs": [
+    "s1",
+    "s2"
+   ]
+  },
+  {
+   "id": "e0",
+   "type": "const",
+   "params": {
+    "value": 0.2
+   }
+  },
+  {
+   "id": "e1",
+   "type": "const",
+   "params": {
+    "value": 1.6
+   }
+  },
+  {
+   "id": "crest",
+   "type": "smoothstep",
+   "inputs": [
+    "e0",
+    "e1",
+    "ss"
+   ]
+  },
+  {
+   "id": "col",
+   "type": "lerp",
+   "inputs": [
+    "pa",
+    "pb",
+    "crest"
+   ]
+  },
+  {
+   "id": "k_em",
+   "type": "const",
+   "params": {
+    "value": 0.6
+   }
+  },
+  {
+   "id": "em",
+   "type": "mul",
+   "inputs": [
+    "crest",
+    "k_em"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "col",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 0,
+  "palette_a": "#2F6F73",
+  "palette_b": "#4FC3F7"
+ }
+}

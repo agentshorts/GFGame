@@ -157,7 +157,7 @@ struct GFARENA_API FGFArenaUnit
 	GENERATED_BODY()
 
 	UPROPERTY() int32 Id = 0;
-	/** 0 = her side (players), 1 = opponents. */
+	/** 0 = the players' side, 1 = opponents. */
 	UPROPERTY() int32 Team = 0;
 	UPROPERTY() FString OwnerKey;
 	UPROPERTY() FGuid CompanionId;

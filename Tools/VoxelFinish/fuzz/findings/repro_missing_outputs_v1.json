@@ -1,0 +1,22 @@
+{
+ "schema": "voxelfinish.effect_graph/2",
+ "effect_id": "fx_repro_missing_outputs",
+ "name": "missing outputs",
+ "animated": false,
+ "nodes": [
+  {
+   "id": "c",
+   "type": "const",
+   "params": {
+    "value": 0.25
+   }
+  }
+ ],
+ "rev": {
+  "number": 1,
+  "parent_rev": null,
+  "hash": "sha256:7e925537b64577642f05f151dde5d6c3c129f89bb76820a5229d29263eae44a7",
+  "note": "repro",
+  "created": "2026-10-30T00:00:00Z"
+ }
+}

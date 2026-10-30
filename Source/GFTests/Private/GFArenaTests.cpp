@@ -126,7 +126,7 @@ bool FGFArenaMathTest::RunTest(const FString&)
 	{
 		FGFArenaSim Sim;
 		Sim.Init(7, EGFArenaAI::Normal, EGFArenaAI::Normal);
-		const int32 A = Sim.AddUnit(D, 0, Dino(TEXT("Her"), TEXT("Sailback"), 3, 1));
+		const int32 A = Sim.AddUnit(D, 0, Dino(TEXT("Owner"), TEXT("Sailback"), 3, 1));
 		const int32 B = Sim.AddUnit(D, 1, Dino(FString(), TEXT("Rex"), 1, 1));
 		ZeroCooldowns(Sim);
 		Sim.Find(B)->Pos = Sim.Find(A)->Pos + FVector2D(150.f, 0.f);
@@ -135,7 +135,7 @@ bool FGFArenaMathTest::RunTest(const FString&)
 			SetStatus(*Sim.Find(B), EGFArenaStatus::Wet, 5.f);
 		}
 		const float Before = Sim.Find(B)->HP;
-		Sim.ApplyCommands(D, { Cmd(TEXT("Her"), A, 2, B) });
+		Sim.ApplyCommands(D, { Cmd(TEXT("Owner"), A, 2, B) });
 		const float Dealt = Before - Sim.Find(B)->HP;
 		const float Expected = Sim.Find(A)->Attack * 1.6f * (bWet ? 2.f : 1.f);
 		TestEqual(bWet ? TEXT("Tidal Snap x2 vs Wet") : TEXT("Tidal Snap plain"), Dealt, Expected, 0.01f);
@@ -145,11 +145,11 @@ bool FGFArenaMathTest::RunTest(const FString&)
 	{
 		FGFArenaSim Sim;
 		Sim.Init(8, EGFArenaAI::Normal, EGFArenaAI::Normal);
-		const int32 A = Sim.AddUnit(D, 0, Dino(TEXT("Her"), TEXT("Sailback"), 1, 1));
+		const int32 A = Sim.AddUnit(D, 0, Dino(TEXT("Owner"), TEXT("Sailback"), 1, 1));
 		const int32 B = Sim.AddUnit(D, 1, Dino(FString(), TEXT("Raptor"), 1, 1));
 		ZeroCooldowns(Sim);
 		Sim.Find(B)->Pos = Sim.Find(A)->Pos + FVector2D(300.f, 0.f);
-		Sim.ApplyCommands(D, { Cmd(TEXT("Her"), A, 0, INDEX_NONE) });
+		Sim.ApplyCommands(D, { Cmd(TEXT("Owner"), A, 0, INDEX_NONE) });
 		TestTrue(TEXT("Raptor taunted"), Sim.Find(B)->Has(EGFArenaStatus::Taunt));
 		TestEqual(TEXT("Taunted by the Sailback"), Sim.Find(B)->TauntBy, A);
 		TestTrue(TEXT("Sailback guarded"), Sim.Find(A)->Has(EGFArenaStatus::Guard));
@@ -172,7 +172,7 @@ bool FGFArenaAutoSimTest::RunTest(const FString&)
 		const int32 Level = R.RandRange(1, 6);
 		for (int32 i = 0; i < 3; ++i)
 		{
-			Sim.AddUnit(D, 0, Dino(TEXT("Her"), Species[R.RandHelper(Species.Num())], Level, i * 2));
+			Sim.AddUnit(D, 0, Dino(TEXT("Owner"), Species[R.RandHelper(Species.Num())], Level, i * 2));
 		}
 		const int32 Opp = R.RandRange(3, 4);
 		for (int32 i = 0; i < Opp; ++i)
@@ -204,10 +204,10 @@ bool FGFArenaAutoSimTest::RunTest(const FString&)
 			Abilities += U.AbilitiesUsed;
 		}
 	}
-	AddInfo(FString::Printf(TEXT("Arena: %d/%d/%d (her/opp/draw), longest %.1fs, worst idle %.2fs, %d abilities"), Wins[0], Wins[1], Draws, Longest, WorstIdle, Abilities));
+	AddInfo(FString::Printf(TEXT("Arena: %d/%d/%d (own/opp/draw), longest %.1fs, worst idle %.2fs, %d abilities"), Wins[0], Wins[1], Draws, Longest, WorstIdle, Abilities));
 	TestTrue(TEXT("Every fight ends within 180 s"), Longest <= FGFArenaSim::MaxSeconds + 0.1f);
 	TestTrue(TEXT("No dino stands stuck 3 s"), WorstIdle < 3.f);
-	TestTrue(TEXT("Her side wins some"), Wins[0] > 0);
+	TestTrue(TEXT("Player side wins some"), Wins[0] > 0);
 	TestTrue(TEXT("Opponents win some"), Wins[1] > 0);
 	TestTrue(TEXT("Timeouts under 5 %"), Draws < Fights / 20);
 	TestTrue(TEXT("Abilities get used"), Abilities > Fights);
@@ -243,24 +243,24 @@ bool FGFArenaCommandsTest::RunTest(const FString&)
 	const FGFArenaData& D = FGFArenaData::Get();
 	FGFArenaSim Sim;
 	Sim.Init(11, EGFArenaAI::Normal, EGFArenaAI::Normal);
-	const int32 Rex = Sim.AddUnit(D, 0, Dino(TEXT("Her"), TEXT("Rex"), 3, 1));
-	const int32 Nip = Sim.AddUnit(D, 0, Dino(TEXT("Her"), TEXT("Nipper"), 1, 3));
+	const int32 Rex = Sim.AddUnit(D, 0, Dino(TEXT("Owner"), TEXT("Rex"), 3, 1));
+	const int32 Nip = Sim.AddUnit(D, 0, Dino(TEXT("Owner"), TEXT("Nipper"), 1, 3));
 	const int32 Foe = Sim.AddUnit(D, 1, Dino(FString(), TEXT("Sailback"), 1, 1));
 	const int32 Far = Sim.AddUnit(D, 1, Dino(FString(), TEXT("Hornback"), 1, 5));
 
 	auto Check = [&](const FGFArenaCommand& C) { return Sim.CheckCommand(D, C).ToString(); };
 	TestEqual(TEXT("Only the owner commands"), Check(Cmd(TEXT("Friend"), Rex, 0, Foe)), FString(TEXT("NotOwner")));
-	TestEqual(TEXT("Opponents can't be commanded"), Check(Cmd(TEXT("Her"), Foe, 0, Rex)), FString(TEXT("NotOwner")));
-	TestEqual(TEXT("Ability 3 locked at level 1"), Check(Cmd(TEXT("Her"), Nip, 2, INDEX_NONE)), FString(TEXT("Locked")));
-	TestEqual(TEXT("Cooling down"), Check(Cmd(TEXT("Her"), Rex, 0, INDEX_NONE)), FString(TEXT("Cooldown")));
+	TestEqual(TEXT("Opponents can't be commanded"), Check(Cmd(TEXT("Owner"), Foe, 0, Rex)), FString(TEXT("NotOwner")));
+	TestEqual(TEXT("Ability 3 locked at level 1"), Check(Cmd(TEXT("Owner"), Nip, 2, INDEX_NONE)), FString(TEXT("Locked")));
+	TestEqual(TEXT("Cooling down"), Check(Cmd(TEXT("Owner"), Rex, 0, INDEX_NONE)), FString(TEXT("Cooldown")));
 	ZeroCooldowns(Sim);
-	TestEqual(TEXT("Own dino isn't a target"), Check(Cmd(TEXT("Her"), Nip, 0, Rex)), FString(TEXT("BadTarget")));
-	TestEqual(TEXT("Ok"), Check(Cmd(TEXT("Her"), Rex, 0, INDEX_NONE)), FString(TEXT("Ok")));
+	TestEqual(TEXT("Own dino isn't a target"), Check(Cmd(TEXT("Owner"), Nip, 0, Rex)), FString(TEXT("BadTarget")));
+	TestEqual(TEXT("Ok"), Check(Cmd(TEXT("Owner"), Rex, 0, INDEX_NONE)), FString(TEXT("Ok")));
 
 	// Roar (area stun) goes off at once in range; the Nipper's Swarm Nip on the far Hornback waits and walks there.
 	Sim.Find(Foe)->Pos = Sim.Find(Rex)->Pos + FVector2D(200.f, 0.f);
 	Sim.Find(Far)->Pos = FVector2D(1000.f, 600.f);
-	Sim.ApplyCommands(D, { Cmd(TEXT("Her"), Rex, 0, INDEX_NONE), Cmd(TEXT("Her"), Nip, 0, Far) });
+	Sim.ApplyCommands(D, { Cmd(TEXT("Owner"), Rex, 0, INDEX_NONE), Cmd(TEXT("Owner"), Nip, 0, Far) });
 	TestTrue(TEXT("Roar stunned the Sailback"), Sim.Find(Foe)->Has(EGFArenaStatus::Stun));
 	TestEqual(TEXT("Roar on cooldown"), Sim.Find(Rex)->Cooldowns[0], 16.f, 0.001f);
 	TestEqual(TEXT("Swarm Nip pending"), Sim.Find(Nip)->CommandSlot, 0);
@@ -284,34 +284,34 @@ bool FGFArenaPossessionTest::RunTest(const FString&)
 	const FGFArenaData& D = FGFArenaData::Get();
 	FGFArenaSim Sim;
 	Sim.Init(12, EGFArenaAI::Normal, EGFArenaAI::Normal);
-	const int32 A = Sim.AddUnit(D, 0, Dino(TEXT("Her"), TEXT("Rex"), 1, 1));
-	const int32 B = Sim.AddUnit(D, 0, Dino(TEXT("Her"), TEXT("Raptor"), 1, 4));
+	const int32 A = Sim.AddUnit(D, 0, Dino(TEXT("Owner"), TEXT("Rex"), 1, 1));
+	const int32 B = Sim.AddUnit(D, 0, Dino(TEXT("Owner"), TEXT("Raptor"), 1, 4));
 	Sim.AddUnit(D, 1, Dino(FString(), TEXT("Hornback"), 1, 1));
 
-	TestEqual(TEXT("Not hers"), Sim.Possess(TEXT("Friend"), A).ToString(), FString(TEXT("NotOwner")));
-	TestEqual(TEXT("Possess"), Sim.Possess(TEXT("Her"), A).ToString(), FString(TEXT("Ok")));
-	TestEqual(TEXT("Possessing A"), Sim.PossessedBy(TEXT("Her")), A);
+	TestEqual(TEXT("Not theirs"), Sim.Possess(TEXT("Friend"), A).ToString(), FString(TEXT("NotOwner")));
+	TestEqual(TEXT("Possess"), Sim.Possess(TEXT("Owner"), A).ToString(), FString(TEXT("Ok")));
+	TestEqual(TEXT("Possessing A"), Sim.PossessedBy(TEXT("Owner")), A);
 	const float X0 = Sim.Find(A)->Pos.X;
-	TestEqual(TEXT("Input"), Sim.SetInput(TEXT("Her"), FVector2D(1.f, 0.f), false, INDEX_NONE).ToString(), FString(TEXT("Ok")));
+	TestEqual(TEXT("Input"), Sim.SetInput(TEXT("Owner"), FVector2D(1.f, 0.f), false, INDEX_NONE).ToString(), FString(TEXT("Ok")));
 	for (int32 i = 0; i < 10; ++i)
 	{
 		Sim.Step(D, FGFArenaSim::StepSeconds);
 	}
-	TestTrue(TEXT("She steers it"), Sim.Find(A)->Pos.X > X0 + 50.f);
-	TestEqual(TEXT("Cycle to B"), Sim.Cycle(TEXT("Her")), B);
+	TestTrue(TEXT("The player steers it"), Sim.Find(A)->Pos.X > X0 + 50.f);
+	TestEqual(TEXT("Cycle to B"), Sim.Cycle(TEXT("Owner")), B);
 	TestTrue(TEXT("A back on AI"), Sim.Find(A)->PossessedBy.IsEmpty() && Sim.Find(A)->MoveInput.IsNearlyZero());
-	TestEqual(TEXT("Cycle back to A"), Sim.Cycle(TEXT("Her")), A);
+	TestEqual(TEXT("Cycle back to A"), Sim.Cycle(TEXT("Owner")), A);
 
-	// Her dino faints under her control: she hops to the next one.
+	// The player's dino faints under their control: they hop to the next one.
 	Sim.Find(A)->HP = 0.5f;
 	SetStatus(*Sim.Find(A), EGFArenaStatus::Burn, 5.f);
 	Sim.Step(D, FGFArenaSim::StepSeconds);
 	TestTrue(TEXT("A fainted"), Sim.Find(A)->bFainted);
-	TestEqual(TEXT("Auto-cycled to B"), Sim.PossessedBy(TEXT("Her")), B);
-	TestEqual(TEXT("Can't possess a fainted dino"), Sim.Possess(TEXT("Her"), A).ToString(), FString(TEXT("Fainted")));
-	Sim.Release(TEXT("Her"));
-	TestEqual(TEXT("Back on the balcony"), Sim.PossessedBy(TEXT("Her")), int32(INDEX_NONE));
-	TestEqual(TEXT("No input when not possessing"), Sim.SetInput(TEXT("Her"), FVector2D(1.f, 0.f), true, 0).ToString(), FString(TEXT("NotPossessing")));
+	TestEqual(TEXT("Auto-cycled to B"), Sim.PossessedBy(TEXT("Owner")), B);
+	TestEqual(TEXT("Can't possess a fainted dino"), Sim.Possess(TEXT("Owner"), A).ToString(), FString(TEXT("Fainted")));
+	Sim.Release(TEXT("Owner"));
+	TestEqual(TEXT("Back on the balcony"), Sim.PossessedBy(TEXT("Owner")), int32(INDEX_NONE));
+	TestEqual(TEXT("No input when not possessing"), Sim.SetInput(TEXT("Owner"), FVector2D(1.f, 0.f), true, 0).ToString(), FString(TEXT("NotPossessing")));
 	return true;
 }
 
@@ -338,7 +338,7 @@ bool FGFArenaWagerSafeguardsTest::RunTest(const FString&)
 	TestTrue(TEXT("At most 3 stacks"), Check({ FGFItemStack(TEXT("Wood"), 1), FGFItemStack(TEXT("Stone"), 1), FGFItemStack(TEXT("Clay"), 1), FGFItemStack(TEXT("Amber"), 1) }) == EGFWagerCheck::TooManyStacks);
 	TestTrue(TEXT("Furniture never"), Check({ FGFItemStack(TEXT("Chair"), 1) }) == EGFWagerCheck::NotWagerable);
 	TestTrue(TEXT("Dinos never"), Check({ FGFItemStack(TEXT("Raptor"), 1) }) == EGFWagerCheck::NotWagerable);
-	TestTrue(TEXT("Only what she has"), Check({ FGFItemStack(TEXT("Wood"), 25) }) == EGFWagerCheck::Insufficient);
+	TestTrue(TEXT("Only what the player has"), Check({ FGFItemStack(TEXT("Wood"), 25) }) == EGFWagerCheck::Insufficient);
 	TestTrue(TEXT("25 % cap"), Check({ FGFItemStack(TEXT("Amber"), 4) }) == EGFWagerCheck::OverCap);
 	FGFRecipeRow Pinned;
 	Pinned.Inputs.Add(FGFItemStack(TEXT("Amber"), 9));
@@ -473,15 +473,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFEconomyForfeitTest, "GFGame.Economy.Forfeit"
 bool FGFEconomyForfeitTest::RunTest(const FString&)
 {
 	FGFMapLedgerAccounts A;
-	A.Accounts.Add(TEXT("Her")).Add(TEXT("Amber"), 10);
+	A.Accounts.Add(TEXT("Owner")).Add(TEXT("Amber"), 10);
 	FGFTransferLedger L;
 	const FGuid Wager = FGuid::NewGuid();
 	L.OpenEscrow(Wager, TEXT("Wager"));
-	TestTrue(TEXT("Stake in"), L.Deposit(A, FGuid::NewGuid(), Wager, TEXT("Her"), { FGFItemStack(TEXT("Amber"), 3) }) == EGFTxResult::Applied);
+	TestTrue(TEXT("Stake in"), L.Deposit(A, FGuid::NewGuid(), Wager, TEXT("Owner"), { FGFItemStack(TEXT("Amber"), 3) }) == EGFTxResult::Applied);
 	const FGuid Tx = FGuid::NewGuid();
 	TestTrue(TEXT("Lost wager forfeits"), L.Forfeit(Tx, Wager, TEXT("Lost")) == EGFTxResult::Applied);
 	TestTrue(TEXT("Replay is a no-op"), L.Forfeit(Tx, Wager, TEXT("Lost")) == EGFTxResult::AlreadyApplied);
-	TestEqual(TEXT("She keeps the rest"), A.Accounts[TEXT("Her")].GetCount(TEXT("Amber")), 7);
+	TestEqual(TEXT("The player keeps the rest"), A.Accounts[TEXT("Owner")].GetCount(TEXT("Amber")), 7);
 	TestEqual(TEXT("Nothing held"), L.HeldInEscrow(TEXT("Amber")), int64(0));
 	TestEqual(TEXT("Counted as burned"), L.GetBurned(TEXT("Amber")), int64(3));
 	TestTrue(TEXT("Can't refund after"), L.Refund(A, FGuid::NewGuid(), Wager) == EGFTxResult::EscrowClosed);

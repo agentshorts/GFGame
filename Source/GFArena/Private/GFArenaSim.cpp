@@ -418,7 +418,7 @@ void FGFArenaSim::OnFainted(FGFArenaUnit& U)
 	{
 		const FString Key = U.PossessedBy;
 		U.PossessedBy.Reset();
-		// Her dino fainted under her control: hop to her next living dino (or back to the balcony).
+		// The player's dino fainted under their control: hop to their next living dino (or back to the balcony).
 		for (const FGFArenaUnit& Next : Units)
 		{
 			if (Next.OwnerKey == Key && Next.IsAlive() && Next.PossessedBy.IsEmpty())
@@ -673,7 +673,7 @@ void FGFArenaSim::TickUnit(const FGFArenaData& Data, FGFArenaUnit& U, float Dt)
 		return;
 	}
 
-	// Direct control: her input goes through the same ability and attack paths.
+	// Direct control: the player's input goes through the same ability and attack paths.
 	if (!U.PossessedBy.IsEmpty())
 	{
 		if (!U.MoveInput.IsNearlyZero() && !U.Has(EGFArenaStatus::Root))

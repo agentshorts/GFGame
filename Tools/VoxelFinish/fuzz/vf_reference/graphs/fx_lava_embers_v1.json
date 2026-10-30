@@ -1,0 +1,107 @@
+{
+ "schema": "voxelfinish.effect_graph/2",
+ "effect_id": "fx_lava_embers",
+ "effect_index": 12,
+ "name": "Lava Embers",
+ "description": "Lava flow whose glow flickers like embers (3 Hz, +/-20 %). SubEffect: fx_lava_flow (pinned r2). The full fx_ember_flicker can't be nested here: lava + ember flatten to about 45 nodes, over the 32 limit, so only its flicker term is reused.",
+ "animated": true,
+ "loop_seconds": 4.0,
+ "nodes": [
+  {
+   "id": "lava",
+   "type": "subeffect",
+   "params": {
+    "ref": {
+     "effect_id": "fx_lava_flow",
+     "rev": 2
+    },
+    "args": {
+     "heat": 2.5
+    }
+   }
+  },
+  {
+   "id": "t",
+   "type": "input",
+   "params": {
+    "source": "time"
+   }
+  },
+  {
+   "id": "w3",
+   "type": "const",
+   "params": {
+    "value": 18.849555
+   }
+  },
+  {
+   "id": "a3",
+   "type": "mul",
+   "inputs": [
+    "t",
+    "w3"
+   ]
+  },
+  {
+   "id": "s3",
+   "type": "sin",
+   "inputs": [
+    "a3"
+   ]
+  },
+  {
+   "id": "kf",
+   "type": "const",
+   "params": {
+    "value": 0.2
+   }
+  },
+  {
+   "id": "fl",
+   "type": "mul",
+   "inputs": [
+    "s3",
+    "kf"
+   ]
+  },
+  {
+   "id": "one",
+   "type": "const",
+   "params": {
+    "value": 1.0
+   }
+  },
+  {
+   "id": "gain",
+   "type": "add",
+   "inputs": [
+    "one",
+    "fl"
+   ]
+  },
+  {
+   "id": "em",
+   "type": "mul",
+   "inputs": [
+    "lava.emissive_strength",
+    "gain"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "lava.base_color",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 0,
+  "palette_a": "#3A3533",
+  "palette_b": "#D9733B"
+ },
+ "rev": {
+  "number": 1,
+  "parent_rev": null,
+  "hash": "sha256:c0af1d79f46d11155ce17975f57a49152b5d79457471e7a161d9a13c8a30957c",
+  "note": "initial composite",
+  "created": "2026-10-30T05:45:00Z"
+ }
+}

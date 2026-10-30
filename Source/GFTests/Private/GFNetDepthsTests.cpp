@@ -1,7 +1,7 @@
 // Hallow Night over the network (PLAN.md M7 Net.Depths): depths unlock in order, the server runs the 2.5D
 // mover from client input and every machine sees the bodies, Z/X/C platforms are shared (anyone works them,
 // one cooldown, same position on every machine from server time), a downed friend can be revived, fainting
-// loses half the unbanked loot, checkpoints and Lift Home bank into her bag, finishing a depth opens the next,
+// loses half the unbanked loot, checkpoints and Lift Home bank into the player's bag, finishing a depth opens the next,
 // and a drop mid-run keeps the faint share.
 #include "GFNetTestUtils.h"
 #include "GFGameState.h"
@@ -132,10 +132,10 @@ bool FGFNetDepthsTest::RunTest(const FString&)
 		TestEqual(TEXT("Already in"), Code(*Run, TEXT("Twice")), FString(TEXT("AlreadyIn")));
 		TestEqual(TEXT("Not in a run yet"), Code(*Run, TEXT("NotIn")), FString(TEXT("NotInRun")));
 		TestEqual(TEXT("Friend joins"), Code(*Run, TEXT("Enter2")), FString(TEXT("Ok")));
-		// Client 1 runs right and jumps; the server moves her and everyone sees it.
+		// Client 1 runs right and jumps; the server moves them and everyone sees it.
 		Send(*Run, 0, TEXT("Run"), TEXT("Input"), [](FGFModeRequest& R) { R.Floats = { 1.f }; R.Ints = { 0, 0, 0 }; });
 	});
-	WaitUntil(Ctx, TEXT("both clients see her run"), 10.f, [Run]()
+	WaitUntil(Ctx, TEXT("both clients see the player run"), 10.f, [Run]()
 	{
 		const FGFDepthsPlayerView* A = ClientView(0, Run->C1);
 		const FGFDepthsPlayerView* B = ClientView(1, Run->C1);
@@ -149,7 +149,7 @@ bool FGFNetDepthsTest::RunTest(const FString&)
 		TestTrue(TEXT("Shades are tougher with a friend"), D && D->Enemies.Num() > 0 && D->Enemies[0].MaxHP == FGFDepthsRules::EnemyHP(2, 1, 2));
 		Send(*Run, 0, TEXT("Hop"), TEXT("Input"), [](FGFModeRequest& R) { R.Floats = { 0.f }; R.Ints = { 1, 1, 0 }; });
 	});
-	WaitUntil(Ctx, TEXT("both clients see her jump"), 10.f, [Run]()
+	WaitUntil(Ctx, TEXT("both clients see the player jump"), 10.f, [Run]()
 	{
 		const FGFDepthsPlayerView* A = ClientView(0, Run->C1);
 		const FGFDepthsPlayerView* B = ClientView(1, Run->C1);
@@ -212,19 +212,19 @@ bool FGFNetDepthsTest::RunTest(const FString&)
 	Do(Ctx, [this, Run]()
 	{
 		TestEqual(TEXT("No heals while down"), Code(*Run, TEXT("DownHeal")), FString(TEXT("CantHeal")));
-		TestEqual(TEXT("Friend revives her"), Code(*Run, TEXT("Revive")), FString(TEXT("Ok")));
+		TestEqual(TEXT("Friend revives the player"), Code(*Run, TEXT("Revive")), FString(TEXT("Ok")));
 		TestEqual(TEXT("Heal 1"), Code(*Run, TEXT("Heal1")), FString(TEXT("Ok")));
 		TestEqual(TEXT("Heal 2"), Code(*Run, TEXT("Heal2")), FString(TEXT("Ok")));
 		TestEqual(TEXT("Full HP"), Code(*Run, TEXT("Full")), FString(TEXT("CantHeal")));
 		AGFDepthsDirector* D = ServerDirector();
 		const FGFDepthsPlayerView* P = D->FindPlayer(Run->C1);
 		TestTrue(TEXT("Revived at 2, healed to 5, one heal left"), P && P->Run.HP == 5 && P->Run.Heals == 1);
-		// Down again with nobody coming: the timer runs out and she faints.
+		// Down again with nobody coming: the timer runs out and the player faints.
 		D->TeleportForTests(Run->C1, FVector2D(100.f, 60.f));
 		D->HitForTests(Run->C1, 5);
 		D->EditPlayerForTests(Run->C1)->Run.DownedLeft = 0.05f;
 	});
-	WaitUntil(Ctx, TEXT("she faints"), 10.f, [Run]()
+	WaitUntil(Ctx, TEXT("the player faints"), 10.f, [Run]()
 	{
 		const FGFDepthsPlayerView* P = ClientView(0, Run->C1);
 		return P && P->Run.Deaths == 1 && !P->Run.bDowned;
@@ -235,10 +235,10 @@ bool FGFNetDepthsTest::RunTest(const FString&)
 		TestEqual(TEXT("Fainting loses half: Moonstone 5 -> 3"), FGFRewards::CountOf(P->Run.Unbanked, TEXT("Moonstone")), 3);
 		TestEqual(TEXT("Stone 3 -> 2"), FGFRewards::CountOf(P->Run.Unbanked, TEXT("Stone")), 2);
 		TestTrue(TEXT("Full HP and heals again"), P->Run.HP == 5 && P->Run.Heals == 3);
-		TestEqual(TEXT("Nothing reached her bag yet"), Client(0)->Inventory->GetInventory().Items.Num(), 0);
+		TestEqual(TEXT("Nothing reached the player's bag yet"), Client(0)->Inventory->GetInventory().Items.Num(), 0);
 		ServerDirector()->TeleportForTests(Run->C1, FGFDepthsLevel::Get(1).Checkpoints[0]);
 	});
-	WaitUntil(Ctx, TEXT("checkpoint banks into her bag"), 10.f, [Run]()
+	WaitUntil(Ctx, TEXT("checkpoint banks into the player's bag"), 10.f, [Run]()
 	{
 		return Client(0)->Inventory->GetCount(TEXT("Moonstone")) == 3 && Client(0)->Inventory->GetCount(TEXT("Stone")) == 2;
 	});
@@ -256,7 +256,7 @@ bool FGFNetDepthsTest::RunTest(const FString&)
 		TestEqual(TEXT("Lift Home only at a lift"), Code(*Run, TEXT("NoLift")), FString(TEXT("NotAtLift")));
 		ServerDirector()->TeleportForTests(Run->C1, FGFDepthsLevel::Get(1).Checkpoints[0]);
 		Send(*Run, 0, TEXT("Lift"), TEXT("LiftHome"));
-		// Her friend finishes the depth.
+		// The player's friend finishes the depth.
 		ServerDirector()->TeleportForTests(Run->C2, FGFDepthsLevel::Get(1).Exit);
 	});
 	WaitUntil(Ctx, TEXT("lift home and the friend at the exit"), 10.f, [Run]()

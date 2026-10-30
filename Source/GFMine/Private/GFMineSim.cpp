@@ -191,7 +191,7 @@ bool FGFMineRules::Tick(FGFMineCrew& Crew, float Dt, FRandomStream& Rng, TArray<
 					bChanged = true;
 					continue;
 				}
-				break; // waits for her order
+				break; // waits for the player's order
 			}
 			const float Use = FMath::Min(Left, P.StateLeft);
 			P.StateLeft -= Use;

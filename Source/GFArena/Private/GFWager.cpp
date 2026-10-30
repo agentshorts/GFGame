@@ -78,7 +78,7 @@ EGFWagerCheck FGFWagerRules::CheckStake(const UDataTable* Items, const FGFInvent
 		const int32 Keep = ProtectedCount(Pinned, S.ItemId);
 		if (Keep > 0 && Inv.GetCount(S.ItemId) - S.Count < Keep)
 		{
-			return EGFWagerCheck::PinnedProtected; // can't stake what her pinned recipe still needs
+			return EGFWagerCheck::PinnedProtected; // can't stake what the player's pinned recipe still needs
 		}
 	}
 	return EGFWagerCheck::Ok;
@@ -99,7 +99,7 @@ TArray<FGFItemStack> FGFWagerRules::Suggest(const UDataTable* Items, const FGFIn
 			Cands.Add({ S.ItemId, Spare, Row->Value });
 		}
 	}
-	// Most plentiful (by value) first, so the suggestion uses what she has lots of.
+	// Most plentiful (by value) first, so the suggestion uses what the player has lots of.
 	Cands.Sort([](const FCand& A, const FCand& B) { return int64(A.Spare) * A.Value != int64(B.Spare) * B.Value ? int64(A.Spare) * A.Value > int64(B.Spare) * B.Value : A.Id.LexicalLess(B.Id); });
 	TArray<FGFItemStack> Out;
 	int64 Total = 0;
@@ -226,7 +226,7 @@ bool FGFWagerRules::CheckCounter(const UDataTable* Items, const TArray<FGFItemSt
 	}
 	if (SameCat * 2 < V)
 	{
-		return Fail(TEXT("under 50% from her categories"));
+		return Fail(TEXT("under 50% from the player's categories"));
 	}
 	return true;
 }
@@ -313,7 +313,7 @@ TArray<FGFItemStack> FGFWagerRules::MatchCounter(const UDataTable* Items, const 
 			return Counter;
 		}
 	}
-	// Fallback: mirror her stake (same items are always same-category), minus anything exclusive.
+	// Fallback: mirror the player's stake (same items are always same-category), minus anything exclusive.
 	TArray<FGFItemStack> Mirror;
 	for (const FGFItemStack& S : Stake)
 	{

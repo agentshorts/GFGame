@@ -53,7 +53,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMineCaptureTest, "GFGame.Mine.Capture", GFMi
 bool FGFMineCaptureTest::RunTest(const FString&)
 {
 	FGFPlayerProgress P;
-	TestTrue(TEXT("Locked before her first tame"), FGFMineRules::CheckCapture(P, 50.f) == EGFMineOrder::Locked);
+	TestTrue(TEXT("Locked before the player's first tame"), FGFMineRules::CheckCapture(P, 50.f) == EGFMineOrder::Locked);
 	P.bHasTamed = true;
 	TestTrue(TEXT("Rushing in startles it"), FGFMineRules::CheckCapture(P, 400.f) == EGFMineOrder::Startled);
 	TestTrue(TEXT("Sneaking up works"), FGFMineRules::CheckCapture(P, 150.f) == EGFMineOrder::Ok);
@@ -86,7 +86,7 @@ bool FGFMineCrewTest::RunTest(const FString&)
 	Run(Crew, 20.f + 60.f + 1.f, Rng, Home);
 	TestTrue(TEXT("Digging after one load"), Crew.Find(A)->State == EGFPebblingState::Work && Crew.Find(A)->Loads == 1);
 	Run(Crew, 3600.f, Rng, Home);
-	TestTrue(TEXT("Satchel full: waits for her order"), Crew.Find(A)->State == EGFPebblingState::Full && Crew.Find(B)->State == EGFPebblingState::Full);
+	TestTrue(TEXT("Satchel full: waits for the player's order"), Crew.Find(A)->State == EGFPebblingState::Full && Crew.Find(B)->State == EGFPebblingState::Full);
 	TestEqual(TEXT("Nothing comes home without an order"), Home.Num(), 0);
 	TestTrue(TEXT("A mined only the Shallows"), OnlyFrom(TEXT("Shallows"), Crew.Find(A)->Carry));
 	TestTrue(TEXT("B mined only the Glow Grotto"), OnlyFrom(TEXT("GlowGrotto"), Crew.Find(B)->Carry));

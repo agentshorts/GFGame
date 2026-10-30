@@ -1,0 +1,233 @@
+{
+ "schema": "voxelfinish.effect_graph/2",
+ "effect_id": "fx_shimmer",
+ "effect_index": 1,
+ "name": "Shimmer",
+ "description": "A soft diagonal highlight band sweeps across the face once per loop.",
+ "animated": true,
+ "loop_seconds": 2.0,
+ "exposed": [
+  {
+   "name": "base",
+   "kind": "input",
+   "type": "v3",
+   "node": "base",
+   "description": "colour underneath the effect (default: palette_a/palette_b by pattern)"
+  },
+  {
+   "name": "band_strength",
+   "kind": "param",
+   "type": "f",
+   "node": "k_amt",
+   "default": 0.6,
+   "min": 0.0,
+   "max": 1.0,
+   "description": "how white the sweeping band gets"
+  },
+  {
+   "name": "band_glow",
+   "kind": "param",
+   "type": "f",
+   "node": "k_em",
+   "default": 1.5,
+   "min": 0.0,
+   "max": 8.0,
+   "description": "emissive strength of the band"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "t",
+   "type": "input",
+   "params": {
+    "source": "time"
+   }
+  },
+  {
+   "id": "ux",
+   "type": "input",
+   "params": {
+    "source": "uv",
+    "component": "x"
+   }
+  },
+  {
+   "id": "uy",
+   "type": "input",
+   "params": {
+    "source": "uv",
+    "component": "y"
+   }
+  },
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "pm",
+   "type": "input",
+   "params": {
+    "source": "pattern_mask"
+   }
+  },
+  {
+   "id": "base",
+   "type": "lerp",
+   "inputs": [
+    "pa",
+    "pb",
+    "pm"
+   ]
+  },
+  {
+   "id": "diag",
+   "type": "add",
+   "inputs": [
+    "ux",
+    "uy"
+   ]
+  },
+  {
+   "id": "k_freq",
+   "type": "const",
+   "params": {
+    "value": 3.141593
+   }
+  },
+  {
+   "id": "d1",
+   "type": "mul",
+   "inputs": [
+    "diag",
+    "k_freq"
+   ]
+  },
+  {
+   "id": "k_speed",
+   "type": "const",
+   "params": {
+    "value": -3.141593
+   }
+  },
+  {
+   "id": "tp",
+   "type": "mul",
+   "inputs": [
+    "t",
+    "k_speed"
+   ]
+  },
+  {
+   "id": "ph",
+   "type": "add",
+   "inputs": [
+    "d1",
+    "tp"
+   ]
+  },
+  {
+   "id": "s",
+   "type": "sin",
+   "inputs": [
+    "ph"
+   ]
+  },
+  {
+   "id": "e0",
+   "type": "const",
+   "params": {
+    "value": 0.75
+   }
+  },
+  {
+   "id": "e1",
+   "type": "const",
+   "params": {
+    "value": 1.0
+   }
+  },
+  {
+   "id": "band",
+   "type": "smoothstep",
+   "inputs": [
+    "e0",
+    "e1",
+    "s"
+   ]
+  },
+  {
+   "id": "white",
+   "type": "const",
+   "params": {
+    "value": [
+     1.0,
+     1.0,
+     1.0
+    ]
+   }
+  },
+  {
+   "id": "k_amt",
+   "type": "const",
+   "params": {
+    "value": 0.6
+   }
+  },
+  {
+   "id": "amt",
+   "type": "mul",
+   "inputs": [
+    "band",
+    "k_amt"
+   ]
+  },
+  {
+   "id": "col",
+   "type": "lerp",
+   "inputs": [
+    "base",
+    "white",
+    "amt"
+   ]
+  },
+  {
+   "id": "k_em",
+   "type": "const",
+   "params": {
+    "value": 1.5
+   }
+  },
+  {
+   "id": "em",
+   "type": "mul",
+   "inputs": [
+    "band",
+    "k_em"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "col",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 2
+ },
+ "rev": {
+  "number": 2,
+  "parent_rev": 1,
+  "hash": "sha256:52e528fdcb427dccd9f844e4be5a1e99725793983a53697dcf6d9983c316e961",
+  "note": "expose base input, band_strength, band_glow",
+  "created": "2026-10-30T05:45:00Z"
+ }
+}

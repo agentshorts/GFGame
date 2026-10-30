@@ -21,3 +21,23 @@ void UGFRhythmSettings::SaveSettings()
 {
 	SaveConfig();
 }
+
+TArray<FGFAudioOutputDevice> UGFRhythmSettings::GetListenToOptions()
+{
+	return FGFWasapiLoopback::EnumerateOutputDevices();
+}
+
+FString UGFRhythmSettings::GetListenToLabel() const
+{
+	if (!ListenDeviceId.IsEmpty())
+	{
+		for (const FGFAudioOutputDevice& D : GetListenToOptions())
+		{
+			if (D.Id == ListenDeviceId)
+			{
+				return D.FriendlyName;
+			}
+		}
+	}
+	return TEXT("System default output");
+}

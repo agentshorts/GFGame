@@ -108,7 +108,7 @@ bool FGFLandRules::CanEdit(const FGFLandState& Land, const FString& Key, bool bI
 {
 	if (bIsHost)
 	{
-		return true; // she can fix or decorate anything, guest plots included
+		return true; // the host can fix or decorate anything, guest plots included
 	}
 	const FGFLandPlot* Plot = Land.PlotAt(Cell);
 	if (!Plot)
@@ -122,7 +122,7 @@ bool FGFLandRules::CanEdit(const FGFLandState& Land, const FString& Key, bool bI
 	}
 	if (Plot->Kind == EGFPlotKind::Home)
 	{
-		OutReason = TEXT("her home plot");
+		OutReason = TEXT("the host's home plot");
 		return false;
 	}
 	if (Plot->TenantKey != Key || Key.IsEmpty())

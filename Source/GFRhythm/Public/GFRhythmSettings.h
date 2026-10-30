@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
+#include "GFWasapiLoopback.h"
 #include "GFRhythmSettings.generated.h"
 
 /**
@@ -35,6 +36,18 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "GF|Rhythm")
 	bool UsesSystemDefault() const { return ListenDeviceId.IsEmpty(); }
+
+	/** "Listen to" choices: "System default output" first, then active output devices only (never inputs). */
+	UFUNCTION(BlueprintCallable, Category = "GF|Rhythm")
+	static TArray<FGFAudioOutputDevice> GetListenToOptions();
+
+	/** Label for the current choice ("System default output" or the device's friendly name). */
+	UFUNCTION(BlueprintCallable, Category = "GF|Rhythm")
+	FString GetListenToLabel() const;
+
+	/** Back to the default: follow the system default output. */
+	UFUNCTION(BlueprintCallable, Category = "GF|Rhythm")
+	void ResetListenToDefault() { ListenDeviceId.Reset(); }
 
 	UFUNCTION(BlueprintCallable, Category = "GF|Rhythm")
 	void SetListenDevice(const FString& EndpointIdOrEmptyForDefault);

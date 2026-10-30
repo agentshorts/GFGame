@@ -1,0 +1,64 @@
+{
+ "schema": "voxelfinish.effect_graph/2",
+ "effect_id": "fx_shimmer_over_pulse",
+ "effect_index": 11,
+ "name": "Shimmer over Pulse",
+ "description": "A breathing glow with a highlight band sweeping over it. SubEffects: fx_pulse_glow (pinned r2) feeds its colour into fx_shimmer (latest).",
+ "animated": true,
+ "loop_seconds": 2.0,
+ "nodes": [
+  {
+   "id": "pulse",
+   "type": "subeffect",
+   "params": {
+    "ref": {
+     "effect_id": "fx_pulse_glow",
+     "rev": 2
+    },
+    "args": {
+     "glow_range": 2.0
+    }
+   }
+  },
+  {
+   "id": "shim",
+   "type": "subeffect",
+   "params": {
+    "ref": {
+     "effect_id": "fx_shimmer",
+     "rev": "latest"
+    },
+    "args": {
+     "band_strength": 0.7
+    },
+    "wires": {
+     "base": "pulse.base_color"
+    }
+   }
+  },
+  {
+   "id": "em",
+   "type": "add",
+   "inputs": [
+    "pulse.emissive_strength",
+    "shim.emissive_strength"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "shim.base_color",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 3,
+  "palette_a": "#A98BFF",
+  "palette_b": "#FFD23F"
+ },
+ "rev": {
+  "number": 1,
+  "parent_rev": null,
+  "hash": "sha256:009d245be7686198297ebbe18a60ed1de9538c08beccff37baac93b998ac3461",
+  "note": "initial composite",
+  "created": "2026-10-30T05:45:00Z"
+ }
+}

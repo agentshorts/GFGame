@@ -1,4 +1,4 @@
-// Overtime over the network: each player runs her own shift (friends see each other's), searches take time and
+// Overtime over the network: each player runs their own shift (friends see each other's), searches take time and
 // one pile at a time, extracting brings everything home, a drop mid-shift keeps 75 %, lockdown seals the doors
 // at 75 %, the Lab Bench turns junk into gear through the ledger, and a Calming Mist settles a hostile dino.
 #include "GFNetTestUtils.h"
@@ -172,7 +172,7 @@ bool FGFNetLabTest::RunTest(const FString&)
 		TestEqual(TEXT("Searching"), Code(*Run, TEXT("Search0")), FString(TEXT("Ok")));
 		TestEqual(TEXT("One pile at a time"), Code(*Run, TEXT("Busy")), FString(TEXT("Busy")));
 		TestEqual(TEXT("No such pile"), Code(*Run, TEXT("Bad")), FString(TEXT("BadPile")));
-		TestEqual(TEXT("Friend starts her own"), Code(*Run, TEXT("Enter2")), FString(TEXT("Ok")));
+		TestEqual(TEXT("Friend starts their own"), Code(*Run, TEXT("Enter2")), FString(TEXT("Ok")));
 	});
 	WaitUntil(Ctx, TEXT("both clients see pile 0 searched"), 10.f, [Run]()
 	{
@@ -205,7 +205,7 @@ bool FGFNetLabTest::RunTest(const FString&)
 		Run->Before = R->Unbanked;
 		Send(*Run, 0, TEXT("Extract"), TEXT("Extract"));
 	});
-	WaitUntil(Ctx, TEXT("extract lands in her bag"), 10.f, [Run]() { return HaveAll(*Run, { TEXT("Extract") }) && Bag(0, TEXT("CircuitInk")) >= 2; });
+	WaitUntil(Ctx, TEXT("extract lands in the player's bag"), 10.f, [Run]() { return HaveAll(*Run, { TEXT("Extract") }) && Bag(0, TEXT("CircuitInk")) >= 2; });
 	Do(Ctx, [this, Run]()
 	{
 		const FGFModeResult* R = Result(*Run, TEXT("Extract"));
@@ -255,7 +255,7 @@ bool FGFNetLabTest::RunTest(const FString&)
 		Send(*Run, 0, TEXT("Chair"), TEXT("Craft"), [](FGFModeRequest& R) { R.Names = { TEXT("Chair") }; });
 		Send(*Run, 0, TEXT("Nope"), TEXT("Craft"), [](FGFModeRequest& R) { R.Names = { TEXT("Nope") }; });
 	});
-	WaitUntil(Ctx, TEXT("bench answers and the mist in her bag"), 10.f, [Run]()
+	WaitUntil(Ctx, TEXT("bench answers and the mist in the player's bag"), 10.f, [Run]()
 	{
 		return HaveAll(*Run, { TEXT("Mist"), TEXT("Treat"), TEXT("Chair"), TEXT("Nope") }) && Bag(0, TEXT("CalmingMist")) == 3;
 	});
@@ -277,10 +277,10 @@ bool FGFNetLabTest::RunTest(const FString&)
 		if (TestNotNull(TEXT("Raptors"), Near) && Far)
 		{
 			Near->Taming->ServerForceHostile(Run->C1);
-			TestTrue(TEXT("Hostile at her"), Near->Taming->GetTameState() == EGFTameState::Hostile);
+			TestTrue(TEXT("Hostile at the player"), Near->Taming->GetTameState() == EGFTameState::Hostile);
 		}
 	});
-	WaitUntil(Ctx, TEXT("her client sees the raptors, one hostile"), 10.f, [Run]()
+	WaitUntil(Ctx, TEXT("the player's client sees the raptors, one hostile"), 10.f, [Run]()
 	{
 		const AActor* A = OnClient(0, Run->Near.Get());
 		const AActor* B = OnClient(0, Run->Far.Get());
@@ -306,7 +306,7 @@ bool FGFNetLabTest::RunTest(const FString&)
 			TestTrue(TEXT("Pack call ignored while calm"), T->GetTameState() != EGFTameState::Hostile);
 		}
 	});
-	WaitUntil(Ctx, TEXT("her client sees it calm"), 10.f, [Run]()
+	WaitUntil(Ctx, TEXT("the player's client sees it calm"), 10.f, [Run]()
 	{
 		const AActor* A = OnClient(0, Run->Near.Get());
 		const UGFTamingComponent* T = A ? A->FindComponentByClass<UGFTamingComponent>() : nullptr;

@@ -185,7 +185,7 @@ bool FGFDepthsMover::Knockback(const FGFDepthsMoveParams& P, FGFDepthsBody& B, f
 void FGFDepthsMover::Step(const FGFDepthsMoveParams& P, const FGFDepthsLevel& L, const TArray<FGFDepthsSwitch>& Switches, double Now, const FGFDepthsInput& In, FGFDepthsBody& B, float Dt)
 {
 	using GFDepthsSim::Overlaps;
-	// Ride the platform she stands on.
+	// Ride the platform the player stands on.
 	if (B.bGrounded && L.Platforms.IsValidIndex(B.OnPlatform))
 	{
 		const FGFDepthsPlatform& Pl = L.Platforms[B.OnPlatform];
@@ -352,7 +352,7 @@ void FGFDepthsMover::Step(const FGFDepthsMoveParams& P, const FGFDepthsLevel& L,
 		}
 	}
 
-	// Walls she can slide on and kick off.
+	// Walls the player can slide on and kick off.
 	B.WallDir = 0;
 	if (P.bWallJump && !B.bGrounded)
 	{

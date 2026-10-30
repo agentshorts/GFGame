@@ -19,7 +19,7 @@ static bool CheckLandEnum(FAutomationTestBase& Test, const TCHAR* What, E Actual
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFLandRulesTest, "GFGame.Land.Rules", GFLandTestFlags)
 bool FGFLandRulesTest::RunTest(const FString&)
 {
-	// Layout: her home + 2 rentable plots, 24 x 24 full height, no overlaps; the rest is the Commons.
+	// Layout: the host's home + 2 rentable plots, 24 x 24 full height, no overlaps; the rest is the Commons.
 	FGFLandState Land = FGFLandRules::MakeDefaultLayout(FIntVector(64, 64, 32));
 	TestEqual(TEXT("3 plots"), Land.Plots.Num(), 3);
 	const FGFLandPlot* Home = Land.Find(FGFLandRules::HomePlotId());
@@ -80,11 +80,11 @@ bool FGFLandRulesTest::RunTest(const FString&)
 	// Permissions.
 	Land.Builders.Add(TEXT("builder"));
 	FString Why;
-	TestTrue(TEXT("Host edits her home"), FGFLandRules::CanEdit(Land, TEXT("host"), true, FIntVector(5, 5, 1), true, Why));
+	TestTrue(TEXT("Host edits their home"), FGFLandRules::CanEdit(Land, TEXT("host"), true, FIntVector(5, 5, 1), true, Why));
 	TestTrue(TEXT("Host edits a guest plot"), FGFLandRules::CanEdit(Land, TEXT("host"), true, FIntVector(40, 10, 1), true, Why));
 	TestTrue(TEXT("Host edits the commons"), FGFLandRules::CanEdit(Land, TEXT("host"), true, FIntVector(50, 50, 1), true, Why));
 	TestTrue(TEXT("Tenant edits own plot"), FGFLandRules::CanEdit(Land, TEXT("guest"), false, FIntVector(40, 10, 1), true, Why));
-	TestFalse(TEXT("Tenant can't edit her home"), FGFLandRules::CanEdit(Land, TEXT("guest"), false, FIntVector(5, 5, 1), false, Why));
+	TestFalse(TEXT("Tenant can't edit the host's home"), FGFLandRules::CanEdit(Land, TEXT("guest"), false, FIntVector(5, 5, 1), false, Why));
 	TestFalse(TEXT("Tenant can't edit a vacant plot"), FGFLandRules::CanEdit(Land, TEXT("guest"), false, FIntVector(10, 40, 1), true, Why));
 	TestFalse(TEXT("Other guest can't edit PlotA"), FGFLandRules::CanEdit(Land, TEXT("other"), false, FIntVector(40, 10, 1), false, Why));
 	TestFalse(TEXT("Guest can't edit the commons"), FGFLandRules::CanEdit(Land, TEXT("guest"), false, FIntVector(50, 50, 1), true, Why));

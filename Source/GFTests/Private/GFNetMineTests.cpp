@@ -1,6 +1,6 @@
-// Pebble Mine over the network (PLAN.md M8 Net.Mine): pebblings stay locked until her first tame, rushing one
-// makes it hide, the crew digs only its own rooms, nothing reaches her bag until she orders the haul, upgrades
-// burn materials, a returning player gets her capped offline haul, and leaving saves the crew with the clock.
+// Pebble Mine over the network (PLAN.md M8 Net.Mine): pebblings stay locked until the player's first tame, rushing one
+// makes it hide, the crew digs only its own rooms, nothing reaches the player's bag until they order the haul, upgrades
+// burn materials, a returning player gets their capped offline haul, and leaving saves the crew with the clock.
 #include "GFNetTestUtils.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
@@ -141,7 +141,7 @@ bool FGFNetMineTest::RunTest(const FString&)
 	WaitUntil(Ctx, TEXT("early answer"), 10.f, [Run]() { return HaveAll(*Run, { TEXT("Early") }); });
 	Do(Ctx, [this, Run]()
 	{
-		TestEqual(TEXT("Locked until her first tame"), Code(*Run, TEXT("Early")), FString(TEXT("Locked")));
+		TestEqual(TEXT("Locked until the player's first tame"), Code(*Run, TEXT("Early")), FString(TEXT("Locked")));
 		OnServer(Run->C1)->Progress.bHasTamed = true; // as ServerAddCompanion does
 		Send(*Run, TEXT("Rush"), TEXT("Capture"), [](FGFModeRequest& R) { R.Floats = { 450.f }; });
 	});
@@ -163,7 +163,7 @@ bool FGFNetMineTest::RunTest(const FString&)
 	Do(Ctx, [Run]() { Send(*Run, TEXT("Sneak2"), TEXT("Capture"), [](FGFModeRequest& R) { R.Floats = { 120.f }; }); });
 	WaitUntil(Ctx, TEXT("second capture"), 10.f, [Run]() { return HaveAll(*Run, { TEXT("Sneak2") }); });
 	Do(Ctx, [Run]() { Send(*Run, TEXT("Third"), TEXT("Capture"), [](FGFModeRequest& R) { R.Floats = { 120.f }; }); });
-	WaitUntil(Ctx, TEXT("crew on her client"), 10.f, [Run]()
+	WaitUntil(Ctx, TEXT("crew on the player's client"), 10.f, [Run]()
 	{
 		return HaveAll(*Run, { TEXT("Third") }) && Client(0)->Progress.Crew.Pebblings.Num() == 2;
 	});
@@ -175,7 +175,7 @@ bool FGFNetMineTest::RunTest(const FString&)
 		const FGFMineCrew& Crew = Client(0)->Progress.Crew;
 		Run->P0 = Crew.Pebblings[0].Id;
 		Run->P1 = Crew.Pebblings[1].Id;
-		TestTrue(TEXT("She sees their names"), !Crew.Pebblings[0].Name.IsNone() && Crew.Pebblings[0].Name != Crew.Pebblings[1].Name);
+		TestTrue(TEXT("Player sees the pebblings' names"), !Crew.Pebblings[0].Name.IsNone() && Crew.Pebblings[0].Name != Crew.Pebblings[1].Name);
 		const FGuid P0 = Run->P0, P1 = Run->P1;
 		Send(*Run, TEXT("ToShallows"), TEXT("Assign"), [P0](FGFModeRequest& R) { R.Ids = { P0 }; R.Names = { TEXT("Shallows") }; });
 		Send(*Run, TEXT("ToGallery"), TEXT("Assign"), [P1](FGFModeRequest& R) { R.Ids = { P1 }; R.Names = { TEXT("CrystalGallery") }; });
@@ -210,8 +210,8 @@ bool FGFNetMineTest::RunTest(const FString&)
 		ServerDirector()->SimSpeed = 300.f; // a minute's dig in 0.2 s
 	});
 
-	// ---- digging: satchels fill, nothing comes home without her order ----
-	WaitUntil(Ctx, TEXT("both satchels full on her client"), 20.f, [Run]()
+	// ---- digging: satchels fill, nothing comes home without the player's order ----
+	WaitUntil(Ctx, TEXT("both satchels full on the player's client"), 20.f, [Run]()
 	{
 		const FGFPebbling* A = ClientPebbling(Run->P0);
 		const FGFPebbling* B = ClientPebbling(Run->P1);
@@ -219,10 +219,10 @@ bool FGFNetMineTest::RunTest(const FString&)
 	});
 	Do(Ctx, [this, Run]()
 	{
-		TestEqual(TEXT("Nothing in her bag before the haul order"), BagTotal(Client(0)), 0);
+		TestEqual(TEXT("Nothing in the player's bag before the haul order"), BagTotal(Client(0)), 0);
 		Send(*Run, TEXT("HaulAll"), TEXT("Haul"));
 	});
-	WaitUntil(Ctx, TEXT("the haul reaches her bag"), 20.f, [Run]()
+	WaitUntil(Ctx, TEXT("the haul reaches the player's bag"), 20.f, [Run]()
 	{
 		return HaveAll(*Run, { TEXT("HaulAll") }) && BagTotal(Client(0)) >= 24;
 	});
@@ -249,7 +249,7 @@ bool FGFNetMineTest::RunTest(const FString&)
 		TestEqual(TEXT("Clock restarted"), P->Progress.Crew.LastSeenUtcTicks, Run->Now);
 		Send(*Run, TEXT("Status2h"), TEXT("Status"));
 	});
-	WaitUntil(Ctx, TEXT("offline haul on her client"), 10.f, [Run]() { return HaveAll(*Run, { TEXT("Status2h") }) && BagTotal(Client(0)) > 0; });
+	WaitUntil(Ctx, TEXT("offline haul on the player's client"), 10.f, [Run]() { return HaveAll(*Run, { TEXT("Status2h") }) && BagTotal(Client(0)) > 0; });
 	Do(Ctx, [this, Run]()
 	{
 		const FGFModeResult* R = Result(*Run, TEXT("Status2h"));
@@ -280,7 +280,7 @@ bool FGFNetMineTest::RunTest(const FString&)
 			GM->GameSession->KickPlayer(PC, FText::FromString(TEXT("GF test: leave the mine")));
 		}
 	});
-	WaitUntil(Ctx, TEXT("she is in the guest records"), 15.f, [Run]()
+	WaitUntil(Ctx, TEXT("the player is in the guest records"), 15.f, [Run]()
 	{
 		const AGFGameState* GS = GameState(ServerWorld());
 		const FGFGuestRecord* Rec = GS ? GS->GuestRecords.Find(Run->C1) : nullptr;
@@ -291,7 +291,7 @@ bool FGFNetMineTest::RunTest(const FString&)
 		const FGFGuestRecord* Rec = GameState(ServerWorld())->GuestRecords.Find(Run->C1);
 		const FGFMineCrew* Crew = Rec ? &Rec->LastCharacter.Progress.Crew : nullptr;
 		TestTrue(TEXT("Crew saved"), Crew && Crew->Pebblings.Num() == 2 && Crew->Level(GFMineUpgrades::Tunnels) == 1);
-		TestEqual(TEXT("Offline clock starts when she leaves"), Crew ? Crew->LastSeenUtcTicks : 0, Run->Now + FTimespan::FromMinutes(7).GetTicks());
+		TestEqual(TEXT("Offline clock starts when the player leaves"), Crew ? Crew->LastSeenUtcTicks : 0, Run->Now + FTimespan::FromMinutes(7).GetTicks());
 	});
 	Stop(Ctx);
 	return true;

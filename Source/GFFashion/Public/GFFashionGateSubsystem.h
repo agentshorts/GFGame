@@ -2,9 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "GFMiniGameGateSubsystem.h"
+#include "GFFashionTypes.h"
 #include "GFFashionGateSubsystem.generated.h"
 
-/** Gate C: fashion show (M3). Stub. */
+/** Gate C: fashion show (M3). Wardrobe and theme lists for the UI; runs live on AGFRunwayStage. */
 UCLASS()
 class GFFASHION_API UGFFashionGateSubsystem : public UGFMiniGameGateSubsystem
 {
@@ -13,4 +14,10 @@ class GFFASHION_API UGFFashionGateSubsystem : public UGFMiniGameGateSubsystem
 public:
 	virtual FName GetGateId() const override { return TEXT("Fashion"); }
 	virtual FName GetMapName() const override { return TEXT("/Game/Maps/L_Runway"); }
+
+	UFUNCTION(BlueprintPure, Category = "GF|Fashion")
+	TArray<FGFFashionTheme> GetThemes() const { return FGFFashionCatalog::Themes(); }
+
+	UFUNCTION(BlueprintPure, Category = "GF|Fashion")
+	TArray<FGFFashionPiece> GetWardrobe() const { return FGFFashionCatalog::Pieces(); }
 };

@@ -541,7 +541,7 @@ Example (dino):
   "material_slots": ["Body"],
   "skeleton": { "reuse_existing": null, "skeleton_name": "SKEL_Dino_Raptor", "root_bone": "root", "bone_count": 26, "rig_source": "hand_built" },
   "unreal_target": "/Game/Art/Dinos/Raptor/SK_Dino_Raptor",
-  "provenance": { "made_by": "agent:blender", "tools": ["Blender 5.2.2"], "ai_generated": false, "generator": null, "license": "own work", "created_utc": "", "project": "GFGame" },
+  "provenance": { "tools": ["Blender 5.2.2"], "ai_generated": false, "generator": null, "license": "own work", "created_utc": "", "project": "GFGame" },
   "status": "ready_for_import",
   "qa": { "blender_checks_passed": true, "notes": "Idle 60f loop (f61=f1); Walk 24f loop @300cm/s; Run 16f loop @700cm/s; Attack_Bite contact f7; Faint holds last frame; bounds centre offset X=..cm" }
 }

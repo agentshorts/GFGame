@@ -198,7 +198,7 @@ struct GFDEPTHS_API FGFDepthsRunState
 	UPROPERTY(BlueprintReadOnly, Category = "Depths") int32 Section = 0;
 	/** Last checkpoint reached (-1 = the entrance). */
 	UPROPERTY(BlueprintReadOnly, Category = "Depths") int32 Checkpoint = INDEX_NONE;
-	/** Picked up but not banked yet (not in her bag until a checkpoint or Lift Home). */
+	/** Picked up but not banked yet (not in the player's bag until a checkpoint or Lift Home). */
 	UPROPERTY(BlueprintReadOnly, Category = "Depths") TArray<FGFItemStack> Unbanked;
 	UPROPERTY(BlueprintReadOnly, Category = "Depths") bool bDowned = false;
 	UPROPERTY(BlueprintReadOnly, Category = "Depths") float DownedLeft = 0.f;
@@ -208,7 +208,7 @@ struct GFDEPTHS_API FGFDepthsRunState
 
 struct GFDEPTHS_API FGFDepthsRules
 {
-	/** Lowers HP; true when this hit takes her to 0. */
+	/** Lowers HP; true when this hit takes them to 0. */
 	static bool Damage(FGFDepthsRunState& S, int32 Amount);
 	/** One of the section's heals: +2 HP (not past 5). */
 	static bool Heal(FGFDepthsRunState& S);

@@ -277,7 +277,7 @@ void AGFGameState::ServerSetLandlord(const FString& Key)
 		{
 			if (L.ToKey == Old && L.Kind == EGFLetterKind::Rent)
 			{
-				L.ToKey = Key; // rent letters always belong to whoever hosts her world
+				L.ToKey = Key; // rent letters always belong to whoever hosts the world
 			}
 		}
 	}
@@ -774,7 +774,7 @@ EGFLandResult AGFGameState::ServerPackUpPlot(FName PlotId)
 		return EGFLandResult::Pending;
 	}
 	const FGFPlotBlueprint BP = FGFLandRules::MakeBlueprint(Voxel->GetGrid(), *P, HostWorldId, FDateTime::UtcNow());
-	FGFLandRules::StoreBlueprint(PackedBlueprints, BP); // her copy, too
+	FGFLandRules::StoreBlueprint(PackedBlueprints, BP); // the host's copy, too
 	AGFPlayerState* Tenant = FindPlayerByKey(P->TenantKey);
 	if (Tenant && !Tenant->bLoggedOut && Tenant->bCharacterReady)
 	{
@@ -918,7 +918,7 @@ EGFLandResult AGFGameState::ServerHandleLandAction(AGFPlayerState* By, const FGF
 		if (P->Kind != EGFPlotKind::Rentable || bHost) return EGFLandResult::NotAllowed;
 		if (P->HasTenant()) return P->TenantKey == Key ? EGFLandResult::AlreadyHasPlot : EGFLandResult::PlotTaken;
 		if (!P->bForRent) return EGFLandResult::NotForRent;
-		if (Land.CountPlotsOf(Key) > 0) return EGFLandResult::AlreadyHasPlot; // one per guest; she can assign a second
+		if (Land.CountPlotsOf(Key) > 0) return EGFLandResult::AlreadyHasPlot; // one per guest; the host can assign a second
 		SetTenant(*P, Key);
 		return EGFLandResult::Ok;
 
@@ -996,16 +996,16 @@ EGFLandResult AGFGameState::ServerHandleLandAction(AGFPlayerState* By, const FGF
 			{
 				return ApplyBlueprint(*P, *BP);
 			}
-			// Free, but she says OK first.
+			// Free, but the host says OK first.
 			PendingRestores.RemoveAll([&A](const FGFPendingRestore& R) { return R.PlotId == A.PlotId; });
 			FGFPendingRestore& Pending = PendingRestores.AddDefaulted_GetRef();
 			Pending.PlotId = A.PlotId;
 			Pending.TenantKey = Key;
 			Pending.SourceWorldId = A.SourceWorldId;
 			Pending.SourcePlotId = A.SourcePlotId;
-			if (AGFPlayerState* Her = FindPlayerByKey(Land.LandlordKey))
+			if (AGFPlayerState* LandlordPS = FindPlayerByKey(Land.LandlordKey))
 			{
-				Her->NotifyLand(FString::Printf(TEXT("%s asks to restore their build on %s"), *By->GetPlayerName(), *A.PlotId.ToString()));
+				LandlordPS->NotifyLand(FString::Printf(TEXT("%s asks to restore their build on %s"), *By->GetPlayerName(), *A.PlotId.ToString()));
 			}
 			return EGFLandResult::Pending;
 		}

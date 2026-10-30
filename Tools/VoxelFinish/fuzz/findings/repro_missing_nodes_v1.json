@@ -1,0 +1,16 @@
+{
+ "schema": "voxelfinish.effect_graph/2",
+ "effect_id": "fx_repro_missing_nodes",
+ "name": "missing nodes",
+ "animated": false,
+ "outputs": {
+  "base_color": "c"
+ },
+ "rev": {
+  "number": 1,
+  "parent_rev": null,
+  "hash": "sha256:eb64b8d8c905efd2bc4d312e0237cdd7fbec51ecfa0b5b25e575b7cb403704fd",
+  "note": "repro",
+  "created": "2026-10-30T00:00:00Z"
+ }
+}

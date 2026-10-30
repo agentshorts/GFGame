@@ -285,7 +285,7 @@ FGFModeResult AGFArenaDirector::HandleModeRequest(AGFPlayerState* By, const FGFM
 		Queued.Add(Cmd);
 		FGFModeResult Res = FGFModeResult::Ok();
 		Res.Ints = { Queued.Num() };
-		// Every living dino on her side has an order: time resumes straight away.
+		// Every living dino on the player's side has an order: time resumes straight away.
 		if (Queued.Num() >= Sim.AliveCount(0))
 		{
 			EndSlowTime(Now);
@@ -356,7 +356,7 @@ FGFModeResult AGFArenaDirector::DoPlace(AGFPlayerState* By, const TArray<FGuid>&
 	FGFArenaEntry& E = EntryFor(By->PlayerKey);
 	E.CompanionIds = Ids;
 	E.Spots = Spots;
-	By->Progress.ArenaFormationIds = Ids; // her last formation is remembered
+	By->Progress.ArenaFormationIds = Ids; // their last formation is remembered
 	By->Progress.ArenaFormationSpots = Spots;
 	By->MarkCharacterChanged();
 	return FGFModeResult::Ok();
@@ -481,7 +481,7 @@ FGFModeResult AGFArenaDirector::DoFight(AGFPlayerState* By)
 		}
 		return FGFModeResult::Fail(TEXT("NotPlaced"));
 	}
-	// Opponents: as many as her team (at least 3), level from the band.
+	// Opponents: as many as the player's team (at least 3), level from the band.
 	const TArray<FName> SpeciesIds = Data.SpeciesIds();
 	const int32 AvgLevel = FMath::Max(1, FMath::RoundToInt(float(LevelSum) / Count));
 	const int32 Level = FMath::Max(1, AvgLevel + (BandRow ? BandRow->LevelDelta : 0));
@@ -576,14 +576,14 @@ void AGFArenaDirector::SettleWager(FGFArenaEntry& E, bool bWon, bool bLost)
 	E.bEscrowOpen = false;
 	if (bWon)
 	{
-		// She keeps her stake and gets the opponent's counter-bet.
+		// The player keeps their stake and gets the opponent's counter-bet.
 		G->ServerRefund(FGuid::NewGuid(), E.EscrowId, TEXT("ArenaStakeBack"));
 		G->ServerMint(FGuid::NewGuid(), E.PlayerKey, E.Counter, TEXT("ArenaWagerWin"));
 		E.WagerResult = TEXT("Won");
 	}
 	else if (bLost)
 	{
-		G->ServerForfeit(FGuid::NewGuid(), E.EscrowId, TEXT("ArenaWagerLost")); // only her stake
+		G->ServerForfeit(FGuid::NewGuid(), E.EscrowId, TEXT("ArenaWagerLost")); // only their stake
 		E.WagerResult = TEXT("Lost");
 	}
 	else

@@ -1,0 +1,135 @@
+{
+ "schema": "gfgame.effect_graph/1",
+ "id": "fx_rainbow",
+ "effect_index": 5,
+ "name": "Rainbow Cycle",
+ "description": "Both palette colours rotate through the hue wheel, offset diagonally across the face.",
+ "animated": true,
+ "loop_seconds": 4.0,
+ "nodes": [
+  {
+   "id": "t",
+   "type": "input",
+   "params": {
+    "source": "time"
+   }
+  },
+  {
+   "id": "ux",
+   "type": "input",
+   "params": {
+    "source": "uv",
+    "component": "x"
+   }
+  },
+  {
+   "id": "uy",
+   "type": "input",
+   "params": {
+    "source": "uv",
+    "component": "y"
+   }
+  },
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "pm",
+   "type": "input",
+   "params": {
+    "source": "pattern_mask"
+   }
+  },
+  {
+   "id": "k_t",
+   "type": "const",
+   "params": {
+    "value": 0.25
+   }
+  },
+  {
+   "id": "ht",
+   "type": "mul",
+   "inputs": [
+    "t",
+    "k_t"
+   ]
+  },
+  {
+   "id": "diag",
+   "type": "add",
+   "inputs": [
+    "ux",
+    "uy"
+   ]
+  },
+  {
+   "id": "hd",
+   "type": "mul",
+   "inputs": [
+    "diag",
+    "k_t"
+   ]
+  },
+  {
+   "id": "h",
+   "type": "add",
+   "inputs": [
+    "ht",
+    "hd"
+   ]
+  },
+  {
+   "id": "ca",
+   "type": "hue_shift",
+   "inputs": [
+    "pa",
+    "h"
+   ]
+  },
+  {
+   "id": "cb",
+   "type": "hue_shift",
+   "inputs": [
+    "pb",
+    "h"
+   ]
+  },
+  {
+   "id": "col",
+   "type": "lerp",
+   "inputs": [
+    "ca",
+    "cb",
+    "pm"
+   ]
+  },
+  {
+   "id": "em",
+   "type": "const",
+   "params": {
+    "value": 0.3
+   }
+  }
+ ],
+ "outputs": {
+  "base_color": "col",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 1,
+  "palette_a": "#FF6FB5",
+  "palette_b": "#5ED6A0"
+ }
+}

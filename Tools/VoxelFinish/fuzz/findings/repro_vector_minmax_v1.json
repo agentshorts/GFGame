@@ -1,0 +1,52 @@
+{
+ "schema": "voxelfinish.effect_graph/2",
+ "effect_id": "fx_repro_vector_minmax",
+ "name": "vector min max",
+ "animated": false,
+ "exposed": [
+  {
+   "name": "tint",
+   "kind": "param",
+   "type": "v3",
+   "node": "c",
+   "default": [
+    0.1,
+    0.2,
+    0.3
+   ],
+   "min": [
+    0,
+    0,
+    0
+   ],
+   "max": [
+    1,
+    1,
+    1
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "id": "c",
+   "type": "const",
+   "params": {
+    "value": [
+     0.1,
+     0.2,
+     0.3
+    ]
+   }
+  }
+ ],
+ "outputs": {
+  "base_color": "c"
+ },
+ "rev": {
+  "number": 1,
+  "parent_rev": null,
+  "hash": "sha256:8ea4885cfd38360de85fe781f70ce17d99456128c6ac5cd78a1590843719c835",
+  "note": "repro",
+  "created": "2026-10-30T00:00:00Z"
+ }
+}

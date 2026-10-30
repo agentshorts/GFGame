@@ -178,7 +178,7 @@ void AGFDepthsDirector::Respawn(FGFDepthsPlayerView& P)
 
 void AGFDepthsDirector::Faint(FGFDepthsPlayerView& P)
 {
-	FGFDepthsRules::Die(P.Run); // the lost half simply vanishes (it was never in her bag)
+	FGFDepthsRules::Die(P.Run); // the lost half simply vanishes (it was never in their bag)
 	Respawn(P);
 }
 

@@ -1,0 +1,192 @@
+{
+ "schema": "gfgame.effect_graph/1",
+ "id": "fx_sparkle",
+ "effect_index": 4,
+ "name": "Sparkle",
+ "description": "About 1 texel in 8 twinkles white on its own random phase.",
+ "animated": true,
+ "loop_seconds": 1.0,
+ "nodes": [
+  {
+   "id": "t",
+   "type": "input",
+   "params": {
+    "source": "time"
+   }
+  },
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "pm",
+   "type": "input",
+   "params": {
+    "source": "pattern_mask"
+   }
+  },
+  {
+   "id": "base",
+   "type": "lerp",
+   "inputs": [
+    "pa",
+    "pb",
+    "pm"
+   ]
+  },
+  {
+   "id": "rnd",
+   "type": "input",
+   "params": {
+    "source": "noise_value",
+    "scale": 16,
+    "seed": 7
+   }
+  },
+  {
+   "id": "sel",
+   "type": "input",
+   "params": {
+    "source": "noise_value",
+    "scale": 16,
+    "seed": 91
+   }
+  },
+  {
+   "id": "k_w",
+   "type": "const",
+   "params": {
+    "value": 6.283185
+   }
+  },
+  {
+   "id": "tw",
+   "type": "mul",
+   "inputs": [
+    "t",
+    "k_w"
+   ]
+  },
+  {
+   "id": "rp",
+   "type": "mul",
+   "inputs": [
+    "rnd",
+    "k_w"
+   ]
+  },
+  {
+   "id": "ph",
+   "type": "add",
+   "inputs": [
+    "tw",
+    "rp"
+   ]
+  },
+  {
+   "id": "s",
+   "type": "sin",
+   "inputs": [
+    "ph"
+   ]
+  },
+  {
+   "id": "e0",
+   "type": "const",
+   "params": {
+    "value": 0.6
+   }
+  },
+  {
+   "id": "e1",
+   "type": "const",
+   "params": {
+    "value": 1.0
+   }
+  },
+  {
+   "id": "tw2",
+   "type": "smoothstep",
+   "inputs": [
+    "e0",
+    "e1",
+    "s"
+   ]
+  },
+  {
+   "id": "thr",
+   "type": "const",
+   "params": {
+    "value": 0.875
+   }
+  },
+  {
+   "id": "on",
+   "type": "step",
+   "inputs": [
+    "thr",
+    "sel"
+   ]
+  },
+  {
+   "id": "spark",
+   "type": "mul",
+   "inputs": [
+    "tw2",
+    "on"
+   ]
+  },
+  {
+   "id": "white",
+   "type": "const",
+   "params": {
+    "value": [
+     1.0,
+     1.0,
+     1.0
+    ]
+   }
+  },
+  {
+   "id": "col",
+   "type": "lerp",
+   "inputs": [
+    "base",
+    "white",
+    "spark"
+   ]
+  },
+  {
+   "id": "k_em",
+   "type": "const",
+   "params": {
+    "value": 4.0
+   }
+  },
+  {
+   "id": "em",
+   "type": "mul",
+   "inputs": [
+    "spark",
+    "k_em"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "col",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 9
+ }
+}

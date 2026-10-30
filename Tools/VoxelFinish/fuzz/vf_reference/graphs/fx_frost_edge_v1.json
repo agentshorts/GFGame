@@ -1,0 +1,237 @@
+{
+ "schema": "gfgame.effect_graph/1",
+ "id": "fx_frost_edge",
+ "effect_index": 9,
+ "name": "Frost Edge",
+ "description": "Ragged frost creeps in from the face edges (static).",
+ "animated": false,
+ "nodes": [
+  {
+   "id": "ux",
+   "type": "input",
+   "params": {
+    "source": "uv",
+    "component": "x"
+   }
+  },
+  {
+   "id": "uy",
+   "type": "input",
+   "params": {
+    "source": "uv",
+    "component": "y"
+   }
+  },
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "nz",
+   "type": "input",
+   "params": {
+    "source": "noise_value",
+    "scale": 16,
+    "seed": 3
+   }
+  },
+  {
+   "id": "neg",
+   "type": "const",
+   "params": {
+    "value": -1.0
+   }
+  },
+  {
+   "id": "one",
+   "type": "const",
+   "params": {
+    "value": 1.0
+   }
+  },
+  {
+   "id": "four",
+   "type": "const",
+   "params": {
+    "value": 4.0
+   }
+  },
+  {
+   "id": "nx",
+   "type": "mul",
+   "inputs": [
+    "ux",
+    "neg"
+   ]
+  },
+  {
+   "id": "ix",
+   "type": "add",
+   "inputs": [
+    "nx",
+    "one"
+   ]
+  },
+  {
+   "id": "ex0",
+   "type": "mul",
+   "inputs": [
+    "ux",
+    "ix"
+   ]
+  },
+  {
+   "id": "ex",
+   "type": "mul",
+   "inputs": [
+    "ex0",
+    "four"
+   ]
+  },
+  {
+   "id": "ny",
+   "type": "mul",
+   "inputs": [
+    "uy",
+    "neg"
+   ]
+  },
+  {
+   "id": "iy",
+   "type": "add",
+   "inputs": [
+    "ny",
+    "one"
+   ]
+  },
+  {
+   "id": "ey0",
+   "type": "mul",
+   "inputs": [
+    "uy",
+    "iy"
+   ]
+  },
+  {
+   "id": "ey",
+   "type": "mul",
+   "inputs": [
+    "ey0",
+    "four"
+   ]
+  },
+  {
+   "id": "e",
+   "type": "mul",
+   "inputs": [
+    "ex",
+    "ey"
+   ]
+  },
+  {
+   "id": "k_n",
+   "type": "const",
+   "params": {
+    "value": 0.3
+   }
+  },
+  {
+   "id": "nn",
+   "type": "mul",
+   "inputs": [
+    "nz",
+    "k_n"
+   ]
+  },
+  {
+   "id": "en",
+   "type": "add",
+   "inputs": [
+    "e",
+    "nn"
+   ]
+  },
+  {
+   "id": "e0",
+   "type": "const",
+   "params": {
+    "value": 0.3
+   }
+  },
+  {
+   "id": "e1",
+   "type": "const",
+   "params": {
+    "value": 0.55
+   }
+  },
+  {
+   "id": "inner",
+   "type": "smoothstep",
+   "inputs": [
+    "e0",
+    "e1",
+    "en"
+   ]
+  },
+  {
+   "id": "col",
+   "type": "lerp",
+   "inputs": [
+    "pb",
+    "pa",
+    "inner"
+   ]
+  },
+  {
+   "id": "ninner",
+   "type": "mul",
+   "inputs": [
+    "inner",
+    "neg"
+   ]
+  },
+  {
+   "id": "frost",
+   "type": "add",
+   "inputs": [
+    "ninner",
+    "one"
+   ]
+  },
+  {
+   "id": "k_em",
+   "type": "const",
+   "params": {
+    "value": 0.5
+   }
+  },
+  {
+   "id": "em",
+   "type": "mul",
+   "inputs": [
+    "frost",
+    "k_em"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "col",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 0,
+  "palette_a": "#4F6B3A",
+  "palette_b": "#E8F6FF"
+ }
+}

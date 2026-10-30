@@ -1,0 +1,151 @@
+{
+ "schema": "voxelfinish.effect_graph/2",
+ "effect_id": "fx_pulse_glow",
+ "effect_index": 2,
+ "name": "Pulse Glow",
+ "description": "Whole face breathes its glow up and down (0.5 to 3.0).",
+ "animated": true,
+ "loop_seconds": 2.0,
+ "exposed": [
+  {
+   "name": "base",
+   "kind": "input",
+   "type": "v3",
+   "node": "base",
+   "description": "colour underneath the effect (default: palette_a/palette_b by pattern)"
+  },
+  {
+   "name": "glow_range",
+   "kind": "param",
+   "type": "f",
+   "node": "k_rng",
+   "default": 2.5,
+   "min": 0.0,
+   "max": 6.0,
+   "description": "how far the glow swings above its 0.5 floor"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "t",
+   "type": "input",
+   "params": {
+    "source": "time"
+   }
+  },
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "pm",
+   "type": "input",
+   "params": {
+    "source": "pattern_mask"
+   }
+  },
+  {
+   "id": "base",
+   "type": "lerp",
+   "inputs": [
+    "pa",
+    "pb",
+    "pm"
+   ]
+  },
+  {
+   "id": "k_w",
+   "type": "const",
+   "params": {
+    "value": 3.141593
+   }
+  },
+  {
+   "id": "tw",
+   "type": "mul",
+   "inputs": [
+    "t",
+    "k_w"
+   ]
+  },
+  {
+   "id": "s",
+   "type": "sin",
+   "inputs": [
+    "tw"
+   ]
+  },
+  {
+   "id": "half",
+   "type": "const",
+   "params": {
+    "value": 0.5
+   }
+  },
+  {
+   "id": "s2",
+   "type": "mul",
+   "inputs": [
+    "s",
+    "half"
+   ]
+  },
+  {
+   "id": "s01",
+   "type": "add",
+   "inputs": [
+    "s2",
+    "half"
+   ]
+  },
+  {
+   "id": "k_rng",
+   "type": "const",
+   "params": {
+    "value": 2.5
+   }
+  },
+  {
+   "id": "e1",
+   "type": "mul",
+   "inputs": [
+    "s01",
+    "k_rng"
+   ]
+  },
+  {
+   "id": "em",
+   "type": "add",
+   "inputs": [
+    "e1",
+    "half"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "base",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 3,
+  "palette_a": "#A98BFF",
+  "palette_b": "#FFD23F"
+ },
+ "rev": {
+  "number": 2,
+  "parent_rev": 1,
+  "hash": "sha256:b8df41cd02d5091a2639ed4c9d880aa7eba7b6ea064834c85623e8517b704daa",
+  "note": "expose base input and glow_range",
+  "created": "2026-10-30T05:45:00Z"
+ }
+}

@@ -1,11 +1,11 @@
 #pragma once
 
 // Server side of the Pebble Mine (PLAN.md M8). Players talk to it through AGFPlayerState::RequestMode (Mode "Mine").
-// Each player's crew lives in her saved progress (Progress.Crew) and only works while she's in the world;
-// when she comes back the crew's offline haul is added (capped). Hauls that reach home go into her bag.
+// Each player's crew lives in their saved progress (Progress.Crew) and only works while they're in the world;
+// when they come back the crew's offline haul is added (capped). Hauls that reach home go into their bag.
 //
 // Verbs:
-//   Capture  Floats = [approach speed cm/s]   (needs her first tame; > 200 startles it, it hides 5 s)
+//   Capture  Floats = [approach speed cm/s]   (needs their first tame; > 200 startles it, it hides 5 s)
 //   Assign   Ids = [pebbling], Names = [room]     Haul  Ids = [pebbling] (empty = everyone)     Recall Ids = [pebbling]
 //   Buy      Names = [upgrade]  (materials burned)  -> Ints = [new level]
 //   Status   -> Stacks = last offline haul, Ints = [offline minutes]

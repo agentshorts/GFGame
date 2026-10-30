@@ -1,0 +1,265 @@
+{
+ "schema": "gfgame.effect_graph/1",
+ "id": "fx_water_ripple",
+ "effect_index": 8,
+ "revision": 2,
+ "name": "Water Ripple",
+ "description": "Two crossing diagonal waves plus a fine ripple along x. Uses only uv and time, so it bakes to one shared atlas slot; integer wave numbers make every face tile seamlessly with its neighbours, and it loops exactly over 16 frames.",
+ "animated": true,
+ "loop_seconds": 2.0,
+ "nodes": [
+  {
+   "id": "t",
+   "type": "input",
+   "params": {
+    "source": "time"
+   }
+  },
+  {
+   "id": "ux",
+   "type": "input",
+   "params": {
+    "source": "uv",
+    "component": "x"
+   }
+  },
+  {
+   "id": "uy",
+   "type": "input",
+   "params": {
+    "source": "uv",
+    "component": "y"
+   }
+  },
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "k1",
+   "type": "const",
+   "params": {
+    "value": 6.283185
+   }
+  },
+  {
+   "id": "kt",
+   "type": "const",
+   "params": {
+    "value": -3.141592
+   }
+  },
+  {
+   "id": "neg",
+   "type": "const",
+   "params": {
+    "value": -1.0
+   }
+  },
+  {
+   "id": "tp",
+   "type": "mul",
+   "inputs": [
+    "t",
+    "kt"
+   ]
+  },
+  {
+   "id": "dA",
+   "type": "add",
+   "inputs": [
+    "ux",
+    "uy"
+   ]
+  },
+  {
+   "id": "pA",
+   "type": "mul",
+   "inputs": [
+    "dA",
+    "k1"
+   ]
+  },
+  {
+   "id": "qA",
+   "type": "add",
+   "inputs": [
+    "pA",
+    "tp"
+   ]
+  },
+  {
+   "id": "sA",
+   "type": "sin",
+   "inputs": [
+    "qA"
+   ]
+  },
+  {
+   "id": "ny",
+   "type": "mul",
+   "inputs": [
+    "uy",
+    "neg"
+   ]
+  },
+  {
+   "id": "dB",
+   "type": "add",
+   "inputs": [
+    "ux",
+    "ny"
+   ]
+  },
+  {
+   "id": "pB",
+   "type": "mul",
+   "inputs": [
+    "dB",
+    "k1"
+   ]
+  },
+  {
+   "id": "qB",
+   "type": "add",
+   "inputs": [
+    "pB",
+    "tp"
+   ]
+  },
+  {
+   "id": "sB",
+   "type": "sin",
+   "inputs": [
+    "qB"
+   ]
+  },
+  {
+   "id": "k2",
+   "type": "const",
+   "params": {
+    "value": 12.56637
+   }
+  },
+  {
+   "id": "pC",
+   "type": "mul",
+   "inputs": [
+    "ux",
+    "k2"
+   ]
+  },
+  {
+   "id": "kt2",
+   "type": "const",
+   "params": {
+    "value": -6.283185
+   }
+  },
+  {
+   "id": "tp2",
+   "type": "mul",
+   "inputs": [
+    "t",
+    "kt2"
+   ]
+  },
+  {
+   "id": "qC",
+   "type": "add",
+   "inputs": [
+    "pC",
+    "tp2"
+   ]
+  },
+  {
+   "id": "sC",
+   "type": "sin",
+   "inputs": [
+    "qC"
+   ]
+  },
+  {
+   "id": "sAB",
+   "type": "add",
+   "inputs": [
+    "sA",
+    "sB"
+   ]
+  },
+  {
+   "id": "ss",
+   "type": "add",
+   "inputs": [
+    "sAB",
+    "sC"
+   ]
+  },
+  {
+   "id": "e0",
+   "type": "const",
+   "params": {
+    "value": 0.6
+   }
+  },
+  {
+   "id": "e1",
+   "type": "const",
+   "params": {
+    "value": 2.6
+   }
+  },
+  {
+   "id": "crest",
+   "type": "smoothstep",
+   "inputs": [
+    "e0",
+    "e1",
+    "ss"
+   ]
+  },
+  {
+   "id": "col",
+   "type": "lerp",
+   "inputs": [
+    "pa",
+    "pb",
+    "crest"
+   ]
+  },
+  {
+   "id": "k_em",
+   "type": "const",
+   "params": {
+    "value": 0.6
+   }
+  },
+  {
+   "id": "em",
+   "type": "mul",
+   "inputs": [
+    "crest",
+    "k_em"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "col",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 0,
+  "palette_a": "#2F6F73",
+  "palette_b": "#4FC3F7"
+ }
+}

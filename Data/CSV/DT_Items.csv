@@ -32,6 +32,12 @@ Amber,"NSLOCTEXT(""GFItems"", ""Amber"", ""Amber"")",None,Material,999,Uncommon,
 Crystal,"NSLOCTEXT(""GFItems"", ""Crystal"", ""Crystal"")",None,Material,999,Uncommon,,3,8,Glow,True,True,None
 PrismShard,"NSLOCTEXT(""GFItems"", ""PrismShard"", ""Prism Shard"")",None,Material,999,Uncommon,,3,8,Glow,True,True,None
 Glitter,"NSLOCTEXT(""GFItems"", ""Glitter"", ""Glitter"")",None,Material,999,Uncommon,,3,8,Fabric,True,True,None
+RoseDye,"NSLOCTEXT(""GFItems"", ""RoseDye"", ""Rose Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None
+SunDye,"NSLOCTEXT(""GFItems"", ""SunDye"", ""Sun Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None
+FernDye,"NSLOCTEXT(""GFItems"", ""FernDye"", ""Fern Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None
+SkyDye,"NSLOCTEXT(""GFItems"", ""SkyDye"", ""Sky Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None
+PlumDye,"NSLOCTEXT(""GFItems"", ""PlumDye"", ""Plum Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None
+ChalkDye,"NSLOCTEXT(""GFItems"", ""ChalkDye"", ""Chalk Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None
 TrophyCup,"NSLOCTEXT(""GFItems"", ""TrophyCup"", ""Trophy Cup"")",None,Material,999,Uncommon,,3,8,Trophy,True,True,None
 SpellPage,"NSLOCTEXT(""GFItems"", ""SpellPage"", ""Spell Page"")",None,Material,999,Uncommon,,3,8,Trophy,True,True,None
 Thornmelon,"NSLOCTEXT(""GFItems"", ""Thornmelon"", ""Thornmelon"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None

@@ -32,7 +32,7 @@ namespace
 			Now += Row.OfferCooldown;
 			if (M.OffersThisVisit >= Row.Fullness)
 			{
-				M.OffersThisVisit = 0; // pretend she came back another visit
+				M.OffersThisVisit = 0; // pretend the player came back another visit
 			}
 			M.Offer(Row, Now, TEXT("A"), Food);
 			if (M.IsTamed())
@@ -174,7 +174,7 @@ bool FGFTameStateFlowTest::RunTest(const FString&)
 	TestEqual(TEXT("A favourite calms it instantly"), E(M.Offer(R, Now, TEXT("A"), TEXT("JerkyBites"))), E(EGFOfferResult::Favourite));
 	TestEqual(TEXT("Calmed: Feeding"), E(M.State), E(EGFTameState::Feeding));
 
-	// Hostile, then she switches to an acceptable food: Alert after 3 s without being hit.
+	// Hostile, then the player switches to an acceptable food: Alert after 3 s without being hit.
 	M.ForceHostile(TEXT("A"));
 	const TArray<FGFTamerView> Holding = { FGFTamerView(TEXT("A"), 1000.f, TEXT("Steakroot")) };
 	TickFor(M, R, Now, 2.f, Holding);
@@ -184,7 +184,7 @@ bool FGFTameStateFlowTest::RunTest(const FString&)
 	TickFor(M, R, Now, 1.2f, Holding);
 	TestNotEqual(TEXT("Calmed after 3 s"), E(M.State), E(EGFTameState::Hostile));
 	M.Tick(R, Now += 0.1f, 0.1f, Holding);
-	TestEqual(TEXT("...and back to Feeding (she fed it this visit)"), E(M.State), E(EGFTameState::Feeding));
+	TestEqual(TEXT("...and back to Feeding (the player fed it this visit)"), E(M.State), E(EGFTameState::Feeding));
 
 	// Hostile too long: it flees and the bond resets; it wanders back later.
 	const float BondBefore = M.Bond;
@@ -249,7 +249,7 @@ bool FGFTameAggroTest::RunTest(const FString&)
 	TickFor(M, R, Now, R.ThreatSeconds + 0.5f, Two);
 	TestEqual(TEXT("Hostile"), E(M.State), E(EGFTameState::Hostile));
 	TestEqual(TEXT("At the empty-handed player"), M.TargetKey, FString(TEXT("Empty")));
-	// She walks away (out of the calm radius); it settles after 5 s alone.
+	// The player walks away (out of the calm radius); it settles after 5 s alone.
 	TickFor(M, R, Now, 5.3f, { FGFTamerView(TEXT("Empty"), 4000.f, NAME_None) });
 	TestEqual(TEXT("Calm again"), E(M.State), E(EGFTameState::Wild));
 

@@ -205,7 +205,7 @@ bool FGFNetArenaTest::RunTest(const FString&)
 		TestEqual(TEXT("Only the host switches wagers off for everyone"), Code(*Run, TEXT("NotHost")), FString(TEXT("NotHost")));
 		TestEqual(TEXT("No Slow Time before the fight"), Code(*Run, TEXT("Early")), FString(TEXT("NotFighting")));
 		const FGFModeResult* W = Result(*Run, TEXT("C1Wager"));
-		TestTrue(TEXT("The AI matches her stake"), W && W->Stacks.Num() > 0);
+		TestTrue(TEXT("The AI matches the player's stake"), W && W->Stacks.Num() > 0);
 		const AGFPlayerState* P1 = OnServer(Run->C1);
 		TestTrue(TEXT("Formation remembered"), P1 && P1->Progress.ArenaFormationSpots.Num() == 3);
 		Run->Before = P1 ? P1->Inventory->GetInventory() : FGFInventory();
@@ -234,8 +234,8 @@ bool FGFNetArenaTest::RunTest(const FString&)
 		{
 			Run->C2Escrow = E2->EscrowId;
 		}
-		TestEqual(TEXT("Her stake left her bag"), OnServer(Run->C1)->Inventory->GetCount(TEXT("Amber")), Run->Before.GetCount(TEXT("Amber")) - 3);
-		TestEqual(TEXT("Team: her 3 + friend's 1"), D->GetSim().AliveCount(0), 4);
+		TestEqual(TEXT("Player's stake left their bag"), OnServer(Run->C1)->Inventory->GetCount(TEXT("Amber")), Run->Before.GetCount(TEXT("Amber")) - 3);
+		TestEqual(TEXT("Team: player's 3 + friend's 1"), D->GetSim().AliveCount(0), 4);
 		TestTrue(TEXT("At least 3 opponents"), D->GetSim().AliveCount(1) >= 3);
 		Run->RexUnit = UnitOf(D->GetSim(), Run->C1, TEXT("Rex"));
 		Run->RaptorUnit = UnitOf(D->GetSim(), Run->C1, TEXT("Raptor"));
@@ -270,8 +270,8 @@ bool FGFNetArenaTest::RunTest(const FString&)
 	});
 	Do(Ctx, [this, Run]()
 	{
-		TestEqual(TEXT("Friend can't command her dino"), Code(*Run, TEXT("StealCmd")), FString(TEXT("NotOwner")));
-		TestEqual(TEXT("Friend can't possess her dino"), Code(*Run, TEXT("StealPossess")), FString(TEXT("NotOwner")));
+		TestEqual(TEXT("Friend can't command the player's dino"), Code(*Run, TEXT("StealCmd")), FString(TEXT("NotOwner")));
+		TestEqual(TEXT("Friend can't possess the player's dino"), Code(*Run, TEXT("StealPossess")), FString(TEXT("NotOwner")));
 		TestEqual(TEXT("Command"), Code(*Run, TEXT("Cmd")), FString(TEXT("Ok")));
 		TestEqual(TEXT("One order per dino"), Code(*Run, TEXT("Cmd2")), FString(TEXT("AlreadyCommanded")));
 		TestEqual(TEXT("Third ability locked at level 1"), Code(*Run, TEXT("Locked")), FString(TEXT("Locked")));
@@ -311,7 +311,7 @@ bool FGFNetArenaTest::RunTest(const FString&)
 		TestEqual(TEXT("Possess"), Code(*Run, TEXT("Possess")), FString(TEXT("Ok")));
 		TestEqual(TEXT("Steer"), Code(*Run, TEXT("Steer")), FString(TEXT("Ok")));
 		const FGFModeResult* C = Result(*Run, TEXT("Cycle"));
-		TestTrue(TEXT("Cycled to another of her dinos"), C && C->Ints.Num() == 1 && C->Ints[0] != Run->RexUnit && C->Ints[0] != INDEX_NONE);
+		TestTrue(TEXT("Cycled to another of the player's dinos"), C && C->Ints.Num() == 1 && C->Ints[0] != Run->RexUnit && C->Ints[0] != INDEX_NONE);
 		Send(*Run, 0, TEXT("Release"), Arena, TEXT("Release"));
 		Send(*Run, 0, TEXT("NoSteer"), Arena, TEXT("Input"), [](FGFModeRequest& R) { R.Floats = { 1.f, 0.f }; });
 	});
@@ -346,7 +346,7 @@ bool FGFNetArenaTest::RunTest(const FString&)
 		AGFArenaDirector* D = ServerDirector();
 		if (D)
 		{
-			TestTrue(TEXT("The fight goes on for her"), D->Phase == EGFArenaPhase::Fighting);
+			TestTrue(TEXT("The fight goes on for the player"), D->Phase == EGFArenaPhase::Fighting);
 			D->SimSpeed = 25.f; // finish quickly
 		}
 	});
@@ -365,7 +365,7 @@ bool FGFNetArenaTest::RunTest(const FString&)
 		const AGFArenaDirector* D = ServerDirector();
 		const FGFArenaEntry* E = D ? D->FindEntry(Run->C1) : nullptr;
 		const AGFPlayerState* P1 = OnServer(Run->C1);
-		if (!TestNotNull(TEXT("Her entry"), E) || !P1)
+		if (!TestNotNull(TEXT("Player's entry"), E) || !P1)
 		{
 			return;
 		}

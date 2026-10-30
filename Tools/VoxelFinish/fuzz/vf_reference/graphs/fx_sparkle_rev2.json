@@ -1,0 +1,228 @@
+{
+ "schema": "voxelfinish.effect_graph/2",
+ "effect_id": "fx_sparkle",
+ "effect_index": 4,
+ "name": "Sparkle",
+ "description": "About 1 texel in 8 twinkles white on its own random phase.",
+ "animated": true,
+ "loop_seconds": 1.0,
+ "exposed": [
+  {
+   "name": "base",
+   "kind": "input",
+   "type": "v3",
+   "node": "base",
+   "description": "colour underneath the effect (default: palette_a/palette_b by pattern)"
+  },
+  {
+   "name": "density",
+   "kind": "param",
+   "type": "f",
+   "node": "thr",
+   "default": 0.875,
+   "min": 0.5,
+   "max": 0.99,
+   "description": "texel select threshold (higher = fewer sparkles)"
+  },
+  {
+   "name": "sparkle_glow",
+   "kind": "param",
+   "type": "f",
+   "node": "k_em",
+   "default": 4.0,
+   "min": 0.0,
+   "max": 8.0,
+   "description": "emissive strength of each twinkle"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "t",
+   "type": "input",
+   "params": {
+    "source": "time"
+   }
+  },
+  {
+   "id": "pa",
+   "type": "input",
+   "params": {
+    "source": "palette_a"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "input",
+   "params": {
+    "source": "palette_b"
+   }
+  },
+  {
+   "id": "pm",
+   "type": "input",
+   "params": {
+    "source": "pattern_mask"
+   }
+  },
+  {
+   "id": "base",
+   "type": "lerp",
+   "inputs": [
+    "pa",
+    "pb",
+    "pm"
+   ]
+  },
+  {
+   "id": "rnd",
+   "type": "input",
+   "params": {
+    "source": "noise_value",
+    "scale": 16,
+    "seed": 7
+   }
+  },
+  {
+   "id": "sel",
+   "type": "input",
+   "params": {
+    "source": "noise_value",
+    "scale": 16,
+    "seed": 91
+   }
+  },
+  {
+   "id": "k_w",
+   "type": "const",
+   "params": {
+    "value": 6.283185
+   }
+  },
+  {
+   "id": "tw",
+   "type": "mul",
+   "inputs": [
+    "t",
+    "k_w"
+   ]
+  },
+  {
+   "id": "rp",
+   "type": "mul",
+   "inputs": [
+    "rnd",
+    "k_w"
+   ]
+  },
+  {
+   "id": "ph",
+   "type": "add",
+   "inputs": [
+    "tw",
+    "rp"
+   ]
+  },
+  {
+   "id": "s",
+   "type": "sin",
+   "inputs": [
+    "ph"
+   ]
+  },
+  {
+   "id": "e0",
+   "type": "const",
+   "params": {
+    "value": 0.6
+   }
+  },
+  {
+   "id": "e1",
+   "type": "const",
+   "params": {
+    "value": 1.0
+   }
+  },
+  {
+   "id": "tw2",
+   "type": "smoothstep",
+   "inputs": [
+    "e0",
+    "e1",
+    "s"
+   ]
+  },
+  {
+   "id": "thr",
+   "type": "const",
+   "params": {
+    "value": 0.875
+   }
+  },
+  {
+   "id": "on",
+   "type": "step",
+   "inputs": [
+    "thr",
+    "sel"
+   ]
+  },
+  {
+   "id": "spark",
+   "type": "mul",
+   "inputs": [
+    "tw2",
+    "on"
+   ]
+  },
+  {
+   "id": "white",
+   "type": "const",
+   "params": {
+    "value": [
+     1.0,
+     1.0,
+     1.0
+    ]
+   }
+  },
+  {
+   "id": "col",
+   "type": "lerp",
+   "inputs": [
+    "base",
+    "white",
+    "spark"
+   ]
+  },
+  {
+   "id": "k_em",
+   "type": "const",
+   "params": {
+    "value": 4.0
+   }
+  },
+  {
+   "id": "em",
+   "type": "mul",
+   "inputs": [
+    "spark",
+    "k_em"
+   ]
+  }
+ ],
+ "outputs": {
+  "base_color": "col",
+  "emissive_strength": "em"
+ },
+ "preview": {
+  "pattern_id": 9
+ },
+ "rev": {
+  "number": 2,
+  "parent_rev": 1,
+  "hash": "sha256:3d48e49781c1ef37347f2320678b8973adcc30d57f6a0dd563141b27cf9fe88e",
+  "note": "expose base input, density, sparkle_glow",
+  "created": "2026-10-30T05:45:00Z"
+ }
+}

@@ -851,7 +851,7 @@ bool FGFGiantEatTest::RunTest(const FString&)
 		FGFGiantStepOut Out;
 		const FGFSafeCircles Zone12 = HomeZone(T3, P.Num());
 		Sim.Begin(T3, Lines, Zone12, P, false, 12, Out);
-		// Let it close in while she runs (no idle time yet), then she stops.
+		// Let it close in while the player runs (no idle time yet), then they stop.
 		for (int32 i = 0; i < 400 && FVector::Dist2D(Sim.Location, P[0].Location) > T3.IdleRange * 0.8f; ++i)
 		{
 			FGFGiantStepOut O;
@@ -870,7 +870,7 @@ bool FGFGiantEatTest::RunTest(const FString&)
 				if (L.Phase == EGFGiantLinePhase::Target && WarnAt < 0.f && Sim.Elapsed - StopAt >= 1.4f)
 				{
 					WarnAt = Sim.Elapsed - StopAt;
-					TestEqual(TEXT("Warning aimed at her"), L.TargetKey, FString(TEXT("Frozen")));
+					TestEqual(TEXT("Warning aimed at the player"), L.TargetKey, FString(TEXT("Frozen")));
 				}
 			}
 			if (!O.Eaten.IsEmpty())

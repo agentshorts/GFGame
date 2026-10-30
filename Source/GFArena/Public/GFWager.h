@@ -30,22 +30,22 @@ struct GFARENA_API FGFWagerRules
 
 	static const TCHAR* ToString(EGFWagerCheck R);
 
-	/** Biggest total stake value allowed: 25 % of her inventory value (rounded down). */
+	/** Biggest total stake value allowed: 25 % of the player's inventory value (rounded down). */
 	static int64 CapValue(const UDataTable* Items, const FGFInventory& Inv);
 	/** How many of ItemId the pinned recipe needs (protected from wagers). */
 	static int32 ProtectedCount(const FGFRecipeRow* Pinned, FName ItemId);
-	/** Validates her stake against her inventory and the safeguards. Stake must be normalised (unique ids). */
+	/** Validates the player's stake against their inventory and the safeguards. Stake must be normalised (unique ids). */
 	static EGFWagerCheck CheckStake(const UDataTable* Items, const FGFInventory& Inv, const TArray<FGFItemStack>& Stake, const FGFRecipeRow* Pinned, bool bWagersOff);
-	/** About 10 % of her inventory value in up to 3 readable stacks, never protected items (empty if nothing fits). */
+	/** About 10 % of the player's inventory value in up to 3 readable stacks, never protected items (empty if nothing fits). */
 	static TArray<FGFItemStack> Suggest(const UDataTable* Items, const FGFInventory& Inv, const FGFRecipeRow* Pinned);
-	/** What she needs: inputs of the pinned recipe she can't cover yet (then the pinned inputs themselves). */
+	/** What the player needs: inputs of the pinned recipe they can't cover yet (then the pinned inputs themselves). */
 	static TArray<FName> Needs(const FGFInventory& Inv, const FGFRecipeRow* Pinned);
 
 	/**
 	 * The AI's counter-bet (seeded, deterministic): value within +-10 % of the stake and in the same band,
-	 * every item tier within +-1 of her tiers, >= 50 % of the value from her staked categories and the rest from
-	 * her needs, at most 4 stacks, never exclusive items (Hallow Night / lab drops stay where they belong).
-	 * Empty if no fair counter exists (she gets asked to change her stake).
+	 * every item tier within +-1 of their tiers, >= 50 % of the value from their staked categories and the rest from
+	 * their needs, at most 4 stacks, never exclusive items (Hallow Night / lab drops stay where they belong).
+	 * Empty if no fair counter exists (the player gets asked to change their stake).
 	 */
 	static TArray<FGFItemStack> MatchCounter(const UDataTable* Items, const TArray<FGFItemStack>& Stake, const TArray<FName>& InNeeds, int32 Seed);
 	/** Checks every counter-bet rule above; Why gets the first broken one. */

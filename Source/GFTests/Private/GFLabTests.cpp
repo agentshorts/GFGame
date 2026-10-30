@@ -90,7 +90,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFLabShiftTest, "GFGame.Lab.Shift", GFLabTestF
 bool FGFLabShiftTest::RunTest(const FString&)
 {
 	using namespace GFLabTestUtil;
-	FGFLabRun R = FGFLabRules::StartRun(TEXT("Her"), 7);
+	FGFLabRun R = FGFLabRules::StartRun(TEXT("Owner"), 7);
 	TestTrue(TEXT("Bad pile"), FGFLabRules::BeginSearch(R, 8) == EGFLabOrder::BadPile);
 	TestTrue(TEXT("Search pile 0"), FGFLabRules::BeginSearch(R, 0) == EGFLabOrder::Ok);
 	TestTrue(TEXT("One at a time"), FGFLabRules::BeginSearch(R, 1) == EGFLabOrder::Busy);
@@ -242,13 +242,13 @@ bool FGFLabTamingAidsTest::RunTest(const FString&)
 		return false;
 	}
 	// Empty-handed inside the aggro radius: normally a threat.
-	const TArray<FGFTamerView> Her = { FGFTamerView(TEXT("Her"), 500.f, NAME_None, false) };
+	const TArray<FGFTamerView> Tamers = { FGFTamerView(TEXT("Owner"), 500.f, NAME_None, false) };
 	FGFTameMachine M;
 	float Now = 0.f;
-	M.Tick(*Raptor, Now, 0.1f, Her);
-	M.Tick(*Raptor, Now += 0.1f, 0.1f, Her);
+	M.Tick(*Raptor, Now, 0.1f, Tamers);
+	M.Tick(*Raptor, Now += 0.1f, 0.1f, Tamers);
 	TestTrue(TEXT("Threat without food"), M.State == EGFTameState::Threat);
-	M.ForceHostile(TEXT("Her"));
+	M.ForceHostile(TEXT("Owner"));
 	TestTrue(TEXT("Hostile"), M.State == EGFTameState::Hostile);
 
 	TestTrue(TEXT("Mist works"), M.ApplyCalm(Now));
@@ -259,20 +259,20 @@ bool FGFLabTamingAidsTest::RunTest(const FString&)
 	{
 		while (Now < Until)
 		{
-			M.Tick(*Raptor, Now += 0.25f, 0.25f, Her);
+			M.Tick(*Raptor, Now += 0.25f, 0.25f, Tamers);
 			bStayedCalm &= Now >= MistEnds || (M.State != EGFTameState::Threat && M.State != EGFTameState::Hostile);
 		}
 	};
 	TickTo(Now + 0.5f);
-	TestTrue(TEXT("Curious about her while calm"), M.State == EGFTameState::Curious);
-	// Wrong food twice while calm: refused, but it doesn't turn on her.
-	TestTrue(TEXT("Refused"), M.Offer(*Raptor, Now, TEXT("Her"), TEXT("Stone")) == EGFOfferResult::Refused);
+	TestTrue(TEXT("Curious about the player while calm"), M.State == EGFTameState::Curious);
+	// Wrong food twice while calm: refused, but it doesn't turn on the player.
+	TestTrue(TEXT("Refused"), M.Offer(*Raptor, Now, TEXT("Owner"), TEXT("Stone")) == EGFOfferResult::Refused);
 	TickTo(Now + Raptor->OfferCooldown);
-	TestTrue(TEXT("Refused again"), M.Offer(*Raptor, Now, TEXT("Her"), TEXT("Stone")) == EGFOfferResult::Refused);
+	TestTrue(TEXT("Refused again"), M.Offer(*Raptor, Now, TEXT("Owner"), TEXT("Stone")) == EGFOfferResult::Refused);
 	TestTrue(TEXT("Calm through refusals"), M.State == EGFTameState::Curious);
 	// A Lab Treat feeds it.
 	TickTo(Now + Raptor->OfferCooldown);
-	TestTrue(TEXT("Lab Treat accepted"), M.Offer(*Raptor, Now, TEXT("Her"), GFLabItems::LabTreat) == EGFOfferResult::Accepted);
+	TestTrue(TEXT("Lab Treat accepted"), M.Offer(*Raptor, Now, TEXT("Owner"), GFLabItems::LabTreat) == EGFOfferResult::Accepted);
 	TestEqual(TEXT("Bond from the treat"), M.Bond, FGFDinoDiet::BondGain(*Raptor, GFLabItems::LabTreat));
 	TickTo(MistEnds - 0.1f);
 	TestTrue(TEXT("Nobody is a threat for the mist's 10 s"), bStayedCalm && Now - (MistEnds - FGFTameMachine::CalmingMistSeconds) >= 9.5f);

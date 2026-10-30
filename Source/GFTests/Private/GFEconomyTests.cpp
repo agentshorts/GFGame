@@ -107,7 +107,7 @@ bool FGFEconomyLedgerTest::RunTest(const FString&)
 	FRandomStream Rng(1234);
 	FGFMapLedgerAccounts A;
 	FGFTransferLedger L;
-	const TArray<FString> Keys = { TEXT("Her"), TEXT("Friend1"), TEXT("Friend2"), TEXT("Friend3") };
+	const TArray<FString> Keys = { TEXT("Owner"), TEXT("Friend1"), TEXT("Friend2"), TEXT("Friend3") };
 	TMap<FName, int64> Start;
 	for (const FString& K : Keys)
 	{
@@ -242,14 +242,14 @@ bool FGFEconomyEscrowTest::RunTest(const FString&)
 	auto Fresh = [](FGFMapLedgerAccounts& A)
 	{
 		A.Accounts.Reset();
-		A.Accounts.Add(TEXT("Her")).Add(TEXT("Amber"), 10);
+		A.Accounts.Add(TEXT("Owner")).Add(TEXT("Amber"), 10);
 		A.Accounts.Add(TEXT("Friend")).Add(TEXT("Wood"), 30);
 	};
 	const FGuid Wager = FGuid::NewGuid();
 	auto Stake = [&](FGFMapLedgerAccounts& A, FGFTransferLedger& L)
 	{
 		L.OpenEscrow(Wager, TEXT("Wager"));
-		TestTrue(TEXT("Her stake"), L.Deposit(A, FGuid::NewGuid(), Wager, TEXT("Her"), { FGFItemStack(TEXT("Amber"), 3) }) == EGFTxResult::Applied);
+		TestTrue(TEXT("Owner's stake"), L.Deposit(A, FGuid::NewGuid(), Wager, TEXT("Owner"), { FGFItemStack(TEXT("Amber"), 3) }) == EGFTxResult::Applied);
 		TestTrue(TEXT("Friend stake"), L.Deposit(A, FGuid::NewGuid(), Wager, TEXT("Friend"), { FGFItemStack(TEXT("Wood"), 24) }) == EGFTxResult::Applied);
 		TestTrue(TEXT("Can't stake more than you have"), L.Deposit(A, FGuid::NewGuid(), Wager, TEXT("Friend"), { FGFItemStack(TEXT("Wood"), 7) }) == EGFTxResult::InsufficientItems);
 		TestEqual(TEXT("Stakes held"), L.HeldInEscrow(TEXT("Wood")), int64(24));
@@ -257,18 +257,18 @@ bool FGFEconomyEscrowTest::RunTest(const FString&)
 	{
 		FGFMapLedgerAccounts A; Fresh(A); FGFTransferLedger L; Stake(A, L);
 		const FGuid Tx = FGuid::NewGuid();
-		TestTrue(TEXT("Win pays out"), L.Release(A, Tx, Wager, TEXT("Her")) == EGFTxResult::Applied);
-		TestTrue(TEXT("Paying twice is a no-op"), L.Release(A, Tx, Wager, TEXT("Her")) == EGFTxResult::AlreadyApplied);
+		TestTrue(TEXT("Win pays out"), L.Release(A, Tx, Wager, TEXT("Owner")) == EGFTxResult::Applied);
+		TestTrue(TEXT("Paying twice is a no-op"), L.Release(A, Tx, Wager, TEXT("Owner")) == EGFTxResult::AlreadyApplied);
 		TestTrue(TEXT("Closed escrow can't pay again"), L.Release(A, FGuid::NewGuid(), Wager, TEXT("Friend")) == EGFTxResult::EscrowClosed);
 		TestTrue(TEXT("Closed escrow can't be refunded"), L.Refund(A, FGuid::NewGuid(), Wager) == EGFTxResult::EscrowClosed);
-		TestEqual(TEXT("Winner keeps her amber"), A.Accounts[TEXT("Her")].GetCount(TEXT("Amber")), 10);
-		TestEqual(TEXT("Winner gets the wood"), A.Accounts[TEXT("Her")].GetCount(TEXT("Wood")), 24);
+		TestEqual(TEXT("Winner keeps their amber"), A.Accounts[TEXT("Owner")].GetCount(TEXT("Amber")), 10);
+		TestEqual(TEXT("Winner gets the wood"), A.Accounts[TEXT("Owner")].GetCount(TEXT("Wood")), 24);
 		TestEqual(TEXT("Loser keeps the rest"), A.Accounts[TEXT("Friend")].GetCount(TEXT("Wood")), 6);
 	}
 	{
 		FGFMapLedgerAccounts A; Fresh(A); FGFTransferLedger L; Stake(A, L);
 		TestTrue(TEXT("Draw refunds"), L.Refund(A, FGuid::NewGuid(), Wager) == EGFTxResult::Applied);
-		TestEqual(TEXT("Draw: her amber back"), A.Accounts[TEXT("Her")].GetCount(TEXT("Amber")), 10);
+		TestEqual(TEXT("Draw: their amber back"), A.Accounts[TEXT("Owner")].GetCount(TEXT("Amber")), 10);
 		TestEqual(TEXT("Draw: his wood back"), A.Accounts[TEXT("Friend")].GetCount(TEXT("Wood")), 30);
 	}
 	{
@@ -278,11 +278,11 @@ bool FGFEconomyEscrowTest::RunTest(const FString&)
 		L.OpenEscrow(Letter, TEXT("Mail"));
 		TestTrue(TEXT("Letter filled"), L.Deposit(A, FGuid::NewGuid(), Letter, TEXT("Friend"), { FGFItemStack(TEXT("Wood"), 2) }) == EGFTxResult::Applied);
 		TestEqual(TEXT("One wager refunded"), L.RefundOpen(A, TEXT("Wager")), 1);
-		TestEqual(TEXT("Her amber back"), A.Accounts[TEXT("Her")].GetCount(TEXT("Amber")), 10);
+		TestEqual(TEXT("Owner's amber back"), A.Accounts[TEXT("Owner")].GetCount(TEXT("Amber")), 10);
 		TestEqual(TEXT("His wood back, minus the letter"), A.Accounts[TEXT("Friend")].GetCount(TEXT("Wood")), 28);
 		TestTrue(TEXT("Letter still open"), L.FindEscrow(Letter)->bOpen);
-		TestTrue(TEXT("Claiming the letter"), L.Release(A, FGuid::NewGuid(), Letter, TEXT("Her")) == EGFTxResult::Applied);
-		TestEqual(TEXT("Claimed"), A.Accounts[TEXT("Her")].GetCount(TEXT("Wood")), 2);
+		TestTrue(TEXT("Claiming the letter"), L.Release(A, FGuid::NewGuid(), Letter, TEXT("Owner")) == EGFTxResult::Applied);
+		TestEqual(TEXT("Claimed"), A.Accounts[TEXT("Owner")].GetCount(TEXT("Wood")), 2);
 		L.PruneClosedEscrows();
 		TestEqual(TEXT("Closed escrows pruned"), L.Escrows.Num(), 0);
 	}
@@ -291,7 +291,7 @@ bool FGFEconomyEscrowTest::RunTest(const FString&)
 		FGFMapLedgerAccounts A; Fresh(A); FGFTransferLedger L; Stake(A, L);
 		A.Accounts.Remove(TEXT("Friend"));
 		TestTrue(TEXT("Refund with a missing account refuses"), L.Refund(A, FGuid::NewGuid(), Wager) == EGFTxResult::UnknownAccount);
-		TestEqual(TEXT("Her stake still held"), L.HeldInEscrow(TEXT("Amber")), int64(3));
+		TestEqual(TEXT("Owner's stake still held"), L.HeldInEscrow(TEXT("Amber")), int64(3));
 	}
 	return true;
 }

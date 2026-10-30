@@ -1,0 +1,25 @@
+{
+ "schema": "voxelfinish.effect_graph/2",
+ "effect_id": "fx_café",
+ "name": "unicode id",
+ "animated": false,
+ "nodes": [
+  {
+   "id": "c",
+   "type": "const",
+   "params": {
+    "value": 0.25
+   }
+  }
+ ],
+ "outputs": {
+  "base_color": "c"
+ },
+ "rev": {
+  "number": 1,
+  "parent_rev": null,
+  "hash": "sha256:dad97105ad3843f2a491b0157016af4b1963d387b07e5eb6e0dc015d296e1468",
+  "note": "repro",
+  "created": "2026-10-30T00:00:00Z"
+ }
+}
