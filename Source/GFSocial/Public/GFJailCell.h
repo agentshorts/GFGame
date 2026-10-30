@@ -2,6 +2,8 @@
 
 // Greybox underground jail cell: a floor, four walls and a ceiling (block-all boxes) around a spot far below the hub.
 // Replicated so clients collide with it too. Art replaces the boxes later.
+// The whole cell (walls included) is a no-entry box in UGFSafeZoneSubsystem while it exists: walkers that don't
+// collide (e.g. the giant) can come up to it but never into it, and anyone inside is out of their reach.
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GFJailCell.generated.h"
@@ -23,7 +25,13 @@ public:
 
 	/** Where a jailed pawn stands (centre, just above the floor). */
 	FVector GetStandSpot() const { return GetActorLocation() + FVector(0.f, 0.f, 100.f); }
+	/** World box around the whole cell, walls, floor and ceiling included (the no-entry box). */
+	FBox GetCellBox() const;
 
 	UPROPERTY(VisibleAnywhere, Category = "GF|Social") TObjectPtr<UBoxComponent> Floor;
 	UPROPERTY(VisibleAnywhere, Category = "GF|Social") TArray<TObjectPtr<UBoxComponent>> Walls;
+
+protected:
+	virtual void PostInitializeComponents() override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 };

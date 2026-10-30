@@ -22,6 +22,7 @@
 #include "GFSocialDirector.h"
 #include "GFGiantDirector.h"
 #include "GFGiantEventComponent.h"
+#include "GFJailCell.h"
 #include "GFTestZoneProvider.h"
 #include "GameFramework/DefaultPawn.h"
 
@@ -927,6 +928,97 @@ bool FGFSocialProtectionProvidersTest::RunTest(const FString&)
 	TestTrue(TEXT("Land provider is now the newest"), Zones->GetZone() == Lands.Get());
 	Check(TEXT("Land newest"), false);
 	Zones->UnregisterProvider(LandProvider);
+	return true;
+}
+
+// Big Grumble in a world with faction land: the event's land zone answers protection through the land owner (so an
+// unprotected visitor on faction land is exposed, a member or a protected visitor isn't), the player views carry the
+// faction and host flag, the event goes for the exposed visitor, a protected attacker isn't eaten, and the jail cell is
+// a no-entry box (registered at spawn, gone with the cell) that puts a jailed player out of reach.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialGiantProtectionTest, "GFGame.Social.GiantProtection", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFSocialGiantProtectionTest::RunTest(const FString&)
+{
+	FWorld W;
+	if (!W.Init(*this, TEXT("GFSocialGiantProtection")))
+	{
+		return false;
+	}
+	UGFSocialComponent* S = W.Social;
+	UGFSafeZoneSubsystem* Zones = UGFSafeZoneSubsystem::Get(W.World);
+	TSharedPtr<FTwoLands> Lands = MakeShared<FTwoLands>();
+	Lands->Access = &S->Access;
+	Zones->SetOverride(Lands);
+	AGFPlayerState* L = W.Add(TEXT("L"), FA);
+	AGFPlayerState* M = W.Add(TEXT("M"), FA);
+	AGFPlayerState* V = W.Add(TEXT("V"), FB);
+	AGFPlayerState* H = W.Add(TEXT("H"), NAME_None, true);
+	for (AGFPlayerState* PS : { L, M, V, H })
+	{
+		PutAt(W.World, PS, OnA);
+	}
+	UGFGiantEventComponent* Giant = AGFGiantDirector::GetEvent(W.World, true);
+	if (!TestNotNull(TEXT("Giant event"), Giant))
+	{
+		return false;
+	}
+	Giant->bAutoTrigger = false;
+	Giant->ForcedSeed = 5;
+	Giant->Tuning.bEatIdleTarget = false;
+
+	auto View = [&](const TCHAR* Key)
+	{
+		FGFGiantPlayerView Out;
+		for (const FGFGiantPlayerView& P : Giant->GatherPlayers())
+		{
+			if (P.Key == Key)
+			{
+				Out = P;
+			}
+		}
+		return Out;
+	};
+	TestEqual(TEXT("View carries the faction"), View(TEXT("V")).GroupId, FB);
+	TestTrue(TEXT("View carries the host flag"), View(TEXT("H")).bHost);
+	const IGFSafeZoneQuery& Zone = Giant->GetLandZone();
+	const TArray<FBox> NoBoxes;
+	TestTrue(TEXT("Unprotected visitor on FA land is exposed"), FGFGiantRules::IsExposed(Zone, NoBoxes, View(TEXT("V"))));
+	TestFalse(TEXT("Member at home is not exposed"), FGFGiantRules::IsExposed(Zone, NoBoxes, View(TEXT("M"))));
+	TestFalse(TEXT("Host is not exposed"), FGFGiantRules::IsExposed(Zone, NoBoxes, View(TEXT("H"))));
+	TestEqual(TEXT("Land owner through the land zone"), Zone.OwnerAt(OnA), FA);
+	S->Access.FindOrAdd(FA, TEXT("V")).bProtected = true;
+	TestFalse(TEXT("Protected visitor is not exposed"), FGFGiantRules::IsExposed(Zone, NoBoxes, View(TEXT("V"))));
+	TestFalse(TEXT("Trigger: nobody exposed"), FGFGiantRules::AnyoneOutside(Zone, Giant->GatherPlayers(), Giant->GetNoEntry()));
+	S->Access.FindOrAdd(FA, TEXT("V")).bProtected = false;
+	TestTrue(TEXT("Trigger: the visitor is exposed again"), FGFGiantRules::AnyoneOutside(Zone, Giant->GatherPlayers(), Giant->GetNoEntry()));
+
+	// The jail cell: a no-entry box from spawn; the jailed member is out of reach.
+	TestEqual(TEXT("No cell yet"), Giant->GetNoEntry().Num(), 0);
+	TestEqual(TEXT("Leader jails a member"), S->ServerJail(L, M), C::Ok);
+	const TArray<FBox> Boxes = Giant->GetNoEntry();
+	TestEqual(TEXT("The cell is a no-entry box"), Boxes.Num(), 1);
+	const FGFGiantPlayerView Jailed = View(TEXT("M"));
+	TestTrue(TEXT("The jailed member stands inside it"), FGFNoEntry::IsInside(Boxes, Jailed.Location));
+	TestFalse(TEXT("The jailed member is out of reach"), FGFGiantRules::IsExposed(Zone, Boxes, Jailed));
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AGFJailCell* Extra = W.World->SpawnActor<AGFJailCell>(AGFJailCell::StaticClass(), FTransform(FVector(9000.f, 0.f, 0.f)), Params);
+	TestEqual(TEXT("A second cell adds a box"), Giant->GetNoEntry().Num(), 2);
+	TestTrue(TEXT("Its stand spot is inside"), Extra && Zones->IsInsideNoEntry(Extra->GetStandSpot()));
+	if (Extra)
+	{
+		Extra->Destroy();
+	}
+	TestEqual(TEXT("A destroyed cell drops its box"), Giant->GetNoEntry().Num(), 1);
+
+	// The event goes for the exposed visitor; the protected leader hitting it isn't eaten, the visitor is.
+	TestTrue(TEXT("Event starts"), Giant->ServerStartEvent());
+	TestEqual(TEXT("Targets the unprotected visitor on faction land"), Giant->GetSim().TargetKey, FString(TEXT("V")));
+	TestFalse(TEXT("Protected leader isn't eaten"), Giant->ServerOnAttacked(L));
+	TestFalse(TEXT("Jailed member isn't eaten"), Giant->ServerOnAttacked(M));
+	TestTrue(TEXT("Still running"), Giant->bEventActive && Giant->GetSim().IsActive());
+	TestTrue(TEXT("Exposed visitor who attacks is eaten"), Giant->ServerOnAttacked(V));
+	TestEqual(TEXT("Damage from the giant"), Giant->DamageFromGiant, 0);
+	Zones->SetOverride(nullptr);
 	return true;
 }
 

@@ -2,10 +2,14 @@
 
 // Big Grumble, the giant dino event (open world). Every few days of real time, after heavy play, a giant
 // placeholder dino turns up while players are outside safe territory. It herds rather than hunts: it never deals
-// damage, only shoves players toward safety, it can never enter safe territory, it talks in all chat, and it leaves
-// after EventSeconds. It eats exactly one player (who faints through IGFFaintHandler, never through the ledger)
-// when that player attacks it, or when its target stands still outside safety near it.
+// damage, only shoves players toward safety, it talks in all chat, and it leaves after EventSeconds. It eats exactly
+// one player (who faints through IGFFaintHandler, never through the ledger) when that player attacks it, or when its
+// target stands still near it.
 // Safety is always asked through IGFSafeZoneQuery (GFSafeZone.h): any number of regions, no hard-coded circle.
+// Who it may take is asked per player (IGFSafeZoneQuery::IsSafeFor, i.e. protection): a player is "exposed" when
+// that says unsafe and they are not inside a no-entry box (FGFNoEntry, e.g. a jail cell). It only ever targets,
+// shoves or eats exposed players. Movement: it skirts safe territory, except that it walks in after an exposed
+// target standing there (an unprotected visitor on someone's land); it never enters a no-entry box.
 //
 // Everything that decides behaviour lives in FGFGiantRules / FGFGiantSim (no world, deterministic for a seed), so
 // headless tests can drive it directly; UGFGiantEventComponent (on AGFGiantDirector) applies the sim to the world on the
@@ -98,8 +102,10 @@ struct GFGIANT_API FGFGiantTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Circle") float CircleBaseRadius = 1200.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Circle") float CircleRadiusPerExtraPlayer = 400.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Circle") float CircleMaxRadius = 3200.f;
-	/** The giant's body radius: its centre always stays at least this far outside safe territory. */
+	/** The giant's body radius: while skirting safe territory its centre stays at least this far outside (also its no-entry margin). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Circle") float GiantRadius = 350.f;
+	/** Half height (cm) of its body around its location: no-entry boxes overlapping this height block it. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Circle") float BodyHalfHeight = 600.f;
 
 	// ---- Chase ----
 	/** Fallback player run speed when the pawn has no character movement. */
@@ -229,6 +235,11 @@ struct GFGIANT_API FGFGiantPlayerView
 	/** Who last turned this player's faction protection off (AGFPlayerState::LastDrag); fills {Dragger}. */
 	FString Dragger;
 	int64 DraggedAtUtcTicks = 0;
+	/** Group (faction) id and host flag, for the per-player safety question (IGFSafeZoneQuery::IsSafeFor). */
+	FName GroupId;
+	bool bHost = false;
+
+	FGFSafeSubject Subject() const { return FGFSafeSubject(Key, GroupId, bHost); }
 };
 
 struct FGFGiantShove
@@ -281,12 +292,18 @@ struct GFGIANT_API FGFGiantRules
 
 	/** The default region (tunables) at Center for Members players. */
 	static FGFSafeRegion DefaultRegion(const FGFGiantTuning& T, const FVector& Center, int32 Members);
-	static bool AnyoneOutside(const IGFSafeZoneQuery& Zone, const TArray<FGFGiantPlayerView>& Players);
+	/**
+	 * The giant may take P: not safe for P where they stand (Zone.IsSafeFor, so protection counts) and not inside a
+	 * no-entry box (out of reach, e.g. jailed). Only exposed players are ever targeted, shoved or eaten.
+	 */
+	static bool IsExposed(const IGFSafeZoneQuery& Zone, const TArray<FBox>& NoEntry, const FGFGiantPlayerView& P);
+	/** Anyone exposed (the trigger's "someone is out there"). */
+	static bool AnyoneOutside(const IGFSafeZoneQuery& Zone, const TArray<FGFGiantPlayerView>& Players, const TArray<FBox>& NoEntry = TArray<FBox>());
 	/** Moves P (horizontally) out until its body (GiantRadius) is clear of safe territory. */
 	static FVector ClampOutside(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const FVector& P);
 
-	/** Newest outside player: lowest play time (within NewestTieSeconds), then latest first join, then farthest from safety. INDEX_NONE if nobody is outside. */
-	static int32 PickTarget(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const TArray<FGFGiantPlayerView>& Players);
+	/** Newest exposed player: lowest play time (within NewestTieSeconds), then latest first join, then farthest from safety. INDEX_NONE if nobody is exposed. */
+	static int32 PickTarget(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const TArray<FGFGiantPlayerView>& Players, const TArray<FBox>& NoEntry = TArray<FBox>());
 	/** Where it goes to herd Target: behind it, on the side away from the nearest safety. */
 	static FVector HerdGoal(const FGFGiantTuning& T, const IGFSafeZoneQuery& Zone, const FVector& Target);
 	/** Shove launch velocity for a player at P: horizontally toward the nearest safety. */
@@ -305,6 +322,24 @@ struct GFGIANT_API FGFGiantRules
 };
 
 /**
+ * The zone the giant decides with in a world: shapes (inside, edges, closest points) from Base (its own regions or a
+ * custom zone), but per-player safety and owners from the land owner first (UGFSafeZoneSubsystem::IsSafeFor /
+ * OwnerAt, so territory protection counts), falling back to Base on unowned land.
+ */
+struct GFGIANT_API FGFGiantLandZone : public IGFSafeZoneQuery
+{
+	const IGFSafeZoneQuery* Base = nullptr;
+	TWeakObjectPtr<const UGFSafeZoneSubsystem> Lands;
+
+	virtual bool IsInsideSafe(const FVector& L) const override { return Base && Base->IsInsideSafe(L); }
+	virtual bool IsSafeFor(const FGFSafeSubject& Who, const FVector& L) const override;
+	virtual FName OwnerAt(const FVector& L) const override;
+	virtual FVector ClosestSafePoint(const FVector& L) const override { return Base ? Base->ClosestSafePoint(L) : L; }
+	virtual bool ClosestEdge(const FVector& L, FVector& OutPoint, FVector& OutOutward) const override { return Base && Base->ClosestEdge(L, OutPoint, OutOutward); }
+	virtual bool HasAnySafe() const override { return Base && Base->HasAnySafe(); }
+};
+
+/**
  * One giant event, deterministic for a seed. Drive with Begin, then Step every frame (Zone must stay valid) (players as seen this frame),
  * Attacked when a player hits it. Read State/Location; apply the step output.
  */
@@ -318,6 +353,8 @@ struct GFGIANT_API FGFGiantSim
 
 	/** Safe territory (not owned; the caller keeps it alive and may swap it between steps). */
 	const IGFSafeZoneQuery* Zone = nullptr;
+	/** No-entry boxes (FGFNoEntry; e.g. jail cells): it never walks into one, and players inside are out of reach. Caller-set. */
+	TArray<FBox> NoEntry;
 	FVector Location = FVector::ZeroVector;
 	EGFGiantState State = EGFGiantState::None;
 	float Elapsed = 0.f;
@@ -340,10 +377,12 @@ struct GFGIANT_API FGFGiantSim
 	float LeaveLeft = 0.f;
 	/** Last chase speed (tests). */
 	float LastSpeed = 0.f;
+	/** It walked into safe territory after a target and is still in (it walks back out instead of jumping). */
+	bool bWalkingOut = false;
 
 	void Begin(const FGFGiantTuning& InT, const FGFGiantLines& InLines, const IGFSafeZoneQuery& InZone, const TArray<FGFGiantPlayerView>& Players, bool bInReturnVisit, int32 Seed, FGFGiantStepOut& Out);
 	void Step(float Dt, const TArray<FGFGiantPlayerView>& Players, FGFGiantStepOut& Out);
-	/** A player attacked it: that player is eaten and it leaves at once (only ever one). Returns true if eaten. */
+	/** A player attacked it: an exposed attacker is eaten and it leaves at once (only ever one); it never eats a protected or unreachable one. Returns true if eaten. */
 	bool Attacked(const FString& Key, const TArray<FGFGiantPlayerView>& Players, FGFGiantStepOut& Out);
 
 	bool IsActive() const { return State == EGFGiantState::Chase || State == EGFGiantState::Circling || State == EGFGiantState::Leaving; }
@@ -354,5 +393,10 @@ private:
 	void ChaseChat(const FGFGiantPlayerView* Target, FGFGiantStepOut& Out);
 	bool Eat(const FString& Key, const TArray<FGFGiantPlayerView>& Players, FGFGiantStepOut& Out);
 	void StartLeaving(FGFGiantStepOut& Out);
+	/**
+	 * One step of StepLen toward Goal. bMayEnterSafe: straight line, safe territory or not. Otherwise it skirts safe
+	 * territory (StepOutside); if it chased someone in, it first walks out the shortest way instead of jumping. Never into a no-entry box.
+	 */
+	void MoveToward(const FVector& Goal, float StepLen, bool bMayEnterSafe);
 	const FGFGiantPlayerView* Find(const TArray<FGFGiantPlayerView>& Players, const FString& Key) const;
 };

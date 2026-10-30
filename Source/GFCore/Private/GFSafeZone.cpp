@@ -219,6 +219,48 @@ FVector FGFSafeZone::StepOutside(const IGFSafeZoneQuery& Zone, const FVector& Fr
 	return KeepOut(Zone, Next, Margin);
 }
 
+// ---------------- No-entry boxes ----------------
+
+bool FGFNoEntry::IsInside(const TArray<FBox>& Boxes, const FVector& P)
+{
+	return Boxes.ContainsByPredicate([&](const FBox& B) { return B.IsValid && B.IsInsideOrOn(P); });
+}
+
+FVector FGFNoEntry::KeepOut(const TArray<FBox>& Boxes, const FVector& P, float Radius, float HalfHeight)
+{
+	FVector Out = P;
+	for (int32 Iter = 0; Iter < 4; ++Iter)
+	{
+		bool bMoved = false;
+		for (const FBox& B : Boxes)
+		{
+			if (!B.IsValid || B.Max.Z < P.Z - HalfHeight || B.Min.Z > P.Z + HalfHeight)
+			{
+				continue;
+			}
+			const float MinX = B.Min.X - Radius, MaxX = B.Max.X + Radius;
+			const float MinY = B.Min.Y - Radius, MaxY = B.Max.Y + Radius;
+			if (Out.X <= MinX || Out.X >= MaxX || Out.Y <= MinY || Out.Y >= MaxY)
+			{
+				continue;
+			}
+			// Out to the nearest side (so a mover slides along the box instead of stopping).
+			const float DX0 = Out.X - MinX, DX1 = MaxX - Out.X, DY0 = Out.Y - MinY, DY1 = MaxY - Out.Y;
+			const float M = FMath::Min(FMath::Min(DX0, DX1), FMath::Min(DY0, DY1));
+			if (M == DX0) { Out.X = MinX - 0.5f; }
+			else if (M == DX1) { Out.X = MaxX + 0.5f; }
+			else if (M == DY0) { Out.Y = MinY - 0.5f; }
+			else { Out.Y = MaxY + 0.5f; }
+			bMoved = true;
+		}
+		if (!bMoved)
+		{
+			break;
+		}
+	}
+	return Out;
+}
+
 // ---------------- Subsystem ----------------
 
 UGFSafeZoneSubsystem* UGFSafeZoneSubsystem::Get(const UObject* WorldContext)
@@ -310,3 +352,32 @@ const IGFSafeZoneQuery* UGFSafeZoneSubsystem::OwnerZoneAt(const FVector& Locatio
 	}
 	return nullptr;
 }
+
+void UGFSafeZoneSubsystem::SetNoEntry(const UObject* Owner, const FBox& Box)
+{
+	if (!Owner)
+	{
+		return;
+	}
+	ClearNoEntry(Owner);
+	NoEntry.Add({ Owner, Box });
+}
+
+void UGFSafeZoneSubsystem::ClearNoEntry(const UObject* Owner)
+{
+	NoEntry.RemoveAll([&](const TPair<TWeakObjectPtr<const UObject>, FBox>& E) { return !E.Key.IsValid() || E.Key.Get() == Owner; });
+}
+
+TArray<FBox> UGFSafeZoneSubsystem::GetNoEntry() const
+{
+	TArray<FBox> Out;
+	for (const TPair<TWeakObjectPtr<const UObject>, FBox>& E : NoEntry)
+	{
+		if (E.Key.IsValid())
+		{
+			Out.Add(E.Value);
+		}
+	}
+	return Out;
+}
+

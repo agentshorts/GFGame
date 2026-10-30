@@ -94,6 +94,21 @@ struct GFCORE_API FGFSafeZone
 	static FVector StepOutside(const IGFSafeZoneQuery& Zone, const FVector& From, const FVector& Goal, float StepLen, float Margin);
 };
 
+/**
+ * No-entry boxes: places nothing that walks may enter (e.g. a jail cell). World-space boxes; anything inside one is
+ * out of reach. Pure helpers, no world.
+ */
+struct GFCORE_API FGFNoEntry
+{
+	/** True if P is inside any box (3D). */
+	static bool IsInside(const TArray<FBox>& Boxes, const FVector& P);
+	/**
+	 * P pushed out horizontally until a body of Radius at P is clear of every box whose height range overlaps the body
+	 * (P.Z - HalfHeight .. P.Z + HalfHeight). Boxes above or below the body are ignored. Z is kept.
+	 */
+	static FVector KeepOut(const TArray<FBox>& Boxes, const FVector& P, float Radius, float HalfHeight);
+};
+
 UINTERFACE(MinimalAPI, meta = (CannotImplementInterfaceInBlueprint))
 class UGFSafeZoneProvider : public UInterface
 {
@@ -142,10 +157,18 @@ public:
 	 */
 	FName OwnerAt(const FVector& Location) const;
 
+	/** Registers (or moves) Owner's no-entry box (FGFNoEntry). Works wherever Owner exists (server and clients). */
+	void SetNoEntry(const UObject* Owner, const FBox& Box);
+	void ClearNoEntry(const UObject* Owner);
+	/** Every live no-entry box. */
+	TArray<FBox> GetNoEntry() const;
+	bool IsInsideNoEntry(const FVector& Location) const { return FGFNoEntry::IsInside(GetNoEntry(), Location); }
+
 private:
 	/** The query that owns the land at Location (override alone when set, else providers newest first), or null. */
 	const IGFSafeZoneQuery* OwnerZoneAt(const FVector& Location, FName& OutOwner) const;
 
 	TArray<TWeakObjectPtr<UObject>> Providers;
 	TSharedPtr<IGFSafeZoneQuery> Override;
+	TArray<TPair<TWeakObjectPtr<const UObject>, FBox>> NoEntry;
 };

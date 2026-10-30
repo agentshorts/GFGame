@@ -141,6 +141,19 @@ const IGFSafeZoneQuery& UGFGiantEventComponent::GetSafeZone() const
 	return Circles;
 }
 
+const IGFSafeZoneQuery& UGFGiantEventComponent::GetLandZone() const
+{
+	LandZone.Base = &GetSafeZone();
+	LandZone.Lands = UGFSafeZoneSubsystem::Get(this);
+	return LandZone;
+}
+
+TArray<FBox> UGFGiantEventComponent::GetNoEntry() const
+{
+	const UGFSafeZoneSubsystem* Sub = UGFSafeZoneSubsystem::Get(this);
+	return Sub ? Sub->GetNoEntry() : TArray<FBox>();
+}
+
 const IGFSafeZoneQuery* UGFGiantEventComponent::GetSafeZoneQuery() const
 {
 	if (!ZoneOverride.IsValid() && SafeRegions.Num() == 0)
@@ -194,6 +207,8 @@ TArray<FGFGiantPlayerView> UGFGiantEventComponent::GatherPlayers() const
 		V.bBusy = BusyKeys.Contains(PS->PlayerKey);
 		V.Dragger = PS->LastDrag.DraggerName;
 		V.DraggedAtUtcTicks = PS->LastDrag.AtUtcTicks;
+		V.GroupId = PS->FactionId;
+		V.bHost = PS->bIsHost;
 		if (const ACharacter* C = Cast<ACharacter>(Pawn))
 		{
 			V.RunSpeed = C->GetCharacterMovement() ? C->GetCharacterMovement()->MaxWalkSpeed : 0.f;
@@ -220,7 +235,8 @@ bool UGFGiantEventComponent::ServerStartEvent()
 	Sim.Channel = Info.ChatChannel.IsNone() ? FName(TEXT("All")) : Info.ChatChannel;
 	FGFGiantStepOut Out;
 	RefreshSafeZone(Players.Num() + Bellies.Num());
-	Sim.Begin(Tuning, Lines, GetSafeZone(), Players, bReturn, ForcedSeed != 0 ? ForcedSeed : FMath::Rand(), Out);
+	Sim.NoEntry = GetNoEntry();
+	Sim.Begin(Tuning, Lines, GetLandZone(), Players, bReturn, ForcedSeed != 0 ? ForcedSeed : FMath::Rand(), Out);
 
 	FActorSpawnParameters P;
 	P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -256,7 +272,8 @@ bool UGFGiantEventComponent::ServerOnAttacked(AGFPlayerState* By)
 		return false;
 	}
 	FGFGiantStepOut Out;
-	Sim.Zone = &GetSafeZone();
+	Sim.Zone = &GetLandZone();
+	Sim.NoEntry = GetNoEntry();
 	const bool bEaten = Sim.Attacked(By->PlayerKey, GatherPlayers(), Out);
 	Apply(Out);
 	return bEaten;
@@ -504,7 +521,8 @@ void UGFGiantEventComponent::TickComponent(float DeltaSeconds, ELevelTick TickTy
 	{
 		WatchPawns(); // late joiners / respawned pawns
 		FGFGiantStepOut Out;
-		Sim.Zone = &GetSafeZone();
+		Sim.Zone = &GetLandZone();
+		Sim.NoEntry = GetNoEntry();
 		Sim.Step(DeltaSeconds, Players, Out);
 		Apply(Out);
 		return;
@@ -513,7 +531,7 @@ void UGFGiantEventComponent::TickComponent(float DeltaSeconds, ELevelTick TickTy
 	if (bAutoTrigger && TriggerCheckIn <= 0.f)
 	{
 		TriggerCheckIn = Tuning.TriggerCheckSeconds;
-		const bool bAnyoneOutside = FGFGiantRules::AnyoneOutside(GetSafeZone(), Players);
+		const bool bAnyoneOutside = FGFGiantRules::AnyoneOutside(GetLandZone(), Players, GetNoEntry());
 		if (FGFGiantRules::ShouldTrigger(Tuning, Save, Now, bAnyoneOutside))
 		{
 			ServerStartEvent();

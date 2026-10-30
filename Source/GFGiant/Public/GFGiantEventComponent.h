@@ -5,7 +5,8 @@
 // the body later.
 // Server side of the giant dino event (Big Grumble; name and look in Data/CSV/DT_GiantDino.csv).
 // - Trigger: every MinRealSecondsBetween of real time, once players have played MinPlaySecondsSinceLast in total
-//   since the last event, and only while someone is outside safe territory. Clock and play time are saved with
+//   since the last event, and only while someone is exposed (FGFGiantRules::IsExposed: unprotected where they stand
+//   and not inside a no-entry box). Clock and play time are saved with
 //   the world (mode blob "Giant").
 // - While it runs, FGFGiantSim decides everything; this actor applies it: moves the replicated AGFGiantDino, shoves
 //   pawns (LaunchCharacter, never damage), posts lines to the replicated Chat log, and handles a snack (belly cam
@@ -67,6 +68,13 @@ public:
 	void SetSafeZone(TSharedPtr<IGFSafeZoneQuery> Zone);
 	/** The safe-zone query everything here uses (custom one if set, else the circle regions). */
 	const IGFSafeZoneQuery& GetSafeZone() const;
+	/**
+	 * What the sim decides with: GetSafeZone's shapes, with per-player safety and owners asked of the land owner
+	 * through UGFSafeZoneSubsystem first (FGFGiantLandZone), so faction protection counts.
+	 */
+	const IGFSafeZoneQuery& GetLandZone() const;
+	/** The world's no-entry boxes (UGFSafeZoneSubsystem; e.g. jail cells). */
+	TArray<FBox> GetNoEntry() const;
 	/** IGFSafeZoneProvider (UGFSafeZoneSubsystem): the same zone, for other systems (null while there are no regions). */
 	virtual const IGFSafeZoneQuery* GetSafeZoneQuery() const override;
 	bool IsUsingDefaultRegion() const { return bUseDefaultRegion; }
@@ -164,4 +172,5 @@ private:
 	bool bUseDefaultRegion = true;
 	TSharedPtr<IGFSafeZoneQuery> ZoneOverride;
 	mutable FGFSafeCircles Circles;
+	mutable FGFGiantLandZone LandZone;
 };
