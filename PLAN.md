@@ -218,7 +218,7 @@ Rules for agents:
 - Every system exposes pure functions (scoring, trust math, recipes, save encoding) so tests don't need a world.
 - Cross-mode talk goes through `UGFInventoryComponent` and `UGFCompanionRoster` only; mini-game maps never reference hub classes directly.
 - One PR per feature, < ~600 changed lines, with tests in the same PR, so reviews stay manageable.
-- Mini-games load as separate maps (`L_Hub`, `L_Valley`, `L_Runway`, `L_Arena`, `L_Beat`); the hub is saved before each transition.
+- Mini-games load as separate maps (`L_Hub`, `L_Valley`, `L_Runway`, `L_Moba`, `L_Beat`); the hub is saved before each transition. Depths, the dino arena, the mine and the lab stay on the hub, each on its own pad.
 
 ---
 

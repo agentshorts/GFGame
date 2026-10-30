@@ -13,4 +13,5 @@ class GFCOMPANION_API UGFTamingGateSubsystem : public UGFMiniGameGateSubsystem
 public:
 	virtual FName GetGateId() const override { return TEXT("Taming"); }
 	virtual FName GetMapName() const override { return TEXT("/Game/Maps/L_Valley"); }
+	virtual FText GetDisplayName() const override { return FText::FromString(TEXT("Valley")); }
 };

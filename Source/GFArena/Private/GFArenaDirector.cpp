@@ -1,4 +1,5 @@
 #include "GFArenaDirector.h"
+#include "GFMiniGameCatalog.h"
 #include "GFWager.h"
 #include "GFEconomy.h"
 #include "GFGameState.h"
@@ -6,6 +7,7 @@
 #include "GFInventoryComponent.h"
 #include "GFCompanionRoster.h"
 #include "GFRecipeTypes.h"
+#include "Components/SceneComponent.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -38,6 +40,12 @@ AGFArenaDirector::AGFArenaDirector()
 	bReplicates = true;
 	bAlwaysRelevant = true;
 	SetNetUpdateFrequency(20.f);
+
+	// GetActorLocation reads the root. Without one it is always the origin, so the four
+	// sims look stacked even when Get() asked for the pad. Movable so the hub can park it later.
+	USceneComponent* PadRoot = CreateDefaultSubobject<USceneComponent>(TEXT("PadRoot"));
+	PadRoot->SetMobility(EComponentMobility::Movable);
+	RootComponent = PadRoot;
 }
 
 AGFArenaDirector* AGFArenaDirector::Get(UWorld* World, bool bSpawn)
@@ -54,7 +62,13 @@ AGFArenaDirector* AGFArenaDirector::Get(UWorld* World, bool bSpawn)
 	{
 		FActorSpawnParameters P;
 		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		return World->SpawnActor<AGFArenaDirector>(P);
+		const FVector At = FGFMiniGameCatalog::DefaultSpawn(ModeName);
+		AGFArenaDirector* Director = World->SpawnActor<AGFArenaDirector>(AGFArenaDirector::StaticClass(), FTransform(At), P);
+		if (Director)
+		{
+			Director->SetActorLocation(At);
+		}
+		return Director;
 	}
 	return nullptr;
 }
