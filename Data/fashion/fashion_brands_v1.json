@@ -22,7 +22,7 @@
       "name": "Dirtachi",
       "parody_of": "Gucci",
       "faction_vibe": "Verdant",
-      "tagline": "Muddy money, double-D monogram.",
+      "tagline": "Muddy money, double-D print.",
       "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
       "status": "placeholder",
       "items": [
@@ -40,7 +40,7 @@
         },
         {
           "id": "dirtachi_02",
-          "name": "Dirtachi Monogram Purse",
+          "name": "Dirtachi Mud-Print Purse",
           "type": "bag/purse",
           "materials": [
             "dead skin",
@@ -111,13 +111,13 @@
       "name": "Lava Vuitonne",
       "parody_of": "Louis Vuitton",
       "faction_vibe": "Cinderwrights",
-      "tagline": "Monogrammed, molten, mildly on fire.",
+      "tagline": "Patterned, molten, mildly on fire.",
       "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
       "status": "placeholder",
       "items": [
         {
           "id": "lavatonne_01",
-          "name": "Speedy Magma Tote",
+          "name": "Magma Duffle Tote",
           "type": "bag/purse",
           "materials": [
             "dead skin",
@@ -129,7 +129,7 @@
         },
         {
           "id": "lavatonne_02",
-          "name": "LV Lava Trunk",
+          "name": "Lava Steamer Trunk",
           "type": "bag/purse",
           "materials": [
             "obsidian",
@@ -140,7 +140,7 @@
         },
         {
           "id": "lavatonne_03",
-          "name": "Ember Monogram Scarf",
+          "name": "Ember Print Scarf",
           "type": "accessory",
           "materials": [
             "ash silk"
@@ -155,7 +155,7 @@
       "name": "Shardnel",
       "parody_of": "Chanel",
       "faction_vibe": "Rime",
-      "tagline": "No. 5 shards of the finest ice.",
+      "tagline": "Five shards of the finest ice.",
       "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
       "status": "placeholder",
       "items": [
@@ -172,7 +172,7 @@
         },
         {
           "id": "shardnel_02",
-          "name": "No. 5 Frost Perfume",
+          "name": "Frost Shard Perfume",
           "type": "cosmetic",
           "materials": [
             "crystal",
@@ -216,7 +216,7 @@
       "items": [
         {
           "id": "versaurus_01",
-          "name": "Medusaur Gold Shirt",
+          "name": "Gold Scale Silk Shirt",
           "type": "top",
           "materials": [
             "ash silk",
@@ -238,7 +238,7 @@
         },
         {
           "id": "versaurus_03",
-          "name": "Greek-Key Tail Cuff",
+          "name": "Gold Tail Cuff",
           "type": "accessory",
           "materials": [
             "gold dust",
@@ -372,7 +372,7 @@
         },
         {
           "id": "hermozoic_03",
-          "name": "H-Is-for-Herbivore Belt",
+          "name": "Herbivore Buckle Belt",
           "type": "accessory",
           "materials": [
             "dead skin",
@@ -405,7 +405,7 @@
         },
         {
           "id": "burrowberry_02",
-          "name": "Burrow Check Scarf",
+          "name": "Plaid Burrow Scarf",
           "type": "accessory",
           "materials": [
             "fur"
@@ -437,7 +437,7 @@
       "items": [
         {
           "id": "suprex_01",
-          "name": "Box Logo Tee (Tiny Arms Fit)",
+          "name": "Red Block Tee (Tiny Arms Fit)",
           "type": "top",
           "materials": [
             "ash silk",
@@ -491,7 +491,7 @@
         },
         {
           "id": "spike_02",
-          "name": "Tail Swoosh Track Pants",
+          "name": "Tail-Stripe Track Pants",
           "type": "bottoms",
           "materials": [
             "ash silk"
@@ -533,7 +533,7 @@
         },
         {
           "id": "raptidas_02",
-          "name": "Stan Snatch Sneakers",
+          "name": "Court Claw Sneakers",
           "type": "shoes",
           "materials": [
             "dead skin",
@@ -603,13 +603,13 @@
       "name": "Fangdi",
       "parody_of": "Fendi",
       "faction_vibe": "Cinderwrights",
-      "tagline": "FF stands for Fang Fang.",
+      "tagline": "Fangs stand for Fang Fang.",
       "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
       "status": "placeholder",
       "items": [
         {
           "id": "fangdi_01",
-          "name": "Fang Baguette Bag",
+          "name": "Fang Shoulder Bag",
           "type": "bag/purse",
           "materials": [
             "dead skin",
@@ -620,7 +620,7 @@
         },
         {
           "id": "fangdi_02",
-          "name": "Peekaboo Jaw Purse",
+          "name": "Open-Jaw Purse",
           "type": "bag/purse",
           "materials": [
             "dead skin",
@@ -632,7 +632,7 @@
         },
         {
           "id": "fangdi_03",
-          "name": "FF Ember Slides",
+          "name": "Ember Slides",
           "type": "shoes",
           "materials": [
             "rubber sap",
@@ -654,7 +654,7 @@
       "items": [
         {
           "id": "gnawvenchy_01",
-          "name": "Antigona Gnaw Bag",
+          "name": "Gnaw Tote Bag",
           "type": "bag/purse",
           "materials": [
             "dead skin",
@@ -692,13 +692,13 @@
       "name": "Volcantino",
       "parody_of": "Valentino",
       "faction_vibe": "Cinderwrights",
-      "tagline": "Rockstud, but the rocks are lava.",
+      "tagline": "Studs, but the studs are lava.",
       "trademark_check": "quick web check 2026-10-30: no fashion brand found under this name",
       "status": "placeholder",
       "items": [
         {
           "id": "volcantino_01",
-          "name": "Rockstud Magma Heels",
+          "name": "Studded Magma Pumps",
           "type": "shoes",
           "materials": [
             "obsidian",
@@ -820,7 +820,7 @@
       "items": [
         {
           "id": "pangaeagonia_01",
-          "name": "Better-Sweater Fleece",
+          "name": "Swamp Fleece Jacket",
           "type": "top",
           "materials": [
             "fur",
@@ -831,7 +831,7 @@
         },
         {
           "id": "pangaeagonia_02",
-          "name": "Baggies Swamp Shorts",
+          "name": "Swamp Trunks",
           "type": "bottoms",
           "materials": [
             "moss thread"
@@ -841,7 +841,7 @@
         },
         {
           "id": "pangaeagonia_03",
-          "name": "Synchilla Snap-Jaw Pullover",
+          "name": "Snap-Jaw Fleece Pullover",
           "type": "top",
           "materials": [
             "fur",
@@ -863,7 +863,7 @@
       "items": [
         {
           "id": "northfang_01",
-          "name": "Nuptse Fang Puffer",
+          "name": "Fang Puffer Jacket",
           "type": "top",
           "materials": [
             "fur",
@@ -907,7 +907,7 @@
       "items": [
         {
           "id": "leafis_01",
-          "name": "501 Vine Jeans",
+          "name": "Straight Vine Jeans",
           "type": "bottoms",
           "materials": [
             "moss thread",
@@ -982,7 +982,7 @@
         },
         {
           "id": "clawcs_02",
-          "name": "Jibbitz Tooth Charms",
+          "name": "Clog Tooth Charms",
           "type": "accessory",
           "materials": [
             "teeth",
@@ -1072,7 +1072,7 @@
       "items": [
         {
           "id": "drraptens_01",
-          "name": "1460 Stompers",
+          "name": "Eight-Eye Stomp Boots",
           "type": "shoes",
           "materials": [
             "dead skin",
@@ -1083,7 +1083,7 @@
         },
         {
           "id": "drraptens_02",
-          "name": "Yellow-Stitch Mary Janes",
+          "name": "Stitched Stomp Mary Janes",
           "type": "shoes",
           "materials": [
             "dead skin"
@@ -1115,7 +1115,7 @@
         },
         {
           "id": "mykelclaws_02",
-          "name": "MK Gold Claw Watch",
+          "name": "Gold Claw Watch",
           "type": "accessory",
           "materials": [
             "gold dust",
@@ -1257,7 +1257,7 @@
       "items": [
         {
           "id": "lululava_01",
-          "name": "Align Magma Leggings",
+          "name": "Magma Yoga Leggings",
           "type": "bottoms",
           "materials": [
             "ash silk",
@@ -1268,7 +1268,7 @@
         },
         {
           "id": "lululava_02",
-          "name": "Define Ember Jacket",
+          "name": "Ember Run Jacket",
           "type": "top",
           "materials": [
             "ash silk"
@@ -1332,7 +1332,7 @@
       "items": [
         {
           "id": "tommyhillfanger_01",
-          "name": "Flag-Fang Polo",
+          "name": "Colorblock Fang Polo",
           "type": "top",
           "materials": [
             "ash silk",
@@ -1417,7 +1417,7 @@
         },
         {
           "id": "armorni_02",
-          "name": "Code Frost Cologne",
+          "name": "Frost Cologne",
           "type": "cosmetic",
           "materials": [
             "crystal",
@@ -1548,7 +1548,7 @@
       "items": [
         {
           "id": "roarlex_01",
-          "name": "Sub-Swamper Dive Watch",
+          "name": "Swamp Dive Watch",
           "type": "accessory",
           "materials": [
             "gold dust",
@@ -1559,7 +1559,7 @@
         },
         {
           "id": "roarlex_02",
-          "name": "Day-Date Extinction Watch",
+          "name": "Extinction Calendar Watch",
           "type": "accessory",
           "materials": [
             "gold dust",
@@ -1592,7 +1592,7 @@
         },
         {
           "id": "bathingrex_02",
-          "name": "Bape-Sta Stompers",
+          "name": "Star-Stomp Sneakers",
           "type": "shoes",
           "materials": [
             "dead skin",
