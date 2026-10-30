@@ -316,6 +316,14 @@ FGFFerryResult FGFFerryRules::ApplyPass(
 FVector FGFFerryRules::FlightPosition(const FVector& A, const FVector& B, float Alpha, float Altitude)
 {
 	const float T = FMath::Clamp(Alpha, 0.f, 1.f);
+	if (T <= 0.f)
+	{
+		return A;
+	}
+	if (T >= 1.f)
+	{
+		return B;
+	}
 	FVector Point = FMath::Lerp(A, B, T);
 	Point.Z += FMath::Sin(T * PI) * Altitude;
 	return Point;
