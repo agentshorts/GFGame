@@ -1,0 +1,480 @@
+{
+ "schema": "gf/mining_range_tree/v1",
+ "level": "L_MiningRange",
+ "row_id": "Verdant_TreePlot",
+ "plot_size_cells": [
+  5,
+  5,
+  7
+ ],
+ "cell_cm": 100,
+ "frame": "plot-local cells; range cell = plot cell_min from MiningRange_Rows_v1 (Verdant_TreePlot) + (i, j, k)",
+ "counts": {
+  "Log": 7,
+  "Leaves": 54
+ },
+ "total": 61,
+ "felling": {
+  "trunk_cells": [
+   [
+    2,
+    2,
+    0
+   ],
+   [
+    2,
+    2,
+    1
+   ],
+   [
+    2,
+    2,
+    2
+   ],
+   [
+    2,
+    2,
+    3
+   ],
+   [
+    2,
+    2,
+    4
+   ]
+  ],
+  "rule": "Rootfield (#269) fells the whole tree: every cell connected to a broken trunk cell through Log/Leaves breaks; today (break tool) each cell breaks alone",
+  "expected_drops_today": {
+   "WoodPlank": 61
+  },
+  "note": "DT_Blocks today: Log and Leaves both drop WoodPlank"
+ },
+ "cells": [
+  {
+   "i": 2,
+   "j": 2,
+   "k": 0,
+   "block": "Log",
+   "part": "trunk"
+  },
+  {
+   "i": 2,
+   "j": 2,
+   "k": 1,
+   "block": "Log",
+   "part": "trunk"
+  },
+  {
+   "i": 2,
+   "j": 2,
+   "k": 2,
+   "block": "Log",
+   "part": "trunk"
+  },
+  {
+   "i": 2,
+   "j": 2,
+   "k": 3,
+   "block": "Log",
+   "part": "trunk"
+  },
+  {
+   "i": 2,
+   "j": 2,
+   "k": 4,
+   "block": "Log",
+   "part": "trunk"
+  },
+  {
+   "i": 1,
+   "j": 2,
+   "k": 0,
+   "block": "Log",
+   "part": "root_flare"
+  },
+  {
+   "i": 2,
+   "j": 3,
+   "k": 0,
+   "block": "Log",
+   "part": "root_flare"
+  },
+  {
+   "i": 0,
+   "j": 1,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 0,
+   "j": 2,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 0,
+   "j": 3,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 1,
+   "j": 0,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 1,
+   "j": 1,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 1,
+   "j": 2,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 1,
+   "j": 3,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 1,
+   "j": 4,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 2,
+   "j": 0,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 2,
+   "j": 1,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 2,
+   "j": 3,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 2,
+   "j": 4,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 3,
+   "j": 0,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 3,
+   "j": 1,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 3,
+   "j": 2,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 3,
+   "j": 3,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 3,
+   "j": 4,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 4,
+   "j": 1,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 4,
+   "j": 2,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 4,
+   "j": 3,
+   "k": 3,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 0,
+   "j": 1,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 0,
+   "j": 2,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 0,
+   "j": 3,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 1,
+   "j": 0,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 1,
+   "j": 1,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 1,
+   "j": 2,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 1,
+   "j": 3,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 1,
+   "j": 4,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 2,
+   "j": 0,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 2,
+   "j": 1,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 2,
+   "j": 3,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 2,
+   "j": 4,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 3,
+   "j": 0,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 3,
+   "j": 1,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 3,
+   "j": 2,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 3,
+   "j": 3,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 3,
+   "j": 4,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 4,
+   "j": 1,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 4,
+   "j": 2,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 4,
+   "j": 3,
+   "k": 4,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 1,
+   "j": 1,
+   "k": 5,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 1,
+   "j": 2,
+   "k": 5,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 1,
+   "j": 3,
+   "k": 5,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 2,
+   "j": 1,
+   "k": 5,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 2,
+   "j": 2,
+   "k": 5,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 2,
+   "j": 3,
+   "k": 5,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 3,
+   "j": 1,
+   "k": 5,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 3,
+   "j": 2,
+   "k": 5,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 3,
+   "j": 3,
+   "k": 5,
+   "block": "Leaves",
+   "part": "canopy"
+  },
+  {
+   "i": 2,
+   "j": 2,
+   "k": 6,
+   "block": "Leaves",
+   "part": "crown"
+  },
+  {
+   "i": 1,
+   "j": 2,
+   "k": 6,
+   "block": "Leaves",
+   "part": "crown"
+  },
+  {
+   "i": 3,
+   "j": 2,
+   "k": 6,
+   "block": "Leaves",
+   "part": "crown"
+  },
+  {
+   "i": 2,
+   "j": 1,
+   "k": 6,
+   "block": "Leaves",
+   "part": "crown"
+  },
+  {
+   "i": 2,
+   "j": 3,
+   "k": 6,
+   "block": "Leaves",
+   "part": "crown"
+  }
+ ]
+}

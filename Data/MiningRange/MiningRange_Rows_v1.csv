@@ -1,0 +1,22 @@
+row_id,zone,side,kind,block,placed,spell_proof,hardness,drop_item,drop_item_today,dt_row_exists,cell_min_i,cell_min_j,cell_min_k,len_x,depth_y,height_z,cells,world_min_cm,world_max_cm,sign_x,sign_y,sign_z,sign_yaw,sign_line1,sign_line2,sign_line3,sign_badge
+Common_Dirt,Common,left(+Y),block_row,Dirt,False,False,0.5,Dirt,,True,0,6,0,5,2,3,30,0 600 0,500 800 300,250.0,600,360,-90,Dirt,Hardness 0.5,drops Dirt,
+Common_Stone,Common,left(+Y),block_row,Stone,False,False,1.5,Stone,,True,8,6,0,5,2,3,30,800 600 0,1300 800 300,1050.0,600,360,-90,Stone,Hardness 1.5,drops Stone,
+Common_Fabric,Common,right(-Y),block_row,Fabric,False,True,0.3,Fabric,,True,0,-8,0,5,2,3,30,0 -800 0,500 -600 300,250.0,-600,360,90,Fabric,Hardness 0.3,drops Fabric,SPELL-PROOF
+Common_PlayerWall,Common,right(-Y),block_row,WoodPlank,True,True,1.0,WoodPlank,,True,8,-8,0,5,2,3,30,800 -800 0,1300 -600 300,1050.0,-600,360,90,WoodPlank (built),Hardness 1.0,drops WoodPlank,SPELL-PROOF
+Verdant_Log,Verdant,left(+Y),block_row,Log,False,False,1.0,WoodPlank,,True,20,6,0,5,2,3,30,2000 600 0,2500 800 300,2250.0,600,360,-90,Log,Hardness 1.0,drops WoodPlank,
+Verdant_Leaves,Verdant,left(+Y),block_row,Leaves,False,False,0.3,WoodPlank,,True,28,6,0,5,2,3,30,2800 600 0,3300 800 300,3050.0,600,360,-90,Leaves,Hardness 0.3,drops WoodPlank,
+Verdant_WoodPlank,Verdant,left(+Y),block_row,WoodPlank,False,False,1.0,WoodPlank,,True,36,6,0,5,2,3,30,3600 600 0,4100 800 300,3850.0,600,360,-90,WoodPlank,Hardness 1.0,drops WoodPlank,
+Verdant_Grass,Verdant,right(-Y),block_row,Grass,False,False,0.5,Dirt,,True,20,-8,0,5,2,3,30,2000 -800 0,2500 -600 300,2250.0,-600,360,90,Grass,Hardness 0.5,drops Dirt,
+Verdant_Farmland,Verdant,right(-Y),block_row,Farmland,False,False,0.5,Dirt,,True,28,-8,0,5,2,3,30,2800 -800 0,3300 -600 300,3050.0,-600,360,90,Farmland,Hardness 0.5,drops Dirt,
+Verdant_TreePlot,Verdant,right(-Y),tree_plot,,False,False,,,,,36,-11,0,5,5,7,,3600 -1100 0,4100 -600 700,3850.0,-600,760,90,TreePlot,Fell me,,
+Rime_Ice,Rime,left(+Y),block_row,Ice,False,False,0.5,Stone,,True,48,6,0,5,2,3,30,4800 600 0,5300 800 300,5050.0,600,360,-90,Ice,Hardness 0.5,drops Stone,
+Rime_Glass,Rime,left(+Y),block_row,Glass,False,False,0.3,Glass,,True,56,6,0,5,2,3,30,5600 600 0,6100 800 300,5850.0,600,360,-90,Glass,Hardness 0.3,drops Glass,
+Rime_RakeLane,Rime,right(-Y),station,Stone,False,False,,,,,48,-8,0,6,3,2,36,4800 -800 0,5400 -500 200,5100.0,-500,260,90,Stone,Clawcall lane,,
+Cinderwrights_Lava,Cinderwrights,left(+Y),pool,Lava,False,False,1.5,Stone,,True,68,6,-3,5,2,3,30,6800 600 -300,7300 800 0,7050.0,600,160,-90,Lava,Hardness 1.5,drops Stone,
+Cinderwrights_Basalt,Cinderwrights,left(+Y),block_row,Basalt,False,False,1.5,Stone,,True,76,6,0,5,2,3,30,7600 600 0,8100 800 300,7850.0,600,360,-90,Basalt,Hardness 1.5,drops Stone,
+Cinderwrights_Stone,Cinderwrights,left(+Y),block_row,Stone,False,False,1.5,Stone,,True,84,6,0,5,2,3,30,8400 600 0,8900 800 300,8650.0,600,360,-90,Stone,Hardness 1.5,drops Stone,
+Cinderwrights_SparkStation,Cinderwrights,right(-Y),station,Stone,False,False,,,,,68,-7,0,5,1,3,15,6800 -700 0,7300 -600 300,7050.0,-600,360,90,Stone,Sparkfield 8 m,,
+Ore_ClayBed,Ore,left(+Y),block_row,ClayBed,False,False,0.5,Clay,Dirt,False,96,6,0,5,2,3,30,9600 600 0,10100 800 300,9850.0,600,360,-90,ClayBed,Hardness 0.5,drops Clay (today Dirt),
+Ore_OreMetal,Ore,left(+Y),block_row,OreMetal,False,False,2.5,OreMetal,Stone,False,104,6,0,5,2,3,30,10400 600 0,10900 800 300,10650.0,600,360,-90,OreMetal,Hardness 2.5,drops OreMetal (today Stone),
+Ore_CoalnutSeam,Ore,right(-Y),block_row,CoalnutSeam,False,False,1.5,Coalnut,Stone,False,96,-8,0,5,2,3,30,9600 -800 0,10100 -600 300,9850.0,-600,360,90,CoalnutSeam,Hardness 1.5,drops Coalnut (today Stone),
+Ore_CrystalVein,Ore,right(-Y),block_row,CrystalVein,False,False,2.0,Crystal,Glass,False,104,-8,0,5,2,3,30,10400 -800 0,10900 -600 300,10650.0,-600,360,90,CrystalVein,Hardness 2.0,drops Crystal (today Glass),
