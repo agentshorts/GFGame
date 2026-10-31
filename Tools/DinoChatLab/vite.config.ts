@@ -9,6 +9,10 @@ const isolation = {
 export default defineConfig({
   base: "./",
   plugins: [vue()],
+  // RiveScript reads `process.browser` with no guard. The browser has no `process` binding.
+  define: {
+    "process.browser": "true",
+  },
   server: {
     port: 5173,
     headers: isolation,
