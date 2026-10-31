@@ -713,4 +713,187 @@ bool FGFMovementLandingMarkerTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMovementTripleJumpTest, "GFGame.Movement.TripleJump", GFMovementTestsPrivate::GFMovementFlags)
+bool FGFMovementTripleJumpTest::RunTest(const FString&)
+{
+	using namespace GFMovementTestsPrivate;
+	const UGFMovementTuning& Tuning = GFMovementTuningCDO();
+	TestEqual(TEXT("Three jumps"), Tuning.JumpsPerAirtime, 3);
+	TestEqual(TEXT("Jump 2 height"), Tuning.Jump2HeightScale, 0.85f);
+	TestEqual(TEXT("Jump 3 height"), Tuning.Jump3HeightScale, 1.10f);
+	TestEqual(TEXT("Extra jump cost"), Tuning.ExtraJumpCost, 15.f);
+	TestEqual(TEXT("Jump speed"), Tuning.JumpZVelocity, 520.f);
+	TestEqual(TEXT("Jump 3 boost"), Tuning.Jump3ForwardBoost, 250.f);
+	TestEqual(TEXT("Flip length"), Tuning.JumpFlipDuration, 0.45f);
+	TestEqual(TEXT("Flip degrees"), Tuning.JumpFlipDegrees, 360.f);
+
+	const AGFCharacter* Character = GetDefault<AGFCharacter>();
+	const UCharacterMovementComponent* Move = Character ? Character->GetCharacterMovement() : nullptr;
+	if (!TestNotNull(TEXT("Player movement"), Move))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Base hop matches the asset"), Move->JumpZVelocity, Tuning.JumpZVelocity);
+
+	const float Jump2Z = Tuning.JumpZVelocity * FMath::Sqrt(Tuning.Jump2HeightScale);
+	const float Jump3Z = Tuning.JumpZVelocity * FMath::Sqrt(Tuning.Jump3HeightScale);
+
+	FGFStaminaState State = GFMovementFullState();
+	FGFStaminaCommand Hop = GFMovementCommand(0.05f);
+	Hop.bJumpPressed = true;
+	Hop.MoveDirection = FVector(0.0, 1.0, 0.0);
+	State = GFStaminaSim::Step(State, Hop, Tuning);
+	TestTrue(TEXT("Ground hop is jump 1"), State.bJumpAccepted && State.JumpsUsed == 1);
+	TestTrue(TEXT("Jump 1 is free"), GFMovementNear(State.Stamina, Tuning.MaxStamina));
+	TestTrue(TEXT("Jump 1 is full height"), GFMovementNear(State.JumpZSpeed, Tuning.JumpZVelocity));
+	TestTrue(TEXT("Jump 1 has no boost"), State.JumpForward.IsNearlyZero());
+	TestTrue(TEXT("Jump 1 does not flip"), State.FlipTimeLeft <= 0.f);
+	TestEqual(TEXT("Jump 1 leaves the air dash"), State.AirDashesUsed, 0);
+
+	FGFStaminaCommand Air = Hop;
+	Air.bGrounded = false;
+	State = GFStaminaSim::Step(State, Air, Tuning);
+	TestTrue(TEXT("Second press is jump 2"), State.bJumpAccepted && State.JumpsUsed == 2);
+	TestTrue(TEXT("Jump 2 costs 15"), GFMovementNear(State.Stamina, 185.f));
+	TestTrue(TEXT("Jump 2 is 85% height"), GFMovementNear(State.JumpZSpeed, Jump2Z));
+	TestTrue(TEXT("Jump 2 does not flip"), State.FlipTimeLeft <= 0.f);
+	TestTrue(TEXT("Spend arms the delay"), GFMovementNear(State.RegenDelayLeft, Tuning.RegenDelay));
+
+	Air.MoveDirection = FVector(0.0, 1.0, 0.0);
+	State = GFStaminaSim::Step(State, Air, Tuning);
+	TestTrue(TEXT("Third press is the flip"), State.bJumpAccepted && State.JumpsUsed == 3);
+	TestTrue(TEXT("Jump 3 costs another 15"), GFMovementNear(State.Stamina, 170.f));
+	TestTrue(TEXT("Jump 3 is 110% height"), GFMovementNear(State.JumpZSpeed, Jump3Z));
+	TestTrue(TEXT("Jump 3 boosts forward"), State.JumpForward.Y > 200.0 && FMath::Abs(State.JumpForward.X) < 1.0);
+	TestTrue(TEXT("Flip timer starts"), GFMovementNear(State.FlipTimeLeft, Tuning.JumpFlipDuration));
+	TestEqual(TEXT("The flip did not spend the air dash"), State.AirDashesUsed, 0);
+
+	const float Spent = State.Stamina;
+	State = GFStaminaSim::Step(State, Air, Tuning);
+	TestFalse(TEXT("A fourth press is refused"), State.bJumpAccepted);
+	TestEqual(TEXT("The count stays at 3"), State.JumpsUsed, 3);
+	TestTrue(TEXT("A refused jump is free"), GFMovementNear(State.Stamina, Spent));
+
+	FGFStaminaCommand Dash = Air;
+	Dash.bJumpPressed = false;
+	Dash.bDashPressed = true;
+	const int32 JumpsBeforeDash = 2;
+	FGFStaminaState Dashed = GFMovementFullState();
+	Dashed.JumpsUsed = JumpsBeforeDash;
+	Dashed.bWasGrounded = false;
+	Dashed.Stamina = 185.f;
+	Dashed.RegenDelayLeft = Tuning.RegenDelay;
+	Dashed = GFStaminaSim::Step(Dashed, Dash, Tuning);
+	TestEqual(TEXT("Air dash does not spend a jump"), Dashed.JumpsUsed, JumpsBeforeDash);
+	TestEqual(TEXT("Air dash still has its own charge"), Dashed.AirDashesUsed, 1);
+	Dash.bDashPressed = false;
+	Dash.bJumpPressed = true;
+	Dashed = GFStaminaSim::Step(Dashed, Dash, Tuning);
+	TestTrue(TEXT("Jump 3 still follows an air dash"), Dashed.bJumpAccepted && Dashed.JumpsUsed == 3);
+
+	FGFStaminaCommand Land = GFMovementCommand(0.05f);
+	Land.bGrounded = true;
+	FGFStaminaState Landed = State;
+	Landed.bWasGrounded = false;
+	Landed.AirDashesUsed = 1;
+	Landed = GFStaminaSim::Step(Landed, Land, Tuning);
+	TestEqual(TEXT("Landing resets the jump count"), Landed.JumpsUsed, 0);
+	TestEqual(TEXT("Landing still resets the air dash"), Landed.AirDashesUsed, 0);
+	TestTrue(TEXT("Landing ends the flip"), Landed.FlipTimeLeft <= 0.f);
+
+	FGFStaminaState Broke = GFMovementFullState();
+	Broke.Stamina = 10.f;
+	Broke.RegenDelayLeft = 1.f;
+	FGFStaminaCommand BrokeHop = GFMovementCommand(0.05f);
+	BrokeHop.bJumpPressed = true;
+	Broke = GFStaminaSim::Step(Broke, BrokeHop, Tuning);
+	TestTrue(TEXT("Jump 1 works on an empty-ish pool"), Broke.bJumpAccepted && Broke.JumpsUsed == 1);
+	TestTrue(TEXT("Jump 1 still costs nothing"), GFMovementNear(Broke.Stamina, 10.f));
+	BrokeHop.bGrounded = false;
+	Broke = GFStaminaSim::Step(Broke, BrokeHop, Tuning);
+	TestFalse(TEXT("Jump 2 waits for 15 stamina"), Broke.bJumpAccepted);
+	TestEqual(TEXT("The refused extra jump is not counted"), Broke.JumpsUsed, 1);
+	TestTrue(TEXT("Stamina stays put"), GFMovementNear(Broke.Stamina, 10.f));
+
+	FGFStaminaState Hearth = GFMovementFullState();
+	Hearth.bWasGrounded = false;
+	FGFStaminaCommand HearthHop = GFMovementCommand(0.05f);
+	HearthHop.bGrounded = false;
+	HearthHop.bJumpPressed = true;
+	HearthHop.bInsideKindleRing = true;
+	Hearth = GFStaminaSim::Step(Hearth, HearthHop, Tuning);
+	Hearth = GFStaminaSim::Step(Hearth, HearthHop, Tuning);
+	Hearth = GFStaminaSim::Step(Hearth, HearthHop, Tuning);
+	TestTrue(TEXT("Hearth still allows the flip"), Hearth.bJumpAccepted && Hearth.JumpsUsed == 3);
+	TestTrue(TEXT("Hearth extra jumps are free"), GFMovementNear(Hearth.Stamina, Tuning.MaxStamina));
+
+	FGFStaminaState Kick = GFMovementFullState();
+	Kick.JumpsUsed = 2;
+	Kick.Stamina = 170.f;
+	Kick.RegenDelayLeft = 1.f;
+	Kick.bWasGrounded = false;
+	Kick.bGripping = true;
+	Kick.GripTimeLeft = 1.f;
+	Kick.GripNormal = FVector(1.0, 0.0, 0.0);
+	Kick.FlipTimeLeft = 0.4f;
+	FGFStaminaCommand KickCmd = GFMovementCommand(0.05f);
+	KickCmd.bGrounded = false;
+	KickCmd.bJumpPressed = true;
+	Kick = GFStaminaSim::Step(Kick, KickCmd, Tuning);
+	TestTrue(TEXT("Wall-kick consumes the press"), Kick.bTraversalJump && !Kick.bJumpAccepted);
+	TestEqual(TEXT("Wall-kick resets the jump count"), Kick.JumpsUsed, 0);
+	TestEqual(TEXT("Wall-kick still refunds the air dash"), Kick.AirDashesUsed, 0);
+	TestTrue(TEXT("Wall-kick drops the flip"), Kick.FlipTimeLeft <= 0.f);
+	TestTrue(TEXT("Wall-kick is not an extra jump charge"), GFMovementNear(Kick.Stamina, 170.f));
+	KickCmd.bJumpPressed = true;
+	Kick = GFStaminaSim::Step(Kick, KickCmd, Tuning);
+	TestTrue(TEXT("The next hop after a kick is jump 1"), Kick.bJumpAccepted && Kick.JumpsUsed == 1);
+	TestTrue(TEXT("That hop is full height"), GFMovementNear(Kick.JumpZSpeed, Tuning.JumpZVelocity));
+
+	FGFStaminaState Run = GFMovementFullState();
+	FGFStaminaCommand Along = GFMovementCommand(0.05f);
+	Along.bGrounded = false;
+	Along.HorizontalSpeed = 500.f;
+	Along.MoveDirection = FVector(0.0, 1.0, 0.0);
+	Along.Contact.bWallContact = true;
+	Along.Contact.WallNormal = FVector(1.0, 0.0, 0.0);
+	Run = GFStaminaSim::Step(Run, Along, Tuning);
+	TestTrue(TEXT("Setup is a wall run"), Run.bWallRunning);
+	Along.bJumpPressed = true;
+	Run = GFStaminaSim::Step(Run, Along, Tuning);
+	TestTrue(TEXT("A hop leaves the wall run"), Run.bJumpAccepted && !Run.bWallRunning);
+	TestTrue(TEXT("That visit stays closed"), Run.bWallRunBlocked);
+	Along.bJumpPressed = false;
+	Run = GFStaminaSim::Step(Run, Along, Tuning);
+	TestFalse(TEXT("Still touching the wall does not restart the run"), Run.bWallRunning);
+
+	FGFStaminaState Rope = GFMovementFullState();
+	Rope.bSwinging = true;
+	Rope.bWasGrounded = false;
+	Rope.GrappleAnchor = FVector(0.0, 0.0, 500.0);
+	Rope.TravelLocation = FVector::ZeroVector;
+	Rope.RopeLength = 500.f;
+	Rope.SwingVelocity = FVector(100.0, 0.0, 0.0);
+	FGFStaminaCommand Swing = GFMovementCommand(0.05f);
+	Swing.bGrounded = false;
+	Swing.bJumpPressed = true;
+	Swing.bGrappleSwingHeld = true;
+	Rope = GFStaminaSim::Step(Rope, Swing, Tuning);
+	TestFalse(TEXT("A swing keeps the jump press"), Rope.bJumpAccepted);
+	TestEqual(TEXT("A swing does not count a hop"), Rope.JumpsUsed, 0);
+	TestTrue(TEXT("Still swinging"), Rope.bSwinging);
+
+	FGFStaminaState Off = GFMovementFullState();
+	Off.JumpsUsed = 2;
+	Off.FlipTimeLeft = 0.3f;
+	FGFStaminaCommand Disabled = GFMovementCommand(0.05f);
+	Disabled.bStaminaEnabled = false;
+	Disabled.bJumpPressed = true;
+	Off = GFStaminaSim::Step(Off, Disabled, Tuning);
+	TestEqual(TEXT("Mini-games clear the jump count"), Off.JumpsUsed, 0);
+	TestFalse(TEXT("Mini-games do not accept the hop"), Off.bJumpAccepted);
+	TestTrue(TEXT("Mini-games end the flip"), Off.FlipTimeLeft <= 0.f);
+	return true;
+}
+
 #endif

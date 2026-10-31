@@ -1,6 +1,6 @@
 #pragma once
 
-// Every stamina, sprint, dash, traversal, hearth and arc number lives here.
+// Every stamina, sprint, dash, jump, traversal, hearth and arc number lives here.
 // UGFCharacterMovementComponent uses the asset when one is assigned, otherwise this class default.
 
 #include "CoreMinimal.h"
@@ -198,4 +198,39 @@ public:
 	/** Impact normals flatter than this are walls, and the marker skips them. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Landing", meta = (ClampMin = "0", ClampMax = "1"))
 	float LandingMinFloorNormalZ = 0.5f;
+
+	/** Upward speed of jump 1, cm/s. 520 clears one 100 cm block. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (ClampMin = "0"))
+	float JumpZVelocity = 520.f;
+
+	/** Jump presses allowed before the next landing or wall-kick. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (ClampMin = "0"))
+	int32 JumpsPerAirtime = 3;
+
+	/**
+	 * Jump 2 apex height relative to jump 1.
+	 * Upward speed is scaled by the square root, because height grows with speed squared.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (ClampMin = "0"))
+	float Jump2HeightScale = 0.85f;
+
+	/** Jump 3 apex height relative to jump 1. Same square-root speed scale as jump 2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (ClampMin = "0"))
+	float Jump3HeightScale = 1.10f;
+
+	/** Horizontal speed added on jump 3, cm/s, along move input, else velocity, else the camera. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (ClampMin = "0"))
+	float Jump3ForwardBoost = 250.f;
+
+	/** Stamina for jump 2 and jump 3. Jump 1 is free. The air dash does not spend this. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (ClampMin = "0"))
+	float ExtraJumpCost = 15.f;
+
+	/** Seconds of the procedural front flip on jump 3. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (ClampMin = "0"))
+	float JumpFlipDuration = 0.45f;
+
+	/** Mesh pitch over that flip, degrees. 360 is one full turn around the actor's right axis. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (ClampMin = "0"))
+	float JumpFlipDegrees = 360.f;
 };

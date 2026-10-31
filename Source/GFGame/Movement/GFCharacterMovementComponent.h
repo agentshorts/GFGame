@@ -26,12 +26,16 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
 	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
+	virtual void TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void PerformMovement(float DeltaTime) override;
 	virtual float GetMaxSpeed() const override;
 	virtual float GetGravityZ() const override;
 
 	/** Copies BaseRunSpeed onto MaxWalkSpeed. Does not include the sprint multiplier. */
 	void ApplyBaseRunSpeed();
+
+	/** Copies jump speed and the airtime jump count from the tuning asset. */
+	void ApplyJumpTuning();
 
 	void SetSprintHeld(bool bHeld);
 	void NotifyDashPressed();
@@ -93,6 +97,7 @@ public:
 
 protected:
 	virtual void CalcVelocity(float DeltaTime, float Friction, bool bFluid, float BrakingDeceleration) override;
+	virtual bool DoJump(bool bReplayingMoves, float DeltaTime) override;
 	virtual void HandleImpact(const FHitResult& Hit, float TimeSlice, const FVector& MoveDelta) override;
 
 	UFUNCTION()
@@ -100,6 +105,9 @@ protected:
 
 	UFUNCTION()
 	void OnRep_StaminaGate();
+
+	UFUNCTION()
+	void OnRep_FlipTime();
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GF|Movement")
 	TObjectPtr<UGFMovementTuning> TuningAsset;
@@ -118,11 +126,16 @@ protected:
 	UPROPERTY(Replicated)
 	bool bInsideKindleRing = false;
 
+	/** Jump-3 flip seconds left. Simulated proxies play this. The owner predicts Sim.FlipTimeLeft instead. */
+	UPROPERTY(ReplicatedUsing = OnRep_FlipTime)
+	float ReplicatedFlipTimeLeft = 0.f;
+
 private:
 	void RefreshStaminaGate();
 	void ApplyStaminaGate();
 	FVector LiveCameraForward() const;
 	void GatherLiveContact(FGFTraversalContact& Contact);
+	void ApplyFlipPose(float TimeLeft);
 
 	FGFStaminaState Sim;
 	FGFStaminaState SimAtMoveStart;
@@ -152,4 +165,7 @@ private:
 	bool bLocalInsideKindle = false;
 	bool bStaminaEnabled = true;
 	bool bGotAuthoritativeStamina = false;
+	float ProxyFlipTimeLeft = 0.f;
+	FRotator MeshRestRotation = FRotator::ZeroRotator;
+	bool bMeshRestCaptured = false;
 };

@@ -49,6 +49,95 @@ void FGFStaminaState::ResetFull(const UGFMovementTuning& Tuning)
 	SwingVelocity = FVector::ZeroVector;
 	bOverrideVelocity = false;
 	OverrideVelocity = FVector::ZeroVector;
+	JumpsUsed = 0;
+	bTraversalJump = false;
+	bJumpAccepted = false;
+	JumpZSpeed = 0.f;
+	JumpForward = FVector::ZeroVector;
+	FlipTimeLeft = 0.f;
+}
+
+namespace GFStaminaSimDetail
+{
+	FVector GFStaminaJumpFacing(const FGFStaminaCommand& Command)
+	{
+		FVector Facing = GFStaminaFlatUnit(Command.MoveDirection);
+		if (Facing.IsNearlyZero())
+		{
+			Facing = GFStaminaFlatUnit(Command.Velocity);
+		}
+		if (Facing.IsNearlyZero())
+		{
+			Facing = GFStaminaFlatUnit(Command.CameraForward);
+		}
+		return Facing.IsNearlyZero() ? FVector::ForwardVector : Facing;
+	}
+
+	bool GFStaminaResolveJump(FGFStaminaState& Next, const FGFStaminaState& Prev, const FGFStaminaCommand& Command, const UGFMovementTuning& Tuning)
+	{
+		const bool bWallKick = Command.bJumpPressed && Prev.bGripping && !Next.bGripping;
+		const bool bSwivelLaunch = Command.bJumpPressed && Prev.bSwiveling && !Next.bSwiveling;
+		if (!Command.bJumpPressed || bWallKick || bSwivelLaunch || Next.bTraversalJump)
+		{
+			return false;
+		}
+		if (Next.bGripping || Next.bSwiveling || Next.bSwinging || Next.bYanking)
+		{
+			return false;
+		}
+		if (Tuning.JumpsPerAirtime <= 0)
+		{
+			return false;
+		}
+
+		const int32 Index = Command.bGrounded ? 1 : Next.JumpsUsed + 1;
+		if (Index > Tuning.JumpsPerAirtime)
+		{
+			return false;
+		}
+
+		const bool bExtra = Index >= 2;
+		const bool bInfinite = Command.bInsideKindleRing;
+		if (bExtra && !bInfinite && Next.Stamina + KINDA_SMALL_NUMBER < Tuning.ExtraJumpCost)
+		{
+			return false;
+		}
+
+		float HeightScale = 1.f;
+		float Boost = 0.f;
+		if (Index == 2)
+		{
+			HeightScale = Tuning.Jump2HeightScale;
+		}
+		else if (Index >= 3)
+		{
+			HeightScale = Tuning.Jump3HeightScale;
+			Boost = FMath::Max(0.f, Tuning.Jump3ForwardBoost);
+		}
+		const float SpeedScale = FMath::Sqrt(FMath::Max(0.f, HeightScale));
+		Next.bJumpAccepted = true;
+		Next.JumpsUsed = Index;
+		Next.JumpZSpeed = FMath::Max(0.f, Tuning.JumpZVelocity) * SpeedScale;
+		Next.JumpForward = GFStaminaJumpFacing(Command) * static_cast<double>(Boost);
+		if (Next.bWallRunning)
+		{
+			Next.bWallRunBlocked = true;
+		}
+		Next.bWallRunning = false;
+		Next.bOverrideVelocity = false;
+		Next.OverrideVelocity = FVector::ZeroVector;
+		if (Index >= 3 && Tuning.JumpFlipDuration > 0.f)
+		{
+			Next.FlipTimeLeft = Tuning.JumpFlipDuration;
+		}
+		if (bExtra && !bInfinite)
+		{
+			Next.Stamina = GFStaminaNonNegative(Next.Stamina - Tuning.ExtraJumpCost);
+			Next.RegenDelayLeft = Tuning.RegenDelay;
+			return true;
+		}
+		return false;
+	}
 }
 
 FVector GFStaminaSim::ResolveDashDirection(const FVector& MoveDirection, const FVector& CameraForward)
@@ -119,11 +208,25 @@ FGFStaminaState GFStaminaSim::Step(const FGFStaminaState& State, const FGFStamin
 		Idle.DashTimeLeft = 0.f;
 		Idle.bSprintBlocked = false;
 		Idle.bWasGrounded = Command.bGrounded;
+		Idle.JumpsUsed = 0;
+		Idle.bTraversalJump = false;
+		Idle.bJumpAccepted = false;
+		Idle.JumpZSpeed = 0.f;
+		Idle.JumpForward = FVector::ZeroVector;
+		Idle.FlipTimeLeft = 0.f;
 		GFTraversalSim::ClearActivity(Idle, Tuning);
 		return Idle;
 	}
 
 	FGFStaminaState Next = State;
+	Next.bJumpAccepted = false;
+	Next.bTraversalJump = false;
+	Next.JumpZSpeed = 0.f;
+	Next.JumpForward = FVector::ZeroVector;
+	if (Next.FlipTimeLeft > 0.f)
+	{
+		Next.FlipTimeLeft = GFStaminaSimDetail::GFStaminaNonNegative(Next.FlipTimeLeft - Dt);
+	}
 	if (Next.DashTimeLeft > 0.f)
 	{
 		Next.DashTimeLeft = GFStaminaSimDetail::GFStaminaNonNegative(Next.DashTimeLeft - Dt);
@@ -138,6 +241,8 @@ FGFStaminaState GFStaminaSim::Step(const FGFStaminaState& State, const FGFStamin
 	if (bLanded)
 	{
 		Next.AirDashesUsed = 0;
+		Next.JumpsUsed = 0;
+		Next.FlipTimeLeft = 0.f;
 	}
 	if (!Command.bSprintHeld)
 	{
@@ -146,6 +251,10 @@ FGFStaminaState GFStaminaSim::Step(const FGFStaminaState& State, const FGFStamin
 
 	const bool bInfinite = Command.bInsideKindleRing;
 	bool bSpent = GFTraversalSim::Apply(Next, Command, Tuning);
+	if (GFStaminaSimDetail::GFStaminaResolveJump(Next, State, Command, Tuning))
+	{
+		bSpent = true;
+	}
 
 	const bool bTraversalBusy = Next.bGripping || Next.bWallRunning || Next.bSwiveling || Next.bSwinging || Next.bYanking;
 	if (Command.bDashPressed && !Next.bDashing && !bTraversalBusy && Tuning.DashDuration > 0.f)

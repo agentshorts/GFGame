@@ -235,6 +235,9 @@ bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Comma
 		Next.bGripping = false;
 		Next.GripTimeLeft = 0.f;
 		Next.AirDashesUsed = 0;
+		Next.JumpsUsed = 0;
+		Next.FlipTimeLeft = 0.f;
+		Next.bTraversalJump = true;
 		Next.bOverrideVelocity = true;
 		Next.OverrideVelocity = Normal * static_cast<double>(Tuning.WallKickSpeed) + FVector(0.0, 0.0, static_cast<double>(Tuning.WallKickUp));
 	}
@@ -259,6 +262,7 @@ bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Comma
 	{
 		const FVector Tangent = GFTraversalDetail::GFTraversalTangent(Next.SwivelAngle, Next.SwivelSign);
 		Next.bSwiveling = false;
+		Next.bTraversalJump = true;
 		Next.bOverrideVelocity = true;
 		Next.OverrideVelocity = Tangent * static_cast<double>(Next.SwivelSpeed) * static_cast<double>(Tuning.SwivelLaunchBoost)
 			+ FVector(0.0, 0.0, static_cast<double>(Tuning.SwivelLaunchUp));

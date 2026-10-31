@@ -19,7 +19,8 @@ struct FInputActionValue;
  * The player character. Third-person by default (spring arm ~450 cm, pitch ~-20, FOV 90 per ASSET_BRIEFS),
  * V toggles first-person. LMB removes a block, RMB places the selected block, wheel cycles the hotbar.
  * Input assets are optional: if none are assigned, a default mapping is built in C++ at runtime.
- * Shift sprints, Ctrl dashes, Q swings a grapple and E yanks it. MaxWalkSpeed stays the base run.
+ * Shift sprints, Ctrl dashes, Q swings a grapple and E yanks it. Space can hop three times before landing.
+ * MaxWalkSpeed stays the base run.
  */
 UCLASS(Config = Game)
 class GFGAME_API AGFCharacter : public ACharacter

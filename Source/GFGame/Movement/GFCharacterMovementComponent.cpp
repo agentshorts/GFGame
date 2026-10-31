@@ -7,6 +7,7 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/GameModeBase.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "CollisionQueryParams.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -199,14 +200,16 @@ public:
 
 UGFCharacterMovementComponent::UGFCharacterMovementComponent()
 {
-	// Constructor value matches UGFMovementTuning::BaseRunSpeed. BeginPlay copies the asset, which may override it.
+	// Constructor values match UGFMovementTuning. BeginPlay copies the asset, which may override them.
 	MaxWalkSpeed = 500.f;
+	JumpZVelocity = 520.f;
 }
 
 void UGFCharacterMovementComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	ApplyBaseRunSpeed();
+	ApplyJumpTuning();
 	if (CharacterOwner && CharacterOwner->HasAuthority())
 	{
 		Sim.ResetFull(GetTuning());
@@ -240,11 +243,22 @@ void UGFCharacterMovementComponent::GetLifetimeReplicatedProps(TArray<FLifetimeP
 	DOREPLIFETIME_CONDITION(UGFCharacterMovementComponent, AuthoritativeStamina, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UGFCharacterMovementComponent, ReplicatedStaminaGate, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UGFCharacterMovementComponent, bInsideKindleRing, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UGFCharacterMovementComponent, ReplicatedFlipTimeLeft, COND_SkipOwner);
 }
 
 void UGFCharacterMovementComponent::ApplyBaseRunSpeed()
 {
 	MaxWalkSpeed = GetTuning().BaseRunSpeed;
+}
+
+void UGFCharacterMovementComponent::ApplyJumpTuning()
+{
+	const UGFMovementTuning& Tuning = GetTuning();
+	JumpZVelocity = Tuning.JumpZVelocity;
+	if (CharacterOwner)
+	{
+		CharacterOwner->JumpMaxCount = FMath::Max(Tuning.JumpsPerAirtime, 0);
+	}
 }
 
 const UGFMovementTuning& UGFCharacterMovementComponent::GetTuning() const
@@ -467,9 +481,42 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 		{
 			AuthoritativeStamina = Quantized;
 		}
+		if (!FMath::IsNearlyEqual(ReplicatedFlipTimeLeft, Sim.FlipTimeLeft, 0.02f))
+		{
+			ReplicatedFlipTimeLeft = Sim.FlipTimeLeft;
+		}
+	}
+
+	// The step decides whether this press is a real hop. The engine jump runs inside Super.
+	if (!bStaminaEnabled)
+	{
+		if (CharacterOwner)
+		{
+			CharacterOwner->JumpMaxCount = 1;
+			if (!IsMovingOnGround())
+			{
+				CharacterOwner->bPressedJump = false;
+			}
+		}
+	}
+	else if (Sim.bJumpAccepted)
+	{
+		CharacterOwner->bPressedJump = true;
+		CharacterOwner->JumpCurrentCount = 0;
+		CharacterOwner->JumpMaxCount = FMath::Max(GetTuning().JumpsPerAirtime, 2);
+		JumpZVelocity = Sim.JumpZSpeed;
+	}
+	else if (bJump)
+	{
+		CharacterOwner->bPressedJump = false;
 	}
 
 	Super::PerformMovement(DeltaTime);
+	JumpZVelocity = GetTuning().JumpZVelocity;
+	if (CharacterOwner && bStaminaEnabled)
+	{
+		CharacterOwner->JumpMaxCount = FMath::Max(GetTuning().JumpsPerAirtime, 0);
+	}
 }
 
 float UGFCharacterMovementComponent::GetMaxSpeed() const
@@ -480,6 +527,26 @@ float UGFCharacterMovementComponent::GetMaxSpeed() const
 float UGFCharacterMovementComponent::GetGravityZ() const
 {
 	return Super::GetGravityZ() * GFStaminaSim::GravityScale(Sim, GetTuning());
+}
+
+bool UGFCharacterMovementComponent::DoJump(bool bReplayingMoves, float DeltaTime)
+{
+	// Mini-games keep the ordinary hop. The triple jump is part of the stamina move set.
+	if (!bStaminaEnabled)
+	{
+		return Super::DoJump(bReplayingMoves, DeltaTime);
+	}
+	if (!Sim.bJumpAccepted || !CharacterOwner)
+	{
+		return false;
+	}
+	if (!Super::DoJump(bReplayingMoves, DeltaTime))
+	{
+		return false;
+	}
+	Velocity.Z = static_cast<double>(Sim.JumpZSpeed);
+	Velocity += Sim.JumpForward;
+	return true;
 }
 
 void UGFCharacterMovementComponent::CalcVelocity(float DeltaTime, float Friction, bool bFluid, float BrakingDeceleration)
@@ -526,6 +593,55 @@ void UGFCharacterMovementComponent::HandleImpact(const FHitResult& Hit, float Ti
 void UGFCharacterMovementComponent::OnRep_StaminaGate()
 {
 	ApplyStaminaGate();
+}
+
+void UGFCharacterMovementComponent::OnRep_FlipTime()
+{
+	if (CharacterOwner && CharacterOwner->GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		ProxyFlipTimeLeft = ReplicatedFlipTimeLeft;
+	}
+}
+
+void UGFCharacterMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (CharacterOwner && CharacterOwner->GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		ProxyFlipTimeLeft = FMath::Max(0.f, ProxyFlipTimeLeft - DeltaTime);
+		ApplyFlipPose(ProxyFlipTimeLeft);
+	}
+	else
+	{
+		ApplyFlipPose(Sim.FlipTimeLeft);
+	}
+}
+
+void UGFCharacterMovementComponent::ApplyFlipPose(float TimeLeft)
+{
+	USkeletalMeshComponent* Mesh = CharacterOwner ? CharacterOwner->GetMesh() : nullptr;
+	if (!Mesh)
+	{
+		return;
+	}
+	if (TimeLeft > 0.f)
+	{
+		if (!bMeshRestCaptured)
+		{
+			MeshRestRotation = Mesh->GetRelativeRotation();
+			bMeshRestCaptured = true;
+		}
+		const float Duration = FMath::Max(GetTuning().JumpFlipDuration, 0.05f);
+		const float Alpha = FMath::Clamp(1.f - (TimeLeft / Duration), 0.f, 1.f);
+		const float Degrees = Alpha * FMath::Max(0.f, GetTuning().JumpFlipDegrees);
+		const FQuat Spin(FVector::RightVector, FMath::DegreesToRadians(static_cast<double>(Degrees)));
+		Mesh->SetRelativeRotation(Spin * MeshRestRotation.Quaternion());
+	}
+	else if (bMeshRestCaptured)
+	{
+		Mesh->SetRelativeRotation(MeshRestRotation);
+		bMeshRestCaptured = false;
+	}
 }
 
 void UGFCharacterMovementComponent::OnRep_AuthoritativeStamina()

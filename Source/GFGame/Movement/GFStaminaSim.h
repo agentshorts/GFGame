@@ -86,6 +86,16 @@ struct GFGAME_API FGFStaminaState
 	bool bOverrideVelocity = false;
 	FVector OverrideVelocity = FVector::ZeroVector;
 
+	/** Jump presses since the last landing or wall-kick. Jump 1 is free. The air dash does not touch this. */
+	int32 JumpsUsed = 0;
+	/** This step's jump press launched a wall-kick or a swivel, so it is not one of the three hops. */
+	bool bTraversalJump = false;
+	bool bJumpAccepted = false;
+	float JumpZSpeed = 0.f;
+	FVector JumpForward = FVector::ZeroVector;
+	/** Seconds left on the jump-3 front flip. The mesh reads this. Landing clears it. */
+	float FlipTimeLeft = 0.f;
+
 	void ResetFull(const UGFMovementTuning& Tuning);
 };
 

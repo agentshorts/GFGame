@@ -30,7 +30,7 @@ AGFCharacter::AGFCharacter(const FObjectInitializer& ObjectInitializer)
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 540.f, 0.f);
-	GetCharacterMovement()->JumpZVelocity = 520.f; // clears one 100 cm block
+	GetCharacterMovement()->JumpZVelocity = 520.f; // matches UGFMovementTuning::JumpZVelocity, clears one block
 	GetCharacterMovement()->MaxWalkSpeed = 500.f;
 	// Walk up one-block (100 cm) steps without jumping. See PlayerMaxStepHeight for the capsule limit.
 	GetCharacterMovement()->MaxStepHeight = PlayerMaxStepHeight;
@@ -95,6 +95,7 @@ void AGFCharacter::PostInitializeComponents()
 	{
 		Move->MaxStepHeight = PlayerMaxStepHeight;
 		Move->ApplyBaseRunSpeed();
+		Move->ApplyJumpTuning();
 	}
 	else if (UCharacterMovementComponent* Move = GetCharacterMovement())
 	{
