@@ -1,5 +1,9 @@
 """Create/refresh /Game/Data/DT_* DataTables from Data/CSV/*.csv (PLAN.md section 5).
 
+The CSV files are the source of truth. DT_Items.uasset is not edited by hand; this script
+rebuilds /Game/Data/DT_Items from Data/CSV/DT_Items.csv, including the OutfitSlot column on
+fashion rows. FGFDataTables reads that CSV whenever the ItemTable soft reference is empty.
+
 Run headless:
   UnrealEditor-Cmd.exe GFGame.uproject -run=pythonscript -script="<abs path>/Tools/import_datatables.py" -unattended -nullrhi
 """
