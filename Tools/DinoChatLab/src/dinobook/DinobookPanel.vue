@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import LabWizard from "../components/LabWizard.vue";
+import PanelInfo from "../components/PanelInfo.vue";
 import { loadBundledPersonas } from "../data/loadPersonas";
 import { recordTraces } from "../logic/trace";
 import { decorateDinobook } from "../trace/decorate";
@@ -254,6 +256,14 @@ const lastSummary = computed(() => runs.value.at(-1)?.summary ?? "");
       </p>
     </header>
 
+    <div class="book-guides">
+      <PanelInfo id="dinobook" />
+      <div class="guide-pair">
+        <LabWizard id="crew" />
+        <LabWizard id="events" />
+      </div>
+    </div>
+
     <div class="book-grid">
       <div class="book-controls">
         <p class="hint">Player name is the one in Talk. A blank name is you.</p>
@@ -365,6 +375,7 @@ const lastSummary = computed(() => runs.value.at(-1)?.summary ?? "");
       <div class="book-feed">
         <div class="log-head">
           <h3>Thread</h3>
+          <PanelInfo id="dinobook-feed" />
           <p class="hint" v-if="lastSummary">{{ lastSummary }}</p>
         </div>
         <div class="sheet" role="feed">

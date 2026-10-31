@@ -1,0 +1,77 @@
+[
+  {
+    "file": "chat-lab.png",
+    "title": "Chat lab",
+    "caption": "Talk on the left, the transcript in the middle, the decision slate on the right. Help and the trace switch live in the header."
+  },
+  {
+    "file": "panel-talk.png",
+    "title": "Talk",
+    "caption": "Mode, line engine, focus dino, and the context model. The About card is the collapsible note at the top."
+  },
+  {
+    "file": "panel-info-talk.png",
+    "title": "About this panel",
+    "caption": "Open the card for what the panel is for, what to try first, and what each control means. Every panel has one. Open or closed is remembered in this browser."
+  },
+  {
+    "file": "panel-transcript.png",
+    "title": "Transcript",
+    "caption": "Presets fill the box. Send writes the line. Open Trace under a reply for the badge and the reason."
+  },
+  {
+    "file": "panel-decision.png",
+    "title": "Decision",
+    "caption": "The live intent, the reasons, the pack, the distance, and the context budget for the focused dino."
+  },
+  {
+    "file": "panel-dinobook.png",
+    "title": "Dinobook",
+    "caption": "Event buttons, wages, and jobs on the left. The thread and all-chat sit on the paper."
+  },
+  {
+    "file": "personas.png",
+    "title": "Personas",
+    "caption": "The roster, the editor, and a test chat. Bundled dinos stay read-only until you duplicate one."
+  },
+  {
+    "file": "panel-dino-list.png",
+    "title": "Dino list",
+    "caption": "Search, speech pattern, + New, and Duplicate. Crew setup can reopen from this panel."
+  },
+  {
+    "file": "panel-editor.png",
+    "title": "Editor",
+    "caption": "Name, speech, topics, relationships, and the interest minimums."
+  },
+  {
+    "file": "panel-test-chat.png",
+    "title": "Test chat",
+    "caption": "ELIZA answers the draft. The decision log and the memory blocks sit under the composer."
+  },
+  {
+    "file": "username-gate.png",
+    "title": "Username",
+    "caption": "The first Personas visit. There is no password. The name stays in this browser."
+  },
+  {
+    "file": "trace-log.png",
+    "title": "Trace log",
+    "caption": "#/trace lists chat turns, Dinobook posts, paydays, and elder picks. Filter by dino or by source."
+  },
+  {
+    "file": "wizard-crew.png",
+    "title": "Crew setup",
+    "caption": "Pick dinos, personas, wages, and jobs. Skip remembers the dismissal. Open crew setup brings it back."
+  },
+  {
+    "file": "wizard-events.png",
+    "title": "Dinobook events",
+    "caption": "What Player joined, Attacked, Refused mango, Rental downed, Payday, and Summon Big Grumble each change."
+  },
+  {
+    "file": "wizard-traces.png",
+    "title": "Reading traces",
+    "caption": "Engines, the colour badge, the reason line, and the filters on #/trace."
+  }
+]

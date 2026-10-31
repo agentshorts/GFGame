@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { useLab } from "./composables/useLab";
+import LabWizard from "./components/LabWizard.vue";
+import PanelInfo from "./components/PanelInfo.vue";
 import DinobookPanel from "./dinobook/DinobookPanel.vue";
 import TraceRow from "./trace/TraceRow.vue";
 import TraceToggle from "./trace/TraceToggle.vue";
@@ -126,6 +128,7 @@ function onPromptInput(event: Event) {
         <h1>Dino Chat Lab</h1>
         <a class="lab-link" href="#/personas">Personas</a>
         <a class="lab-link" href="#/trace">Trace log</a>
+        <a class="lab-link" href="#/help">Help</a>
       </div>
       <div class="status">
         <TraceToggle />
@@ -139,6 +142,7 @@ function onPromptInput(event: Event) {
     <div class="columns">
       <section class="bench" aria-label="Chat controls">
         <h2>Talk</h2>
+        <PanelInfo id="talk" />
         <div class="modes" role="group" aria-label="Chat mode">
           <button type="button" :aria-pressed="mode === 'direct'" @click="mode = 'direct'">1:1</button>
           <button type="button" :aria-pressed="mode === 'all-chat'" @click="mode = 'all-chat'">All-chat</button>
@@ -251,6 +255,8 @@ function onPromptInput(event: Event) {
         <div class="log-head">
           <h2>{{ mode === "event" ? "Game events" : mode === "all-chat" ? "All chat" : selected.name }}</h2>
           <p class="hint">Channel All. The classic engine writes the line. The slate panel is the decision.</p>
+          <PanelInfo id="transcript" />
+          <LabWizard id="traces" />
         </div>
         <div class="sheet" role="log">
           <p class="hint" v-if="messages.length === 0">
@@ -302,6 +308,7 @@ function onPromptInput(event: Event) {
 
       <aside class="debug" aria-label="Alignment debug">
         <h2>Decision</h2>
+        <PanelInfo id="decision" />
         <p class="hint">{{ selected.name }} · lab alignment {{ alignmentPick === "persona" ? selected.alignment : alignmentPick }}</p>
         <label class="field">
           <span>Alignment override</span>

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import LabWizard from "../components/LabWizard.vue";
+import PanelInfo from "../components/PanelInfo.vue";
 import { SPEECH_PATTERNS, type Sentiment } from "./profile";
 import { useManager } from "./useManager";
 import TraceRow from "../trace/TraceRow.vue";
@@ -94,6 +96,7 @@ function onFile(event: Event) {
         <h1>Dino roster</h1>
         <a class="lab-link" href="#/">Back to the chat lab</a>
         <a class="lab-link" href="#/trace">Trace log</a>
+        <a class="lab-link" href="#/help">Help</a>
       </div>
       <div class="status">
         <TraceToggle />
@@ -116,6 +119,7 @@ function onFile(event: Event) {
         <p class="hint" v-if="mode === 'remote'">
           New names on the shared hub are capped at 100 per UTC day.
         </p>
+        <PanelInfo id="username" />
         <label class="field">
           <span>Username</span>
           <input v-model="nameDraft" name="username" type="text" minlength="3" maxlength="20" autocomplete="username" required />
@@ -125,9 +129,14 @@ function onFile(event: Event) {
       </form>
     </div>
 
-    <div v-else class="columns">
+    <div v-else>
+      <div class="page-guides">
+        <LabWizard id="crew" />
+      </div>
+      <div class="columns">
       <section class="bench" data-pane="list" aria-label="Dino list">
         <h2>Dinos</h2>
+        <PanelInfo id="dino-list" />
         <label class="field">
           <span>Search</span>
           <input v-model="query" type="text" placeholder="Name or description" />
@@ -169,6 +178,7 @@ function onFile(event: Event) {
 
       <section class="editor" data-pane="editor" aria-label="Persona editor">
         <h2>Editor</h2>
+        <PanelInfo id="editor" />
         <p class="hint" v-if="!selected">Pick a dino.</p>
         <template v-else>
           <p class="hint" v-if="!editable">Read-only. Duplicate it if you want a copy you can edit.</p>
@@ -301,6 +311,7 @@ function onFile(event: Event) {
         <div class="log-head">
           <h2>Test chat</h2>
           <p class="hint">Uses the draft, saved or not. ELIZA speaks. The log is the decision.</p>
+          <PanelInfo id="test-chat" />
           <label class="field">
             <span>Player name</span>
             <input v-model="playerName" type="text" maxlength="40" @change="refreshForPlayer" />
@@ -348,6 +359,7 @@ function onFile(event: Event) {
           <button type="button" @click="resetMemory">Reset memory</button>
         </div>
       </section>
+      </div>
     </div>
   </div>
 </template>
