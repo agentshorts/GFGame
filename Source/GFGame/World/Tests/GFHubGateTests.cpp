@@ -191,7 +191,9 @@ bool FGFHubGateCatalogTest::RunTest(const FString&)
 	TestEqual(TEXT("Beat Hop map"), Beat->Map.ToString(), FString(TEXT("/Game/Maps/L_Beat")));
 	TestTrue(TEXT("Depths is a sim"), Depths->HasSim() && !Depths->HasMap());
 	TestEqual(TEXT("MOBA map"), Moba->Map.ToString(), FString(TEXT("/Game/Maps/L_Moba")));
-	TestEqual(TEXT("MOBA sign"), Moba->Label, FString(TEXT("MOBA")));
+	TestEqual(TEXT("Crystal Clash sign"), Moba->Label, FString(TEXT("Crystal Clash")));
+	TestEqual(TEXT("Crystal Clash keeps the Moba id"), Moba->Id, FName(TEXT("Moba")));
+	TestFalse(TEXT("Sign does not say MOBA"), Moba->Label.Equals(TEXT("MOBA")));
 
 	TestEqual(TEXT("Taming gate label"), GetDefault<UGFTamingGateSubsystem>()->GetDisplayName().ToString(), FGFMiniGameCatalog::Find(TEXT("Taming"))->Label);
 	TestEqual(TEXT("Runway gate label"), GetDefault<UGFFashionGateSubsystem>()->GetDisplayName().ToString(), FGFMiniGameCatalog::Find(TEXT("Fashion"))->Label);
@@ -505,8 +507,8 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 		AGFMiniGameGate* Sign = FindSpawnedGate(MobaWorld.World, TEXT("Moba"), EGFMiniGameGateRole::Marker);
 		if (TestNotNull(TEXT("MOBA sign actor"), Sign))
 		{
-			TestEqual(TEXT("MOBA map shows MOBA"), Sign->GetLabel(), FString(TEXT("MOBA")));
-			TestEqual(TEXT("MOBA map sign text"), Sign->GetSignText().ToString(), FString(TEXT("MOBA")));
+			TestEqual(TEXT("Crystal Clash map label"), Sign->GetLabel(), FString(TEXT("Crystal Clash")));
+			TestEqual(TEXT("Crystal Clash map sign text"), Sign->GetSignText().ToString(), FString(TEXT("Crystal Clash")));
 			TestFalse(TEXT("MOBA map marker has no pad floor"), FloorBlocks(Sign->GetPadFloor()));
 		}
 		TestNull(TEXT("MOBA map has no Depths sign"), FindSpawnedGate(MobaWorld.World, TEXT("Depths"), EGFMiniGameGateRole::Marker));
