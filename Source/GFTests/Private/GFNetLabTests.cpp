@@ -1,6 +1,7 @@
 // Overtime over the network: each player runs their own shift (friends see each other's), searches take time and
 // one pile at a time, extracting brings everything home, a drop mid-shift keeps 75 %, lockdown seals the doors
-// at 75 %, the Lab Bench turns junk into gear through the ledger, and a Calming Mist settles a hostile dino.
+// at 75 %, anomalies wake and containment replicates, the Lab Bench turns junk into gear through the ledger,
+// and a Calming Mist settles a hostile dino.
 #include "GFNetTestUtils.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
@@ -30,6 +31,7 @@ namespace GFNetLabTest
 		FString C1, C2;
 		TMap<FName, int32> Want;
 		TArray<FGFItemStack> Before;
+		int32 AnomalyIndex = 0;
 		TWeakObjectPtr<AGFDino> Near, Far;
 	};
 
@@ -243,6 +245,79 @@ bool FGFNetLabTest::RunTest(const FString&)
 		TestTrue(TEXT("Ended by lockdown"), ServerDirector()->LastEnd.FindRef(Run->C1) == EGFLabEnd::Lockdown);
 		TestEqual(TEXT("Lockdown keeps 75 %: 4 -> 3"), Bag(0, TEXT("ScrapWire")), 3);
 		TestEqual(TEXT("Lockdown keeps 75 %: 3 -> 2"), Bag(0, TEXT("PolymerGel")), 2);
+	});
+
+	// ---- anomalies replicate ----
+	Do(Ctx, [Run]()
+	{
+		AGFLabDirector* D = ServerDirector();
+		if (D)
+		{
+			D->SimSpeed = 1.f;
+			D->ForcedSeed = 9001;
+		}
+		Send(*Run, 0, TEXT("EnterA"), TEXT("Enter"));
+	});
+	WaitUntil(Ctx, TEXT("anomaly shift started"), 10.f, [Run]()
+	{
+		const FGFLabRun* R = ServerDirector() ? ServerDirector()->FindRun(Run->C1) : nullptr;
+		return HaveAll(*Run, { TEXT("EnterA") }) && R && R->Anomalies.Num() > 0;
+	});
+	Do(Ctx, [this, Run]()
+	{
+		FGFLabRun* R = ServerDirector()->EditRunForTests(Run->C1);
+		if (!TestNotNull(TEXT("Anomaly shift"), R) || R->Anomalies.Num() == 0)
+		{
+			return;
+		}
+		Run->AnomalyIndex = 0;
+		R->Clock = R->Anomalies[0].StartTime - 0.2f;
+	});
+	WaitUntil(Ctx, TEXT("clients see the anomaly wake"), 10.f, [Run]()
+	{
+		for (int32 i = 0; i < 2; ++i)
+		{
+			const AGFLabDirector* D = ClientDirector(i);
+			const FGFLabRun* R = D ? D->FindRun(Run->C1) : nullptr;
+			if (!R || !R->Anomalies.IsValidIndex(Run->AnomalyIndex) || !R->Anomalies[Run->AnomalyIndex].bActive)
+			{
+				return false;
+			}
+		}
+		return true;
+	});
+	Do(Ctx, [Run]()
+	{
+		Send(*Run, 0, TEXT("ContainA"), TEXT("Contain"), [Run](FGFModeRequest& R) { R.Ints = { Run->AnomalyIndex }; });
+	});
+	WaitUntil(Ctx, TEXT("clients see it contained"), 10.f, [Run]()
+	{
+		for (int32 i = 0; i < 2; ++i)
+		{
+			const AGFLabDirector* D = ClientDirector(i);
+			const FGFLabRun* R = D ? D->FindRun(Run->C1) : nullptr;
+			if (!R || !R->Anomalies.IsValidIndex(Run->AnomalyIndex) || !R->Anomalies[Run->AnomalyIndex].bContained)
+			{
+				return false;
+			}
+		}
+		return true;
+	});
+	Do(Ctx, [this, Run]()
+	{
+		const FGFLabRun* ServerRun = ServerDirector()->FindRun(Run->C1);
+		const AGFLabDirector* ClientD = ClientDirector(0);
+		const FGFLabRun* ClientRun = ClientD ? ClientD->FindRun(Run->C1) : nullptr;
+		const int32 Index = Run->AnomalyIndex;
+		TestTrue(TEXT("Server contained it"), ServerRun && ServerRun->Anomalies.IsValidIndex(Index) && ServerRun->Anomalies[Index].bContained && !ServerRun->Anomalies[Index].bActive);
+		TestTrue(TEXT("Client sees the same anomaly"), ClientRun && ServerRun && ClientRun->Anomalies.IsValidIndex(Index)
+			&& ClientRun->Anomalies[Index].Kind == ServerRun->Anomalies[Index].Kind
+			&& ClientRun->Anomalies[Index].bContained && !ClientRun->Anomalies[Index].bActive);
+		Send(*Run, 0, TEXT("ExtractA"), TEXT("Extract"));
+	});
+	WaitUntil(Ctx, TEXT("anomaly shift extracted"), 10.f, [Run]()
+	{
+		return HaveAll(*Run, { TEXT("ExtractA") }) && ServerDirector() && !ServerDirector()->FindRun(Run->C1);
 	});
 
 	// ---- Lab Bench ----
