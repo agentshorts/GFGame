@@ -18,6 +18,7 @@
 #include "Engine/Font.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "Engine/LevelStreaming.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
@@ -39,7 +40,7 @@ const FName AGFMiningRange::ModeName(TEXT("MiningRange"));
 const TCHAR* AGFMiningRange::RangeMap = TEXT("/Game/Maps/L_MiningRange");
 bool AGFMiningRange::bTestForceDressingFallback = false;
 
-namespace
+namespace GFMiningRangePrivate
 {
 	static const TCHAR* CubePath = TEXT("/Engine/BasicShapes/Cube.Cube");
 	static const TCHAR* FontPath = TEXT("/Engine/EngineFonts/RobotoDistanceField.RobotoDistanceField");
@@ -297,6 +298,22 @@ namespace
 		}
 		return FFileHelper::SaveArrayToFile(File, *Path);
 	}
+
+	static bool CaptureWorldSettled(UWorld* World)
+	{
+		if (!World)
+		{
+			return false;
+		}
+		for (ULevelStreaming* Level : World->GetStreamingLevels())
+		{
+			if (Level && Level->ShouldBeLoaded() && !Level->IsLevelVisible())
+			{
+				return false;
+			}
+		}
+		return true;
+	}
 }
 
 AGFMiningRange::AGFMiningRange()
@@ -359,6 +376,10 @@ void AGFMiningRange::BeginPlay()
 
 void AGFMiningRange::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(CaptureTimer);
+	}
 	if (bRegistered)
 	{
 		if (AGFGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGFGameState>() : nullptr)
@@ -450,7 +471,7 @@ void AGFMiningRange::BuildWorld()
 		Voxel->PlotSizeInBlocks = Layout.GridSize;
 		Voxel->StarterGroundLayers = 0;
 	}
-	StampLayout(Voxel.Get(), Layout);
+	GFMiningRangePrivate::StampLayout(Voxel.Get(), Layout);
 	if (AGFGameState* GS = World->GetGameState<AGFGameState>())
 	{
 		GS->bEnforcePlotPermissions = false;
@@ -529,14 +550,14 @@ void AGFMiningRange::BuildVisuals()
 	{
 		return;
 	}
-	UFont* Font = LoadObject<UFont>(nullptr, FontPath);
+	UFont* Font = LoadObject<UFont>(nullptr, GFMiningRangePrivate::FontPath);
 	const bool bWantArt = Layout.Dressing.bLoaded;
-	UStaticMesh* SignMesh = bWantArt && Layout.Dressing.Signs.Num() > 0 ? LoadMesh(Layout.Dressing.Signs[0].Mesh) : nullptr;
-	UStaticMesh* BadgeMesh = bWantArt && Layout.Dressing.Badges.Num() > 0 ? LoadMesh(Layout.Dressing.Badges[0].Mesh) : nullptr;
-	UStaticMesh* BaseMesh = bWantArt && Layout.Dressing.Lever.bPresent ? LoadMesh(Layout.Dressing.Lever.BaseMesh) : nullptr;
-	UStaticMesh* HandleAsset = bWantArt && Layout.Dressing.Lever.bPresent ? LoadMesh(Layout.Dressing.Lever.HandleMesh) : nullptr;
-	UStaticMesh* TrimMesh = bWantArt && Layout.Dressing.Trims.Num() > 0 ? LoadMesh(Layout.Dressing.Trims[0].Mesh) : nullptr;
-	UStaticMesh* FloorMesh = bWantArt && Layout.Dressing.Tiles.Num() > 0 ? LoadMesh(Layout.Dressing.Tiles[0].Mesh) : nullptr;
+	UStaticMesh* SignMesh = bWantArt && Layout.Dressing.Signs.Num() > 0 ? GFMiningRangePrivate::LoadMesh(Layout.Dressing.Signs[0].Mesh) : nullptr;
+	UStaticMesh* BadgeMesh = bWantArt && Layout.Dressing.Badges.Num() > 0 ? GFMiningRangePrivate::LoadMesh(Layout.Dressing.Badges[0].Mesh) : nullptr;
+	UStaticMesh* BaseMesh = bWantArt && Layout.Dressing.Lever.bPresent ? GFMiningRangePrivate::LoadMesh(Layout.Dressing.Lever.BaseMesh) : nullptr;
+	UStaticMesh* HandleAsset = bWantArt && Layout.Dressing.Lever.bPresent ? GFMiningRangePrivate::LoadMesh(Layout.Dressing.Lever.HandleMesh) : nullptr;
+	UStaticMesh* TrimMesh = bWantArt && Layout.Dressing.Trims.Num() > 0 ? GFMiningRangePrivate::LoadMesh(Layout.Dressing.Trims[0].Mesh) : nullptr;
+	UStaticMesh* FloorMesh = bWantArt && Layout.Dressing.Tiles.Num() > 0 ? GFMiningRangePrivate::LoadMesh(Layout.Dressing.Tiles[0].Mesh) : nullptr;
 	bArtDressing = bWantArt && SignMesh && BadgeMesh && BaseMesh && HandleAsset && TrimMesh && FloorMesh;
 	if (bWantArt && !bArtDressing)
 	{
@@ -563,7 +584,7 @@ void AGFMiningRange::BuildVisuals()
 		Text->SetHorizontalAlignment(EHTA_Center);
 		Text->SetVerticalAlignment(EVRTA_TextCenter);
 		Text->SetWorldSize(16.f);
-		Text->SetTextRenderColor(Ink);
+		Text->SetTextRenderColor(GFMiningRangePrivate::Ink);
 		Text->SetText(FText::FromString(Line));
 		if (Font)
 		{
@@ -592,7 +613,7 @@ void AGFMiningRange::BuildVisuals()
 		{
 			Sign->SetStaticMesh(SignMesh);
 		}
-		else if (UStaticMesh* Box = Cube())
+		else if (UStaticMesh* Box = GFMiningRangePrivate::Cube())
 		{
 			Sign->SetStaticMesh(Box);
 			Sign->SetWorldScale3D(FVector(0.07f, 1.40f, 0.95f));
@@ -648,7 +669,7 @@ void AGFMiningRange::BuildVisuals()
 			Base->SetStaticMesh(BaseMesh);
 			Base->SetCollisionProfileName(TEXT("BlockAll"));
 		}
-		else if (UStaticMesh* Box = Cube())
+		else if (UStaticMesh* Box = GFMiningRangePrivate::Cube())
 		{
 			Base->SetStaticMesh(Box);
 			Base->SetWorldScale3D(FVector(0.7f));
@@ -668,7 +689,7 @@ void AGFMiningRange::BuildVisuals()
 			{
 				Handle->SetStaticMesh(HandleAsset);
 			}
-			else if (UStaticMesh* Box = Cube())
+			else if (UStaticMesh* Box = GFMiningRangePrivate::Cube())
 			{
 				Handle->SetStaticMesh(Box);
 				Handle->SetRelativeScale3D(FVector(0.18f, 0.18f, 0.7f));
@@ -720,7 +741,7 @@ void AGFMiningRange::BuildVisuals()
 				Ism->SetupAttachment(Root);
 				Ism->SetStaticMesh(FloorMesh);
 				Ism->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-				if (UMaterialInterface* Mat = LoadMat(Prop.Material))
+				if (UMaterialInterface* Mat = GFMiningRangePrivate::LoadMat(Prop.Material))
 				{
 					Ism->SetMaterial(0, Mat);
 				}
@@ -762,7 +783,7 @@ void AGFMiningRange::ResetAll()
 	{
 		return;
 	}
-	StampLayout(Grid, Layout);
+	GFMiningRangePrivate::StampLayout(Grid, Layout);
 	for (TPair<FString, FGainTracker>& Pair : Trackers)
 	{
 		Pair.Value.Gained.Reset();
@@ -1006,10 +1027,34 @@ void AGFMiningRange::CaptureIfEditor()
 		return;
 	}
 #endif
-	if (!FApp::CanEverRender() || !GFMiningMaps::IsMiningRange(GetWorld()))
+	UWorld* World = GetWorld();
+	if (!FApp::CanEverRender() || !World || !GFMiningMaps::IsMiningRange(World))
 	{
 		return;
 	}
+	const FString RootDir = TEXT("C:/DevPersonal/GFGame-captures");
+	if (!FPaths::DirectoryExists(RootDir))
+	{
+		return;
+	}
+	// BeginPlay is before the first rendered frame. Wait out streaming, then a couple of seconds of light.
+	CaptureArmedAt = World->GetTimeSeconds();
+	World->GetTimerManager().SetTimer(CaptureTimer, this, &AGFMiningRange::RunEditorCapture, 0.5f, true, 2.f);
+}
+
+void AGFMiningRange::RunEditorCapture()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	const float Elapsed = World->GetTimeSeconds() - CaptureArmedAt;
+	if (!GFMiningRangePrivate::CaptureWorldSettled(World) && Elapsed < 8.f)
+	{
+		return;
+	}
+	World->GetTimerManager().ClearTimer(CaptureTimer);
 	const FString RootDir = TEXT("C:/DevPersonal/GFGame-captures");
 	if (!FPaths::DirectoryExists(RootDir))
 	{
@@ -1054,11 +1099,11 @@ void AGFMiningRange::CaptureIfEditor()
 			int32 Y = 16;
 			for (const FString& Line : HudLines())
 			{
-				StampText(Pixels, 960, 540, 16, Y, Line);
+				GFMiningRangePrivate::StampText(Pixels, 960, 540, 16, Y, Line);
 				Y += 18;
 			}
 		}
-		if (!WriteBmp(Dir / (Name + TEXT(".bmp")), Pixels, 960, 540))
+		if (!GFMiningRangePrivate::WriteBmp(Dir / (Name + TEXT(".bmp")), Pixels, 960, 540))
 		{
 			UE_LOG(LogGF, Warning, TEXT("Mining range: capture %s was not written"), *Name);
 		}

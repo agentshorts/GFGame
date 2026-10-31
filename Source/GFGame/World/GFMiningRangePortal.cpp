@@ -15,7 +15,7 @@
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 
-namespace
+namespace GFMiningRangePortalPrivate
 {
 	static const TCHAR* CubePath = TEXT("/Engine/BasicShapes/Cube.Cube");
 	static const TCHAR* FontPath = TEXT("/Engine/EngineFonts/RobotoDistanceField.RobotoDistanceField");
@@ -95,12 +95,12 @@ void AGFMiningRangePortal::ApplyVisuals()
 	}
 	bVisuals = true;
 	SignText = FText::FromString(TEXT("Mining Range"));
-	if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, CubePath))
+	if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, GFMiningRangePortalPrivate::CubePath))
 	{
 		Mesh->SetStaticMesh(Cube);
 		Mesh->SetWorldScale3D(FVector(1.2f, 0.4f, 2.2f));
 	}
-	if (UFont* Font = LoadObject<UFont>(nullptr, FontPath))
+	if (UFont* Font = LoadObject<UFont>(nullptr, GFMiningRangePortalPrivate::FontPath))
 	{
 		LabelText->SetFont(Font);
 	}
@@ -205,7 +205,7 @@ void AGFMiningRangeDirector::Place(const FString& WorldPackage, const FVector& R
 		GS->RegisterModeHandler(this);
 		bRegistered = true;
 	}
-	const FVector At = RimeCenter + PortalOffset;
+	const FVector At = RimeCenter + GFMiningRangePortalPrivate::PortalOffset;
 	for (TActorIterator<AGFMiningRangePortal> It(World); It; ++It)
 	{
 		It->SetActorLocation(At);

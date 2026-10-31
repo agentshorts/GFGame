@@ -10,6 +10,7 @@
 #include "GameFramework/Actor.h"
 #include "GFModeTypes.h"
 #include "GFMiningRangeLayout.h"
+#include "TimerManager.h"
 #include "GFMiningRange.generated.h"
 
 class AGFPlayerState;
@@ -108,6 +109,7 @@ private:
 	void RegisterHandler();
 	void StartPull();
 	void CaptureIfEditor();
+	void RunEditorCapture();
 	void PublishStats();
 	FString PlayerLabel(const AGFPlayerState* PS) const;
 
@@ -158,4 +160,6 @@ private:
 	float LeverTo = -35.f;
 	float LeverAlpha = 1.f;
 	bool bRegistered = false;
+	FTimerHandle CaptureTimer;
+	float CaptureArmedAt = -1.f;
 };
