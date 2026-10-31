@@ -86,6 +86,8 @@ private:
 	void DrawDepthsSession();
 	/** Ferry stand: fare, destinations and the lifetime pass while the local pawn is at a stop. */
 	void DrawFerryStand();
+	/** Mining range: items gained since reset, cells broken, and time to clear each row. */
+	void DrawMiningRange();
 	void DrawPauseMenu();
 
 	void PollToasts();

@@ -7,7 +7,7 @@ public class GFGame : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "GameplayTags", "GFCore", "GFVoxel", "GFBuild", "GFGarden", "GFCompanion", "GFFashion", "GFMoba", "GFRhythm", "GFSave", "GFNet", "VoxelFinish" });
-		PrivateDependencyModuleNames.AddRange(new string[] { "GFSocial", "GFMine", "GFArena", "GFDepths", "GFLab", "Slate", "SlateCore" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "GFSocial", "GFMine", "GFArena", "GFDepths", "GFLab", "Json", "RenderCore", "Slate", "SlateCore" });
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "Territory"));
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "AI/Roaming"));
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "Dinos/Wild"));
@@ -20,5 +20,6 @@ public class GFGame : ModuleRules
 
 		// Loose copies of Data/CSV next to the staged project. FGFDataTables::CsvPath reads ProjectDir/Data/CSV.
 		RuntimeDependencies.Add("$(ProjectDir)/Data/CSV/...", StagedFileType.NonUFS);
+		RuntimeDependencies.Add("$(ProjectDir)/Data/MiningRange/...", StagedFileType.NonUFS);
 	}
 }

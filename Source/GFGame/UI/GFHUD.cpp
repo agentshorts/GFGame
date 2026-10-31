@@ -19,6 +19,7 @@
 #include "GFPlayerState.h"
 #include "GFTerritorySubsystem.h"
 #include "GFVoxelWorld.h"
+#include "GFMiningRange.h"
 #include "Engine/Canvas.h"
 #include "Engine/Texture2D.h"
 #include "Engine/Engine.h"
@@ -243,6 +244,7 @@ void AGFHUD::DrawHUD()
 	DrawGrumbleSession();
 	DrawDepthsSession();
 	DrawFerryStand();
+	DrawMiningRange();
 	DrawCrosshair();
 	DrawAimOverlay();
 	DrawCompass();
@@ -255,6 +257,33 @@ void AGFHUD::DrawHUD()
 	DrawHint();
 	DrawPathsAndVillains();
 	DrawPauseMenu();
+}
+
+void AGFHUD::DrawMiningRange()
+{
+	UWorld* World = GetWorld();
+	if (!World || !Canvas)
+	{
+		return;
+	}
+	AGFMiningRange* Range = nullptr;
+	for (TActorIterator<AGFMiningRange> It(World); It; ++It)
+	{
+		Range = *It;
+		break;
+	}
+	if (!Range || !Range->IsHudOn())
+	{
+		return;
+	}
+	UFont* Font = HudFont();
+	const float Scale = Canvas->ClipY / 1080.f;
+	float Y = 72.f * Scale;
+	for (const FString& Line : Range->HudLines())
+	{
+		DrawText(Line, FLinearColor(0.93f, 0.90f, 0.82f), 28.f * Scale, Y, Font, 0.85f * Scale, false);
+		Y += 18.f * Scale;
+	}
 }
 
 void AGFHUD::DrawCrosshair()
