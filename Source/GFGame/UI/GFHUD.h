@@ -60,6 +60,8 @@ private:
 	void DrawBeatHopSession();
 	/** Pebble Mine (#216): verb prompts while the local pawn is on the mine pad. */
 	void DrawMineSession();
+	/** Fashion runway: theme, look, start, finish and the score, while the local pawn is on the site. */
+	void DrawRunwaySession();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);

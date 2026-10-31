@@ -1,4 +1,5 @@
 #include "GFRunwayStage.h"
+#include "GFRunwaySite.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFLog.h"
@@ -38,6 +39,34 @@ AGFRunwayStage* AGFRunwayStage::Find(const UWorld* World)
 		}
 	}
 	return nullptr;
+}
+
+void AGFRunwayStage::EnsurePlayableSite()
+{
+	UWorld* World = GetWorld();
+	if (!HasAuthority() || !World || World->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	AGFRunwaySite* Site = AGFRunwaySite::Get(World);
+	const bool bNew = Site == nullptr;
+	if (bNew)
+	{
+		FActorSpawnParameters Params;
+		Params.Owner = this;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Site = World->SpawnActor<AGFRunwaySite>(AGFRunwaySite::StaticClass(), FTransform(GetActorLocation()), Params);
+	}
+	if (!Site)
+	{
+		return;
+	}
+	if (bNew)
+	{
+		UE_LOG(LogGF, Log, TEXT("Runway: playable site on the stage (start, finish, results, hub)"));
+	}
+	Site->SetActorLocation(GetActorLocation());
+	Site->BuildIfNeeded();
 }
 
 void AGFRunwayStage::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
