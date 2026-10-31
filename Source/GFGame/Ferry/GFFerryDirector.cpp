@@ -65,20 +65,6 @@ namespace GFFerryDirectorPrivate
 		return bAny ? FMath::Max(1, Best) : 1;
 	}
 
-	void SeatOnBasket(APawn* Rider, USceneComponent* Basket)
-	{
-		if (!Rider || !Basket)
-		{
-			return;
-		}
-		// Snap to the basket, then to the seat offset in basket space (-25, 0, 12.5).
-		// The Seat socket is authored at that same point. Attaching to the socket stores
-		// a zero relative location, so the rider is on the ferry but not at the seat.
-		const FAttachmentTransformRules Rules(EAttachmentRule::SnapToTarget, EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, false);
-		Rider->AttachToComponent(Basket, Rules);
-		Rider->SetActorRelativeLocation(FGFFerryArt::SeatLocal());
-	}
-
 	void GrabBasket(AGFFerryDino* Craft, UStaticMeshComponent* Basket)
 	{
 		if (!Craft || !Basket)
@@ -341,7 +327,8 @@ bool AGFFerryDirector::StartFlight(APawn* Rider, const FGFFerryStop& From, const
 		Move->DisableMovement();
 		bDisabledMovement = true;
 	}
-	GFFerryDirectorPrivate::SeatOnBasket(Rider, Basket);
+	// Feet on the floor, rotation locked to the basket. BeginSeat replicates that lock to clients.
+	UGFFerryRiderComponent::SeatOnBasket(Rider, Basket);
 	if (Ride)
 	{
 		Ride->BeginSeat();
@@ -455,6 +442,11 @@ bool AGFFerryDirector::AdvanceFlight(FFlight& Flight, float DeltaSeconds)
 		FinishFlight(Flight);
 		return true;
 	}
+	// The bird pitches on the way up. Keep the feet on the floor and the body upright with the basket.
+	if (Basket)
+	{
+		UGFFerryRiderComponent::SeatOnBasket(Rider, Basket);
+	}
 	return false;
 }
 
@@ -463,11 +455,14 @@ void AGFFerryDirector::FinishFlight(FFlight& Flight)
 	if (APawn* Rider = Flight.Rider.Get())
 	{
 		Rider->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
-		Rider->SetActorLocation(Flight.Drop);
+		// The basket follows the bird's pitch. Landing keeps the yaw and stands the rider up.
+		const FRotator Standing(0.f, Rider->GetActorRotation().Yaw, 0.f);
+		Rider->SetActorLocationAndRotation(Flight.Drop, Standing);
 		if (Flight.bDisabledMovement)
 		{
 			if (UCharacterMovementComponent* Move = Rider->FindComponentByClass<UCharacterMovementComponent>())
 			{
+				Move->StopMovementImmediately();
 				Move->SetMovementMode(MOVE_Walking);
 			}
 		}

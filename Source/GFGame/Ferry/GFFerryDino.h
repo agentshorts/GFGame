@@ -32,7 +32,7 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Ferry")
 	TObjectPtr<UStaticMeshComponent> Perch;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Ferry")
+	UPROPERTY(ReplicatedUsing = OnRep_Basket, VisibleAnywhere, BlueprintReadOnly, Category = "GF|Ferry")
 	TObjectPtr<UStaticMeshComponent> Basket;
 
 	/** Which stop this parked copy belongs to. None on a transit copy. */
@@ -71,7 +71,13 @@ public:
 
 	virtual void BeginPlay() override;
 
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UFUNCTION()
+	void OnRep_Basket();
+
 private:
 	void ApplyBody();
+	void PrepareBasket(UStaticMeshComponent* Comp);
 	static UStaticMesh* LoadStaticQuiet(const TCHAR* Path);
 };

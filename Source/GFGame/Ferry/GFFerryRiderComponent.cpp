@@ -5,21 +5,43 @@
 #include "GFProtectedActor.h"
 #include "GFSimpleAnimComponent.h"
 #include "Animation/AnimSequenceBase.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
 
 namespace GFFerryRiderPrivate
 {
 	// Longer than a trip. EndSeat releases it. A looping sit is not left alone by UGFSimpleAnimComponent.
 	constexpr float SeatHoldSeconds = 1.0e6f;
+
+	float CapsuleHalfHeight(const APawn* Rider)
+	{
+		const ACharacter* Character = Cast<ACharacter>(Rider);
+		const UCapsuleComponent* Capsule = Character ? Character->GetCapsuleComponent() : nullptr;
+		return Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 0.f;
+	}
+
+	/** Seat socket when the mesh has one, otherwise the authored floor point (-25, 0, 12.5). */
+	FVector SeatFloorLocal(const USceneComponent* Basket)
+	{
+		if (Basket && Basket->DoesSocketExist(FGFFerryArt::SeatSocket()))
+		{
+			return Basket->GetSocketTransform(FGFFerryArt::SeatSocket(), RTS_Component).GetLocation();
+		}
+		return FGFFerryArt::SeatLocal();
+	}
 }
 
 UGFFerryRiderComponent::UGFFerryRiderComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
+	// After movement, so a client prediction step cannot leave the head in the basket.
+	PrimaryComponentTick.TickGroup = TG_PostPhysics;
 	SetIsReplicatedByDefault(true);
 }
 
@@ -113,21 +135,114 @@ void UGFFerryRiderComponent::EndFlightProtection()
 	bInFlight = false;
 }
 
+void UGFFerryRiderComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (SeatAnim.IsNone())
+	{
+		return;
+	}
+	ApplySeatLock();
+	APawn* Pawn = Cast<APawn>(GetOwner());
+	USceneComponent* Basket = Pawn && Pawn->GetRootComponent() ? Pawn->GetRootComponent()->GetAttachParent() : nullptr;
+	if (Basket)
+	{
+		SeatOnBasket(Pawn, Basket);
+	}
+}
+
+void UGFFerryRiderComponent::SeatOnBasket(APawn* Rider, USceneComponent* Basket)
+{
+	if (!Rider || !Basket)
+	{
+		return;
+	}
+	USceneComponent* Root = Rider->GetRootComponent();
+	if (!Root)
+	{
+		return;
+	}
+	// Attach to the basket component, not the Seat socket. A socket attach stores a zero
+	// relative location, and the socket's rotation is not the basket's up.
+	const FVector Centre = GFFerryRiderPrivate::SeatFloorLocal(Basket) + FVector(0.f, 0.f, GFFerryRiderPrivate::CapsuleHalfHeight(Rider));
+	if (Root->GetAttachParent() != Basket)
+	{
+		const FAttachmentTransformRules Rules(EAttachmentRule::SnapToTarget, EAttachmentRule::SnapToTarget, EAttachmentRule::KeepWorld, false);
+		Rider->AttachToComponent(Basket, Rules);
+	}
+	if (!Root->GetRelativeLocation().Equals(Centre, 0.5f))
+	{
+		Rider->SetActorRelativeLocation(Centre);
+	}
+	if (!Root->GetRelativeRotation().Equals(FRotator::ZeroRotator, 0.5f))
+	{
+		Rider->SetActorRelativeRotation(FRotator::ZeroRotator);
+	}
+}
+
 void UGFFerryRiderComponent::BeginSeat()
 {
 	SeatAnim = FGFFerryArt::SeatAnim();
 	ApplySeatPose();
+	ApplySeatLock();
 }
 
 void UGFFerryRiderComponent::EndSeat()
 {
 	SeatAnim = NAME_None;
 	ApplySeatPose();
+	ApplySeatLock();
 }
 
 void UGFFerryRiderComponent::OnRep_SeatAnim()
 {
 	ApplySeatPose();
+	ApplySeatLock();
+}
+
+void UGFFerryRiderComponent::ApplySeatLock()
+{
+	APawn* Pawn = Cast<APawn>(GetOwner());
+	const bool bSeated = !SeatAnim.IsNone();
+	if (!bSeated)
+	{
+		SetComponentTickEnabled(false);
+		if (Pawn && bRestoreCollision)
+		{
+			Pawn->SetActorEnableCollision(true);
+			bRestoreCollision = false;
+		}
+		if (bRestoreMovement)
+		{
+			if (UCharacterMovementComponent* Move = Pawn ? Pawn->FindComponentByClass<UCharacterMovementComponent>() : nullptr)
+			{
+				Move->StopMovementImmediately();
+				Move->SetMovementMode(MOVE_Walking);
+			}
+			bRestoreMovement = false;
+		}
+		return;
+	}
+
+	SetComponentTickEnabled(true);
+	if (!Pawn)
+	{
+		return;
+	}
+	if (UCharacterMovementComponent* Move = Pawn->FindComponentByClass<UCharacterMovementComponent>())
+	{
+		if (Move->MovementMode != MOVE_None)
+		{
+			Move->StopMovementImmediately();
+			Move->DisableMovement();
+			bRestoreMovement = true;
+		}
+	}
+	if (Pawn->GetActorEnableCollision())
+	{
+		Pawn->SetActorEnableCollision(false);
+		bRestoreCollision = true;
+	}
 }
 
 void UGFFerryRiderComponent::ApplySeatPose()

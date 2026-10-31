@@ -54,6 +54,7 @@ struct GFGAME_API FGFFerryArt
 	static FVector PerchPointLocal() { return FVector(-95.f, 0.f, 262.5f); }
 	static FVector BasketSpotLocal() { return FVector(0.f, 0.f, 12.5f); }
 	static FVector GripLocal() { return FVector(0.f, 0.f, 193.75f); }
+	/** Basket floor, where the feet go. The capsule centre is one half-height above this. */
 	static FVector SeatLocal() { return FVector(-25.f, 0.f, 12.5f); }
 
 	static FName PerchAnim() { return TEXT("Ripwing.Perch_Idle"); }
