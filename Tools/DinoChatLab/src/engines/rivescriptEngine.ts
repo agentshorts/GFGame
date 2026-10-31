@@ -27,10 +27,8 @@ export function createRiveScriptEngine(): ChatEngine {
       const raw = await bot.reply(request.persona.id, request.utterance);
       const text = restoreTargetToken(raw).trim();
       const missed = text.length === 0 || text.startsWith("ERR:");
-      return {
-        engine: "rivescript",
-        text: missed ? (request.persona.fallbackReplies[0] ?? "...") : text,
-      };
+      if (!missed) return { engine: "rivescript", text };
+      return { engine: "rivescript", text: request.persona.fallbackReplies[0] ?? "...", fellBack: true };
     },
     reset(personaId?: string) {
       if (personaId) bots.delete(personaId);

@@ -1,6 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { loadBundledPersonas } from "../data/loadPersonas";
+import { recordTraces } from "../logic/trace";
+import { decorateDinobook } from "../trace/decorate";
+import TraceRow from "../trace/TraceRow.vue";
+import { dayKey, formatDay, formatWhen } from "../trace/time";
+import { useTrace } from "../trace/useTrace";
 import {
   clampShiftPay,
   createLocalCore,
@@ -16,7 +21,7 @@ import {
   type DinobookEventId,
   type DinobookPost,
   type FamilyBrief,
-  type RunResult,
+  type Skip,
   type WageCard,
 } from "./index";
 
@@ -29,26 +34,46 @@ const roster = personas.map((persona) => ({
 }));
 
 const core = ref<DinobookCorePort>(createLocalCore());
-const playerName = ref("Pip");
+const playerName = defineModel<string>("playerName", { default: "" });
+const { enabled: tracesOn, byId: traceById } = useTrace();
 const familyId = ref(LAB_TREE.families[0]?.familyId ?? "swamp");
 const briefs = ref<FamilyBrief[]>([]);
 const wages = ref<WageCard[]>([]);
 /** Shift pay is not stored on a work row. It stays here until Payday credits it. */
 const shiftPay = ref<Record<string, number>>({});
-const posts = ref<DinobookPost[]>([]);
-const chatLines = ref<AllChatLine[]>([]);
-const last = ref<RunResult | null>(null);
+interface FeedRun {
+  runId: string;
+  eventId: DinobookEventId;
+  label: string;
+  at: string;
+  posts: DinobookPost[];
+  allChat: AllChatLine[];
+  summary: string;
+  skipped: Skip[];
+}
+const runs = ref<FeedRun[]>([]);
 const memory = ref<Record<string, string>>({});
 const idStart = ref(0);
+const posting = ref(false);
 const maxSpeakers = ref(4);
 const maxChatLines = ref(1);
 const maxChatTokens = ref(80);
 const leaderOnly = ref(true);
 
-const roots = computed(() => posts.value.filter((post) => post.link === "root" || !post.parentId));
+function rootsOf(list: DinobookPost[]): DinobookPost[] {
+  return list.filter((post) => post.link === "root" || !post.parentId);
+}
 
-function childrenOf(parentId: string): DinobookPost[] {
-  return posts.value.filter((post) => post.parentId === parentId);
+function childrenOf(list: DinobookPost[], parentId: string): DinobookPost[] {
+  return list.filter((post) => post.parentId === parentId);
+}
+
+function showDay(index: number): boolean {
+  const run = runs.value[index];
+  if (!run) return false;
+  if (index === 0) return true;
+  const prev = runs.value[index - 1];
+  return !prev || dayKey(run.at) !== dayKey(prev.at);
 }
 
 function familyName(id: string | null): string {
@@ -65,9 +90,7 @@ function syncBriefs() {
   });
 }
 
-function onPlayer() {
-  syncBriefs();
-}
+watch(playerName, () => syncBriefs());
 
 const ledgerLocked = computed(() => core.value.source === "src/core");
 
@@ -117,11 +140,16 @@ function dinoName(id: string): string {
   return roster.find((dino) => dino.id === id)?.name ?? id;
 }
 
-function run(event: DinobookEventId) {
+async function run(event: DinobookEventId) {
+  if (posting.value) return;
+  posting.value = true;
+  try {
   if (event !== "summon-big-grumble" && event !== "payday") {
     core.value.apply(playerName.value, familyId.value, event);
     syncBriefs();
   }
+  const earlierPosts = runs.value.flatMap((row) => row.posts);
+  const earlierChat = runs.value.flatMap((row) => row.allChat);
   const result = runDinobookEvent({
     event,
     playerName: playerName.value,
@@ -131,8 +159,8 @@ function run(event: DinobookEventId) {
     memory: memory.value,
     idStart: idStart.value,
     priorTexts: [
-      ...posts.value.map((post) => post.content),
-      ...chatLines.value.map((line) => line.text),
+      ...earlierPosts.map((post) => post.content),
+      ...earlierChat.map((line) => line.text),
     ],
     policy: { maxSpeakersPerEvent: clampCount(maxSpeakers.value, 1, 8) },
     chat: {
@@ -141,11 +169,23 @@ function run(event: DinobookEventId) {
       leaderOnly: leaderOnly.value,
     },
   });
-  posts.value = [...posts.value, ...result.posts];
-  chatLines.value = [...chatLines.value, ...result.allChat];
+  const traces = await decorateDinobook(result.traces, personas);
+  recordTraces(traces);
   memory.value = result.memory;
   idStart.value = result.nextId;
-  last.value = result;
+  const leader = roster.find((dino) => dino.id === result.leaderId)?.name ?? result.leaderId;
+  const approach = result.approach ? ` · Big Grumble ${result.approach} (${result.approachReason})` : "";
+  const label = DINOBOOK_EVENTS.find((row) => row.id === event)?.label ?? event;
+  runs.value = [...runs.value, {
+    runId: result.runId,
+    eventId: event,
+    label,
+    at: result.posts[0]?.at ?? result.allChat[0]?.at ?? new Date().toISOString(),
+    posts: result.posts,
+    allChat: result.allChat,
+    summary: `${result.planId} · leader ${leader}${approach}`,
+    skipped: result.skipped,
+  }];
   for (const [dinoId, line] of Object.entries(result.memory)) {
     core.value.remember(dinoId, line);
   }
@@ -156,6 +196,9 @@ function run(event: DinobookEventId) {
     }
     syncBriefs();
   }
+  } finally {
+    posting.value = false;
+  }
 }
 
 function clampCount(value: number, min: number, max: number): number {
@@ -164,9 +207,7 @@ function clampCount(value: number, min: number, max: number): number {
 }
 
 function resetFeed() {
-  posts.value = [];
-  chatLines.value = [];
-  last.value = null;
+  runs.value = [];
   memory.value = {};
   idStart.value = 0;
 }
@@ -197,15 +238,7 @@ onMounted(async () => {
   syncBriefs();
 });
 
-const lastChat = computed(() => (last.value ? last.value.allChat : []));
-const lastSkipped = computed(() => (last.value ? last.value.skipped : []));
-const lastSummary = computed(() => {
-  const current = last.value;
-  if (!current) return "";
-  const name = roster.find((dino) => dino.id === current.leaderId)?.name ?? current.leaderId;
-  const approach = current.approach ? ` · Big Grumble ${current.approach} (${current.approachReason})` : "";
-  return `${current.planId} · leader ${name}${approach}`;
-});
+const lastSummary = computed(() => runs.value.at(-1)?.summary ?? "");
 </script>
 
 <template>
@@ -223,10 +256,7 @@ const lastSummary = computed(() => {
 
     <div class="book-grid">
       <div class="book-controls">
-        <label class="field">
-          <span>Player</span>
-          <input v-model="playerName" type="text" maxlength="40" @change="onPlayer" />
-        </label>
+        <p class="hint">Player name is the one in Talk. A blank name is you.</p>
         <label class="field">
           <span>Stat bump applies to</span>
           <select v-model="familyId">
@@ -241,6 +271,7 @@ const lastSummary = computed(() => {
             v-for="event in DINOBOOK_EVENTS"
             :key="event.id"
             type="button"
+            :disabled="posting"
             @click="run(event.id)"
           >
             {{ event.label }}
@@ -337,50 +368,66 @@ const lastSummary = computed(() => {
           <p class="hint" v-if="lastSummary">{{ lastSummary }}</p>
         </div>
         <div class="sheet" role="feed">
-          <p class="hint" v-if="posts.length === 0">Trigger an event. The feed fills before all-chat.</p>
-          <article v-for="post in roots" :key="post.id" class="thread">
-            <div class="bubble" :style="{ borderColor: post.color }">
-              <p class="who">{{ post.authorName }} · {{ linkLabel(post) }} · {{ post.tokens }} tok · {{ post.role }}</p>
-              <p>{{ post.content }}</p>
-            </div>
-            <article
-              v-for="child in childrenOf(post.id)"
-              :key="child.id"
-              class="bubble nested"
-              :class="{ side: child.link === 'side' }"
-              :style="{ borderColor: child.color }"
-            >
-              <p class="who">
-                {{ child.authorName }} · {{ linkLabel(child) }}
-                <template v-if="child.link === 'side'"> · friendly</template>
-                · {{ child.tokens }} tok · {{ child.role }}
-              </p>
-              <p>{{ child.content }}</p>
+          <p class="hint" v-if="runs.length === 0">Trigger an event. The feed fills before all-chat.</p>
+          <template v-for="(run, index) in runs" :key="run.runId">
+            <p v-if="showDay(index)" class="day-rule">{{ formatDay(run.at) }}</p>
+            <header class="event-head">
+              <strong>{{ run.label }}</strong>
+              <time :datetime="run.at">{{ formatWhen(run.at) }}</time>
+              <span>{{ run.summary }}</span>
+            </header>
+            <article v-for="post in rootsOf(run.posts)" :key="post.id" class="thread">
+              <div class="bubble" :style="{ borderColor: post.color }">
+                <p class="who">{{ post.authorName }} · {{ linkLabel(post) }} · {{ formatWhen(post.at) }} · {{ post.tokens }} tok · {{ post.role }}</p>
+                <p>{{ post.content }}</p>
+                <TraceRow v-if="tracesOn && post.traceId" :trace="traceById(post.traceId)" />
+              </div>
               <article
-                v-for="nested in childrenOf(child.id)"
-                :key="nested.id"
+                v-for="child in childrenOf(run.posts, post.id)"
+                :key="child.id"
                 class="bubble nested"
-                :class="{ side: nested.link === 'side' }"
-                :style="{ borderColor: nested.color }"
+                :class="{ side: child.link === 'side' }"
+                :style="{ borderColor: child.color }"
               >
-                <p class="who">{{ nested.authorName }} · {{ linkLabel(nested) }} · {{ nested.tokens }} tok</p>
-                <p>{{ nested.content }}</p>
+                <p class="who">
+                  {{ child.authorName }} · {{ linkLabel(child) }}
+                  <template v-if="child.link === 'side'"> · friendly</template>
+                  · {{ formatWhen(child.at) }} · {{ child.tokens }} tok · {{ child.role }}
+                </p>
+                <p>{{ child.content }}</p>
+                <TraceRow v-if="tracesOn && child.traceId" :trace="traceById(child.traceId)" />
+                <article
+                  v-for="nested in childrenOf(run.posts, child.id)"
+                  :key="nested.id"
+                  class="bubble nested"
+                  :class="{ side: nested.link === 'side' }"
+                  :style="{ borderColor: nested.color }"
+                >
+                  <p class="who">{{ nested.authorName }} · {{ linkLabel(nested) }} · {{ formatWhen(nested.at) }} · {{ nested.tokens }} tok</p>
+                  <p>{{ nested.content }}</p>
+                  <TraceRow v-if="tracesOn && nested.traceId" :trace="traceById(nested.traceId)" />
+                </article>
               </article>
             </article>
-          </article>
+          </template>
         </div>
 
         <div class="allchat">
-          <h3>All chat this event</h3>
-          <p class="hint" v-if="lastChat.length === 0">Quiet. The budget is holding the rest on Dinobook.</p>
-          <article v-for="line in lastChat" :key="line.id" class="bubble" :style="{ borderColor: line.color }">
-            <p class="who">{{ line.speakerName }} · {{ line.reason }} · {{ line.tokens }} tok</p>
-            <p>{{ line.text }}</p>
-          </article>
-          <p class="hint" v-if="lastSkipped.length">
-            Held back:
-            <span v-for="skip in lastSkipped" :key="skip.dinoId + skip.reason">{{ skip.name }} ({{ skip.reason }}) </span>
-          </p>
+          <h3>All chat</h3>
+          <p class="hint" v-if="runs.length === 0">Quiet. The budget is holding the rest on Dinobook.</p>
+          <template v-for="run in runs" :key="`${run.runId}-chat`">
+            <p class="event-label">{{ run.label }} · {{ formatWhen(run.at) }}</p>
+            <p class="hint" v-if="run.allChat.length === 0">Quiet for this event. The budget is holding the rest on Dinobook.</p>
+            <article v-for="line in run.allChat" :key="line.id" class="bubble" :style="{ borderColor: line.color }">
+              <p class="who">{{ line.speakerName }} · {{ line.reason }} · {{ formatWhen(line.at) }} · {{ line.tokens }} tok</p>
+              <p>{{ line.text }}</p>
+              <TraceRow v-if="tracesOn && line.traceId" :trace="traceById(line.traceId)" />
+            </article>
+            <p class="hint" v-if="run.skipped.length">
+              Held back:
+              <span v-for="skip in run.skipped" :key="skip.dinoId + skip.reason">{{ skip.name }} ({{ skip.reason }}) </span>
+            </p>
+          </template>
         </div>
       </div>
     </div>
@@ -456,7 +503,8 @@ const lastSummary = computed(() => {
   border-top: 1px solid var(--rule);
   padding: 0.7rem 0.9rem 0.9rem;
 }
-.allchat .hint, .book-feed .hint { color: var(--paper-muted); }
+.allchat .hint, .book-feed .hint, .event-label { color: var(--paper-muted); }
+.event-label { margin: 0.55rem 0 0.15rem; font-size: 0.78rem; }
 @media (max-width: 980px) {
   .book-top { flex-direction: column; align-items: start; }
   .book-note { text-align: left; }

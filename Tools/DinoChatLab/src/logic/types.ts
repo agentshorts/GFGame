@@ -99,6 +99,7 @@ export interface TranscriptMessage {
   contextTokens?: number;
   contextBudget?: number;
   rephrased?: boolean;
+  traceId?: string;
 }
 
 export interface TranscriptExport {

@@ -1,5 +1,6 @@
-import { fillTarget } from "./fillTarget";
-import { filterOutput } from "./filter";
+import { fillTarget, fillTargetDecision } from "./fillTarget";
+import { filterDecision, filterOutput } from "./filter";
+import type { TraceDecision } from "./traceTypes";
 import { GAME_CHAT_MAX_CHARS, type Replacement } from "./types";
 
 export function clampChatText(text: string, max = GAME_CHAT_MAX_CHARS): string {
@@ -29,6 +30,7 @@ export interface PresentedReply {
   rawText: string;
   filtered: boolean;
   replacements: Replacement[];
+  decisions: TraceDecision[];
 }
 
 export function presentReply(engineText: string, options: {
@@ -36,13 +38,29 @@ export function presentReply(engineText: string, options: {
   maxReplyLength: number;
   maxTokens: number;
 }): PresentedReply {
-  const filled = fillTarget(engineText.trim(), options.playerName);
+  const raw = engineText.trim();
+  const filled = fillTarget(raw, options.playerName);
   const filtered = filterOutput(filled);
   const budget = replyCharBudget(options.maxReplyLength, options.maxTokens);
+  const text = clipText(filtered.text, budget);
+  const flat = filtered.text.replace(/\s+/g, " ").trim();
+  const clipped = text !== flat;
   return {
-    text: clipText(filtered.text, budget),
+    text,
     rawText: filled,
     filtered: filtered.filtered,
     replacements: filtered.replacements,
+    decisions: [
+      fillTargetDecision(raw, filled, options.playerName),
+      filterDecision(filtered),
+      {
+        stage: "present",
+        chosen: text,
+        reason: clipped
+          ? `Clipped to ${budget} characters so the line fits the reply budget.`
+          : "Inside the reply budget.",
+        detail: { budget, clipped },
+      },
+    ],
   };
 }

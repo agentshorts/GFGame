@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { useLab } from "./composables/useLab";
 import DinobookPanel from "./dinobook/DinobookPanel.vue";
+import TraceRow from "./trace/TraceRow.vue";
+import TraceToggle from "./trace/TraceToggle.vue";
+import { useTrace } from "./trace/useTrace";
 
 const {
   personas,
@@ -83,6 +86,8 @@ const {
   usePreset,
 } = useLab();
 
+const { enabled: tracesOn, byId: traceById } = useTrace();
+
 const presets = [
   "why you running",
   "player ran away",
@@ -120,12 +125,16 @@ function onPromptInput(event: Event) {
         <p class="eyebrow">Workbench</p>
         <h1>Dino Chat Lab</h1>
         <a class="lab-link" href="#/personas">Personas</a>
+        <a class="lab-link" href="#/trace">Trace log</a>
       </div>
-      <p class="status">
-        {{ lineEngines.find((choice) => choice.id === engineId)?.label }}
-        · context {{ contextTokens }}/{{ activeBudget }}
-        · intent {{ focusDecision.intent }}
-      </p>
+      <div class="status">
+        <TraceToggle />
+        <p>
+          {{ lineEngines.find((choice) => choice.id === engineId)?.label }}
+          · context {{ contextTokens }}/{{ activeBudget }}
+          · intent {{ focusDecision.intent }}
+        </p>
+      </div>
     </header>
     <div class="columns">
       <section class="bench" aria-label="Chat controls">
@@ -271,6 +280,7 @@ function onPromptInput(event: Event) {
               </template>
               <template v-else>Nothing was filtered.</template>
             </p>
+            <TraceRow v-if="tracesOn && message.traceId" :trace="traceById(message.traceId)" />
           </article>
         </div>
         <form class="composer" @submit.prevent="send">
@@ -450,7 +460,7 @@ function onPromptInput(event: Event) {
           <button v-for="kind in statKinds" :key="kind" type="button" @click="recordWorld(kind)">{{ kind.replaceAll('_', ' ') }}</button>
         </div>
       </aside>
-      <DinobookPanel />
+      <DinobookPanel v-model:player-name="playerName" />
     </div>
   </div>
 </template>

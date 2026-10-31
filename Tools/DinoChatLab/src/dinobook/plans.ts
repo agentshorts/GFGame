@@ -1,17 +1,24 @@
 import { BEG_MANGO, EXTORT_LINE } from "../logic/alignment";
+import { estimateTokens } from "../logic/context";
 import { fillTarget } from "../logic/fillTarget";
+import type { TraceAttribution } from "../logic/traceTypes";
 import type { Alignment } from "../logic/types";
+import { clampToTokens } from "./text";
 import { BIG_GRUMBLE_ID, eldersOf, familyOf, type FamilyTree } from "./tree";
-import type {
-  DinobookEventId,
-  FamilyBrief,
-  GrumbleApproach,
-  PlanId,
-  RoleId,
-  RosterDino,
+import {
+  POST_TOKEN_CAP,
+  type DinobookEventId,
+  type FamilyBrief,
+  type GrumbleApproach,
+  type PlanId,
+  type RoleId,
+  type RosterDino,
 } from "./types";
 
 const HARSH: readonly Alignment[] = ["LE", "NE", "CE", "CN"];
+
+/** Elder notes stay short so "Still noted" cannot restack the previous post. */
+export const NOTE_TOKEN_CAP = 16;
 
 const VOICE: Record<string, string> = {
   "lanternmaw": "Lure light.",
@@ -215,19 +222,19 @@ export function leadLine(input: {
   const blockName = nameOf(input.roster, blockId, "someone");
   const hitName = hitId ? nameOf(input.roster, hitId, "someone") : input.leader.name;
   const hitClause = hitId ? `${hitName} takes the hit` : "I take the hit";
-  const noted = input.memory ? ` Still noted: ${input.memory}` : "";
   const what = eventPhrase(input.event);
 
+  let body: string;
   if (input.plan === "welcome") {
-    return `${tag} ${input.player} joined. ${input.familyName} welcomes them. Friends can wave on the side. No path block.${noted}`;
+    body = `${tag} ${input.player} joined. ${input.familyName} welcomes them. Friends can wave on the side. No path block.`;
+  } else if (input.plan === "cover") {
+    body = `${tag} ${input.player} ${what}. ${input.familyName} plan: ${blockName} blocks the path, ${hitClause}, then we ask for mango. Read it here first.`;
+  } else if (input.plan === "repossess") {
+    body = `${tag} ${input.player} downed a rental. ${input.familyName} plan: ${blockName} blocks the path, ${hitClause}, then I demand it back.`;
+  } else {
+    body = `${tag} ${input.player} ${what}. ${input.familyName} plan: ${blockName} blocks the path, ${hitClause}, then I demand mango. Read Dinobook before all-chat.`;
   }
-  if (input.plan === "cover") {
-    return `${tag} ${input.player} ${what}. ${input.familyName} plan: ${blockName} blocks the path, ${hitClause}, then we ask for mango. Read it here first.${noted}`;
-  }
-  if (input.plan === "repossess") {
-    return `${tag} ${input.player} downed a rental. ${input.familyName} plan: ${blockName} blocks the path, ${hitClause}, then I demand it back.${noted}`;
-  }
-  return `${tag} ${input.player} ${what}. ${input.familyName} plan: ${blockName} blocks the path, ${hitClause}, then I demand mango. Read Dinobook before all-chat.${noted}`;
+  return withNote(body, input.memory);
 }
 
 export function roleLine(input: {
@@ -330,4 +337,101 @@ export function verdictLine(input: {
 
 export function followUpChat(speaker: RosterDino, priorName: string, player: string): string {
   return `${voiceTag(speaker.id)} ${priorName} already spoke. I stay on ${player} and add nothing new.`;
+}
+
+/** Keep the first real sentence and drop every nested "Still noted" tail. */
+export function memoryNote(text: string, cap = NOTE_TOKEN_CAP): string {
+  const parts = text.split(/\bstill noted:/i).map((part) => part.trim()).filter((part) => part.length > 0);
+  return clampToTokens(parts[0] ?? "", cap);
+}
+
+export function stillNoted(memory: string, cap = NOTE_TOKEN_CAP): string {
+  const note = memoryNote(memory, cap);
+  if (!note) return "";
+  return ` Still noted: ${note}`;
+}
+
+/** Append one short note only when the whole post still fits, on a word boundary. */
+function withNote(body: string, memory: string): string {
+  const note = memoryNote(memory);
+  if (!note) return body;
+  const prefix = " Still noted: ";
+  const line = `${body}${prefix}${note}`;
+  if (estimateTokens(line) <= POST_TOKEN_CAP) return line;
+  const room = POST_TOKEN_CAP - estimateTokens(body) - estimateTokens(prefix);
+  if (room < 3) return body;
+  const short = clampToTokens(note, room);
+  if (!short) return body;
+  const fitted = `${body}${prefix}${short}`;
+  return estimateTokens(fitted) <= POST_TOKEN_CAP ? fitted : body;
+}
+
+export interface CreditPost {
+  id: string;
+  authorId: string;
+  authorName: string;
+  role: string;
+}
+
+/**
+ * "X said it" names the post this reply hangs under, or the dino who opened the plan.
+ * The previous speaker in time is not the credit when someone else posted in between.
+ */
+export function creditSpeaker(input: {
+  posts: readonly CreditPost[];
+  parentId: string | null;
+  selfId: string;
+  leaderId: string;
+  leaderName: string;
+}): TraceAttribution {
+  if (input.parentId) {
+    const parent = input.posts.find((post) => post.id === input.parentId);
+    if (parent) {
+      return { name: parent.authorName, dinoId: parent.authorId, postId: parent.id, because: "parent" };
+    }
+  }
+  const opening = input.posts.find((post) => post.role === "lead" || post.role === "brag-pay");
+  if (opening && opening.authorId !== input.selfId) {
+    return { name: opening.authorName, dinoId: opening.authorId, postId: opening.id, because: "lead" };
+  }
+  if (input.leaderId && input.leaderId !== input.selfId) {
+    return { name: input.leaderName, dinoId: input.leaderId, postId: null, because: "lead" };
+  }
+  return { name: input.leaderName, dinoId: input.leaderId || null, postId: null, because: "self" };
+}
+
+export function creditReason(credit: TraceAttribution, previousName: string | null): string {
+  if (credit.because === "self" || credit.because === "none") {
+    return "This line opens the event, so it does not credit another dino.";
+  }
+  const via = credit.because === "parent"
+    ? "the post this reply hangs under"
+    : "the dino who opened the plan";
+  const clash = previousName && previousName !== credit.name
+    ? ` The previous speaker was ${previousName}, and that name is not the credit.`
+    : "";
+  return `Credits ${credit.name}, ${via}.${clash}`;
+}
+
+export function leaderReason(
+  event: DinobookEventId,
+  tree: FamilyTree,
+  roster: readonly RosterDino[],
+  briefs: readonly FamilyBrief[],
+): { id: string; name: string; reason: string } {
+  const id = pickLeader(event, tree, roster, briefs);
+  const dino = roster.find((row) => row.id === id);
+  const family = familyOf(tree, id);
+  const brief = briefFor(briefs, family?.familyId ?? null);
+  const name = dino?.name ?? id;
+  let rule = "lowest family rep, then the harshest alignment";
+  if (event === "player-joined") rule = "highest family rep, then the kindest alignment";
+  else if (event === "refused-mango") rule = "most refused mango, then the harshest alignment";
+  else if (event === "rental-downed") rule = "most rentals downed, then the lowest rep";
+  const rep = brief?.rep ?? 0;
+  return {
+    id,
+    name,
+    reason: `Elder pick: ${name} leads. ${rule}. ${family?.name ?? "No family"} rep ${rep}.`,
+  };
 }

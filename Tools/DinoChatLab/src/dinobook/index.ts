@@ -28,9 +28,15 @@ export type { CoreModuleBag, CoreStatsRow, DinobookCorePort } from "./corePort";
 export {
   assignRoles,
   chooseApproach,
+  creditReason,
+  creditSpeaker,
   demandLine,
+  leaderReason,
+  memoryNote,
+  NOTE_TOKEN_CAP,
   pickLeader,
   planFor,
+  stillNoted,
 } from "./plans";
 
 export { acceptSpeech, clampToTokens, normalizeLine, withReference } from "./text";
@@ -73,6 +79,7 @@ export type {
   RosterDino,
   RunInput,
   RunResult,
+  Skip,
   SpamPolicy,
   WageCard,
 } from "./types";

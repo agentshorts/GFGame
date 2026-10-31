@@ -1,3 +1,4 @@
+import type { TraceDecision } from "./traceTypes";
 import type { Cue } from "./types";
 import type { ChatMode, Intent } from "./types";
 import { INTENTS } from "./types";
@@ -73,6 +74,15 @@ export function pickSteer(args: {
     reason: keyword
       ? `No world action. Chat keyword ${keyword}.`
       : "No world action and no cue. The classic engine can fall back.",
+  };
+}
+
+export function steerDecision(steer: Steer): TraceDecision {
+  return {
+    stage: "steer",
+    chosen: steer.utterance,
+    reason: steer.reason,
+    detail: { source: steer.source, keyword: steer.keyword },
   };
 }
 

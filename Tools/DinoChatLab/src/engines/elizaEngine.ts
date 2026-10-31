@@ -25,10 +25,8 @@ export function createElizaEngine(): ChatEngine {
       const bot = bots.get(request.persona.id);
       if (!bot) throw new Error(`ELIZA was not ready for ${request.persona.name}.`);
       const assembled = getAssembledReply(bot.processInput(request.utterance))?.trim();
-      return {
-        engine: "eliza",
-        text: assembled && assembled.length > 0 ? assembled : (request.persona.fallbackReplies[0] ?? "..."),
-      };
+      if (assembled && assembled.length > 0) return { engine: "eliza", text: assembled };
+      return { engine: "eliza", text: request.persona.fallbackReplies[0] ?? "...", fellBack: true };
     },
     reset(personaId?: string) {
       if (personaId) bots.delete(personaId);

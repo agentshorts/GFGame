@@ -5,6 +5,7 @@ import {
   englishDataset,
   englishRecommendedTransformers,
 } from "obscenity";
+import type { TraceDecision } from "./traceTypes";
 import type { Replacement } from "./types";
 
 const matcher = new RegExpMatcher({
@@ -31,4 +32,25 @@ export function filterOutput(text: string): FilterResult {
     return { original, replacement: "*".repeat(Math.max(1, original.length)) };
   });
   return { text: cleaned, filtered: true, replacements };
+}
+
+export function filterDecision(result: FilterResult): TraceDecision {
+  if (!result.filtered) {
+    return {
+      stage: "filter",
+      chosen: result.text,
+      reason: "PG filter left the line alone.",
+      detail: { filtered: false, spans: 0 },
+    };
+  }
+  const words = result.replacements.map((swap) => swap.original).filter((word) => word.length > 0);
+  const count = result.replacements.length;
+  return {
+    stage: "filter",
+    chosen: result.text,
+    reason: words.length > 0
+      ? `PG filter hid ${count} span${count === 1 ? "" : "s"} (${words.join(", ")}).`
+      : `PG filter hid ${count} span${count === 1 ? "" : "s"}.`,
+    detail: { filtered: true, spans: count },
+  };
 }
