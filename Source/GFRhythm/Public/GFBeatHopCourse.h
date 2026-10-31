@@ -311,6 +311,15 @@ public:
 	void PlaceInLobby(APawn* Pawn);
 	/** True while the run's movement (auto-run, beat-length hop) is applied to this character. */
 	bool HasRunMovement(const ACharacter* Character) const;
+	/**
+	 * Server: put a fallen runner back mid-run on the next brick the song hasn't reached yet (#221). That brick is
+	 * excused for PlayerKey (no score, no Miss); the runner waits on it, then leaves on the beat with a full hop forward.
+	 */
+	void PutBackMidRun(ACharacter* Character, const FString& PlayerKey);
+	/** The brick a put-back runner is waiting on, or INDEX_NONE once released (or never put back). */
+	int32 GetHoldBrick(const ACharacter* Character) const;
+	/** The velocity a put-back runner leaves their brick with: run speed along the course plus a jump's lift (#221). */
+	FVector GetRespawnHopVelocity(const ACharacter* Character) const;
 
 	/**
 	 * StartGate countdown screen cell (beat_hop_v2, T_BeatHop_Countdown layout): 0 Off, 1 Ready_A, 2 "3", 3 "2", 4 "1",
@@ -616,6 +625,10 @@ private:
 	TMap<TWeakObjectPtr<ACharacter>, FSavedRunMove> SavedMoves;
 	/** Caught players put back mid-run stand still on their brick until the song reaches it (run time). */
 	TMap<TWeakObjectPtr<ACharacter>, double> HoldUntil;
+	/** Which brick each held runner is waiting on (#221). */
+	TMap<TWeakObjectPtr<ACharacter>, int32> HoldBrick;
+	/** Lets a held runner go: run speed forward, plus a hop unless they already jumped (#221). */
+	void ReleaseHold(ACharacter* Character, bool bAlreadyHopping);
 	TWeakObjectPtr<APawn> PendingStart;
 	TWeakObjectPtr<APawn> PendingFinish;
 	TFunction<void(const FString&)> TravelOverride;

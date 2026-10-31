@@ -312,6 +312,115 @@ bool FGFBeatHopFullRunTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFBeatHopRespawnMomentumTest, "GFGame.BeatHop.RespawnMomentum", GFBeatHopPlayableTests::Flags)
+bool FGFBeatHopRespawnMomentumTest::RunTest(const FString&)
+{
+	// #221: put back on a brick mid-run, a runner used to start from a standstill and drop short of the next brick,
+	// and the brick they were put on swept as a Miss. Now it's excused and they leave it on the beat with a full hop.
+	using namespace GFBeatHopPlayableTests;
+	FBeatWorld W;
+	if (!TestNotNull(TEXT("World"), W.World))
+	{
+		return false;
+	}
+	AGFBeatHopCourse* Course = PlaceOnBeatMap(W.World);
+	if (!TestNotNull(TEXT("Course"), Course))
+	{
+		return false;
+	}
+	FGFTransferLedger Ledger;
+	FGFMapLedgerAccounts Accounts;
+	Accounts.Accounts.Add(TEXT("Solo"));
+	Course->SetLedgerOverride(&Ledger, &Accounts);
+	Course->SetDebugServerTime(1000.0);
+	ACharacter* Runner = SpawnRunner(W.World, Course->GetStartTrigger() ? Course->GetStartTrigger()->GetComponentLocation() : Course->GetLobbySpawn());
+	FString Why;
+	if (!TestNotNull(TEXT("Runner"), Runner) || !TestTrue(TEXT("Run starts from the gate"), Course->TryStartFromGate(Runner, Why)))
+	{
+		AddError(Why);
+		return false;
+	}
+	UCharacterMovementComponent* Move = Runner->GetCharacterMovement();
+	if (!TestNotNull(TEXT("Movement"), Move) || !TestTrue(TEXT("Bricks"), Course->NumBricks() > 4))
+	{
+		return false;
+	}
+
+	// Fall off around the second brick: hop the first, skip the second, then get put back.
+	const double T0 = Course->GetBrick(0).Time;
+	Course->SetDebugRunTime(T0);
+	Course->UpdateRun();
+	TestTrue(TEXT("First hop perfect"), Course->HandleLanding(TEXT("Solo"), 0, T0) == EGFJudgement::Perfect);
+	const double TFall = Course->GetBrick(1).Time;
+	Course->SetDebugRunTime(TFall);
+	Course->UpdateRun();
+	Course->PutBackMidRun(Runner, TEXT("Solo"));
+	const int32 Held = Course->GetHoldBrick(Runner);
+	if (!TestTrue(TEXT("Put back on a brick"), Course->IsValidBrick(Held) && Course->IsValidBrick(Held + 1)))
+	{
+		return false;
+	}
+	const FGFBeatHopBrick& HoldB = Course->GetBrick(Held);
+	const FGFBeatHopBrick& NextB = Course->GetBrick(Held + 1);
+	TestTrue(TEXT("The brick is still ahead of the song"), HoldB.Time > TFall);
+	TestTrue(TEXT("Put above the brick"), Runner->GetActorLocation().Z > Course->GetBrickTop(Held).Z);
+
+	// Landing on the brick you were put on isn't judged.
+	Course->SetDebugRunTime(TFall + 0.01);
+	TestTrue(TEXT("Landing on the put-back brick isn't judged"), Course->HandleLanding(TEXT("Solo"), Held, TFall + 0.01) == EGFJudgement::None);
+
+	// Waiting: no forward speed yet.
+	Course->UpdateSession();
+	TestEqual(TEXT("Still held before the beat"), Course->GetHoldBrick(Runner), Held);
+	TestEqual(TEXT("No forward speed while held"), Move->Velocity.Size2D(), 0.0, 0.01);
+
+	// On the beat: released with a hop's worth of velocity toward the next brick.
+	Course->SetDebugRunTime(HoldB.Time);
+	Course->UpdateSession();
+	TestEqual(TEXT("Released on the beat"), Course->GetHoldBrick(Runner), static_cast<int32>(INDEX_NONE));
+	const FVector Fwd = Course->GetActorForwardVector().GetSafeNormal2D();
+	const double Forward = FVector::DotProduct(Move->Velocity, Fwd);
+	TestEqual(TEXT("Leaves at run speed"), Forward, static_cast<double>(Move->MaxWalkSpeed), 1.0);
+	TestEqual(TEXT("Leaves with a jump's lift"), Move->Velocity.Z, static_cast<double>(Move->JumpZVelocity), 1.0);
+	TestTrue(TEXT("Airborne"), Move->IsFalling());
+	TestTrue(TEXT("Not from a standstill (the bug)"), Forward > 100.0);
+
+	// The hop carries them as far as the course moves in one hop's airtime, which covers a one-beat gap to the next brick.
+	const double G = FMath::Abs(W.World->GetGravityZ()) * Move->GravityScale;
+	if (TestTrue(TEXT("Gravity"), G > 0.0))
+	{
+		const double Air = 2.0 * Move->Velocity.Z / G;
+		const double Reach = Air * Forward;
+		const double Gap = (NextB.Time - HoldB.Time) * Course->GetBeatmap().RefSpeedCms;
+		const double Beat = Air * Course->GetBeatmap().RefSpeedCms;
+		if (Gap <= Beat + 1.0)
+		{
+			TestTrue(FString::Printf(TEXT("Hop reaches the next brick (%.0f cm of %.0f cm)"), Reach, Gap), Reach + 50.0 >= Gap);
+		}
+	}
+
+	// The put-back brick never sweeps as a Miss. Bricks 1 .. Held-1 were really skipped (the fall), so they still count.
+	Course->SetDebugRunTime(NextB.Time);
+	Course->UpdateRun();
+	const FGFRhythmScore* After = Course->GetScore(TEXT("Solo"));
+	TestEqual(TEXT("Only the skipped bricks are Misses, not the put-back one"), After ? After->Misses : -1, Held - 1);
+
+	// A hop of their own while waiting lets them go early, at run speed, keeping their lift.
+	Course->SetDebugRunTime(NextB.Time);
+	Course->PutBackMidRun(Runner, TEXT("Solo"));
+	const int32 Held2 = Course->GetHoldBrick(Runner);
+	if (TestTrue(TEXT("Put back again"), Course->IsValidBrick(Held2)))
+	{
+		Move->SetMovementMode(MOVE_Falling);
+		Move->Velocity = FVector(0.0, 0.0, 300.0);
+		Course->UpdateSession();
+		TestEqual(TEXT("Own hop releases early"), Course->GetHoldBrick(Runner), static_cast<int32>(INDEX_NONE));
+		TestEqual(TEXT("Own hop gets run speed"), FVector::DotProduct(Move->Velocity, Fwd), static_cast<double>(Move->MaxWalkSpeed), 1.0);
+		TestEqual(TEXT("Own hop keeps its lift"), Move->Velocity.Z, 300.0, 0.01);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFBeatHopReturnToHubTest, "GFGame.BeatHop.ReturnToHub", GFBeatHopPlayableTests::Flags)
 bool FGFBeatHopReturnToHubTest::RunTest(const FString&)
 {
