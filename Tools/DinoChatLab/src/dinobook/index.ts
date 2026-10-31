@@ -54,6 +54,39 @@ export {
 export type { Factory, PaydaySeat } from "./wages";
 
 export {
+  DEFAULT_RENTAL_TERMS,
+  activeRentals,
+  createLedger,
+  downRental,
+  elderOf,
+  harvestMineral,
+  normalizeTerms,
+  openRental,
+  owedMinerals,
+  quoteRental,
+  returnRental,
+  withTerms,
+} from "./rentals";
+export type {
+  CloseRentalInput,
+  ElderShop,
+  MineralStack,
+  OpenRentalInput,
+  OpenedRental,
+  RentalLedger,
+  RentalNo,
+  RentalOk,
+  RentalQuote,
+  RentalRecord,
+  RentalRefusal,
+  RentalResult,
+  RentalSettlement,
+  RentalStatKind,
+  RentalStatus,
+  RentalTerms,
+} from "./rentals";
+
+export {
   DEFAULT_CHAT_BUDGET,
   DEFAULT_POLICY,
   DINOBOOK_EVENTS,
