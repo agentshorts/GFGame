@@ -1,5 +1,6 @@
 #include "GFHUD.h"
 #include "GFBeatHopCourse.h"
+#include "GFFerryStand.h"
 #include "GFMineSite.h"
 #include "GFZoneCatalog.h"
 #include "GFZoneLayout.h"
@@ -169,6 +170,7 @@ void AGFHUD::DrawHUD()
 	DrawBeatHopPops();
 	DrawBeatHopSession();
 	DrawMineSession();
+	DrawFerryStand();
 	DrawCrosshair();
 	DrawCompass();
 	DrawStaminaArc();
@@ -905,6 +907,64 @@ void AGFHUD::DrawBeatHopSession()
 	Lines.Emplace(TEXT("Step on a tile to pick a song or difficulty, then run through the gate ahead."), Soft);
 	Lines.Emplace(TEXT("You run on your own: Space to hop on the beat, A / D to switch lanes."), Soft);
 	Panel(Lines, Canvas->ClipX * 0.5f, 12.f * Scale);
+}
+
+void AGFHUD::DrawFerryStand()
+{
+	UWorld* World = GetWorld();
+	if (!World || !Canvas)
+	{
+		return;
+	}
+	const APawn* Pawn = GetOwningPawn();
+	const AGFFerryStand* Stand = nullptr;
+	float Best = 0.f;
+	for (TActorIterator<AGFFerryStand> It(World); It; ++It)
+	{
+		if (!It->IsPlayerNear(Pawn))
+		{
+			continue;
+		}
+		const float Dist = FVector::Dist2D(Pawn->GetActorLocation(), It->GetActorLocation());
+		if (!Stand || Dist < Best)
+		{
+			Stand = *It;
+			Best = Dist;
+		}
+	}
+	if (!Stand)
+	{
+		return;
+	}
+	TArray<FString> Prompt;
+	Stand->GetPromptLines(Prompt);
+	if (Prompt.Num() == 0)
+	{
+		return;
+	}
+	UFont* Font = HudFont();
+	const float Scale = FMath::Clamp(Canvas->ClipY / 720.f, 1.f, 3.f);
+	const float LineH = 16.f * Scale;
+	float W = 0.f;
+	for (const FString& Line : Prompt)
+	{
+		float TW = 0.f, TH = 0.f;
+		GetTextSize(Line, TW, TH, Font, Scale);
+		W = FMath::Max(W, TW);
+	}
+	const float Pad = 10.f * Scale;
+	const float H = Prompt.Num() * LineH + Pad * 2.f;
+	const float X = Canvas->ClipX * 0.5f - W * 0.5f - Pad;
+	const float Top = 12.f * Scale;
+	DrawRect(FLinearColor(0.05f, 0.06f, 0.08f, 0.72f), X, Top, W + Pad * 2.f, H);
+	const FLinearColor Gold(1.f, 0.82f, 0.25f);
+	const FLinearColor Soft(0.9f, 0.86f, 0.78f);
+	float Y = Top + Pad;
+	for (int32 i = 0; i < Prompt.Num(); ++i)
+	{
+		DrawText(Prompt[i], (i == 0) ? Gold : Soft, X + Pad, Y, Font, Scale, false);
+		Y += LineH;
+	}
 }
 
 void AGFHUD::DrawMineSession()

@@ -60,6 +60,8 @@ private:
 	void DrawBeatHopSession();
 	/** Pebble Mine (#216): verb prompts while the local pawn is on the mine pad. */
 	void DrawMineSession();
+	/** Ferry stand: fare, destinations and the lifetime pass while the local pawn is at a stop. */
+	void DrawFerryStand();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);
