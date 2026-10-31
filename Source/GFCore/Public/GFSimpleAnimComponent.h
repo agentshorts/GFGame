@@ -9,7 +9,8 @@ class USkeletalMeshComponent;
 /**
  * Idle / move on a skeletal mesh without an AnimBP. Each tick it reads the owner's horizontal speed and plays
  * MoveAnim looped above MoveSpeed (20 cm/s), otherwise IdleAnim looped. The clip changes only when that choice changes.
- * Single-node playback (SetAnimationMode AnimationSingleNode, PlayAnimation).
+ * Single-node playback (SetAnimationMode AnimationSingleNode, PlayAnimation). MoveAnim plays at ground speed / the
+ * row's NaturalSpeedCms (DT_AnimMap) when it has one, so Walk and Run don't skate; everything else plays at 1.0.
  *
  * Emotes and other one-shots: call PauseFor with the clip's length (UGFSocialComponent does this). Looping one-shots
  * are held for that long; a non-looping clip is also left alone until it stops, even without a pause. Then idle or
@@ -54,8 +55,10 @@ public:
 
 	virtual void TickComponent(float DeltaSeconds, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-private:
+	/** The mesh this component animates: the owner's first visible skeletal mesh that has an asset. */
 	USkeletalMeshComponent* FindArtMesh() const;
+
+private:
 
 	FName CurrentKey = NAME_None;
 	float PauseRemaining = 0.f;

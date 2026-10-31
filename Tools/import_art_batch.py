@@ -77,6 +77,15 @@ ORDER = [
     # SK_Dino_Ripwing v3 is also tagged worldmap_v1 but only its _D changed: import this batch with GFART_ONLY, not GFART_BATCH.
     "SM_GatePad", "SM_Gate_Beat", "SM_Gate_Sim", "SM_Sign_BeatHop", "SM_Sign_Runway", "SM_Sign_Moba",
     "SM_Rime_Beacon", "SM_Rime_FrostPine", "SM_Rime_IceRock", "SM_Rime_Lantern", "SM_Rime_Signpost", "SM_FerryBasket",
+    # Beat Hop v1 (batch beat_hop_v1, #201): bricks (re-parented to M_GF_BeatBrick by SM_Block_Beat_L1/ue/GF_BeatHop_materials.py
+    # after the import), track kit, VFX meshes and the judgement/sparkle texture set. SK_Player_Base v6 is also tagged
+    # beat_hop_v1 and keeps its batch-1 slot above, so GFART_BATCH=beat_hop_v1 re-imports it (and drags its outfits).
+    "SM_Block_Beat_L1", "SM_Block_Beat_L2", "SM_Block_Beat_L3", "SM_Block_Beat_L4", "SM_Block_Beat_L5",
+    "SM_Block_Beat_Neutral", "SM_Block_Beat_Hold", "SM_Block_Beat_Pad", "SM_Block_Beat_Switch",
+    "SM_Block_Beat_Crumble_A", "SM_Block_Beat_Crumble_B", "SM_Block_Beat_Crumble_C",
+    "SM_Track_Rail_Side", "SM_Track_Pillar", "SM_Track_CatchFloor", "SM_Track_StartGate", "SM_Track_FinishGate",
+    "SM_Track_Checkpoint", "SM_Track_Speaker", "SM_Track_FloatingNote_A", "SM_Track_FloatingNote_B", "SM_Track_DiscoCube",
+    "SM_Track_Skyline_A", "SM_Track_Skyline_B", "SM_Furn_Jukebox", "SM_VFX_Cube", "SM_VFX_Cube_2mv", "VFX_BeatHop_v1",
 ]
 # Skeletons shared across species live in their own folder, not in the folder of whichever mesh created them.
 # The first import creates the skeleton there; later imports reuse it. Pre-clean never deletes a shared
@@ -100,7 +109,7 @@ if _only or _batches:
 CLIP_LIMIT_Z = -5.0  # cm: no clip may sink the posed mesh below this (manifest "limit -5")
 _probe_path = os.environ.get("GFART_PROBE", "").strip()
 PROBE = json.load(open(_probe_path, encoding="utf-8")) if _probe_path else {}
-PROP_MAT_BATCHES = ("3b", "7", "worldmap_v1")
+PROP_MAT_BATCHES = ("3b", "7", "worldmap_v1", "beat_hop_v1")
 HAZARD_MAT_BATCHES = ("hazards1",)  # per-slot materials from unreal_material_hint (M_GF_Prop, M_GF_Lava)
 MAT_DIR = "/Game/Art/Materials"
 BAD_PATH = re.compile(r"[a-z]:[\\/]users[\\/]", re.I)  # source paths must not leak a username

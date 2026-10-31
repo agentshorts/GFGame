@@ -27,6 +27,11 @@ struct GFCORE_API FGFAnimMapRow : public FTableRowBase
 	 * Plant_Flag: -10 (the pole foot only reaches the ground in the clip). 0 for clips that leave nothing behind.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Anim") float PlantedPropOffsetZ = 0.f;
+	/**
+	 * cm/s the planted foot travels in a locomotion loop (Walk 87, Run 450, Run_Fast 600). Above zero, whoever plays the
+	 * clip for movement sets play rate = ground speed / this, so the feet don't skate. 0 = play at 1.0 (everything else).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Anim") float NaturalSpeedCms = 0.f;
 };
 
 struct GFCORE_API FGFAnimMap
@@ -34,4 +39,6 @@ struct GFCORE_API FGFAnimMap
 	static const FGFAnimMapRow* Find(FName Key);
 	/** Loads the clip for Key, or nullptr if the key is unknown or the clip isn't imported. */
 	static UAnimSequenceBase* Load(FName Key);
+	/** Ground speed / the row's NaturalSpeedCms, clamped to [0.25, 3]; 1 when the key has no natural speed. */
+	static float PlayRateFor(FName Key, float GroundSpeedCms);
 };

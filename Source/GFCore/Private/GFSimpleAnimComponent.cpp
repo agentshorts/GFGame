@@ -123,6 +123,15 @@ void UGFSimpleAnimComponent::TickComponent(float DeltaSeconds, ELevelTick TickTy
 	const FName Want = ChooseAnim(Speed, IdleAnim, MoveAnim, MoveSpeed);
 	if (Want == CurrentKey)
 	{
+		// Locomotion loops with a natural speed (Walk 87, Run 450 cm/s) follow the ground speed so the feet don't skate.
+		if (!Want.IsNone() && Want == MoveAnim)
+		{
+			const float Rate = FGFAnimMap::PlayRateFor(Want, Speed);
+			if (!FMath::IsNearlyEqual(Mesh->GetPlayRate(), Rate, 0.01f))
+			{
+				Mesh->SetPlayRate(Rate);
+			}
+		}
 		return;
 	}
 	CurrentKey = Want;
@@ -142,4 +151,5 @@ void UGFSimpleAnimComponent::TickComponent(float DeltaSeconds, ELevelTick TickTy
 	}
 	Mesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 	Mesh->PlayAnimation(Clip, true);
+	Mesh->SetPlayRate(Want == MoveAnim ? FGFAnimMap::PlayRateFor(Want, Speed) : 1.f);
 }

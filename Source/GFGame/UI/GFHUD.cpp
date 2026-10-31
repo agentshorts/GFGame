@@ -1,4 +1,5 @@
 #include "GFHUD.h"
+#include "GFBeatHopCourse.h"
 #include "GFZoneCatalog.h"
 #include "GFZoneLayout.h"
 #include "GFZoneSubsystem.h"
@@ -12,6 +13,7 @@
 #include "GFTerritorySubsystem.h"
 #include "GFVoxelWorld.h"
 #include "Engine/Canvas.h"
+#include "Engine/Texture2D.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
@@ -163,6 +165,7 @@ void AGFHUD::DrawHUD()
 		bShownAtSet = true;
 	}
 	PollToasts();
+	DrawBeatHopPops();
 	DrawCrosshair();
 	DrawCompass();
 	DrawStaminaArc();
@@ -698,4 +701,113 @@ void AGFHUD::RemoveChatWidget()
 		GEngine->GameViewport->RemoveViewportWidgetContent(Dying->Root.ToSharedRef());
 	}
 	delete Dying;
+}
+
+void AGFHUD::DrawBeatHopPops()
+{
+	UWorld* World = GetWorld();
+	if (!World || !Canvas)
+	{
+		return;
+	}
+	const AGFBeatHopCourse* Course = nullptr;
+	for (TActorIterator<AGFBeatHopCourse> It(World); It; ++It)
+	{
+		Course = *It;
+		break;
+	}
+	if (!Course || Course->GetPops().Num() == 0)
+	{
+		return;
+	}
+	if (!bBeatTexLoaded)
+	{
+		bBeatTexLoaded = true;
+		BeatJudgementTex = LoadObject<UTexture2D>(nullptr, FGFBeatHopVfx::JudgementTexturePath, nullptr, LOAD_Quiet | LOAD_NoWarn);
+		BeatSparkleTex = LoadObject<UTexture2D>(nullptr, FGFBeatHopVfx::SparkleTexturePath, nullptr, LOAD_Quiet | LOAD_NoWarn);
+	}
+	if (!BeatJudgementTex)
+	{
+		return;
+	}
+	FString MyKey;
+	if (const APlayerController* PC = GetOwningPlayerController())
+	{
+		if (const AGFPlayerState* PS = PC->GetPlayerState<AGFPlayerState>())
+		{
+			MyKey = PS->PlayerKey;
+		}
+	}
+	const double Now = World->GetTimeSeconds();
+	// Sheet pixels to screen pixels: 4x at 1080p, kept whole-ish so the pixel font stays crisp.
+	const float Px = FMath::Clamp(FMath::RoundToFloat(Canvas->ClipY / 270.f), 2.f, 8.f);
+	const float Sheet = static_cast<float>(FGFBeatHopVfx::SheetSize);
+	auto DrawCell = [this, Px, Sheet](const FIntRect& R, float X, float Y, const FLinearColor& Color)
+	{
+		DrawTexture(BeatJudgementTex, X, Y, R.Width() * Px, R.Height() * Px,
+			R.Min.X / Sheet, R.Min.Y / Sheet, R.Width() / Sheet, R.Height() / Sheet, Color, BLEND_Translucent);
+	};
+	for (const FGFBeatHopPop& P : Course->GetPops())
+	{
+		if (!MyKey.IsEmpty() && P.PlayerKey != MyKey)
+		{
+			continue;
+		}
+		const double Age = Now - P.ShownAt;
+		if (Age < 0.0 || Age > FGFBeatHopVfx::PopSeconds)
+		{
+			continue;
+		}
+		const FVector Screen = Project(P.WorldLocation, false);
+		if (Screen.Z <= 0.f)
+		{
+			continue; // behind the camera
+		}
+		const float T = static_cast<float>(Age / FGFBeatHopVfx::PopSeconds);
+		const float Alpha = 1.f - T * T;
+
+		// Sparkle on the brick top: 4 frames of 16x16 at 12 fps, lane-tinted.
+		const int32 Frame = FGFBeatHopVfx::SparkleFrame(Age);
+		if (BeatSparkleTex && P.Judgement != EGFJudgement::Miss && Frame != INDEX_NONE)
+		{
+			const float Size = 16.f * Px;
+			const float U = 1.f / FGFBeatHopVfx::SparkleFrames;
+			FLinearColor C = P.LaneColor;
+			C.A = 1.f;
+			DrawTexture(BeatSparkleTex, Screen.X - Size * 0.5f, Screen.Y - Size * 0.5f, Size, Size, Frame * U, 0.f, U, 1.f, C, BLEND_Translucent);
+		}
+
+		FIntRect Word;
+		if (!FGFBeatHopVfx::WordRect(P.Judgement, Word))
+		{
+			continue;
+		}
+		const float Rise = 10.f * Px * T;
+		const float WordY = Screen.Y - 18.f * Px - Rise;
+		FLinearColor Tint = FGFBeatHopVfx::Tint(P.Judgement);
+		Tint.A = Alpha;
+		DrawCell(Word, Screen.X - Word.Width() * Px * 0.5f, WordY, Tint);
+
+		if (P.Judgement != EGFJudgement::Miss && P.Combo >= 2)
+		{
+			// COMBO x12: digits advance 6 px (5 px glyph + 1 px gap).
+			const FString Digits = FString::FromInt(P.Combo);
+			const FIntRect Combo = FGFBeatHopVfx::ComboRect();
+			const FIntRect Times = FGFBeatHopVfx::TimesRect();
+			const float Width = (Combo.Width() + 2 + Times.Width() + 1 + Digits.Len() * FGFBeatHopVfx::DigitAdvancePx - 1) * Px;
+			float X = Screen.X - Width * 0.5f;
+			const float Y = WordY + (Word.Height() + 3) * Px;
+			FLinearColor Lav = FGFBeatHopVfx::ComboTint();
+			Lav.A = Alpha;
+			DrawCell(Combo, X, Y, Lav);
+			X += (Combo.Width() + 2) * Px;
+			DrawCell(Times, X, Y, Lav);
+			X += (Times.Width() + 1) * Px;
+			for (const TCHAR Ch : Digits)
+			{
+				DrawCell(FGFBeatHopVfx::DigitRect(Ch - TEXT('0')), X, Y, Lav);
+				X += FGFBeatHopVfx::DigitAdvancePx * Px;
+			}
+		}
+	}
 }

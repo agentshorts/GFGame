@@ -1,7 +1,8 @@
 // Imported-art checks (art batch 8: landlord kit, SK_Player_Base v2 emotes + dye material, co-op UI textures;
 // batch 3b: taming/cooking/fishing props; batch 7: arena kit, SK_Player_Base v4, SK_Dino_Raptor v5, arena UI;
 // SK_Player_Base v5: Mailbox_Open, Plant_Flag, Emote_Dance, Emote_Laugh; new dinos v1: Tusksaw, Ripwing,
-// Scythepaw, Lanternmaw; Big Grumble on the shared SKEL_Dino_Rex).
+// Scythepaw, Lanternmaw; Big Grumble on the shared SKEL_Dino_Rex; batch beat_hop_v1: Beat Hop bricks, track kit
+// and judgement VFX, SK_Player_Base v6 with 11 hop clips and re-solved Walk/Run).
 // They load the committed /Game/Art assets, so they fail if an import is missing or a reference breaks.
 #include "Misc/AutomationTest.h"
 #include "GFAnimMap.h"
@@ -59,6 +60,18 @@ bool FGFArtAnimMapTest::RunTest(const FString&)
 		{ TEXT("Player.Plant_Flag"), TEXT("A_Player_Base_Plant_Flag"), false, false },
 		{ TEXT("Player.Emote_Dance"), TEXT("A_Player_Base_Emote_Dance"), true, false },
 		{ TEXT("Player.Emote_Laugh"), TEXT("A_Player_Base_Emote_Laugh"), false, false },
+		// SK_Player_Base v6 hop clips (#207).
+		{ TEXT("Player.Bhop_Takeoff"), TEXT("A_Player_Base_Bhop_Takeoff"), false, false },
+		{ TEXT("Player.Bhop_Air"), TEXT("A_Player_Base_Bhop_Air"), true, false },
+		{ TEXT("Player.Air_Strafe_L"), TEXT("A_Player_Base_Air_Strafe_L"), true, false },
+		{ TEXT("Player.Air_Strafe_R"), TEXT("A_Player_Base_Air_Strafe_R"), true, false },
+		{ TEXT("Player.Bhop_Land"), TEXT("A_Player_Base_Bhop_Land"), false, false },
+		{ TEXT("Player.Land_Perfect"), TEXT("A_Player_Base_Land_Perfect"), false, false },
+		{ TEXT("Player.Stumble"), TEXT("A_Player_Base_Stumble"), false, false },
+		{ TEXT("Player.Fall"), TEXT("A_Player_Base_Fall"), true, false },
+		{ TEXT("Player.Land_Catch"), TEXT("A_Player_Base_Land_Catch"), false, false },
+		{ TEXT("Player.Run_Fast"), TEXT("A_Player_Base_Run_Fast"), true, false },
+		{ TEXT("Player.Victory"), TEXT("A_Player_Base_Victory"), false, true },
 	};
 	USkeleton* Skel = LoadObject<USkeleton>(nullptr, TEXT("/Game/Art/Characters/Player/SKEL_GF_Humanoid.SKEL_GF_Humanoid"));
 	TestNotNull(TEXT("SKEL_GF_Humanoid loads"), Skel);
@@ -88,6 +101,17 @@ bool FGFArtAnimMapTest::RunTest(const FString&)
 		const float Want = FCString::Strcmp(E.Key, TEXT("Player.Plant_Flag")) == 0 ? -10.f : 0.f;
 		TestEqual(FString::Printf(TEXT("%s planted prop offset"), E.Key), Row ? Row->PlantedPropOffsetZ : 1.f, Want);
 	}
+	// Locomotion loops play at ground speed / natural speed (#207): Walk 87, Run 450, Run_Fast 600 cm/s.
+	const FGFAnimMapRow* Walk = FGFAnimMap::Find(TEXT("Player.Walk"));
+	const FGFAnimMapRow* Run = FGFAnimMap::Find(TEXT("Player.Run"));
+	const FGFAnimMapRow* RunFast = FGFAnimMap::Find(TEXT("Player.Run_Fast"));
+	TestEqual(TEXT("Walk natural speed"), Walk ? Walk->NaturalSpeedCms : 0.f, 87.f);
+	TestEqual(TEXT("Run natural speed"), Run ? Run->NaturalSpeedCms : 0.f, 450.f);
+	TestEqual(TEXT("Run_Fast natural speed"), RunFast ? RunFast->NaturalSpeedCms : 0.f, 600.f);
+	TestEqual(TEXT("Run at 450 plays at 1.0"), FGFAnimMap::PlayRateFor(TEXT("Player.Run"), 450.f), 1.f);
+	TestEqual(TEXT("Run_Fast at 900 plays at 1.5"), FGFAnimMap::PlayRateFor(TEXT("Player.Run_Fast"), 900.f), 1.5f);
+	TestEqual(TEXT("Rate is clamped"), FGFAnimMap::PlayRateFor(TEXT("Player.Walk"), 1000.f), 3.f);
+	TestEqual(TEXT("Clips without a natural speed play at 1.0"), FGFAnimMap::PlayRateFor(TEXT("Player.Idle"), 300.f), 1.f);
 	return true;
 }
 
@@ -399,7 +423,7 @@ bool FGFArtBatch7Test::RunTest(const FString&)
 	USkeleton* Human = LoadObject<USkeleton>(nullptr, TEXT("/Game/Art/Characters/Player/SKEL_GF_Humanoid.SKEL_GF_Humanoid"));
 	USkeleton* Raptor = LoadObject<USkeleton>(nullptr, TEXT("/Game/Art/Dinos/Raptor/SKEL_Dino_Raptor.SKEL_Dino_Raptor"));
 	TestNotNull(TEXT("SKEL_Dino_Raptor loads"), Raptor);
-	TestEqual(TEXT("SK_Player_Base v5: 27 clips"), GFArtCountAnims(TEXT("/Game/Art/Characters/Player/Anims"), Human), 27);
+	TestEqual(TEXT("SK_Player_Base v6: 38 clips"), GFArtCountAnims(TEXT("/Game/Art/Characters/Player/Anims"), Human), 38);
 	TestEqual(TEXT("SK_Dino_Raptor v5: 17 clips"), GFArtCountAnims(TEXT("/Game/Art/Dinos/Raptor/Anims"), Raptor), 17);
 	for (const TCHAR* Clip : { TEXT("Attack_Pounce"), TEXT("Attack_Rake"), TEXT("Call"), TEXT("Stunned"), TEXT("Cheer"), TEXT("Refuse") })
 	{
@@ -921,6 +945,100 @@ bool FGFArtFerryTest::RunTest(const FString&)
 		TestTrue(TEXT("MI_Dino_Ripwing_Ferry Dye_R is #FFC93C"), MI->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Dye_R")), Dye) && Dye.Equals(Want, 0.003f));
 		UTexture* Mask = nullptr;
 		TestTrue(TEXT("MI_Dino_Ripwing_Ferry Mask is T_Dino_Ripwing_M"), MI->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("Mask")), Mask) && Mask && Mask->GetName() == TEXT("T_Dino_Ripwing_M"));
+	}
+	return true;
+}
+
+// Beat Hop (batch beat_hop_v1, #201): brick meshes on M_GF_BeatBrick, track kit, VFX cubes and the judgement sprite
+// sheets. Bricks are bottom-centred 100 x 100 x 31.25 (Hold 300 long) so the course puts their top at Z 0.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFArtBeatHopTest, "GFGame.Art.BeatHop", GFArtTestFlags)
+bool FGFArtBeatHopTest::RunTest(const FString&)
+{
+	struct FMesh { const TCHAR* Folder; const TCHAR* Name; FVector Size; bool bCollision; bool bBrickMaster; bool bDyed; };
+	const FMesh Meshes[] = {
+		{ TEXT("Bricks"), TEXT("SM_Block_Beat_L1"), FVector(100.0, 100.0, 31.25), true, true, false },
+		{ TEXT("Bricks"), TEXT("SM_Block_Beat_L2"), FVector(100.0, 100.0, 31.25), true, true, false },
+		{ TEXT("Bricks"), TEXT("SM_Block_Beat_L3"), FVector(100.0, 100.0, 31.25), true, true, false },
+		{ TEXT("Bricks"), TEXT("SM_Block_Beat_L4"), FVector(100.0, 100.0, 31.25), true, true, false },
+		{ TEXT("Bricks"), TEXT("SM_Block_Beat_L5"), FVector(100.0, 100.0, 31.25), true, true, false },
+		{ TEXT("Bricks"), TEXT("SM_Block_Beat_Neutral"), FVector(100.0, 100.0, 31.25), true, true, false },
+		{ TEXT("Bricks"), TEXT("SM_Block_Beat_Hold"), FVector(300.0, 100.0, 31.25), true, true, true },
+		{ TEXT("Bricks"), TEXT("SM_Block_Beat_Pad"), FVector(100.0, 100.0, 31.25), true, true, true },
+		{ TEXT("Bricks"), TEXT("SM_Block_Beat_Switch"), FVector(100.0, 100.0, 31.25), true, true, true },
+		{ TEXT("Bricks"), TEXT("SM_Block_Beat_Crumble_A"), FVector(50.0, 50.0, 31.25), true, true, true },
+		{ TEXT("Bricks"), TEXT("SM_Block_Beat_Crumble_B"), FVector(43.75, 43.75, 25.0), true, true, true },
+		{ TEXT("Bricks"), TEXT("SM_Block_Beat_Crumble_C"), FVector(37.5, 37.5, 18.75), true, true, true },
+		{ TEXT("Track"), TEXT("SM_Track_Rail_Side"), FVector(100.0, 12.5, 25.0), true, false, false },
+		{ TEXT("Track"), TEXT("SM_Track_Pillar"), FVector(100.0, 100.0, 400.0), true, false, false },
+		{ TEXT("Track"), TEXT("SM_Track_CatchFloor"), FVector(400.0, 400.0, 31.25), true, false, false },
+		{ TEXT("Track"), TEXT("SM_Track_StartGate"), FVector(118.75, 612.5, 400.0), true, false, false },
+		{ TEXT("Track"), TEXT("SM_Track_FinishGate"), FVector(112.5, 612.5, 400.0), true, false, false },
+		{ TEXT("Track"), TEXT("SM_Track_Checkpoint"), FVector(100.0, 575.0, 162.5), true, false, false },
+		{ TEXT("Track"), TEXT("SM_Track_Speaker"), FVector(106.25, 212.5, 306.25), true, false, false },
+		{ TEXT("Track"), TEXT("SM_Track_FloatingNote_A"), FVector(25.0, 75.0, 137.5), false, false, false },
+		{ TEXT("Track"), TEXT("SM_Track_FloatingNote_B"), FVector(25.0, 137.5, 143.75), false, false, false },
+		{ TEXT("Track"), TEXT("SM_Track_DiscoCube"), FVector(100.0, 100.0, 112.5), false, false, false },
+		{ TEXT("Track"), TEXT("SM_Track_Skyline_A"), FVector(125.0, 312.5, 1612.5), false, false, false },
+		{ TEXT("Track"), TEXT("SM_Track_Skyline_B"), FVector(100.0, 275.0, 1312.5), false, false, false },
+		{ TEXT("VFX"), TEXT("SM_VFX_Cube"), FVector(6.25, 6.25, 6.25), false, false, false },
+		{ TEXT("VFX"), TEXT("SM_VFX_Cube_2mv"), FVector(12.5, 12.5, 12.5), false, false, false },
+	};
+	for (const FMesh& E : Meshes)
+	{
+		UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/Art/BeatHop/%s/%s.%s"), E.Folder, E.Name, E.Name));
+		if (!TestNotNull(FString::Printf(TEXT("%s loads"), E.Name), M))
+		{
+			continue;
+		}
+		const FBox Box = M->GetBoundingBox();
+		TestTrue(FString::Printf(TEXT("%s is %s cm (got %s)"), E.Name, *E.Size.ToString(), *Box.GetSize().ToString()), Box.GetSize().Equals(E.Size, 0.05));
+		if (FCString::Strcmp(E.Folder, TEXT("Bricks")) == 0)
+		{
+			TestTrue(FString::Printf(TEXT("%s sits on its origin"), E.Name), FMath::IsNearlyZero(Box.Min.Z, 0.05));
+		}
+		const int32 Elems = M->GetBodySetup() ? M->GetBodySetup()->AggGeom.GetElementCount() : 0;
+		TestEqual(FString::Printf(TEXT("%s collision elements"), E.Name), Elems > 0, E.bCollision);
+		const TArray<FStaticMaterial>& Mats = M->GetStaticMaterials();
+		UMaterialInstance* MI = Mats.Num() > 0 ? Cast<UMaterialInstance>(Mats[0].MaterialInterface) : nullptr;
+		if (!TestNotNull(FString::Printf(TEXT("%s has a material instance"), E.Name), MI))
+		{
+			continue;
+		}
+		if (E.bBrickMaster)
+		{
+			TestTrue(FString::Printf(TEXT("%s: %s parent is M_GF_BeatBrick"), E.Name, *MI->GetName()), MI->Parent && MI->Parent->GetName() == TEXT("M_GF_BeatBrick"));
+			FLinearColor Color;
+			TestTrue(FString::Printf(TEXT("%s has the Color parameter the course drives"), E.Name), MI->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Color")), Color));
+			float Strength = 0.f;
+			TestTrue(FString::Printf(TEXT("%s EmissiveStrength 1.5"), E.Name), MI->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("EmissiveStrength")), Strength) && FMath::IsNearlyEqual(Strength, 1.5f));
+#if WITH_EDITOR
+			bool bDye = false;
+			FGuid Guid;
+			MI->GetStaticSwitchParameterValue(FHashedMaterialParameterInfo(TEXT("UseColorAsDye")), bDye, Guid);
+			TestEqual(FString::Printf(TEXT("%s UseColorAsDye"), E.Name), bDye, E.bDyed);
+#endif
+		}
+	}
+	TestTrue(TEXT("StartGate has the Screen slot"), [] {
+		const UStaticMesh* G = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Art/BeatHop/Track/SM_Track_StartGate.SM_Track_StartGate"));
+		return G && G->GetStaticMaterials().Num() == 2 && G->GetStaticMaterials()[1].MaterialSlotName == FName(TEXT("Screen"));
+	}());
+
+	// Judgement sheet and sparkle flipbook: UI settings (nearest, no mips), 64x64 and 64x16.
+	struct FTex { const TCHAR* Name; int32 W; int32 H; };
+	const FTex Texes[] = { { TEXT("T_VFX_Judgement"), 64, 64 }, { TEXT("T_VFX_Sparkle"), 64, 16 } };
+	for (const FTex& E : Texes)
+	{
+		UTexture2D* T = LoadObject<UTexture2D>(nullptr, *FString::Printf(TEXT("/Game/Art/BeatHop/VFX/Textures/%s.%s"), E.Name, E.Name));
+		if (!TestNotNull(FString::Printf(TEXT("%s loads"), E.Name), T))
+		{
+			continue;
+		}
+		bool bOk = T->LODGroup == TEXTUREGROUP_UI && T->Filter == TF_Nearest;
+#if WITH_EDITORONLY_DATA
+		bOk = bOk && T->MipGenSettings == TMGS_NoMipmaps && T->Source.GetSizeX() == E.W && T->Source.GetSizeY() == E.H;
+#endif
+		TestTrue(FString::Printf(TEXT("%s UI settings and size"), E.Name), bOk);
 	}
 	return true;
 }

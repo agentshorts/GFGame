@@ -10,9 +10,14 @@
 #include "GFBeatHopCourse.generated.h"
 
 class UStaticMeshComponent;
+class UMeshComponent;
+class UPrimitiveComponent;
+class UInstancedStaticMeshComponent;
+class UBoxComponent;
 class UMaterialInstanceDynamic;
 class UStaticMesh;
 class UMaterialInterface;
+class UTexture2D;
 class ACharacter;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FGFOnBrickLanding, const FString&, PlayerKey, int32, BrickIndex, EGFJudgement, Judgement, int32, MaterialsEarned);
@@ -52,6 +57,69 @@ struct GFRHYTHM_API FGFBeatHopBrick
 	bool bHitByAnyone = false;
 	bool bMissedByEveryone = false;
 	float ShownGlow = -1.f;
+	/** Mesh origin to brick top (cm): Size.Z for the bottom-centre art bricks, Size.Z / 2 for the engine-cube fallback. */
+	float TopOffsetZ = 0.f;
+	/** The miss break-apart already ran (the brick is hidden, its chunks are falling). */
+	bool bCrumbled = false;
+};
+
+/** A falling piece: a Crumble chunk from a missed brick, or a pixel cube from a Perfect burst. */
+USTRUCT()
+struct GFRHYTHM_API FGFBeatHopDebris
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	FVector Velocity = FVector::ZeroVector;
+	FRotator Spin = FRotator::ZeroRotator;
+	float Age = 0.f;
+	float Life = 1.5f;
+	/** Shrinks to nothing over its life (burst cubes); crumble chunks keep their size. */
+	bool bShrink = false;
+	FVector StartScale = FVector::OneVector;
+};
+
+/** One judgement pop for the HUD: the word (and combo) over the brick, plus the lane-coloured sparkle on a hit. */
+struct GFRHYTHM_API FGFBeatHopPop
+{
+	FString PlayerKey;
+	FVector WorldLocation = FVector::ZeroVector;
+	EGFJudgement Judgement = EGFJudgement::None;
+	int32 Combo = 0;
+	FLinearColor LaneColor = FLinearColor::White;
+	/** World time (s) the pop appeared. */
+	double ShownAt = 0.0;
+};
+
+/**
+ * Beat Hop VFX sprite sheet (art batch beat_hop_v1, #209): T_VFX_Judgement is a 64x64 one-colour sheet whose
+ * rects come from T_VFX_Judgement_layout.json; T_VFX_Sparkle is a 4x1 flipbook of 16x16 frames.
+ */
+struct GFRHYTHM_API FGFBeatHopVfx
+{
+	static const TCHAR* JudgementTexturePath;
+	static const TCHAR* SparkleTexturePath;
+	static constexpr int32 SheetSize = 64;
+	static constexpr int32 DigitAdvancePx = 6;
+	static constexpr int32 SparkleFrames = 4;
+	static constexpr float SparkleFps = 12.f;
+	static constexpr float PopSeconds = 0.8f;
+
+	/** Pixel rect (x, y, w, h; top-left origin) of PERFECT / GOOD / MISS. False for None. */
+	static bool WordRect(EGFJudgement Judgement, FIntRect& Out);
+	static FIntRect ComboRect();
+	static FIntRect TimesRect();
+	static FIntRect PlusRect();
+	/** 0-9. */
+	static FIntRect DigitRect(int32 Digit);
+	/** PERFECT sunflower, GOOD mint, MISS clay (linear). */
+	static FLinearColor Tint(EGFJudgement Judgement);
+	/** COMBO lavender (linear). */
+	static FLinearColor ComboTint();
+	/** Flipbook frame at this age, or INDEX_NONE once the 4 frames have played. */
+	static int32 SparkleFrame(double AgeSeconds);
 };
 
 /**
@@ -66,8 +134,14 @@ struct GFRHYTHM_API FGFBeatHopBrick
  * player's account isn't readable yet, the grant waits here (server side, keyed by player) and is retried with the
  * same TxId. Nothing is handed to the mini-game gate's unkeyed PendingRewards.
  *
- * Songs mode runs on the replicated server world clock, so co-op players see the same lit bricks. Greybox only:
- * engine cube meshes and the basic shape material; no audio, VFX or HISM yet.
+ * Songs mode runs on the replicated server world clock, so co-op players see the same lit bricks.
+ *
+ * Art (batch beat_hop_v1, #201): bricks are the SM_Block_Beat_* meshes (L1-L5 by lane, Hold, Pad, Switch), each with a
+ * MID made from the mesh's own MI on M_GF_BeatBrick so UpdateLights drives `Color`; the engine cube is only a fallback
+ * when the art isn't there. A brick everyone missed breaks into Crumble_A/B/C. The track kit (Start/Finish gates,
+ * checkpoint strips with trigger boxes, catch-floor tiles, rails, pillars and scenery) is built around the bricks and
+ * pulses EmissiveStrength 1..4 on the beat. Characters on the course play the hop clips (#207). The HUD draws the
+ * judgement pops from GetPops(). No audio yet.
  */
 UCLASS()
 class GFRHYTHM_API AGFBeatHopCourse : public AActor
@@ -139,6 +213,27 @@ public:
 	/** World location of a brick's top centre. */
 	FVector GetBrickTop(int32 BrickIndex) const;
 
+	/** The art mesh for a brick: SM_Block_Beat_L<lane+1> (Tap), _Hold, _Pad, _Switch. Object path. */
+	static FString BrickMeshPath(EGFBeatNoteType Type, int32 Lane);
+	/** Linear EmissiveStrength for the track kit at this beat phase (0..1 within the beat): 4 on the beat, easing to 1. */
+	static float BeatPulseStrength(double BeatPhase);
+
+	/** Recent judgement pops (newest last), for the HUD. */
+	const TArray<FGFBeatHopPop>& GetPops() const { return Pops; }
+	/** Falling crumble chunks and burst cubes right now. */
+	int32 NumDebris() const { return Debris.Num(); }
+	UStaticMeshComponent* GetStartGate() const { return StartGate; }
+	UStaticMeshComponent* GetFinishGate() const { return FinishGate; }
+	int32 NumCheckpoints() const { return CheckpointTriggers.Num(); }
+	UBoxComponent* GetCheckpointTrigger(int32 Index) const { return CheckpointTriggers.IsValidIndex(Index) ? CheckpointTriggers[Index].Get() : nullptr; }
+	UInstancedStaticMeshComponent* GetCatchTiles() const { return CatchTiles; }
+	/** Where a caught player goes back to: their last checkpoint, else just behind the start gate. World space. */
+	FVector GetRespawnPoint(const ACharacter* Character) const;
+	/** Records a checkpoint for a character (the trigger boxes call this). */
+	void ReachCheckpoint(ACharacter* Character, int32 CheckpointIndex);
+	/** (Re)builds the gates, checkpoints, catch floor, rails and scenery around the current bricks. */
+	void BuildTrackKit();
+
 	UPROPERTY(BlueprintAssignable, Category = "GF|Rhythm")
 	FGFOnBrickLanding OnBrickLanding;
 
@@ -173,7 +268,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Rhythm")
 	float PadLaunchZ = 900.f;
 
+	/** Checkpoints every this many beats along a song (none in live runs). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Rhythm")
+	int32 CheckpointEveryBeats = 32;
+
+	/** Catch-floor slab origin (cm below the brick tops). Its collision top sits 12.5 cm above this. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Rhythm")
+	float CatchFloorDepthCm = 500.f;
+
 	// AActor
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -227,6 +331,30 @@ private:
 	double PeriodSeconds() const;
 	FPlayerRun& RunFor(const FString& PlayerKey);
 	FLinearColor LaneColor(int32 Lane) const;
+	void Crumble(FGFBeatHopBrick& Brick);
+	void Burst(const FVector& WorldTop, const FLinearColor& Color);
+	void TickDebris(float DeltaSeconds);
+	void UpdatePulse(double Now);
+	void DriveAnims(double Now);
+	void AddPop(const FString& PlayerKey, const FVector& WorldTop, EGFJudgement Judgement, int32 Combo, const FLinearColor& Color);
+	void ClearTrackKit();
+	UStaticMeshComponent* AddKitMesh(const TCHAR* Path, const FTransform& Relative, bool bCollide);
+	UInstancedStaticMeshComponent* AddKitInstances(const TCHAR* Path, const TArray<FTransform>& Relative, bool bCollide);
+	void TrackPulse(UMeshComponent* Mesh);
+
+	UFUNCTION()
+	void OnCheckpointOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+
+	/** Per character on the course: which hop clip is on, and when a one-shot ends (#207). */
+	struct FHopAnim
+	{
+		FName Key;
+		double OneShotUntil = 0.0;
+		bool bWasFalling = false;
+		bool bVictory = false;
+		bool bCaught = false;
+		double RespawnAt = 0.0;
+	};
 
 	UPROPERTY(VisibleAnywhere, Category = "GF|Rhythm")
 	TObjectPtr<USceneComponent> Root;
@@ -244,6 +372,45 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInterface> BaseMaterial;
+
+	UPROPERTY()
+	TArray<FGFBeatHopDebris> Debris;
+
+	/** Gates, strips, rails, scenery: everything BuildTrackKit made (destroyed on rebuild). */
+	UPROPERTY()
+	TArray<TObjectPtr<UPrimitiveComponent>> KitComponents;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> StartGate;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> FinishGate;
+
+	UPROPERTY()
+	TObjectPtr<UInstancedStaticMeshComponent> CatchTiles;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UBoxComponent>> CheckpointTriggers;
+
+	/** Track-kit MIDs whose EmissiveStrength follows the beat. */
+	UPROPERTY()
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> PulseMaterials;
+
+	/** One per checkpoint strip; lit mint once someone reaches it. */
+	UPROPERTY()
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> CheckpointMaterials;
+
+	TArray<FGFBeatHopPop> Pops;
+	TMap<TWeakObjectPtr<ACharacter>, FHopAnim> HopAnims;
+	/** Judgement of each character's latest brick landing (server), read by DriveAnims on the same tick. */
+	TMap<TWeakObjectPtr<ACharacter>, EGFJudgement> LastLanding;
+	TMap<TWeakObjectPtr<ACharacter>, int32> LastCheckpoint;
+	TArray<FVector> CheckpointSpots;
+	double KitStartX = 0.0;
+	double KitEndX = 0.0;
+	int32 LastAddedLane = INDEX_NONE;
+	bool bWasRunning = false;
+	float ShownPulse = -1.f;
 
 	FGFBeatmap Beatmap;
 	FGFJudgeWindows Windows;

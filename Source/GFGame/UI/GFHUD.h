@@ -1,6 +1,6 @@
 #pragma once
 
-// Canvas HUD (crosshair, hotbar, zone, chat, toasts). No UMG. A one-line Slate text box is the chat entry.
+// Canvas HUD (crosshair, hotbar, zone, chat, toasts, Beat Hop judgement pops). No UMG. A one-line Slate text box is the chat entry.
 // Common UI replaces this later.
 
 #include "CoreMinimal.h"
@@ -8,6 +8,7 @@
 #include "GFHUD.generated.h"
 
 class UFont;
+class UTexture2D;
 struct FGHUDChat;
 
 struct FGFHUDToast
@@ -53,6 +54,8 @@ private:
 	void DrawToasts();
 	void DrawHotbar();
 	void DrawHint();
+	/** Beat Hop: PERFECT / GOOD / MISS and COMBO xN over the brick, plus the lane sparkle (T_VFX_Judgement, T_VFX_Sparkle). */
+	void DrawBeatHopPops();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);
@@ -72,6 +75,12 @@ private:
 	bool bShownAtSet = false;
 	bool bHintUserOverride = false;
 	bool bHintUserVisible = true;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> BeatJudgementTex;
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> BeatSparkleTex;
+	bool bBeatTexLoaded = false;
 
 	TMap<int32, double> ChatSeenAt;
 	TArray<FGFHUDToast> Toasts;

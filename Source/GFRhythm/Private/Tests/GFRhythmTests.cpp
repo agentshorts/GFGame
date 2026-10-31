@@ -7,6 +7,10 @@
 #include "GFBuiltInSongs.h"
 #include "GFRhythmJudge.h"
 #include "GFBeatHopCourse.h"
+#include "Components/BoxComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "GFBeatHopGateSubsystem.h"
 #include "GFDataTables.h"
 #include "GFItemTypes.h"
@@ -418,6 +422,132 @@ bool FGFRhythmCourseTest::RunTest(const FString&)
 	TestEqual(TEXT("Full combo rare"), Held(TEXT("Solo"), TEXT("GoldNote")), 1);
 	TestEqual(TEXT("Landing dust + combo bonus"), Held(TEXT("Solo"), TEXT("GlowDust")), Course->NumBricks() * 2 + Course->NumBricks() / 10);
 	TestEqual(TEXT("Earned matches what the ledger paid"), Course->GetEarnedRewards(TEXT("Solo"))->GetCount(TEXT("GlowDust")), Held(TEXT("Solo"), TEXT("GlowDust")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFRhythmCourseArtTest, "GFGame.Rhythm.CourseArt", GFRhythmTests::Flags)
+bool FGFRhythmCourseArtTest::RunTest(const FString&)
+{
+	// Pure helpers first: art paths, beat pulse, judgement sheet rects.
+	TestEqual(TEXT("Tap lane 0 is L1"), AGFBeatHopCourse::BrickMeshPath(EGFBeatNoteType::Tap, 0), FString(TEXT("/Game/Art/BeatHop/Bricks/SM_Block_Beat_L1.SM_Block_Beat_L1")));
+	TestEqual(TEXT("Tap lane 6 wraps to L2"), AGFBeatHopCourse::BrickMeshPath(EGFBeatNoteType::Tap, 6), FString(TEXT("/Game/Art/BeatHop/Bricks/SM_Block_Beat_L2.SM_Block_Beat_L2")));
+	TestTrue(TEXT("Gap has no mesh"), AGFBeatHopCourse::BrickMeshPath(EGFBeatNoteType::Gap, 0).IsEmpty());
+	TestEqual(TEXT("Pulse peaks at 4 on the beat"), AGFBeatHopCourse::BeatPulseStrength(3.0), 4.f, 1e-4f);
+	TestTrue(TEXT("Pulse eases toward 1"), AGFBeatHopCourse::BeatPulseStrength(3.9) < 1.05f && AGFBeatHopCourse::BeatPulseStrength(3.9) >= 1.f);
+	FIntRect R;
+	TestTrue(TEXT("PERFECT rect"), FGFBeatHopVfx::WordRect(EGFJudgement::Perfect, R) && R == FIntRect(1, 2, 42, 9));
+	TestTrue(TEXT("MISS rect"), FGFBeatHopVfx::WordRect(EGFJudgement::Miss, R) && R == FIntRect(34, 12, 57, 19));
+	TestFalse(TEXT("No word for None"), FGFBeatHopVfx::WordRect(EGFJudgement::None, R));
+	TestTrue(TEXT("digit 7"), FGFBeatHopVfx::DigitRect(7) == FIntRect(25, 49, 30, 56));
+	TestTrue(TEXT("digit 0"), FGFBeatHopVfx::DigitRect(0) == FIntRect(1, 34, 6, 41));
+	TestEqual(TEXT("Sparkle frame 2 at 0.2 s"), FGFBeatHopVfx::SparkleFrame(0.2), 2);
+	TestEqual(TEXT("Sparkle done after 4 frames"), FGFBeatHopVfx::SparkleFrame(0.34), (int32)INDEX_NONE);
+
+	GFRhythmTests::FTestWorld TW;
+	if (!TestNotNull(TEXT("World"), TW.World))
+	{
+		return false;
+	}
+	AGFBeatHopCourse* Course = TW.World->SpawnActor<AGFBeatHopCourse>();
+	if (!TestNotNull(TEXT("Course spawned"), Course))
+	{
+		return false;
+	}
+	FGFTransferLedger Ledger;
+	FGFMapLedgerAccounts Accounts;
+	Accounts.Accounts.Add(TEXT("Solo"));
+	Course->SetLedgerOverride(&Ledger, &Accounts);
+	Course->SetDebugRunTime(0.0);
+	FString Why;
+	const FName Song = TEXT("FernHop");
+	if (!TestTrue(TEXT("Song run starts"), Course->StartRunForPlayers(Song, EGFBeatDifficulty::Hard, EGFBeatHopMode::Songs, false, 1, Why)) || Course->NumBricks() < 4)
+	{
+		return false;
+	}
+
+	// Bricks: art meshes by type and lane, top at the course's Z, Hold stretched over 300 cm, Switch mirrored to go down.
+	int32 Holds = 0, SwitchUp = 0, SwitchDown = 0, Pads = 0;
+	int32 PrevLane = INDEX_NONE;
+	for (int32 i = 0; i < Course->NumBricks(); ++i)
+	{
+		const FGFBeatHopBrick& B = Course->GetBrick(i);
+		if (!TestNotNull(TEXT("brick mesh"), B.Mesh.Get()))
+		{
+			return false;
+		}
+		const UStaticMesh* SM = B.Mesh->GetStaticMesh();
+		TestTrue(FString::Printf(TEXT("brick %d uses %s"), i, *AGFBeatHopCourse::BrickMeshPath(B.Type, B.Lane)), SM && SM->GetPathName() == AGFBeatHopCourse::BrickMeshPath(B.Type, B.Lane));
+		TestEqual(FString::Printf(TEXT("brick %d top at Z 0"), i), Course->GetBrickTop(i).Z, 0.0, 0.01);
+		TestTrue(FString::Printf(TEXT("brick %d MID is on its own MI"), i), B.Material && B.Material->Parent && B.Material->Parent->GetName().StartsWith(TEXT("MI_Block_Beat_")));
+		const FVector S = B.Mesh->GetRelativeScale3D();
+		TestEqual(FString::Printf(TEXT("brick %d height"), i), S.Z, Course->BrickSizeCm.Z / 31.25, 1e-4);
+		if (B.Type == EGFBeatNoteType::Hold)
+		{
+			++Holds;
+			const double Len = Course->BrickSizeCm.X + B.LenSeconds * 600.0;
+			TestEqual(TEXT("Hold scale X = length / 300"), S.X, Len / 300.0, 1e-4);
+		}
+		else
+		{
+			TestEqual(FString::Printf(TEXT("brick %d scale X"), i), S.X, Course->BrickSizeCm.X / 100.0, 1e-4);
+		}
+		if (B.Type == EGFBeatNoteType::Pad)
+		{
+			++Pads;
+			TestEqual(TEXT("Pad keeps its 1.3 width"), S.Y, Course->BrickSizeCm.Y * 1.3 / 100.0, 1e-4);
+		}
+		if (B.Type == EGFBeatNoteType::Switch && PrevLane != INDEX_NONE)
+		{
+			const bool bDown = B.Lane < PrevLane;
+			(bDown ? SwitchDown : SwitchUp)++;
+			TestTrue(FString::Printf(TEXT("switch %d arrow points to lane %d"), i, B.Lane), bDown ? S.Y < 0.0 : S.Y > 0.0);
+		}
+		PrevLane = B.Lane;
+	}
+	TestTrue(TEXT("FernHop Hard has holds and both switch directions"), Holds > 0 && SwitchUp > 0 && SwitchDown > 0);
+
+	// Track kit around the song.
+	const FVector FirstTop = Course->GetBrickTop(0);
+	TestNotNull(TEXT("Start gate"), Course->GetStartGate());
+	TestNotNull(TEXT("Finish gate"), Course->GetFinishGate());
+	if (Course->GetStartGate() && Course->GetFinishGate())
+	{
+		TestTrue(TEXT("Start gate before the first brick"), Course->GetStartGate()->GetComponentLocation().X < FirstTop.X);
+		TestTrue(TEXT("Finish gate after the last brick"), Course->GetFinishGate()->GetComponentLocation().X > Course->GetBrickTop(Course->NumBricks() - 1).X);
+	}
+	TestTrue(TEXT("Checkpoints every 32 beats"), Course->NumCheckpoints() >= 1);
+	UInstancedStaticMeshComponent* Tiles = Course->GetCatchTiles();
+	if (TestNotNull(TEXT("Catch floor"), Tiles))
+	{
+		TestTrue(TEXT("Catch floor has tiles"), Tiles->GetInstanceCount() > 4);
+		TestTrue(TEXT("Catch floor blocks"), Tiles->GetCollisionEnabled() != ECollisionEnabled::NoCollision);
+	}
+	if (UBoxComponent* Box = Course->GetCheckpointTrigger(0))
+	{
+		TestTrue(TEXT("Checkpoint trigger overlaps"), Box->GetGenerateOverlapEvents() && Box->GetCollisionEnabled() != ECollisionEnabled::NoCollision);
+	}
+	TestTrue(TEXT("Respawn without a checkpoint is behind the start gate"), Course->GetRespawnPoint(nullptr).X < FirstTop.X);
+
+	// A Perfect landing pops PERFECT and bursts; a brick everyone missed crumbles into chunks.
+	const int32 Hit = 1;
+	const double HitTime = Course->GetBrick(Hit).Time;
+	Course->SetDebugRunTime(HitTime);
+	TestTrue(TEXT("Perfect landing"), Course->HandleLanding(TEXT("Solo"), Hit, HitTime) == EGFJudgement::Perfect);
+	TestTrue(TEXT("Pop recorded"), Course->GetPops().Num() > 0 && Course->GetPops().Last().Judgement == EGFJudgement::Perfect && Course->GetPops().Last().PlayerKey == TEXT("Solo"));
+	TestTrue(TEXT("Perfect burst"), Course->NumDebris() >= 6);
+	const FGFBeatHopBrick& B0 = Course->GetBrick(0);
+	Course->SetDebugRunTime(FMath::Max(HitTime, B0.Time + B0.LenSeconds + 1.0));
+	const int32 Before = Course->NumDebris();
+	Course->Tick(0.016f);
+	TestTrue(TEXT("Missed brick hidden"), !Course->GetBrick(0).Mesh->IsVisible());
+	TestTrue(TEXT("Missed brick has no collision"), Course->GetBrick(0).Mesh->GetCollisionEnabled() == ECollisionEnabled::NoCollision);
+	TestTrue(TEXT("Crumble chunks fall"), Course->NumDebris() >= Before + 3);
+	TestTrue(TEXT("Hit brick stays"), Course->GetBrick(Hit).Mesh->IsVisible());
+	for (int32 i = 0; i < 200; ++i)
+	{
+		Course->Tick(0.016f);
+	}
+	TestEqual(TEXT("Debris cleans up"), Course->NumDebris(), 0);
 	return true;
 }
 
