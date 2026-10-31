@@ -96,6 +96,18 @@ Summoning Big Grumble polls every elder. Each reply quotes that family's rep, ki
 
 Payday is the shift bell. Dinos work lab factories named for materials in `DT_Items` (Fossil pit, Amber kiln, Scales yard, Bone works). Each shift is `creditWages(dinoId, shiftPay)`. The core keeps the higher lifetime, so the panel does not `putWork` a new total. Mate rank is `mateRank(pool, id)`: 1 is first pick in the crew, and it is not stored. The feed can brag about pay, post a mineral find, complain about the work, or say "looking for a job at" a factory. While `src/core` is bound, the panel reads only that storage. Seed family stats and seed payroll stay behind the Seed lab crew button, which writes them in. A dino can be rented or tamed. Lifetime is read-only. Rep bands are the imported `REP_BAND_THRESHOLDS` (friendly at 20, wary at -8, hostile at -40).
 
+## Guides and help
+
+Three guides sit on the panels they explain. Each one can be skipped. Skip stores the dismissal in `localStorage` under `dcl:wizards`, and the guide can be opened again from its button.
+
+- **Crew setup** walks through picking dinos, personas, wages, and jobs. It opens on Personas and on Dinobook.
+- **Dinobook events** says what Player joined, Attacked, Refused mango, Rental downed, Payday, and Summon Big Grumble each change.
+- **Reading traces** covers the engines, the colour badge, the reason line, and the `#/trace` log with its dino and source filters.
+
+Every panel has a collapsible About card: what the panel is for, what to try first, and what the controls mean. Open or closed is remembered under `dcl:panel-info`.
+
+`#/help` is a picture index of the screens and panels. Regenerate those pictures with `npm run help:screenshots`. That starts the lab, drives it headless, and writes `public/help/`.
+
 ## Modes and controls
 
 - 1:1 chat with the focused dino.

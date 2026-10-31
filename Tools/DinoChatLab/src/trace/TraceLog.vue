@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import LabWizard from "../components/LabWizard.vue";
+import PanelInfo from "../components/PanelInfo.vue";
 import { clearTraces, filterTraces, SOURCE_LABEL, tracesToJson } from "../logic/trace";
 import type { TraceSource } from "../logic/traceTypes";
 import TraceRow from "./TraceRow.vue";
@@ -56,6 +58,7 @@ function wipe() {
         <h1>What each engine said</h1>
         <a class="lab-link" href="#/">Back to the chat lab</a>
         <a class="lab-link" href="#/personas">Personas</a>
+        <a class="lab-link" href="#/help">Help</a>
       </div>
       <div class="status trace-status">
         <TraceToggle />
@@ -64,6 +67,8 @@ function wipe() {
     </header>
     <section class="log trace-page" aria-label="Trace log">
       <div class="log-head">
+        <PanelInfo id="trace-log" />
+        <LabWizard id="traces" />
         <div class="row">
           <label class="field">
             <span>Dino</span>
@@ -109,6 +114,12 @@ function wipe() {
 .trace-status { display: flex; flex-direction: column; align-items: flex-end; gap: 0.2rem; }
 .trace-page { margin: 0.8rem; min-height: calc(100vh - 7rem); }
 .trace-page .hint { color: var(--paper-muted); }
+.trace-page .row select,
+.trace-page .row button {
+  background: #fffaf2;
+  color: var(--paper-ink);
+  border-color: var(--rule);
+}
 .day-rule {
   margin: 0.2rem 0;
   font-size: 0.72rem;
