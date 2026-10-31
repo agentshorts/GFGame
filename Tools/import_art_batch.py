@@ -7,11 +7,559 @@ Env: GFART_BATCH=3b,7 (comma list) and/or GFART_ONLY=SM_Plot_ClaimFlag,... selec
      must stay >= -5 cm and the lowest clip must match the manifest's min_ground_z_cm (UE also checks foot/toe bone Z >= -5).
      Frames the manifest lists under "Intentionally below ground" (burrow, swim, perch clips) are exempt from both checks.
 Skeletal manifests with skeleton.sockets get USkeletalMeshSocket entries (bone + offset_cm, Blender bone space -> UE bone space).
-Batches 3b and 7 get materials: M_GF_Prop (Diffuse, DyeMask R, Emissive mask _E) instances per mesh, M_GF_TeamTint for TeamTint slots. Translucent blocks (manifest unreal_material_hint, e.g. SM_Block_Water) get M_GF_Water (Opacity, PanSpeedU/V).
+Batches 3b, 7, worldmap_v1 and beat_hop_v1 keep their static-mesh materials: M_GF_Prop (Diffuse, DyeMask R, Emissive mask _E) instances per mesh, M_GF_TeamTint for TeamTint slots. Translucent blocks (manifest unreal_material_hint, e.g. SM_Block_Water) get M_GF_Water (Opacity, PanSpeedU/V). Any other static or skeletal manifest with unreal_material_hint gets an instance from the hint (skeletal: M_GF_DyeMask Diffuse/Mask; static: M_GF_Prop Diffuse/DyeMask/Emissive). GFART_MATERIAL_DRY_RUN=1 checks those plans and exits before Unreal starts.
 Writes Saved/ArtImport/ue_report.json. Manifest types: static_mesh, skeletal_mesh, texture_set (UI PNGs, batch 8+). Settings: Force Front X Axis, convert scene + scene units,
 uniform scale 1, no redundant-key removal (scale tracks kept), no materials (slots keep names).
 """
 import json, math, os, re, traceback
+
+MAT_DIR = "/Game/Art/Materials"
+PLAYER_MAT_DIR = "/Game/Art/Characters/Player/Materials"
+HAZARD_MAT_BATCHES = ("hazards1",)  # per-slot materials from unreal_material_hint (M_GF_Prop, M_GF_Lava)
+
+def prop_mi_path(man):
+    return man["unreal_target"].rsplit("/", 1)[0] + "/Materials/MI_" + man["asset_name"][3:]
+
+def hint_slots(man):
+    """unreal_material_hint entries keyed by material slot name (hazards, banner/trophy v2). Water-style flat hints -> {}."""
+    h = man.get("unreal_material_hint") or {}
+    slots = man.get("material_slots") or []
+    return {k: v for k, v in h.items() if isinstance(v, dict) and k in slots}
+
+def hazard_mi_path(man, h):
+    """One instance per texture set, shared by every hazard piece: T_Hazard_LavaRock_D -> MI_Hazard_LavaRock."""
+    base = h["texture"][2:] if h["texture"].startswith("T_") else h["texture"]
+    if base.endswith("_D"):
+        base = base[:-2]
+    return man["unreal_target"].rsplit("/", 1)[0] + "/Materials/MI_" + base
+
+BANNER_PATTERNS = ("Plain", "Claw", "Egg", "Gem")
+
+def extra_slot_mi_paths(man):
+    """v2 Pattern slot (banner: one instance per default pattern) and Glass slot (trophy case)."""
+    hs = hint_slots(man)
+    d = man["unreal_target"].rsplit("/", 1)[0] + "/Materials/MI_" + man["asset_name"][3:]
+    out = []
+    if "Pattern" in hs:
+        out += [d + "_Pattern_" + p for p in BANNER_PATTERNS]
+    if "Glass" in hs:
+        out.append(d + "_Glass")
+    return out
+
+def texture_names(man):
+    """Texture short names in the order prop_materials builds its dict (own, then shared)."""
+    files = man.get("files") or {}
+    ordered = []
+    for group in (files.get("textures") or [], files.get("textures_shared") or []):
+        for tex in group:
+            ordered.append(os.path.splitext(str(tex))[0])
+    seen = set()
+    names = []
+    for name in ordered:
+        if name not in seen:
+            seen.add(name)
+            names.append(name)
+    return names
+
+def classify_prop_textures(names):
+    """Same filters as prop_materials: icons, _E and _M are not the diffuse."""
+    diff = [t for t in names if not t.startswith("T_Icon_") and not t.endswith("_E") and not t.endswith("_M")]
+    emis = [t for t in names if t.endswith("_E")]
+    mask = [t for t in names if t.endswith("_M")]
+    return diff, emis, mask
+
+def srgb_hex_to_linear(hexs):
+    """sRGB hex -> linear RGBA. Same curve _srgb_hex feeds to LinearColor."""
+    hexs = str(hexs).lstrip("#")
+    def lin(c):
+        c = c / 255.0
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    return (lin(int(hexs[0:2], 16)), lin(int(hexs[2:4], 16)), lin(int(hexs[4:6], 16)), 1.0)
+
+def material_kind(man):
+    """Which post-import material step a manifest gets: prop, hazard, hint, or None.
+
+    Static meshes in 3b, 7, worldmap_v1 and beat_hop_v1 stay on the prop step, and
+    every other manifest type in those batches stays off it. That is the old
+    PROP_MAT_BATCHES tuple. hazards1 static meshes stay on the hazard step.
+    Any other manifest with a non-empty unreal_material_hint uses the generic hint
+    step (skeletal: M_GF_DyeMask; static: M_GF_Prop, or the parent the hint names).
+    New batches opt in by shipping the hint. Do not extend the four names.
+    """
+    batch = str(man.get("batch"))
+    typ = man.get("type")
+    # Historical static-mesh prop step. Kept so those four batches stay byte-identical.
+    if batch in ("3b", "7", "worldmap_v1", "beat_hop_v1"):
+        return "prop" if typ == "static_mesh" else None
+    if batch in HAZARD_MAT_BATCHES:
+        return "hazard" if typ == "static_mesh" else None
+    if man.get("unreal_material_hint") and typ in ("static_mesh", "skeletal_mesh"):
+        return "hint"
+    return None
+
+def _legacy_material_kind(man):
+    """The pre-hint gate: a tuple of batch names, static meshes only, hints ignored."""
+    batch = str(man.get("batch"))
+    if man.get("type") != "static_mesh":
+        return None
+    if batch in ("3b", "7", "worldmap_v1", "beat_hop_v1"):
+        return "prop"
+    if batch in HAZARD_MAT_BATCHES:
+        return "hazard"
+    return None
+
+def prop_material_plan(man):
+    """What prop_materials then extra_slot_materials write for a frozen-batch static mesh.
+
+    The editor still runs those two functions unchanged. This is the dry-run picture
+    of that sequence, including texture order, water parameters and banner/glass paths.
+    """
+    names = texture_names(man)
+    diff, emis, mask = classify_prop_textures(names)
+    hint = man.get("unreal_material_hint") or {}
+    if not isinstance(hint, dict):
+        hint = {}
+    water = str(hint.get("blend_mode", "")).lower() == "translucent"
+    path = prop_mi_path(man)
+    mi = path.rsplit("/", 1)[-1]
+    textures = {}
+    if diff:
+        textures["Diffuse"] = diff[0]
+    if mask and not water:
+        textures["DyeMask"] = mask[0]
+    if emis and not water:
+        textures["Emissive"] = emis[0]
+    scalars = {}
+    if water:
+        spd = list(hint.get("panner_speed_uv_per_s", [0.05, 0.0])) + [0.0, 0.0]
+        scalars["Opacity"] = float(hint.get("opacity", 0.65))
+        scalars["PanSpeedU"] = float(spd[0])
+        scalars["PanSpeedV"] = float(spd[1])
+    elif emis:
+        scalars["EmissiveStrength"] = 2.0
+    vectors = {}
+    slots = {}
+    for raw in man.get("material_slots") or []:
+        slot = str(raw)
+        if slot in ("Main", "All"):
+            slots[slot] = mi
+        elif slot == "TeamTint":
+            slots[slot] = "MI_GF_TeamTint"
+    hs = hint_slots(man)
+    v2 = {}
+    main = hs.get("Main")
+    if main:
+        # extra_slot_materials overwrites after the prop instance exists, water or not.
+        if main.get("texture") in names:
+            textures["Diffuse"] = main["texture"]
+        if main.get("mask") in names:
+            textures["DyeMask"] = main["mask"]
+        lining = (main.get("defaults") or {}).get("LiningColor")
+        if lining:
+            vectors["Dye_R"] = lining
+            v2["Main_Dye_R_default"] = lining
+    extra = extra_slot_mi_paths(man)
+    if "Pattern" in hs:
+        slots["Pattern"] = mi + "_Pattern_Plain"
+        v2["Pattern"] = sorted(os.path.basename(p) for p in extra if "_Pattern_" in os.path.basename(p))
+    if "Glass" in hs:
+        slots["Glass"] = mi + "_Glass"
+        v2["Glass"] = {"opacity": float(hs["Glass"].get("opacity", 0.3))}
+    return {
+        "kind": "prop",
+        "mi": mi,
+        "path": path,
+        "parent": "M_GF_Water" if water else "M_GF_Prop",
+        "textures": textures,
+        "scalars": scalars,
+        "vectors": vectors,
+        "slots": slots,
+        "extra_paths": extra,
+        "owned_mi_paths": [path] + list(extra),
+        "v2": v2,
+    }
+
+_HINT_NON_SLOTS = {
+    "defaults", "textures", "scalars", "vectors", "params", "slot", "slots",
+    "parent", "instance", "blend_mode", "opacity", "panner_speed_uv_per_s",
+    "Diffuse", "diffuse", "Mask", "mask", "DyeMask", "Emissive", "emissive",
+    "texture", "emissive_strength", "EmissiveStrength", "emissive_color",
+    "Dye_R", "dye_r", "dye", "note", "comment",
+}
+def _parent_name(man, spec):
+    parent = spec.get("parent")
+    if isinstance(parent, str) and parent.startswith("/Game/"):
+        parent = parent.rsplit("/", 1)[-1]
+    if parent:
+        return str(parent)
+    blend = str(spec.get("blend_mode", "")).lower()
+    if blend == "translucent":
+        return "M_GF_Water" if "panner_speed_uv_per_s" in spec else "M_GF_Glass"
+    if man.get("type") == "skeletal_mesh":
+        return "M_GF_DyeMask"
+    return "M_GF_Prop"
+
+def _explicit_strength(spec):
+    if "emissive_strength" in spec:
+        return float(spec["emissive_strength"])
+    if "EmissiveStrength" in spec:
+        return float(spec["EmissiveStrength"])
+    matched = re.search(r"\*\s*E\s*\*\s*([0-9.]+)", str(spec.get("emissive_color", "")))
+    return float(matched.group(1)) if matched else None
+
+def _explicit_textures(spec, parent):
+    dye = parent == "M_GF_DyeMask"
+    out = {}
+    if spec.get("texture"):
+        out["Diffuse"] = os.path.splitext(str(spec["texture"]))[0]
+    if spec.get("Diffuse") or spec.get("diffuse"):
+        out["Diffuse"] = os.path.splitext(str(spec.get("Diffuse") or spec.get("diffuse")))[0]
+    mask = spec.get("mask") or spec.get("Mask") or spec.get("DyeMask")
+    if mask:
+        out["Mask" if dye else "DyeMask"] = os.path.splitext(str(mask))[0]
+    emis = spec.get("emissive") or spec.get("Emissive")
+    if emis and parent not in ("M_GF_DyeMask", "M_GF_Water", "M_GF_Glass"):
+        out["Emissive"] = os.path.splitext(str(emis))[0]
+    return out
+
+def _infer_textures(man, parent):
+    diff, emis, mask = classify_prop_textures(texture_names(man))
+    out = {}
+    if parent == "M_GF_DyeMask":
+        if diff:
+            out["Diffuse"] = diff[0]
+        if mask:
+            out["Mask"] = mask[0]
+    elif parent == "M_GF_Water" or parent == "M_GF_Glass":
+        if diff:
+            out["Diffuse"] = diff[0]
+    elif parent == "M_GF_Lava":
+        if diff:
+            out["Diffuse"] = diff[0]
+        if emis:
+            out["Emissive"] = emis[0]
+    elif parent == "M_GF_Prop":
+        if diff:
+            out["Diffuse"] = diff[0]
+        if mask:
+            out["DyeMask"] = mask[0]
+        if emis:
+            out["Emissive"] = emis[0]
+    return out
+
+def _slot_specs(man, hint):
+    slots_named = [str(s) for s in (man.get("material_slots") or [])]
+    keyed = {}
+    for key, val in hint.items():
+        if not isinstance(val, dict) or key in _HINT_NON_SLOTS:
+            continue
+        if slots_named and key not in slots_named:
+            continue
+        keyed[str(key)] = val
+    if keyed:
+        return keyed
+    interesting = set(hint) & (_HINT_NON_SLOTS - {"note", "comment", "defaults", "textures", "scalars", "vectors", "params"})
+    if not interesting:
+        return None
+    if hint.get("slots"):
+        targets = [str(s) for s in hint["slots"]]
+    elif hint.get("slot"):
+        targets = [str(hint["slot"])]
+    elif any(s in ("Main", "All") for s in slots_named):
+        targets = [s for s in slots_named if s in ("Main", "All")]
+    elif slots_named:
+        targets = [s for s in slots_named if s != "TeamTint"]
+    elif man.get("type") == "skeletal_mesh":
+        targets = ["Body"]
+    else:
+        targets = ["Main"]
+    return {s: hint for s in targets}
+
+def _instance_path(man, spec, slot, index, shared_flat):
+    dest = man["unreal_target"].rsplit("/", 1)[0] + "/Materials"
+    inst = spec.get("instance")
+    if inst:
+        inst = str(inst)
+        return inst if inst.startswith("/Game/") else dest + "/" + inst
+    base = "MI_" + str(man["asset_name"])[3:]
+    if not shared_flat and index > 0:
+        base += "_" + str(slot)
+    return dest + "/" + base
+
+def _dye_hex(spec):
+    dye = spec.get("Dye_R") or spec.get("dye_r") or spec.get("dye")
+    defaults = spec.get("defaults") or {}
+    if not dye:
+        dye = defaults.get("LiningColor") or defaults.get("Dye_R")
+    if isinstance(dye, str) and dye.strip():
+        return dye.strip()
+    return None
+
+def _one_hint_instance(man, slot, spec, index, shared_flat):
+    parent = _parent_name(man, spec)
+    textures = _infer_textures(man, parent)
+    textures.update(_explicit_textures(spec, parent))
+    if parent == "M_GF_Water":
+        textures = {k: v for k, v in textures.items() if k == "Diffuse"}
+    scalars = {}
+    if parent == "M_GF_Water":
+        spd = list(spec.get("panner_speed_uv_per_s", [0.05, 0.0])) + [0.0, 0.0]
+        scalars["Opacity"] = float(spec.get("opacity", 0.65))
+        scalars["PanSpeedU"] = float(spd[0])
+        scalars["PanSpeedV"] = float(spd[1])
+    elif parent == "M_GF_Glass":
+        scalars["Opacity"] = float(spec.get("opacity", 0.3))
+    elif parent == "M_GF_Lava" and "panner_speed_uv_per_s" in spec:
+        spd = list(spec.get("panner_speed_uv_per_s")) + [0.0, 0.0]
+        scalars["PanSpeedU"] = float(spd[0])
+        scalars["PanSpeedV"] = float(spd[1])
+    if parent == "M_GF_Prop" and "Emissive" in textures and "EmissiveStrength" not in scalars:
+        strength = _explicit_strength(spec)
+        scalars["EmissiveStrength"] = 2.0 if strength is None else strength
+    vectors = {}
+    dye = _dye_hex(spec)
+    if dye:
+        vectors["Dye_R"] = dye
+    path = _instance_path(man, spec, slot, index, shared_flat)
+    shared = False
+    if slot == "TeamTint" and not spec.get("instance") and not _explicit_textures(spec, parent):
+        path = MAT_DIR + "/MI_GF_TeamTint"
+        parent = "M_GF_TeamTint"
+        textures = {}
+        scalars = {}
+        vectors = {}
+        shared = True
+    return {
+        "path": path,
+        "name": path.rsplit("/", 1)[-1],
+        "parent": parent,
+        "textures": textures,
+        "scalars": scalars,
+        "vectors": vectors,
+        "slots": [slot],
+        "shared": shared,
+    }
+
+def hint_material_plan(man):
+    """Generic step: one material instance per hint, for any batch outside the frozen prop/hazard gates.
+
+    Skeletal meshes default to M_GF_DyeMask (Diffuse, Mask). Static meshes default to
+    M_GF_Prop (Diffuse, DyeMask, Emissive). A slot map, a flat slot/parent/instance
+    hint, or a water-style blend_mode hint are all accepted. TeamTint with no textures
+    reuses MI_GF_TeamTint and is not owned by the mesh.
+    """
+    hint = man.get("unreal_material_hint")
+    if not isinstance(hint, dict):
+        return {"kind": "hint", "error": "unreal_material_hint must be an object", "instances": [], "slots": {}}
+    specs = _slot_specs(man, hint)
+    if not specs:
+        return {"kind": "hint", "error": "unreal_material_hint did not name a slot, parent, or texture", "instances": [], "slots": {}}
+    shared_flat = len({id(v) for v in specs.values()}) == 1
+    built = [_one_hint_instance(man, slot, spec, i, shared_flat) for i, (slot, spec) in enumerate(specs.items())]
+    instances = []
+    for item in built:
+        merged = False
+        for prev in instances:
+            same = prev["path"] == item["path"] and prev["parent"] == item["parent"] and prev["textures"] == item["textures"]
+            same = same and prev["scalars"] == item["scalars"] and prev["vectors"] == item["vectors"] and not prev["shared"] and not item["shared"]
+            if same:
+                prev["slots"].extend(item["slots"])
+                merged = True
+                break
+        if not merged:
+            instances.append(item)
+    slots = {}
+    for inst in instances:
+        for slot in inst["slots"]:
+            slots[slot] = inst["name"]
+    return {"kind": "hint", "instances": instances, "slots": slots}
+
+def hint_owned_paths(man):
+    plan = hint_material_plan(man)
+    return [inst["path"] for inst in plan.get("instances") or [] if not inst.get("shared")]
+
+def _dry_manifest(asset, batch, typ, target, slots, textures, hint=None, shared=None):
+    man = {
+        "asset_name": asset,
+        "type": typ,
+        "batch": batch,
+        "unreal_target": target,
+        "material_slots": slots,
+        "files": {"textures": list(textures)},
+    }
+    if shared:
+        man["files"]["textures_shared"] = list(shared)
+    if hint is not None:
+        man["unreal_material_hint"] = hint
+    return man
+
+def _check_plans(check):
+    water = _dry_manifest(
+        "SM_Block_Water", "3b", "static_mesh", "/Game/Art/Blocks/SM_Block_Water", ["All"],
+        ["T_Block_Water.png", "T_Block_Water_M.png", "T_Block_Water_E.png"],
+        {"blend_mode": "translucent", "opacity": 0.55, "panner_speed_uv_per_s": [0.02, 0.01]})
+    plan = prop_material_plan(water)
+    check(material_kind(water) == "prop" and _legacy_material_kind(water) == "prop", "water left the prop step")
+    check(plan["parent"] == "M_GF_Water" and plan["textures"] == {"Diffuse": "T_Block_Water"}, "water textures " + str(plan["textures"]))
+    check(plan["scalars"]["Opacity"] == 0.55 and plan["scalars"]["PanSpeedU"] == 0.02 and plan["scalars"]["PanSpeedV"] == 0.01, "water scalars")
+    check("DyeMask" not in plan["textures"] and "Emissive" not in plan["textures"], "water kept mask or emissive")
+    check(plan["slots"] == {"All": "MI_Block_Water"} and plan["path"].endswith("/Materials/MI_Block_Water"), "water mi path")
+    bare = _dry_manifest(
+        "SM_Block_Water", "3b", "static_mesh", "/Game/Art/Blocks/SM_Block_Water", ["All"], ["T_Block_Water.png"],
+        {"blend_mode": "Translucent"})
+    bare_plan = prop_material_plan(bare)
+    check(bare_plan["scalars"]["Opacity"] == 0.65 and bare_plan["scalars"]["PanSpeedU"] == 0.05 and bare_plan["scalars"]["PanSpeedV"] == 0.0, "water defaults")
+
+    steak = _dry_manifest(
+        "SM_Item_Steakroot", "3b", "static_mesh", "/Game/Art/Items/SM_Item_Steakroot", ["Main", "TeamTint"],
+        ["T_Icon_Steakroot.png", "T_Item_Steakroot_D.png", "T_Item_Steakroot_M.png", "T_Item_Steakroot_E.png"])
+    sp = prop_material_plan(steak)
+    check(sp["parent"] == "M_GF_Prop", "steak parent")
+    check(sp["textures"] == {"Diffuse": "T_Item_Steakroot_D", "DyeMask": "T_Item_Steakroot_M", "Emissive": "T_Item_Steakroot_E"}, "steak textures " + str(sp["textures"]))
+    check(sp["scalars"] == {"EmissiveStrength": 2.0}, "steak strength")
+    check(sp["slots"] == {"Main": "MI_Item_Steakroot", "TeamTint": "MI_GF_TeamTint"}, "steak slots")
+    check(sp["owned_mi_paths"] == ["/Game/Art/Items/Materials/MI_Item_Steakroot"], "steak owned")
+
+    shared = _dry_manifest(
+        "SM_Crop_Steakroot_S1", "3b", "static_mesh", "/Game/Art/Crops/SM_Crop_Steakroot_S1", ["Main"], [],
+        shared=["T_Crop_Steakroot_D.png"])
+    check(prop_material_plan(shared)["textures"] == {"Diffuse": "T_Crop_Steakroot_D"}, "shared diffuse")
+
+    banner_tex = ["T_Colo_Banner_D.png", "T_Colo_Banner_M.png"]
+    for pname in BANNER_PATTERNS:
+        banner_tex += ["T_Colo_Banner_Pattern_%s_D.png" % pname, "T_Colo_Banner_Pattern_%s_M.png" % pname]
+    banner = _dry_manifest(
+        "SM_Colo_Banner", "7", "static_mesh", "/Game/Art/Colo/SM_Colo_Banner", ["Main", "Pattern", "TeamTint"], banner_tex,
+        {"Main": {"texture": "T_Colo_Banner_D", "mask": "T_Colo_Banner_M", "defaults": {"LiningColor": "#D88C68"}},
+         "Pattern": {"note": "four default patterns"}})
+    bp = prop_material_plan(banner)
+    check(material_kind(banner) == "prop", "banner kind")
+    root = "/Game/Art/Colo/Materials/MI_Colo_Banner"
+    check(bp["owned_mi_paths"] == [root] + [root + "_Pattern_" + p for p in BANNER_PATTERNS], "banner paths " + str(bp["owned_mi_paths"]))
+    check(bp["slots"]["Pattern"] == "MI_Colo_Banner_Pattern_Plain" and bp["slots"]["TeamTint"] == "MI_GF_TeamTint", "banner slots")
+    check(bp["vectors"] == {"Dye_R": "#D88C68"} and bp["v2"]["Pattern"] == sorted("MI_Colo_Banner_Pattern_" + p for p in BANNER_PATTERNS), "banner dye")
+    check(bp["parent"] == "M_GF_Prop", "banner parent")
+
+    glass = _dry_manifest(
+        "SM_Deco_TrophyCase", "7", "static_mesh", "/Game/Art/Furniture/SM_Deco_TrophyCase", ["Main", "Glass"],
+        ["T_Deco_TrophyCase_D.png"],
+        {"Glass": {"texture": "T_Deco_TrophyCase_D", "opacity": 0.3, "blend_mode": "translucent"}})
+    gp = prop_material_plan(glass)
+    check(gp["parent"] == "M_GF_Prop" and gp["slots"].get("Glass") == "MI_Deco_TrophyCase_Glass", "glass stays a prop main")
+    check(gp["v2"]["Glass"]["opacity"] == 0.3 and gp["owned_mi_paths"][-1].endswith("/MI_Deco_TrophyCase_Glass"), "glass path")
+
+    pad = _dry_manifest(
+        "SM_GatePad", "worldmap_v1", "static_mesh", "/Game/Art/Gates/SM_GatePad", ["Main"],
+        ["T_GatePad_Note.png", "T_GatePad_D.png", "T_GatePad_M.png", "T_GatePad_E.png"],
+        {"Main": {"texture": "T_GatePad_D", "mask": "T_GatePad_M", "defaults": {"LiningColor": "#FFC93C"}}})
+    pp = prop_material_plan(pad)
+    check(material_kind(pad) == "prop" and _legacy_material_kind(pad) == "prop", "worldmap left the prop step")
+    check(pp["textures"]["Diffuse"] == "T_GatePad_D" and pp["textures"]["DyeMask"] == "T_GatePad_M", "worldmap overwrite")
+    check(pp["textures"]["Emissive"] == "T_GatePad_E" and pp["vectors"]["Dye_R"] == "#FFC93C", "worldmap emissive and dye")
+
+    brick = _dry_manifest(
+        "SM_Block_Beat_L1", "beat_hop_v1", "static_mesh", "/Game/Art/BeatHop/Bricks/SM_Block_Beat_L1", ["Main"],
+        ["T_Block_Beat_L1_D.png"])
+    check(material_kind(brick) == "prop" and prop_material_plan(brick)["mi"] == "MI_Block_Beat_L1", "beat hop brick")
+    sheets = _dry_manifest("VFX_BeatHop_v1", "beat_hop_v1", "texture_set", "/Game/Art/BeatHop/VFX/VFX_BeatHop_v1", [], ["T_VFX.png"])
+    check(material_kind(sheets) is None and _legacy_material_kind(sheets) is None, "beat hop texture set")
+    player = _dry_manifest(
+        "SK_Player_Base", "beat_hop_v1", "skeletal_mesh", "/Game/Art/Characters/Player/SK_Player_Base", ["Skin"], [],
+        {"Body": {"parent": "M_GF_DyeMask"}})
+    check(material_kind(player) is None, "frozen skeletal hint must stay off the new step")
+
+    hazard = _dry_manifest(
+        "SM_Hazard_LavaBridge", "hazards1", "static_mesh", "/Game/Art/Hazards/SM_Hazard_LavaBridge", ["Deck", "Lava"],
+        ["T_Hazard_LavaRock_D.png"],
+        {"Lava": {"texture": "T_Hazard_LavaRock_D", "panner_speed_uv_per_s": [0.0, 0.02]}})
+    check(material_kind(hazard) == "hazard" and _legacy_material_kind(hazard) == "hazard", "hazard kind")
+    check(hazard_mi_path(hazard, hazard["unreal_material_hint"]["Lava"]).endswith("/MI_Hazard_LavaRock"), "hazard mi")
+
+    grumble = _dry_manifest(
+        "SK_Dino_BigGrumble", "big_grumble_v4", "skeletal_mesh", "/Game/Art/Dinos/BigGrumble/SK_Dino_BigGrumble", ["Body"],
+        ["T_Dino_BigGrumble_D.png", "T_Dino_BigGrumble_M.png", "T_Dino_BigGrumble_E.png"],
+        {"Body": {
+            "parent": "M_GF_DyeMask",
+            "instance": "/Game/Art/Dinos/BigGrumble/Materials/MI_Dino_BigGrumble",
+            "Diffuse": "T_Dino_BigGrumble_D",
+            "Mask": "T_Dino_BigGrumble_M",
+        }})
+    gp = hint_material_plan(grumble)
+    check(material_kind(grumble) == "hint" and _legacy_material_kind(grumble) is None, "grumble kind")
+    inst = gp["instances"][0]
+    check(inst["parent"] == "M_GF_DyeMask" and inst["path"].endswith("/MI_Dino_BigGrumble"), "grumble instance")
+    check(inst["textures"] == {"Diffuse": "T_Dino_BigGrumble_D", "Mask": "T_Dino_BigGrumble_M"}, "grumble params " + str(inst["textures"]))
+    check(gp["slots"] == {"Body": "MI_Dino_BigGrumble"} and "Emissive" not in inst["textures"], "grumble slot")
+    implied = _dry_manifest(
+        "SK_Dino_BigGrumble", "big_grumble_v4", "skeletal_mesh", "/Game/Art/Dinos/BigGrumble/SK_Dino_BigGrumble", ["Body"],
+        ["T_Dino_BigGrumble_D.png", "T_Dino_BigGrumble_M.png"], {"Body": {}})
+    ip = hint_material_plan(implied)["instances"][0]
+    check(ip["parent"] == "M_GF_DyeMask" and ip["textures"] == inst["textures"] and ip["name"] == "MI_Dino_BigGrumble", "implied grumble")
+
+    ferry = _dry_manifest(
+        "SM_FerryBasket", "ferry_v2", "static_mesh", "/Game/Art/Props/Ferry/SM_FerryBasket", ["Main", "TeamTint"],
+        ["T_FerryBasket_D.png", "T_FerryBasket_M.png", "T_FerryBasket_E.png"],
+        {"Main": {"Dye_R": "#FFC93C"}})
+    fp = hint_material_plan(ferry)
+    check(material_kind(ferry) == "hint", "ferry hint kind")
+    check(fp["slots"] == {"Main": "MI_FerryBasket"} and "TeamTint" not in fp["slots"], "ferry does not invent TeamTint")
+    fi = fp["instances"][0]
+    check(fi["parent"] == "M_GF_Prop" and fi["textures"]["DyeMask"] == "T_FerryBasket_M" and fi["textures"]["Emissive"] == "T_FerryBasket_E", "ferry prop params")
+    check(fi["scalars"]["EmissiveStrength"] == 2.0 and fi["vectors"]["Dye_R"] == "#FFC93C", "ferry strength and dye")
+    check(hint_owned_paths(ferry) == ["/Game/Art/Props/Ferry/Materials/MI_FerryBasket"], "ferry owned")
+
+    quiet = _dry_manifest("SK_Dino_Raptor", "newdinos_v1", "skeletal_mesh", "/Game/Art/Dinos/Raptor/SK_Dino_Raptor", ["Body"], ["T_Dino_Raptor_D.png"])
+    check(material_kind(quiet) is None and _legacy_material_kind(quiet) is None, "hint-less dino")
+    check(material_kind(_dry_manifest("SM_Furn_Chair_Wood", "2", "static_mesh", "/Game/Art/Furniture/SM_Furn_Chair_Wood", ["Main"], ["T_Furn_Chair_Wood_D.png"])) is None, "batch 2")
+    empty = _dry_manifest("SM_Sign_Moba", "signs_v9", "static_mesh", "/Game/Art/Gates/Signs/SM_Sign_Moba", ["Main"], ["T_Sign_Moba_D.png"], {})
+    check(material_kind(empty) is None, "empty hint is not an opt-in")
+
+    r, g, b, a = srgb_hex_to_linear("#FFC93C")
+    check(abs(r - 1.0) < 1e-6 and abs(g - 0.584078) < 1e-4 and abs(b - 0.045186) < 1e-4 and a == 1.0, "crest linear rgb")
+
+def dry_run_self_check(write=None):
+    """Check the material plans without Unreal. GFART_MATERIAL_DRY_RUN=1 exits here."""
+    if write is None:
+        def write(msg):
+            print(msg, flush=True)
+    failures = []
+
+    def check(cond, msg):
+        if not cond:
+            failures.append(msg)
+
+    batches = ("1", "2", "3b", "7", "8", "worldmap_v1", "beat_hop_v1", "beat_hop_v2", "hazards1", "big_grumble_v1", "newdinos_v1", "ferry_v2")
+    frozen = ("3b", "7", "worldmap_v1", "beat_hop_v1")
+    for batch in batches:
+        for typ in ("static_mesh", "skeletal_mesh", "texture_set"):
+            for hinted in (False, True):
+                man = _dry_manifest("SM_Sample", batch, typ, "/Game/Art/Sample/SM_Sample", ["Main"], ["T_Sample_D.png"], {"Main": {"texture": "T_Sample_D"}} if hinted else None)
+                got = material_kind(man)
+                if batch in frozen:
+                    want = "prop" if typ == "static_mesh" else None
+                elif batch in HAZARD_MAT_BATCHES:
+                    want = "hazard" if typ == "static_mesh" else None
+                elif hinted and typ in ("static_mesh", "skeletal_mesh"):
+                    want = "hint"
+                else:
+                    want = None
+                check(got == want, "matrix {} {} hinted={} -> {} want {}".format(batch, typ, hinted, got, want))
+                if want != "hint":
+                    check(got == _legacy_material_kind(man), "legacy drift {} {}".format(batch, typ))
+    _check_plans(check)
+    if failures:
+        for msg in failures:
+            write("FAIL " + msg)
+        write("material dry-run: {} failed".format(len(failures)))
+        return 1
+    write("material dry-run: ok ({} matrix rows)".format(len(batches) * 3 * 2))
+    return 0
+
+# --- material hint pure section ends ---
+
+if os.environ.get("GFART_MATERIAL_DRY_RUN") == "1":
+    raise SystemExit(dry_run_self_check())
+
 import unreal
 
 PROJ = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
@@ -114,9 +662,6 @@ if _only or _batches:
 CLIP_LIMIT_Z = -5.0  # cm: no clip may sink the posed mesh below this (manifest "limit -5")
 _probe_path = os.environ.get("GFART_PROBE", "").strip()
 PROBE = json.load(open(_probe_path, encoding="utf-8")) if _probe_path else {}
-PROP_MAT_BATCHES = ("3b", "7", "worldmap_v1", "beat_hop_v1")
-HAZARD_MAT_BATCHES = ("hazards1",)  # per-slot materials from unreal_material_hint (M_GF_Prop, M_GF_Lava)
-MAT_DIR = "/Game/Art/Materials"
 BAD_PATH = re.compile(r"[a-z]:[\\/]users[\\/]", re.I)  # source paths must not leak a username
 DIM_TOL = 0.05  # cm
 report = {"assets": {}, "log": []}
@@ -655,8 +1200,6 @@ def do_skel(name, man, folder, r):
             r["min_z_note"] = "no foot-probe data for every clip: run Tools/art_foot_probe.py and pass GFART_PROBE"
             chk["min_z"] = False
 
-PLAYER_MAT_DIR = "/Game/Art/Characters/Player/Materials"
-
 def _mexpr(mat, cls, x, y):
     return unreal.MaterialEditingLibrary.create_material_expression(mat, cls, x, y)
 
@@ -731,18 +1274,22 @@ def owned_assets(man):
     out = [dest + "/" + os.path.splitext(a)[0] for a in man["files"].get("animations", [])]
     out = [dest.replace(dest, dest + "/Anims") + "/" + os.path.basename(a) for a in out]
     out += [dest + "/Textures/" + os.path.splitext(t)[0] for t in man["files"].get("textures", [])]
+    kind = material_kind(man)
     if man.get("asset_name") == "SK_Player_Base":
         # dependents first: mesh -> material instances -> master -> textures
         tex = [a for a in out if "/Textures/" in a]
         out = [a for a in out if "/Textures/" not in a] + [man["unreal_target"]] + [PLAYER_MAT_DIR + "/" + m for m in PLAYER_MATS] + tex
-    elif man["type"] == "static_mesh" and str(man.get("batch")) in PROP_MAT_BATCHES:
+    elif kind == "prop":
         tex = [a for a in out if "/Textures/" in a]
         out = [a for a in out if "/Textures/" not in a] + [man["unreal_target"], prop_mi_path(man)] + extra_slot_mi_paths(man) + tex
-    elif man["type"] == "static_mesh" and str(man.get("batch")) in HAZARD_MAT_BATCHES:
+    elif kind == "hazard":
         tex = [a for a in out if "/Textures/" in a]
         own = set(os.path.splitext(t)[0] for t in man["files"].get("textures", []))
         mis = sorted(set(p for slot, h in hint_slots(man).items() for p in [hazard_mi_path(man, h)] if h.get("texture") in own))
         out = [a for a in out if "/Textures/" not in a] + [man["unreal_target"]] + mis + tex
+    elif kind == "hint":
+        tex = [a for a in out if "/Textures/" in a]
+        out = [a for a in out if "/Textures/" not in a] + [man["unreal_target"]] + hint_owned_paths(man) + tex
     else:
         out.append(man["unreal_target"])
     sk = man.get("skeleton") or {}
@@ -750,9 +1297,6 @@ def owned_assets(man):
         out.append(dest + "/" + sk["skeleton_name"])
         out.append(man["unreal_target"] + "_Skeleton")
     return out
-
-def prop_mi_path(man):
-    return man["unreal_target"].rsplit("/", 1)[0] + "/Materials/MI_" + man["asset_name"][3:]
 
 def _png(path, w, h, rgb):
     """Tiny solid-colour PNG (stdlib only) used as a material default texture."""
@@ -870,32 +1414,6 @@ def build_water_master(path):
     EAL.save_loaded_asset(mat)
     return mat
 
-
-def hint_slots(man):
-    """unreal_material_hint entries keyed by material slot name (hazards, banner/trophy v2). Water-style flat hints -> {}."""
-    h = man.get("unreal_material_hint") or {}
-    slots = man.get("material_slots") or []
-    return {k: v for k, v in h.items() if isinstance(v, dict) and k in slots}
-
-def hazard_mi_path(man, h):
-    """One instance per texture set, shared by every hazard piece: T_Hazard_LavaRock_D -> MI_Hazard_LavaRock."""
-    base = h["texture"][2:] if h["texture"].startswith("T_") else h["texture"]
-    if base.endswith("_D"):
-        base = base[:-2]
-    return man["unreal_target"].rsplit("/", 1)[0] + "/Materials/MI_" + base
-
-BANNER_PATTERNS = ("Plain", "Claw", "Egg", "Gem")
-
-def extra_slot_mi_paths(man):
-    """v2 Pattern slot (banner: one instance per default pattern) and Glass slot (trophy case)."""
-    hs = hint_slots(man)
-    d = man["unreal_target"].rsplit("/", 1)[0] + "/Materials/MI_" + man["asset_name"][3:]
-    out = []
-    if "Pattern" in hs:
-        out += [d + "_Pattern_" + p for p in BANNER_PATTERNS]
-    if "Glass" in hs:
-        out.append(d + "_Glass")
-    return out
 
 def _strength(h, default=0.0):
     m = re.search(r"\*\s*E\s*\*\s*([0-9.]+)", str(h.get("emissive_color", "")))
@@ -1187,6 +1705,102 @@ def prop_materials(name, man, r):
             and abs(w["pan_u"] - float(spd[0])) < 1e-4
     r["checks"]["materials"] = ok
 
+def _hint_parent(parent, tex, inst):
+    """Resolve a hint parent name to a material. M_GF_DyeMask already lives on the player."""
+    if parent == "M_GF_Prop":
+        return master("M_GF_Prop", build_prop_master)
+    if parent == "M_GF_Water":
+        return master("M_GF_Water", build_water_master)
+    if parent == "M_GF_Glass":
+        return master("M_GF_Glass", build_glass_master)
+    if parent == "M_GF_Lava":
+        return master("M_GF_Lava", build_lava_master)
+    if parent == "M_GF_TeamTint":
+        return master("M_GF_TeamTint", build_team_tint_master)
+    if parent == "M_GF_DyeMask":
+        p = PLAYER_MAT_DIR + "/M_GF_DyeMask"
+        if EAL.does_asset_exist(p):
+            return unreal.load_asset(p)
+        def loaded(param, fallback, rgb, linear):
+            tname = inst["textures"].get(param)
+            if tname and tname in tex and EAL.does_asset_exist(tex[tname]):
+                return unreal.load_asset(tex[tname])
+            return default_tex(fallback, rgb, linear)
+        return build_dye_mask_master(
+            p,
+            loaded("Diffuse", "T_GF_DefaultWhite", (255, 255, 255), False),
+            loaded("Mask", "T_GF_MaskBlack", (0, 0, 0), True))
+    if isinstance(parent, str) and parent.startswith("/Game/") and EAL.does_asset_exist(parent):
+        return unreal.load_asset(parent)
+    raise RuntimeError("no material parent for hint: " + str(parent))
+
+def _set_skel_slots(man, by_slot):
+    m = unreal.load_asset(man["unreal_target"])
+    mats = list(m.materials)
+    for i, sm in enumerate(mats):
+        s = str(sm.material_slot_name)
+        if s in by_slot:
+            sm.material_interface = by_slot[s]
+            mats[i] = sm
+    m.set_editor_property("materials", mats)
+    EAL.save_loaded_asset(m)
+    m = unreal.load_asset(man["unreal_target"])
+    return {str(s.material_slot_name): (s.material_interface.get_name() if s.material_interface else None) for s in m.materials}
+
+def hint_materials(name, man, r):
+    """Manifests outside the frozen prop/hazard batches: an instance from unreal_material_hint.
+
+    Skeletal meshes use M_GF_DyeMask (Diffuse, Mask). Static meshes use M_GF_Prop
+    (Diffuse, DyeMask, Emissive) unless the hint names another parent (water, glass, lava).
+    """
+    plan = hint_material_plan(man)
+    if plan.get("error"):
+        raise RuntimeError(plan["error"])
+    MEL = unreal.MaterialEditingLibrary
+    tex = _tex_paths(man)
+    by_slot = {}
+    ok = True
+    for inst in plan["instances"]:
+        if inst.get("shared"):
+            mi = team_tint_mi()
+        else:
+            mi = _load_or_create_mi(inst["path"])
+            MEL.set_material_instance_parent(mi, _hint_parent(inst["parent"], tex, inst))
+            if inst["parent"] == "M_GF_DyeMask":
+                need = ["Diffuse", "Mask"]
+            elif inst["parent"] in ("M_GF_Prop", "M_GF_Water", "M_GF_Glass", "M_GF_Lava"):
+                need = ["Diffuse"]
+            else:
+                need = []
+            for param in ("Diffuse", "Mask", "DyeMask", "Emissive"):
+                tname = inst["textures"].get(param)
+                if not tname:
+                    continue
+                tpath = tex.get(tname)
+                if not tpath or not EAL.does_asset_exist(tpath):
+                    ok = False
+                    continue
+                MEL.set_material_instance_texture_parameter_value(mi, param, unreal.load_asset(tpath))
+            for param in need:
+                if param not in inst["textures"]:
+                    ok = False
+            for param, val in inst["scalars"].items():
+                MEL.set_material_instance_scalar_parameter_value(mi, param, float(val))
+            for param, hexv in inst["vectors"].items():
+                MEL.set_material_instance_vector_parameter_value(mi, param, _srgb_hex(hexv))
+            EAL.save_loaded_asset(mi)
+        for slot in inst["slots"]:
+            by_slot[slot] = mi
+    if man.get("type") == "skeletal_mesh":
+        got = _set_skel_slots(man, by_slot)
+    else:
+        got = _set_slots(man, by_slot)
+    r["materials"] = got
+    r["material_params"] = plan
+    ok = ok and bool(plan["instances"]) and all(got.get(s) == by_slot[s].get_name() for s in by_slot)
+    r["checks"]["materials"] = ok
+
+
 # Clean re-import: replace-existing on skeletal meshes re-creates a default skeleton, so delete this
 # batch's own assets first (dependents first, skeletons last). Nothing outside the manifests is touched.
 mans = {n: json.load(open(os.path.join(INBOX, n, "manifest.json"), encoding="utf-8")) for n in ORDER}
@@ -1224,13 +1838,16 @@ for name in ORDER:
 for name in ORDER:
     man = mans[name]
     r = report["assets"][name]
-    if man["type"] == "static_mesh" and str(man.get("batch")) in PROP_MAT_BATCHES + HAZARD_MAT_BATCHES and "error" not in r:
+    kind = material_kind(man)
+    if kind and "error" not in r:
         try:
-            if str(man.get("batch")) in HAZARD_MAT_BATCHES:
+            if kind == "hazard":
                 hazard_materials(name, man, r)
-            else:
+            elif kind == "prop":
                 prop_materials(name, man, r)
                 extra_slot_materials(name, man, r)
+            else:
+                hint_materials(name, man, r)
         except Exception as e:
             r["error"] = "materials: " + str(e) + "\n" + traceback.format_exc()
         r["pass"] = "error" not in r and all(v is True or v == "n/a" for v in r["checks"].values())
