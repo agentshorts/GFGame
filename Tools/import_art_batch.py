@@ -23,7 +23,7 @@ AT = unreal.AssetToolsHelpers.get_asset_tools()
 EAL = unreal.EditorAssetLibrary
 ORDER = [
     # batch 1
-    "SM_Block_Grass", "SM_Block_WoodPlank", "SM_Block_Stone", "SK_Player_Base", "SK_Outfit_Top_GardenTee", "SK_Dino_Raptor",
+    "SM_Block_Grass", "SM_Block_Ice", "SM_Block_Basalt", "SM_Block_Lava", "SM_Block_WoodPlank", "SM_Block_Stone", "SK_Player_Base", "SK_Outfit_Top_GardenTee", "SK_Dino_Raptor",
     # batch 2 (M1 hub kit). Assets that use textures_shared_from come after the asset that ships the texture.
     "SM_Block_ClayBrick", "SM_Block_Cobblestone", "SM_Block_Dirt", "SM_Block_Fabric", "SM_Block_Farmland", "SM_Block_Glass",
     "SM_Block_Leaves", "SM_Block_Log", "SM_Block_PathDirt", "SM_Block_Sand", "SM_Block_StoneBrick", "SM_Block_Thatch",
