@@ -1,4 +1,5 @@
 #include "GFCharacter.h"
+#include "GFCharacterMovementComponent.h"
 #include "GFFerryRiderComponent.h"
 #include "GFPlayerState.h"
 #include "GFZoneSubsystem.h"
@@ -20,7 +21,8 @@
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
 
-AGFCharacter::AGFCharacter()
+AGFCharacter::AGFCharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UGFCharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
 	// Capsule per ASSET_BRIEFS (175 cm player): radius 40, half-height 88.
 	GetCapsuleComponent()->InitCapsuleSize(40.f, 88.f);
@@ -28,7 +30,7 @@ AGFCharacter::AGFCharacter()
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 540.f, 0.f);
-	GetCharacterMovement()->JumpZVelocity = 520.f; // clears one 100 cm block
+	GetCharacterMovement()->JumpZVelocity = 520.f; // matches UGFMovementTuning::JumpZVelocity, clears one block
 	GetCharacterMovement()->MaxWalkSpeed = 500.f;
 	// Walk up one-block (100 cm) steps without jumping. See PlayerMaxStepHeight for the capsule limit.
 	GetCharacterMovement()->MaxStepHeight = PlayerMaxStepHeight;
@@ -89,10 +91,21 @@ void AGFCharacter::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 	// Re-apply once config and Blueprint defaults have loaded, so a tuned PlayerMaxStepHeight reaches the movement component.
-	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	if (UGFCharacterMovementComponent* Move = GetGFMovement())
 	{
 		Move->MaxStepHeight = PlayerMaxStepHeight;
+		Move->ApplyBaseRunSpeed();
+		Move->ApplyJumpTuning();
 	}
+	else if (UCharacterMovementComponent* BaseMove = GetCharacterMovement())
+	{
+		BaseMove->MaxStepHeight = PlayerMaxStepHeight;
+	}
+}
+
+UGFCharacterMovementComponent* AGFCharacter::GetGFMovement() const
+{
+	return Cast<UGFCharacterMovementComponent>(GetCharacterMovement());
 }
 
 void AGFCharacter::SetFirstPerson(bool bEnable)
@@ -126,6 +139,10 @@ void AGFCharacter::BuildDefaultInput()
 	MakeAction(RemoveAction, TEXT("IA_Remove"), EInputActionValueType::Boolean);
 	MakeAction(ToggleViewAction, TEXT("IA_ToggleView"), EInputActionValueType::Boolean);
 	MakeAction(HotbarAction, TEXT("IA_Hotbar"), EInputActionValueType::Axis1D);
+	MakeAction(SprintAction, TEXT("IA_Sprint"), EInputActionValueType::Boolean);
+	MakeAction(DashAction, TEXT("IA_Dash"), EInputActionValueType::Boolean);
+	MakeAction(GrappleSwingAction, TEXT("IA_GrappleSwing"), EInputActionValueType::Boolean);
+	MakeAction(GrappleYankAction, TEXT("IA_GrappleYank"), EInputActionValueType::Boolean);
 	if (!bBuildContext)
 	{
 		return;
@@ -151,6 +168,10 @@ void AGFCharacter::BuildDefaultInput()
 	MappingContext->MapKey(RemoveAction, EKeys::LeftMouseButton);
 	MappingContext->MapKey(ToggleViewAction, EKeys::V);
 	MappingContext->MapKey(HotbarAction, EKeys::MouseWheelAxis);
+	MappingContext->MapKey(SprintAction, EKeys::LeftShift);
+	MappingContext->MapKey(DashAction, EKeys::LeftControl);
+	MappingContext->MapKey(GrappleSwingAction, EKeys::Q);
+	MappingContext->MapKey(GrappleYankAction, EKeys::E);
 }
 
 void AGFCharacter::PawnClientRestart()
@@ -184,6 +205,14 @@ void AGFCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	EIC->BindAction(RemoveAction, ETriggerEvent::Started, this, &AGFCharacter::OnRemove);
 	EIC->BindAction(ToggleViewAction, ETriggerEvent::Started, this, &AGFCharacter::OnToggleView);
 	EIC->BindAction(HotbarAction, ETriggerEvent::Triggered, this, &AGFCharacter::OnHotbar);
+	EIC->BindAction(SprintAction, ETriggerEvent::Started, this, &AGFCharacter::OnSprint);
+	EIC->BindAction(SprintAction, ETriggerEvent::Completed, this, &AGFCharacter::OnSprintStopped);
+	EIC->BindAction(SprintAction, ETriggerEvent::Canceled, this, &AGFCharacter::OnSprintStopped);
+	EIC->BindAction(DashAction, ETriggerEvent::Started, this, &AGFCharacter::OnDash);
+	EIC->BindAction(GrappleSwingAction, ETriggerEvent::Started, this, &AGFCharacter::OnGrappleSwing);
+	EIC->BindAction(GrappleSwingAction, ETriggerEvent::Completed, this, &AGFCharacter::OnGrappleSwingStopped);
+	EIC->BindAction(GrappleSwingAction, ETriggerEvent::Canceled, this, &AGFCharacter::OnGrappleSwingStopped);
+	EIC->BindAction(GrappleYankAction, ETriggerEvent::Started, this, &AGFCharacter::OnGrappleYank);
 }
 
 void AGFCharacter::OnMove(const FInputActionValue& Value)
@@ -214,6 +243,54 @@ void AGFCharacter::OnPlace(const FInputActionValue&)
 void AGFCharacter::OnRemove(const FInputActionValue&)
 {
 	TryRemoveBlock();
+}
+
+void AGFCharacter::OnSprint(const FInputActionValue&)
+{
+	if (UGFCharacterMovementComponent* Move = GetGFMovement())
+	{
+		Move->SetSprintHeld(true);
+	}
+}
+
+void AGFCharacter::OnSprintStopped(const FInputActionValue&)
+{
+	if (UGFCharacterMovementComponent* Move = GetGFMovement())
+	{
+		Move->SetSprintHeld(false);
+	}
+}
+
+void AGFCharacter::OnDash(const FInputActionValue&)
+{
+	if (UGFCharacterMovementComponent* Move = GetGFMovement())
+	{
+		Move->NotifyDashPressed();
+	}
+}
+
+void AGFCharacter::OnGrappleSwing(const FInputActionValue&)
+{
+	if (UGFCharacterMovementComponent* Move = GetGFMovement())
+	{
+		Move->SetGrappleSwingHeld(true);
+	}
+}
+
+void AGFCharacter::OnGrappleSwingStopped(const FInputActionValue&)
+{
+	if (UGFCharacterMovementComponent* Move = GetGFMovement())
+	{
+		Move->SetGrappleSwingHeld(false);
+	}
+}
+
+void AGFCharacter::OnGrappleYank(const FInputActionValue&)
+{
+	if (UGFCharacterMovementComponent* Move = GetGFMovement())
+	{
+		Move->NotifyGrappleYank();
+	}
 }
 
 void AGFCharacter::OnHotbar(const FInputActionValue& Value)

@@ -46,6 +46,8 @@ public:
 private:
 	void DrawCrosshair();
 	void DrawCompass();
+	void DrawStaminaArc();
+	void DrawLandingMarker();
 	void DrawZoneLabel();
 	void DrawChat();
 	void DrawToasts();

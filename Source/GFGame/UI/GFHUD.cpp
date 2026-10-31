@@ -4,6 +4,9 @@
 #include "GFZoneSubsystem.h"
 #include "GFHUDFormat.h"
 #include "GFCharacter.h"
+#include "GFCharacterMovementComponent.h"
+#include "GFMovementTuning.h"
+#include "GFStaminaSim.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFTerritorySubsystem.h"
@@ -162,6 +165,8 @@ void AGFHUD::DrawHUD()
 	PollToasts();
 	DrawCrosshair();
 	DrawCompass();
+	DrawStaminaArc();
+	DrawLandingMarker();
 	DrawZoneLabel();
 	DrawChat();
 	DrawToasts();
@@ -221,6 +226,99 @@ void AGFHUD::DrawCompass()
 		}
 		const FString Letter = Slot.DisplayName.IsEmpty() ? FString(TEXT("*")) : Slot.DisplayName.Left(1);
 		Mark(Stone->Location, Slot.Color, Letter);
+	}
+}
+
+void AGFHUD::DrawStaminaArc()
+{
+	const AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn());
+	const UGFCharacterMovementComponent* Move = Character ? Character->GetGFMovement() : nullptr;
+	if (!Move)
+	{
+		return;
+	}
+	const UGFMovementTuning& Tuning = Move->GetTuning();
+	const float MaxStamina = Move->GetMaxStamina();
+	const float Stamina = Move->GetStamina();
+	if (!GFStaminaSim::ShouldShowArc(Stamina, MaxStamina, Move->IsStaminaEnabled(), Tuning.HudHideEpsilon))
+	{
+		return;
+	}
+
+	const float CX = Canvas->ClipX * 0.5f;
+	const float CY = Canvas->ClipY * 0.5f;
+	const float Radius = 16.f;
+	const float Thick = 2.f;
+	const float FullTurn = 6.2831855f;
+	const float StartAngle = -1.5707963f;
+	const float Fraction = MaxStamina > 0.f ? FMath::Clamp(Stamina / MaxStamina, 0.f, 1.f) : 0.f;
+	const FLinearColor Track(1.f, 1.f, 1.f, 0.22f);
+	const FLinearColor Fill(0.95f, 0.72f, 0.28f, 0.95f);
+	const int32 TrackSteps = 28;
+
+	auto DrawSweep = [this, CX, CY, Radius, Thick, StartAngle](float Sweep, const FLinearColor& Color, int32 Steps)
+	{
+		if (Sweep <= 0.f || Steps < 2)
+		{
+			return;
+		}
+		float PreviousX = CX + Radius * FMath::Cos(StartAngle);
+		float PreviousY = CY + Radius * FMath::Sin(StartAngle);
+		for (int32 Index = 1; Index <= Steps; ++Index)
+		{
+			const float Along = static_cast<float>(Index) / static_cast<float>(Steps);
+			const float Angle = StartAngle + Sweep * Along;
+			const float X = CX + Radius * FMath::Cos(Angle);
+			const float Y = CY + Radius * FMath::Sin(Angle);
+			DrawLine(PreviousX, PreviousY, X, Y, Color, Thick);
+			PreviousX = X;
+			PreviousY = Y;
+		}
+	};
+
+	DrawSweep(FullTurn, Track, TrackSteps);
+	const int32 FillSteps = FMath::Clamp(FMath::CeilToInt(static_cast<float>(TrackSteps) * Fraction), 2, TrackSteps);
+	DrawSweep(FullTurn * Fraction, Fill, FillSteps);
+}
+
+void AGFHUD::DrawLandingMarker()
+{
+	const AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn());
+	UGFCharacterMovementComponent* Move = Character ? Character->GetGFMovement() : nullptr;
+	if (!Move)
+	{
+		return;
+	}
+	FVector WorldPoint = FVector::ZeroVector;
+	if (!Move->GetLandingMarker(WorldPoint))
+	{
+		return;
+	}
+	APlayerController* Controller = GetOwningPlayerController();
+	FVector2D Screen = FVector2D::ZeroVector;
+	if (!Controller || !Controller->ProjectWorldLocationToScreen(WorldPoint, Screen, true))
+	{
+		return;
+	}
+	if (Screen.X < 0.f || Screen.Y < 0.f || Screen.X > Canvas->ClipX || Screen.Y > Canvas->ClipY)
+	{
+		return;
+	}
+	const float Distance = static_cast<float>(FVector::Dist(Character->GetActorLocation(), WorldPoint));
+	const float Radius = FMath::Clamp(900.f / FMath::Max(Distance, 150.f) * 18.f, 6.f, 28.f);
+	const FLinearColor Color(0.45f, 0.92f, 0.55f, 0.9f);
+	const int32 Steps = 16;
+	const float Turn = 6.2831855f;
+	float PreviousX = Screen.X + Radius;
+	float PreviousY = Screen.Y;
+	for (int32 Index = 1; Index <= Steps; ++Index)
+	{
+		const float Angle = Turn * static_cast<float>(Index) / static_cast<float>(Steps);
+		const float X = Screen.X + Radius * FMath::Cos(Angle);
+		const float Y = Screen.Y + Radius * FMath::Sin(Angle);
+		DrawLine(PreviousX, PreviousY, X, Y, Color, 2.f);
+		PreviousX = X;
+		PreviousY = Y;
 	}
 }
 
