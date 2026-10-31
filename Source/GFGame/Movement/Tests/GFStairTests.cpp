@@ -85,6 +85,8 @@ namespace GFStairTestsDetail
 			return;
 		}
 		Move->bRunPhysicsWithNoController = true;
+		// TickComponent consumes input, then returns immediately when the component tick is off.
+		Move->SetComponentTickEnabled(true);
 		if (Move->MovementMode == MOVE_None)
 		{
 			Move->SetDefaultMovementMode();
@@ -220,7 +222,6 @@ namespace GFStairTestsDetail
 		}
 		if (UCharacterMovementComponent* Move = Pawn->GetCharacterMovement())
 		{
-			Move->SetComponentTickEnabled(false);
 			ArmWalker(Move);
 			Move->StopMovementImmediately();
 		}
