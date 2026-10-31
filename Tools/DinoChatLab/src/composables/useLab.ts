@@ -28,7 +28,9 @@ import {
   type DinoWindow,
 } from "../core/memory";
 import { affinityDelta, asksForPlayerRecord, statsDigest } from "../core/stats";
-import { createDefaultStorage } from "../core/storage";
+import { bindStorage, type KeyValueStore } from "../core/storage";
+import { disableSqlite, enableSqlite, liveStorage, notifyStorageSwap, openPreferred } from "../core/storageSession";
+import { exportBehaviorLog, readStorageBackend, type SqlitePlace } from "../core/sqliteStorage";
 import {
   playerSubjectKey,
   RELATIONSHIP_KINDS,
@@ -87,9 +89,19 @@ import {
 } from "../logic/types";
 
 const MANGO: ItemStack = { id: "mango-block", name: "Mango block", count: 1 };
-const storage = createDefaultStorage();
+
+function pageStore(): KeyValueStore | null {
+  if (typeof localStorage === "undefined") return null;
+  return localStorage;
+}
+
+function placeLabel(place: SqlitePlace): string {
+  return place === "opfs" ? "OPFS" : "IndexedDB";
+}
 
 export function useLab() {
+  let storage = liveStorage();
+  bindStorage(storage);
   const personas = loadBundledPersonas();
   const browser = createBrowserWebLlm();
   const engines = createEngines(() => (browser.loadedModelId ? browser : null));
@@ -117,6 +129,13 @@ export function useLab() {
   const alignmentPick = ref<Alignment | "persona">("persona");
 
   const knobs = ref<MemoryKnobs>(storage.getKnobs());
+  const pageKv = pageStore();
+  const wantsSqlite = pageKv ? readStorageBackend(pageKv) === "sqlite" : false;
+  const sqliteOn = ref(false);
+  const storageBusy = ref(wantsSqlite);
+  const storageNote = ref(wantsSqlite
+    ? "Opening the SQLite notebook…"
+    : "localStorage is the notebook. SQLite keeps the same rows in this browser.");
   const windows = ref<Record<string, DinoWindow>>({});
   const statsTick = ref(0);
   const relTick = ref(0);
@@ -251,6 +270,73 @@ export function useLab() {
     if (!promptDirty.value) systemPrompt.value = value;
   }, { immediate: true });
 
+  function reloadNotebook() {
+    knobs.value = storage.getKnobs();
+    windows.value = {};
+    relTick.value += 1;
+    statsTick.value += 1;
+  }
+
+  async function onStorageToggle(on: boolean) {
+    const kv = pageStore();
+    if (!kv) {
+      sqliteOn.value = false;
+      storageNote.value = "This browser has no localStorage, so the notebook cannot move.";
+      return;
+    }
+    storageBusy.value = true;
+    try {
+      if (on) {
+        const opened = await enableSqlite(kv);
+        storage = opened.storage;
+        sqliteOn.value = true;
+        storageNote.value = opened.copied
+          ? `Copied memory, stats, and work into SQLite (${placeLabel(opened.place)}). Switching off reads localStorage again and leaves the file.`
+          : `Using the SQLite notebook (${placeLabel(opened.place)}).`;
+      } else {
+        storage = disableSqlite(kv);
+        sqliteOn.value = false;
+        storageNote.value = "Back on localStorage. The SQLite file is still in this browser.";
+      }
+      reloadNotebook();
+      notifyStorageSwap();
+    } catch (error) {
+      sqliteOn.value = false;
+      storageNote.value = error instanceof Error ? error.message : String(error);
+    } finally {
+      storageBusy.value = false;
+    }
+  }
+
+  const notebookKv = pageStore();
+  if (notebookKv && wantsSqlite) {
+    void openPreferred(notebookKv).then((opened) => {
+      if (!opened) return;
+      storage = opened.storage;
+      sqliteOn.value = true;
+      storageNote.value = opened.copied
+        ? `Copied memory, stats, and work into SQLite (${placeLabel(opened.place)}). Switching off reads localStorage again and leaves the file.`
+        : `Using the SQLite notebook (${placeLabel(opened.place)}).`;
+      reloadNotebook();
+    }).catch((error: unknown) => {
+      sqliteOn.value = false;
+      storageNote.value = error instanceof Error ? error.message : String(error);
+    }).finally(() => {
+      storageBusy.value = false;
+    });
+  }
+
+  function exportBehavior() {
+    const json = exportBehaviorLog(storage, new Date().toISOString());
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "dino-behavior-log.json";
+    link.click();
+    revokeObjectUrlLater(url);
+  }
+
   onMounted(async () => {
     webGpu.value = await detectWebGpu();
   });
@@ -339,6 +425,12 @@ export function useLab() {
       amount: 1,
       note: "lab",
     }, knobs.value.repDeltas);
+    storage.appendBehavior({
+      dinoId: selected.value.id,
+      at,
+      kind,
+      payload: { playerKey: key, familyId: knobs.value.familyId, amount: 1, note: "lab" },
+    });
     const delta = affinityDelta(kind);
     for (const persona of personas) {
       const rel = storage.getRelationship(persona.id, key) ?? blankRelationship(persona.id, key, at);
@@ -579,6 +671,12 @@ export function useLab() {
         promptTokens: null,
         completionTokens: null,
         durationMs: Math.round(performance.now() - started),
+      });
+      storage.appendBehavior({
+        dinoId: persona.id,
+        at: now,
+        kind: plan.logAction,
+        payload: { ...metadata, subjectKey: key, detail: plan.reason },
       });
       const quietText = plan.action === "like" ? "likes that." : `stays quiet (${plan.reason})`;
       const quiet = recordTrace(buildChatTrace({
@@ -833,6 +931,7 @@ export function useLab() {
           : undefined,
       timings: { total: spent, steer: steered.ms ?? 0 },
     }));
+    const replyDetail = [plan.reason, steer.reason, steered.note].filter((part) => part.length > 0).join(" ");
     storage.appendLog({
       id: "",
       at: now,
@@ -840,13 +939,19 @@ export function useLab() {
       dinoId: persona.id,
       subjectKey: key,
       action: "reply",
-      detail: [plan.reason, steer.reason, steered.note].filter((part) => part.length > 0).join(" "),
+      detail: replyDetail,
       metadata,
       engine: asking ? "stats" : engineId.value,
       modelId: browser.loadedModelId,
       promptTokens,
       completionTokens,
       durationMs: spent,
+    });
+    storage.appendBehavior({
+      dinoId: persona.id,
+      at: now,
+      kind: "reply",
+      payload: { ...metadata, subjectKey: key, detail: replyDetail },
     });
     messages.value.push(nextMessage({
       speaker: persona.name,
@@ -1077,6 +1182,11 @@ export function useLab() {
     anotherRound,
     resetChat,
     exportTranscript,
+    sqliteOn,
+    storageBusy,
+    storageNote,
+    onStorageToggle,
+    exportBehavior,
     addItem,
     addMango,
     removeItem,

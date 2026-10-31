@@ -233,6 +233,27 @@ export interface StatEventDraft {
   note?: string;
 }
 
+/**
+ * `behavior_log` row. `payload` is a JSON object.
+ * `at` is the event time, the same column name as `decision_log` and `stat_events`.
+ */
+export interface BehaviorLogEntry {
+  id: number;
+  dinoId: string;
+  at: string;
+  kind: string;
+  payload: Record<string, unknown>;
+}
+
+export interface BehaviorLogDraft {
+  /** Set when copying a row. Omit to assign the next id. */
+  id?: number;
+  dinoId: string;
+  at: string;
+  kind: string;
+  payload?: Record<string, unknown>;
+}
+
 /** `decision_log` row. `metadata` is stored as JSON text in SQLite. */
 export interface DecisionLogEntry {
   id: string;

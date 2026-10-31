@@ -1,7 +1,9 @@
 /**
  * Storage contract. `LocalStorageAdapter` is the lab default.
  * `SQLITE_SCHEMA` is the same shape a later Durable Object would execute.
- * This adapter stores no passwords, tokens, or API keys.
+ * `SqliteStorage` in `sqliteStorage.ts` runs that script in the browser.
+ * This adapter stores no passwords, tokens, or API keys. The `users.token_hash`
+ * column stays empty.
  *
  * Method API: implement `DinoStorage`. That is the contract.
  * Function API: `bindStorage(adapter)`, then `getStats`, `getMemory`, `putMemory`,
@@ -26,11 +28,15 @@ import {
   type StatEventDraft,
   type StatKind,
   type StoredPersona,
+  type BehaviorLogDraft,
+  type BehaviorLogEntry,
 } from "./types";
 
 export const STORAGE_PREFIX = "dcl:";
 export const LOG_CAP = 500;
 export const EVENT_CAP = 1000;
+/** Newest behavior rows kept. Same ceiling as the decision log. */
+export const BEHAVIOR_CAP = LOG_CAP;
 
 export interface KeyValueStore {
   getItem(key: string): string | null;
@@ -53,6 +59,10 @@ export interface DinoStorage {
   deleteRelationships(dinoId: string): void;
   appendLog(entry: DecisionLogEntry): DecisionLogEntry;
   listLog(dinoId?: string, limit?: number): DecisionLogEntry[];
+  /** Appends one behavior row and drops the oldest past `BEHAVIOR_CAP`. */
+  appendBehavior(entry: BehaviorLogDraft): BehaviorLogEntry;
+  listBehavior(dinoId?: string, limit?: number): BehaviorLogEntry[];
+  clearBehavior(): void;
   getStats(playerKey: string): PlayerStatsRow[];
   bumpStats(event: StatEventDraft, deltas?: Record<StatKind, number>): StatEvent;
   listEvents(playerKey?: string): StatEvent[];
@@ -183,6 +193,13 @@ CREATE TABLE IF NOT EXISTS dino_work (
   seeking_job INTEGER NOT NULL DEFAULT 0,
   hired_at TEXT
 );
+CREATE TABLE IF NOT EXISTS behavior_log (
+  id INTEGER PRIMARY KEY,
+  dino_id TEXT NOT NULL,
+  at TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  payload TEXT NOT NULL
+);
 `.trim();
 
 export function memoryKeyValueStore(): KeyValueStore {
@@ -213,6 +230,20 @@ function parseJson<T>(raw: string | null): T | null {
   } catch {
     return null;
   }
+}
+
+/** JSON object for `behavior_log.payload`. Arrays and scalars become `{}`. */
+export function behaviorPayload(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return { ...(value as Record<string, unknown>) };
+}
+
+/** Last `limit` rows. `0` is empty. Omit `limit` to keep the whole list. */
+export function tailRows<T>(rows: readonly T[], limit?: number): T[] {
+  if (limit === undefined) return [...rows];
+  const count = Math.max(0, Math.trunc(limit));
+  if (count === 0) return [];
+  return rows.slice(-count);
 }
 
 export class LocalStorageAdapter implements DinoStorage {
@@ -246,11 +277,48 @@ export class LocalStorageAdapter implements DinoStorage {
     return found;
   }
 
+  /** Dino ids that have a memory, relationship, or work row. */
+  knownDinoIds(): string[] {
+    const ids = new Set<string>();
+    const memoryPrefix = this.key("memory:");
+    const relPrefix = this.key("rel:");
+    const workPrefix = this.key("work:");
+    for (const key of this.keys()) {
+      if (key.startsWith(memoryPrefix)) {
+        ids.add(decodeURIComponent(key.slice(memoryPrefix.length)));
+      } else if (key.startsWith(workPrefix)) {
+        ids.add(decodeURIComponent(key.slice(workPrefix.length)));
+      } else if (key.startsWith(relPrefix)) {
+        const encoded = key.slice(relPrefix.length).split(":")[0] ?? "";
+        if (encoded) ids.add(decodeURIComponent(encoded));
+      }
+    }
+    return [...ids];
+  }
+
+  /** Player keys that have a stats row. */
+  knownPlayerKeys(): string[] {
+    const prefix = this.key("stats:");
+    const keys: string[] = [];
+    for (const key of this.keys()) {
+      if (!key.startsWith(prefix)) continue;
+      keys.push(decodeURIComponent(key.slice(prefix.length)));
+    }
+    return keys;
+  }
+
   private nextSeq(): number {
     const current = Number(this.store.getItem(this.key("seq")) ?? "0");
     const next = Number.isFinite(current) ? Math.trunc(current) + 1 : 1;
     this.store.setItem(this.key("seq"), String(next));
     return next;
+  }
+
+  private raiseSeq(id: number): void {
+    const current = Number(this.store.getItem(this.key("seq")) ?? "0");
+    if (!Number.isFinite(current) || id > current) {
+      this.store.setItem(this.key("seq"), String(Math.trunc(id)));
+    }
   }
 
   listPersonas(): StoredPersona[] {
@@ -352,9 +420,44 @@ export class LocalStorageAdapter implements DinoStorage {
   listLog(dinoId?: string, limit?: number): DecisionLogEntry[] {
     const rows = parseJson<DecisionLogEntry[]>(this.store.getItem(this.key("log"))) ?? [];
     const filtered = dinoId ? rows.filter((row) => row.dinoId === dinoId) : rows;
-    if (limit === undefined) return filtered;
-    const count = Math.max(0, Math.trunc(limit));
-    return filtered.slice(-count);
+    return tailRows(filtered, limit);
+  }
+
+  appendBehavior(entry: BehaviorLogDraft): BehaviorLogEntry {
+    const id = entry.id && entry.id > 0 ? Math.trunc(entry.id) : this.nextSeq();
+    this.raiseSeq(id);
+    const saved: BehaviorLogEntry = {
+      id,
+      dinoId: entry.dinoId,
+      at: entry.at,
+      kind: entry.kind.trim() || "note",
+      payload: behaviorPayload(entry.payload),
+    };
+    const kept = this.listBehavior().filter((row) => row.id !== saved.id);
+    kept.push(saved);
+    this.store.setItem(this.key("behavior"), JSON.stringify(kept.slice(-BEHAVIOR_CAP)));
+    return saved;
+  }
+
+  listBehavior(dinoId?: string, limit?: number): BehaviorLogEntry[] {
+    const rows = parseJson<BehaviorLogEntry[]>(this.store.getItem(this.key("behavior"))) ?? [];
+    const clean = rows.flatMap((row) => {
+      if (!row || typeof row.dinoId !== "string") return [];
+      const entry: BehaviorLogEntry = {
+        id: Math.trunc(Number(row.id)) || 0,
+        dinoId: row.dinoId,
+        at: typeof row.at === "string" ? row.at : "",
+        kind: typeof row.kind === "string" && row.kind.trim() ? row.kind : "note",
+        payload: behaviorPayload(row.payload),
+      };
+      return [entry];
+    });
+    const filtered = dinoId ? clean.filter((row) => row.dinoId === dinoId) : clean;
+    return tailRows(filtered, limit);
+  }
+
+  clearBehavior(): void {
+    this.store.setItem(this.key("behavior"), "[]");
   }
 
   getStats(playerKey: string): PlayerStatsRow[] {
@@ -422,11 +525,20 @@ export class LocalStorageAdapter implements DinoStorage {
 }
 
 let boundStorage: DinoStorage | null = null;
+let defaultFactory: (() => DinoStorage) | null = null;
 
 /** Point the module-level helpers at an adapter. */
 export function bindStorage(storage: DinoStorage): DinoStorage {
   boundStorage = storage;
   return storage;
+}
+
+/**
+ * When set, `createDefaultStorage` returns this adapter instead of a new
+ * localStorage notebook. The SQLite toggle uses it so Dinobook binds the same file.
+ */
+export function setDefaultStorageFactory(factory: (() => DinoStorage) | null): void {
+  defaultFactory = factory;
 }
 
 function bound(): DinoStorage {
@@ -435,6 +547,7 @@ function bound(): DinoStorage {
 }
 
 export function createDefaultStorage(): DinoStorage {
+  if (defaultFactory) return bindStorage(defaultFactory());
   const storage = typeof localStorage !== "undefined"
     ? new LocalStorageAdapter(localStorage)
     : new LocalStorageAdapter(memoryKeyValueStore());

@@ -67,6 +67,11 @@ const {
   anotherRound,
   resetChat,
   exportTranscript,
+  sqliteOn,
+  storageBusy,
+  storageNote,
+  onStorageToggle,
+  exportBehavior,
   addItem,
   addMango,
   removeItem,
@@ -201,6 +206,20 @@ function onPromptInput(event: Event) {
           <button type="button" @click="rebuildPrompt">Rebuild prompt</button>
           <button type="button" @click="resetChat">Reset chat</button>
           <button type="button" @click="exportTranscript">Export JSON</button>
+        </div>
+        <h2>Notebook</h2>
+        <label class="check">
+          <input
+            type="checkbox"
+            :checked="sqliteOn"
+            :disabled="storageBusy"
+            @change="onStorageToggle(($event.target as HTMLInputElement).checked)"
+          />
+          <span>Keep the lab notebook in SQLite</span>
+        </label>
+        <p class="hint">{{ storageNote }}</p>
+        <div class="row">
+          <button type="button" :disabled="storageBusy" @click="exportBehavior">Export behavior log</button>
         </div>
         <label class="check">
           <input v-model="showFilter" type="checkbox" />

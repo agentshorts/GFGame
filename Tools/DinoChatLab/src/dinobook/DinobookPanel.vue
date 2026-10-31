@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onScopeDispose, ref, watch } from "vue";
 import LabWizard from "../components/LabWizard.vue";
 import PanelInfo from "../components/PanelInfo.vue";
 import { loadBundledPersonas } from "../data/loadPersonas";
@@ -25,6 +25,8 @@ import {
   type Skip,
   type WageCard,
 } from "./index";
+import { readStorageBackend } from "../core/sqliteStorage";
+import { onStorageSwap, openPreferred } from "../core/storageSession";
 import { bindPort, unboundPort } from "./portGate";
 
 const personas = loadBundledPersonas();
@@ -261,12 +263,23 @@ function linkLabel(post: DinobookPost): string {
   return name ?? "elder";
 }
 
-onMounted(async () => {
+async function reloadPort(): Promise<void> {
   const port = await bindPort(binding);
   core.value = port;
   portReady.value = true;
   syncBriefs();
+}
+
+onMounted(async () => {
+  if (typeof localStorage !== "undefined" && readStorageBackend(localStorage) === "sqlite") {
+    await openPreferred(localStorage);
+  }
+  await reloadPort();
 });
+
+onScopeDispose(onStorageSwap(() => {
+  void reloadPort();
+}));
 
 const lastSummary = computed(() => runs.value.at(-1)?.summary ?? "");
 </script>

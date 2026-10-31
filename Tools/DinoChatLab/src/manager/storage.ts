@@ -98,6 +98,12 @@ export function createLocalStorage(kv: KeyValueStore): ManagerStorage {
   return wrapLocal(adapter);
 }
 
+/** Point the persona manager at an adapter the lab already opened. */
+export function adoptAdapter(adapter: DinoStorage): ManagerStorage {
+  bindStorage(adapter);
+  return wrapLocal(adapter);
+}
+
 async function parseError(response: Response): Promise<string> {
   try {
     const body = await response.json() as { error?: string };
