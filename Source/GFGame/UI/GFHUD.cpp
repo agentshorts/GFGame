@@ -5,6 +5,7 @@
 #include "GFBeatHopCourse.h"
 #include "GFMineSite.h"
 #include "GFRunwaySite.h"
+#include "GFRunwayStage.h"
 #include "GFArenaSite.h"
 #include "GFZoneCatalog.h"
 #include "GFZoneLayout.h"
@@ -360,6 +361,8 @@ const TCHAR* AGFHUD::PauseEntryLabel(int32 Index)
 	{
 	case 0: return TEXT("Return to hub");
 	case 1: return TEXT("Settings");
+	case 2: return TEXT("Close");
+	case 3: return TEXT("Controls / How to get items");
 	default: return TEXT("Close");
 	}
 }
@@ -429,7 +432,19 @@ void AGFHUD::ActivatePauseEntry(int32 Index)
 		ToggleAimSettings();
 		return;
 	}
+	if (Index == 3)
+	{
+		ShowItemHowTo();
+		ClosePauseMenu();
+		return;
+	}
 	ClosePauseMenu();
+}
+
+void AGFHUD::ShowItemHowTo()
+{
+	bShowItemHowTo = true;
+	bItemHowToPinned = true;
 }
 
 void AGFHUD::DrawPauseMenu()
@@ -442,9 +457,9 @@ void AGFHUD::DrawPauseMenu()
 	const AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController());
 	const bool bConfirm = PC && PC->IsReturnConfirmOpen();
 	const FString Title = bConfirm && PC ? PC->GetReturnConfirmPrompt() : FString(TEXT("Paused"));
-	DrawRect(FLinearColor(0.05f, 0.08f, 0.12f, 0.88f), 24.f, 24.f, 420.f, bConfirm ? 148.f : 132.f);
+	DrawRect(FLinearColor(0.05f, 0.08f, 0.12f, 0.88f), 24.f, 24.f, 420.f, bConfirm ? 148.f : 188.f);
 	DrawText(Title, FLinearColor(0.93f, 0.96f, 1.f), 40.f, 36.f, Font, 1.f, false);
-	const int32 Count = bConfirm ? 2 : 3;
+	const int32 Count = bConfirm ? 2 : 4;
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
 		DrawText(GetPauseEntry(Index), FLinearColor(0.98f, 0.86f, 0.45f), 40.f, 68.f + Index * 28.f, Font, 1.f, false);
@@ -1359,6 +1374,42 @@ void AGFHUD::DrawRunwaySession()
 		const FLinearColor Tint = (i == 0) ? Gold : (bCurrent ? Step : Soft);
 		DrawText(Prompt[i], Tint, X + Pad, Y, Font, Scale, false);
 		Y += LineH;
+	}
+	if (!bShowItemHowTo)
+	{
+		return;
+	}
+	const AGFRunwayStage* Stage = AGFRunwayStage::Find(World);
+	const bool bResults = Stage && Stage->GetPhase() == EGFRunwayPhase::Results;
+	if (bResults && !bItemHowToPinned)
+	{
+		return;
+	}
+	TArray<FString> Hint;
+	Site->GetItemHintLines(Hint);
+	if (Hint.Num() == 0)
+	{
+		return;
+	}
+	Hint.Insert(TEXT("HOW TO GET ITEMS"), 0);
+	float HintW = 0.f;
+	for (const FString& Line : Hint)
+	{
+		float TW = 0.f, TH = 0.f;
+		GetTextSize(Line, TW, TH, Font, Scale);
+		HintW = FMath::Max(HintW, TW);
+	}
+	const float HintH = Hint.Num() * LineH + Pad * 2.f;
+	const float HintX = 16.f * Scale;
+	const float HintTop = Top;
+	DrawRect(FLinearColor(0.10f, 0.08f, 0.06f, 0.78f), HintX, HintTop, HintW + Pad * 2.f, HintH);
+	float HY = HintTop + Pad;
+	for (int32 i = 0; i < Hint.Num(); ++i)
+	{
+		const bool bCurrent = Hint[i].StartsWith(TEXT(">"));
+		const FLinearColor Tint = (i == 0) ? Gold : (bCurrent ? Step : Soft);
+		DrawText(Hint[i], Tint, HintX + Pad, HY, Font, Scale, false);
+		HY += LineH;
 	}
 }
 

@@ -4,6 +4,7 @@
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFInventoryComponent.h"
+#include "GFActivityWin.h"
 #include "GFEconomy.h"
 #include "Components/SceneComponent.h"
 #include "EngineUtils.h"
@@ -266,6 +267,7 @@ void AGFMineDirector::Tick(float DeltaSeconds)
 		if (Home.Num() > 0)
 		{
 			G->ServerMint(FGuid::NewGuid(), PS->PlayerKey, Home, TEXT("MineHaul"));
+			FGFActivityWin::OnActivity().Broadcast(GetWorld(), PS->PlayerKey, TEXT("Mine"), NAME_None);
 		}
 		if (bStamp)
 		{

@@ -40,8 +40,10 @@ public:
 	void OpenPauseMenu();
 	void ClosePauseMenu();
 	void TogglePauseMenu();
-	/** 0 Return to hub, 1 Settings, 2 Close. While a confirm is up: 0 Confirm, 1 Cancel. */
+	/** 0 Return to hub, 1 Settings, 2 Close, 3 Controls / How to get items. While a confirm is up: 0 Confirm, 1 Cancel. */
 	void ActivatePauseEntry(int32 Index);
+	/** Shows the runway item hint again (the Esc entry). */
+	void ShowItemHowTo();
 	static const TCHAR* PauseEntryLabel(int32 Index);
 	FString GetPauseEntry(int32 Index) const;
 	void ToggleAimSettings();
@@ -120,6 +122,9 @@ private:
 	TSharedPtr<SWidget> AimSettingsRoot;
 	bool bAimSettingsOpen = false;
 	bool bPauseMenuOpen = false;
+	/** Item hint on the runway. On until a show ends, and again when the pause menu asks. */
+	bool bShowItemHowTo = true;
+	bool bItemHowToPinned = false;
 	int32 AppliedNotices = 0;
 	int32 AppliedResults = 0;
 };

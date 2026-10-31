@@ -157,6 +157,7 @@ protected:
 private:
 	void SyncState();
 	void PayOut();
+	void GrantShowPieces();
 	void EnsureLinks();
 	bool LedgerReady() const;
 	bool ReadAccount(const FString& Key, FGFInventory& Out) const;

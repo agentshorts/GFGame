@@ -4,6 +4,7 @@
 
 #include "Misc/AutomationTest.h"
 #include "GFFashionItems.h"
+#include "GFFashionTypes.h"
 #include "GFItemTypes.h"
 #include "GFDataTables.h"
 #include "GFEconomy.h"
@@ -159,7 +160,7 @@ bool FGFFashionItemRowsTest::RunTest(const FString&)
 			TestTrue(*FString::Printf(TEXT("%s is not a wearable"), *Id.ToString()), Row.OutfitSlot.IsNone());
 		}
 	});
-	TestEqual(TEXT("The rows that were already in DT_Items are still there"), Other, 82);
+	TestEqual(TEXT("The rows that were already in DT_Items are still there"), Other, 82 + FGFFashionCatalog::Pieces().Num());
 
 	const FGFItemRow* Coat = Items->FindRow<FGFItemRow>(TEXT("LabCoat"), TEXT("FashionItems"), false);
 	const FGFItemRow* Goggles = Items->FindRow<FGFItemRow>(TEXT("SafetyGoggles"), TEXT("FashionItems"), false);

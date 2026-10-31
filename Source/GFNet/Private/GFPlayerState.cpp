@@ -1,4 +1,5 @@
 #include "GFPlayerState.h"
+#include "GFActivityWin.h"
 #include "GFGameState.h"
 #include "GFLocalProfileSubsystem.h"
 #include "GFInventoryComponent.h"
@@ -129,6 +130,7 @@ void AGFPlayerState::ServerAcceptCharacter(FGFCharacterData Data)
 			Data = Rec->LastCharacter;
 		}
 	}
+	const bool bFresh = !Data.bInitialized;
 	if (!Data.bInitialized)
 	{
 		Data.Inventory = FGFInventory();
@@ -152,6 +154,10 @@ void AGFPlayerState::ServerAcceptCharacter(FGFCharacterData Data)
 	{
 		GS->ServerOnPlayerReady(this); // rent owed while away is collected now, mailbox filled
 		GS->NotifyModesPlayerReady(this);
+	}
+	if (bFresh)
+	{
+		FGFActivityWin::OnNewCharacter().Broadcast(GetWorld(), PlayerKey);
 	}
 }
 

@@ -76,6 +76,11 @@ struct GFFASHION_API FGFRunwayJudge
 	static float ScoreHarmony(const FGFOutfit& Outfit);
 	static float ScoreCompleteness(const FGFOutfit& Outfit);
 	static float ScoreNovelty(const FGFOutfit& Outfit, const TArray<FGFOutfit>& History);
+	/**
+	 * How much of the worn outfit shares one set, 0-10. A full set is 10. A mix is lower.
+	 * Kept off the judge cards so a five-piece Garden look still scores the way it always has.
+	 */
+	static float ScoreSet(const FGFOutfit& Outfit);
 
 	static FGFRunwayScore Judge(const FGFOutfit& Outfit, const FGFFashionTheme& Theme, const TArray<FGFOutfit>& History,
 		int32 Seed, const FString& ContestantKey, const TArray<FGFRunwayJudgeProfile>& Panel = DefaultPanel());
