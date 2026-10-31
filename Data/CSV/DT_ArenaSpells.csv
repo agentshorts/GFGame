@@ -1,0 +1,9 @@
+---,Cost,AltCost,DamagePoints,AltDamagePoints,HealFraction,AltHealFraction,Status,StatusSeconds,AltStatus,AltStatusSeconds,Radius,Duration,bAllies,bPush,bLaneBlock,WindowCooldown,AttackMul
+SparkBolt,2,1,3,2,0,0,None,0,Shred,4,0,0,False,False,False,0,1
+FizzBomb,4,0,5,0,0,0,None,0,None,0,0,0,False,False,False,0,1
+VineSnare,2,0,2,0,0,0,Root,2,None,0,0,0,False,False,False,0,1
+StoneWall,2,0,0,0,0,0,None,0,None,0,0,5,False,False,True,0,1
+EmberSpice,1,0,0,0,0,0,None,0,None,0,0,6,True,False,False,0,1.25
+BloomHeal,2,3,0,0,0.24,0.48,None,0,None,0,0,0,True,False,False,0,1
+RainCloud,2,0,0,0,0,0,Wet,6,None,0,350,6,False,False,False,0,1
+RallyWhistle,3,0,0,0,0,0,Haste,4,None,0,0,4,True,True,False,2,1

@@ -5,6 +5,8 @@
 #include "GFCompanionRoster.h"
 #include "GFMiniGameCatalog.h"
 #include "GFPlayerState.h"
+#include "Camera/CameraActor.h"
+#include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
@@ -13,6 +15,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Net/UnrealNetwork.h"
 
@@ -79,6 +82,27 @@ void AGFArenaSite::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AGFArenaSite, bReady);
 	DOREPLIFETIME(AGFArenaSite, LastPrompt);
+	DOREPLIFETIME(AGFArenaSite, BalconyCamera);
+}
+
+FVector AGFArenaSite::BalconyCameraLocal()
+{
+	return FVector(0.f, -1760.f, 760.f);
+}
+
+FVector AGFArenaSite::BalconyLookLocal()
+{
+	return FVector(0.f, 0.f, 40.f);
+}
+
+FRotator AGFArenaSite::BalconyCameraRotation()
+{
+	return (BalconyLookLocal() - BalconyCameraLocal()).Rotation();
+}
+
+FVector AGFArenaSite::BalconyStandLocal()
+{
+	return FVector(0.f, -1500.f, 530.f);
 }
 
 void AGFArenaSite::BeginPlay()
@@ -88,6 +112,16 @@ void AGFArenaSite::BeginPlay()
 	{
 		BuildIfNeeded();
 	}
+}
+
+void AGFArenaSite::EndPlay(const EEndPlayReason::Type Reason)
+{
+	if (BalconyCamera)
+	{
+		BalconyCamera->Destroy();
+		BalconyCamera = nullptr;
+	}
+	Super::EndPlay(Reason);
 }
 
 void AGFArenaSite::OnRep_Ready()
@@ -270,6 +304,60 @@ void AGFArenaSite::BuildVisuals()
 	// West side of the pad, toward the hub.
 	AddArch(TEXT("Hub"), VerbReturn, FVector(-1100.f, 0.f, 0.f), FLinearColor(0.90f, 0.90f, 0.85f));
 	AddLabel(TEXT("Arena"), FVector(400.f, 0.f, 280.f));
+
+	// South balcony. The stand at (400, 0) stays clear. The rail looks down the lane.
+	const FVector Deck(0.f, -1500.f, 400.f);
+	AddBlock(Deck, FVector(900.f, 520.f, 40.f), FLinearColor(0.45f, 0.38f, 0.32f), true);
+	AddBlock(Deck + FVector(0.f, 220.f, 80.f), FVector(860.f, 30.f, 70.f), FLinearColor(0.62f, 0.48f, 0.28f), true);
+	AddLabel(TEXT("Balcony"), Deck + FVector(0.f, 0.f, 160.f));
+
+	if (HasAuthority() && GetWorld() && !BalconyCamera)
+	{
+		const FVector WorldPos = GetActorTransform().TransformPosition(BalconyCameraLocal());
+		const FRotator WorldRot = BalconyCameraRotation();
+		FActorSpawnParameters Params;
+		Params.Owner = this;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		BalconyCamera = GetWorld()->SpawnActor<ACameraActor>(WorldPos, WorldRot, Params);
+		if (BalconyCamera)
+		{
+			BalconyCamera->SetReplicates(true);
+			BalconyCamera->bAlwaysRelevant = true;
+			BalconyCamera->AttachToActor(this, FAttachmentTransformRules::KeepWorldTransform);
+			if (UCameraComponent* Lens = BalconyCamera->GetCameraComponent())
+			{
+				Lens->SetWorldLocationAndRotation(WorldPos, WorldRot);
+				Lens->SetFieldOfView(70.f);
+			}
+		}
+	}
+}
+
+bool AGFArenaSite::ApplyBalconyView(APawn* Pawn)
+{
+	if (!Pawn || !BalconyCamera)
+	{
+		return false;
+	}
+	APlayerController* PC = Cast<APlayerController>(Pawn->GetController());
+	if (!PC)
+	{
+		return false;
+	}
+	PC->SetViewTarget(BalconyCamera);
+	return true;
+}
+
+void AGFArenaSite::ReleaseBalconyView(APawn* Pawn)
+{
+	if (!Pawn)
+	{
+		return;
+	}
+	if (APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
+	{
+		PC->SetViewTarget(Pawn);
+	}
 }
 
 AGFPlayerState* AGFArenaSite::PlayerOf(APawn* Pawn) const
@@ -353,7 +441,10 @@ FGFModeResult AGFArenaSite::TryStart(APawn* Pawn)
 	const FGFModeResult Began = Send(PS, VerbFight);
 	if (Began.bOk)
 	{
-		LastPrompt = TEXT("Start: bout began.");
+		const FVector Stand = GetActorTransform().TransformPosition(BalconyStandLocal());
+		Pawn->SetActorLocation(Stand, false, nullptr, ETeleportType::TeleportPhysics);
+		ApplyBalconyView(Pawn);
+		LastPrompt = TEXT("Start: bout began. Watching from the balcony.");
 	}
 	return Began;
 }
@@ -382,6 +473,7 @@ FGFModeResult AGFArenaSite::TryFinish(APawn* Pawn)
 		LastPrompt = TEXT("Finish: NotFighting");
 		return FGFModeResult::Fail(TEXT("NotFighting"));
 	}
+	ReleaseBalconyView(Pawn);
 	const FGFArenaEntry* Entry = D->FindEntry(PS->PlayerKey);
 	const int32 Stars = Entry ? Entry->Stars : 0;
 	LastPrompt = FString::Printf(TEXT("Finish: %s, %d star(s)"), *OutcomeWord(D->Outcome), Stars);
@@ -423,6 +515,7 @@ bool AGFArenaSite::TryReturn(APawn* Pawn)
 	{
 		return false;
 	}
+	ReleaseBalconyView(Pawn);
 	const FVector Where = GetHubReturnLocation();
 	Pawn->SetActorLocation(Where, false, nullptr, ETeleportType::TeleportPhysics);
 	LastPrompt = TEXT("Back on the hub stand.");
@@ -433,7 +526,7 @@ void AGFArenaSite::GetPromptLines(const AGFPlayerState* PS, TArray<FString>& Out
 {
 	OutLines.Reset();
 	OutLines.Add(TEXT("ARENA"));
-	OutLines.Add(TEXT("Spots: Start, Finish, Results. Return: the white arch."));
+	OutLines.Add(TEXT("Spots: Start, Finish, Results. Return: the white arch. Watch from the Balcony."));
 	OutLines.Add(TEXT("Start places your dinos, clears any wager, and begins the bout."));
 	OutLines.Add(TEXT("An empty roster gets one sparring Nipper. A roster you already have is left as it is."));
 	OutLines.Add(TEXT("Finish runs the bout to its real result. No stake is taken on this pad."));

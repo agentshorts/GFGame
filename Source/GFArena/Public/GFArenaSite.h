@@ -16,6 +16,7 @@ class UStaticMesh;
 class AGFPlayerState;
 class AGFArenaDirector;
 class APawn;
+class ACameraActor;
 
 UCLASS()
 class GFARENA_API AGFArenaSite : public AActor
@@ -26,6 +27,7 @@ public:
 	AGFArenaSite();
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -62,9 +64,24 @@ public:
 	UPROPERTY(Replicated)
 	FString LastPrompt;
 
+	/** Server-spawned, replicated. Clients build the balcony mesh themselves and watch through this camera. */
+	UPROPERTY(Replicated)
+	TObjectPtr<ACameraActor> BalconyCamera;
+
 	static constexpr float NearRadiusCm = 4500.f;
 	/** Matches the no-PlayerStart hub stand (FGFPlayerStartRules::FallbackZ). */
 	static constexpr float HubStandZCm = 120.f;
+
+	/** Greybox balcony. The camera sits above the south rail and looks at the sand. Local to the site. */
+	static FVector BalconyCameraLocal();
+	static FVector BalconyLookLocal();
+	static FRotator BalconyCameraRotation();
+	static FVector BalconyStandLocal();
+
+	ACameraActor* GetBalconyCamera() const { return BalconyCamera; }
+	/** Points a local controller at the balcony camera. False when there is no controller. */
+	bool ApplyBalconyView(APawn* Pawn);
+	void ReleaseBalconyView(APawn* Pawn);
 
 protected:
 	UFUNCTION()

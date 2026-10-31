@@ -193,6 +193,13 @@ struct GFNET_API FGFPlayerProgress
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") TArray<int32> ArenaFormationSpots;
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") int32 ArenaMatches = 0;
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") int32 ArenaWins = 0;
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") int32 ArenaStars = 0;
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") int32 ArenaRentalsQuit = 0;
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") int64 ArenaWagerWon = 0;
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") int64 ArenaWagerLost = 0;
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") int32 ArenaSlowUses = 0;
+	/** Sim seconds spent steering a dino. */
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") float ArenaControlSeconds = 0.f;
 	/** Set on the first tame ever (opens the Mine Mouth). */
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") bool bHasTamed = false;
 	/** Deepest Hallow Night depth finished (0 = none yet; depth N+1 opens after N). */

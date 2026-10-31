@@ -150,16 +150,14 @@ bool FGFTameStateFlowTest::RunTest(const FString&)
 	TestEqual(TEXT("Feed"), E(M.Offer(R, Now, TEXT("A"), TEXT("Steakroot"))), E(EGFOfferResult::Accepted));
 	TestEqual(TEXT("Feeding"), E(M.State), E(EGFTameState::Feeding));
 
-	// Two refusals in a row: Threat.
+	// Wrong food attacks on the first offer. A favourite is the only thing that calls it off.
 	Now += 3.f;
 	TestEqual(TEXT("Refused"), E(M.Offer(R, Now, TEXT("A"), TEXT("Berry"))), E(EGFOfferResult::Refused));
-	TestEqual(TEXT("One refusal: still Feeding"), E(M.State), E(EGFTameState::Feeding));
+	TestEqual(TEXT("Wrong food: Hostile"), E(M.State), E(EGFTameState::Hostile));
+	TestEqual(TEXT("Attacking the offerer"), M.TargetKey, FString(TEXT("A")));
 	Now += 3.f;
-	M.Offer(R, Now, TEXT("A"), TEXT("Berry"));
-	TestEqual(TEXT("Second refusal: Threat"), E(M.State), E(EGFTameState::Threat));
-	TestEqual(TEXT("Threat at the offerer"), M.TargetKey, FString(TEXT("A")));
-	M.Tick(R, Now += 0.1f, 0.1f, { FGFTamerView(TEXT("A"), 300.f, TEXT("Steakroot")) });
-	TestEqual(TEXT("Good food back in hand: Feeding again"), E(M.State), E(EGFTameState::Feeding));
+	TestEqual(TEXT("A favourite calls off the attack"), E(M.Offer(R, Now, TEXT("A"), TEXT("JerkyBites"))), E(EGFOfferResult::Favourite));
+	TestEqual(TEXT("Calmed back to Feeding"), E(M.State), E(EGFTameState::Feeding));
 
 	// Empty hands inside the aggro radius: Threat, then Hostile after ThreatSeconds.
 	const TArray<FGFTamerView> Empty = { FGFTamerView(TEXT("A"), 1000.f, NAME_None) };

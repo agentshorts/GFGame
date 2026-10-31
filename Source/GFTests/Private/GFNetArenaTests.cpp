@@ -311,7 +311,7 @@ bool FGFNetArenaTest::RunTest(const FString&)
 		TestEqual(TEXT("Possess"), Code(*Run, TEXT("Possess")), FString(TEXT("Ok")));
 		TestEqual(TEXT("Steer"), Code(*Run, TEXT("Steer")), FString(TEXT("Ok")));
 		const FGFModeResult* C = Result(*Run, TEXT("Cycle"));
-		TestTrue(TEXT("Cycled to another of the player's dinos"), C && C->Ints.Num() == 1 && C->Ints[0] != Run->RexUnit && C->Ints[0] != INDEX_NONE);
+		TestTrue(TEXT("Cycle inside the 2 s control lock stays on Rex"), C && C->Ints.Num() == 1 && C->Ints[0] == Run->RexUnit);
 		Send(*Run, 0, TEXT("Release"), Arena, TEXT("Release"));
 		Send(*Run, 0, TEXT("NoSteer"), Arena, TEXT("Input"), [](FGFModeRequest& R) { R.Floats = { 1.f, 0.f }; });
 	});

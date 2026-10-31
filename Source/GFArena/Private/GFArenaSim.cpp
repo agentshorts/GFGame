@@ -34,6 +34,14 @@ const FGFArenaData& FGFArenaData::Get()
 		{
 			T->ForeachRow<FGFWagerBandRow>(TEXT("Arena"), [&](const FName&, const FGFWagerBandRow& Row) { Data.Bands.Add(Row); });
 		}
+		if (const UDataTable* T = FGFDataTables::Get<FGFArenaSpellRow>(TEXT("DT_ArenaSpells")))
+		{
+			T->ForeachRow<FGFArenaSpellRow>(TEXT("Arena"), [&](const FName& Name, const FGFArenaSpellRow& Row)
+			{
+				Data.Spells.Add(Name, Row);
+				Data.SpellOrder.Add(Name);
+			});
+		}
 	}
 	return Data;
 }
@@ -92,12 +100,29 @@ TArray<FName> FGFArenaData::SpeciesIds() const
 	return Out;
 }
 
+const FGFArenaSpellRow* FGFArenaData::Spell(FName Id) const
+{
+	return Spells.Find(Id);
+}
+
 // ---------------------------------------------------------------- math
 
 float FGFArenaMath::Damage(float Attack, float Mult, bool bWellFed, bool bTargetShred, bool bTargetGuard, float ComboMult)
 {
 	float D = Attack * Mult * ComboMult;
 	D *= bWellFed ? 1.15f : 1.f;
+	D *= bTargetShred ? 1.2f : 1.f;
+	D *= bTargetGuard ? 0.7f : 1.f;
+	return FMath::Max(0.f, D);
+}
+
+float FGFArenaMath::SpellDamage(float MaxHP, int32 Points, bool bTargetShred, bool bTargetGuard)
+{
+	if (Points <= 0 || MaxHP <= 0.f)
+	{
+		return 0.f;
+	}
+	float D = MaxHP * PointFraction * static_cast<float>(Points);
 	D *= bTargetShred ? 1.2f : 1.f;
 	D *= bTargetGuard ? 0.7f : 1.f;
 	return FMath::Max(0.f, D);
@@ -155,6 +180,19 @@ void FGFArenaSim::Init(int32 InSeed, EGFArenaAI Team0AI, EGFArenaAI Team1AI)
 	Combos = 0;
 	TeamAI[0] = Team0AI;
 	TeamAI[1] = Team1AI;
+	Spark[0] = Spark[1] = SparkStart;
+	SparkBank[0] = SparkBank[1] = 0.f;
+	LastDamageTime = 0.f;
+	ControlReadyAt.Reset();
+	Walls.Reset();
+	Quits.Reset();
+	Loadout0.Reset();
+	Loadout1.Reset();
+	SpellLock0.Reset();
+	SpellLock1.Reset();
+	bSpellsOpen = false;
+	bReplayPlans = false;
+	ReplayCursor = 0;
 }
 
 FVector2D FGFArenaSim::SpotPosition(int32 Team, int32 Spot)
@@ -177,6 +215,17 @@ int32 FGFArenaSim::AddUnit(const FGFArenaData& Data, int32 Team, const FGFArenaE
 	U.Level = FMath::Clamp(Who.Level, 1, 20);
 	U.Spot = FMath::Clamp(Who.Spot, 0, 5);
 	U.bWellFed = Who.bWellFed;
+	U.bRental = Who.bRental;
+	U.Family = Who.Family;
+	U.bControlBlocked = Who.bControlBlocked;
+	U.AttackMul = 1.f;
+	U.AttackMulUntil = 0.f;
+	U.DashUntil = 0.f;
+	U.Terrain = 0.f;
+	U.IntentTarget = INDEX_NONE;
+	U.IntentSlot = -1;
+	U.bIntentRetreat = false;
+	U.bIntentSpent = false;
 	const FGFArenaSpeciesRow* Row = Data.Species.Find(Who.Species);
 	const FGFArenaSpeciesRow Base = Row ? *Row : FGFArenaSpeciesRow();
 	const float Scale = FGFArenaMath::LevelScale(U.Level) * (TeamAI[Team & 1] == EGFArenaAI::Champion && Team == 1 ? 1.15f : 1.f);
@@ -268,6 +317,7 @@ void FGFArenaSim::Step(const FGFArenaData& Data, float Dt)
 		return;
 	}
 	Time += Dt;
+	TickSpark(Dt);
 	for (FGFArenaUnit& U : Units)
 	{
 		if (U.IsAlive())
@@ -275,6 +325,7 @@ void FGFArenaSim::Step(const FGFArenaData& Data, float Dt)
 			TickUnit(Data, U, Dt);
 		}
 	}
+	TickHotSand();
 	CheckEnd();
 	if (!IsOver() && Time >= MaxSeconds)
 	{
@@ -414,6 +465,16 @@ void FGFArenaSim::OnFainted(FGFArenaUnit& U)
 		S = 0.f;
 	}
 	U.CommandSlot = INDEX_NONE;
+	if (U.bRental)
+	{
+		// A rental quits. It is down for this bout and it is not a kill.
+		FGFArenaQuit Quit;
+		Quit.OwnerKey = U.OwnerKey;
+		Quit.Family = U.Family;
+		Quit.Species = U.Species;
+		Quit.UnitId = U.Id;
+		Quits.Add(Quit);
+	}
 	if (!U.PossessedBy.IsEmpty())
 	{
 		const FString Key = U.PossessedBy;
@@ -430,23 +491,86 @@ void FGFArenaSim::OnFainted(FGFArenaUnit& U)
 	}
 }
 
-void FGFArenaSim::Damage(FGFArenaUnit& From, FGFArenaUnit& To, float Amount)
+void FGFArenaSim::NoteHurt(FGFArenaUnit& To, float Amount, int32 AttackerId)
 {
 	if (!To.IsAlive() || Amount <= 0.f)
 	{
 		return;
 	}
 	To.HP -= Amount;
-	To.LastAttacker = From.Id;
+	LastDamageTime = Time;
+	if (AttackerId != INDEX_NONE)
+	{
+		To.LastAttacker = AttackerId;
+	}
 	if (To.HP <= 0.f)
 	{
 		OnFainted(To);
 	}
 }
 
+void FGFArenaSim::Damage(FGFArenaUnit& From, FGFArenaUnit& To, float Amount)
+{
+	NoteHurt(To, Amount, From.Id);
+}
+
+void FGFArenaSim::TickSpark(float Dt)
+{
+	for (int32 Team = 0; Team < 2; ++Team)
+	{
+		if (Spark[Team] >= SparkCap)
+		{
+			SparkBank[Team] = 0.f;
+			continue;
+		}
+		SparkBank[Team] += Dt;
+		while (Spark[Team] < SparkCap && SparkBank[Team] >= SparkEverySeconds)
+		{
+			SparkBank[Team] -= SparkEverySeconds;
+			++Spark[Team];
+		}
+	}
+}
+
+void FGFArenaSim::TickHotSand()
+{
+	if (IsOver() || Time - LastDamageTime < HotSandSeconds)
+	{
+		return;
+	}
+	for (FGFArenaUnit& U : Units)
+	{
+		if (U.IsAlive())
+		{
+			SetStatus(U, EGFArenaStatus::Burn, 1.f);
+		}
+	}
+}
+
+float FGFArenaSim::AttackOf(const FGFArenaUnit& U) const
+{
+	return U.Attack * (Time < U.AttackMulUntil ? U.AttackMul : 1.f);
+}
+
+bool FGFArenaSim::WallBlocks(const FGFArenaUnit& U, float NextX) const
+{
+	for (const FGFArenaWall& W : Walls)
+	{
+		if (W.Until <= Time || FMath::Abs(U.Pos.Y - W.LaneY) > 180.f)
+		{
+			continue;
+		}
+		if ((U.Pos.X <= 0.f && NextX > 0.f) || (U.Pos.X >= 0.f && NextX < 0.f))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void FGFArenaSim::BasicAttack(FGFArenaUnit& U, FGFArenaUnit& T)
 {
-	Damage(U, T, FGFArenaMath::Damage(U.Attack, 1.f, U.bWellFed, T.Has(EGFArenaStatus::Shred), T.Has(EGFArenaStatus::Guard)));
+	Damage(U, T, FGFArenaMath::Damage(AttackOf(U), 1.f, U.bWellFed, T.Has(EGFArenaStatus::Shred), T.Has(EGFArenaStatus::Guard)));
 	U.AttackTimer = U.AttackInterval;
 }
 
@@ -478,6 +602,7 @@ bool FGFArenaSim::UseAbility(const FGFArenaData& Data, FGFArenaUnit& U, int32 Sl
 		if (D <= Row->Range + 30.f && D > 1.f)
 		{
 			U.Pos = T->Pos + (U.Pos - T->Pos) / D * 120.f;
+			U.DashUntil = Time + 0.35f;
 		}
 	}
 	if (!CanUseOn(*Row, U, T))
@@ -495,11 +620,15 @@ bool FGFArenaSim::UseAbility(const FGFArenaData& Data, FGFArenaUnit& U, int32 Sl
 		}
 		if (Row->DamageMult > 0.f)
 		{
-			Damage(U, Victim, FGFArenaMath::Damage(U.Attack, Row->DamageMult, U.bWellFed, Victim.Has(EGFArenaStatus::Shred), Victim.Has(EGFArenaStatus::Guard), Combo));
+			Damage(U, Victim, FGFArenaMath::Damage(AttackOf(U), Row->DamageMult, U.bWellFed, Victim.Has(EGFArenaStatus::Shred), Victim.Has(EGFArenaStatus::Guard), Combo));
 		}
 		if (Victim.IsAlive())
 		{
 			SetStatus(Victim, Row->Status, Row->StatusSeconds);
+			if (Victim.DashUntil > Time)
+			{
+				SetStatus(Victim, EGFArenaStatus::Root, 1.f);
+			}
 			if (Row->Status == EGFArenaStatus::Taunt)
 			{
 				Victim.TauntBy = U.Id;
@@ -608,8 +737,16 @@ bool FGFArenaSim::MoveToward(FGFArenaUnit& U, const FVector2D& Goal, float StopA
 		return false;
 	}
 	const float Speed = U.Speed * (U.Has(EGFArenaStatus::Wet) ? 0.8f : 1.f) * (U.Has(EGFArenaStatus::Haste) ? 1.25f : 1.f);
-	const float Step = FMath::Min(D - StopAt, Speed * Dt);
-	U.Pos += Delta / D * Step;
+	float Step = FMath::Min(D - StopAt, Speed * Dt);
+	FVector2D Next = U.Pos + Delta / D * Step;
+	if (WallBlocks(U, Next.X))
+	{
+		const float HoldX = U.Pos.X <= 0.f ? FMath::Min(U.Pos.X, -30.f) : FMath::Max(U.Pos.X, 30.f);
+		const float Slide = Delta.Y >= 0.f ? 1.f : -1.f;
+		Next = FVector2D(HoldX, U.Pos.Y + Slide * Speed * Dt);
+		Step = FVector2D::Distance(U.Pos, Next);
+	}
+	U.Pos = Next;
 	U.Pos.X = FMath::Clamp(U.Pos.X, -HalfWidth, HalfWidth);
 	U.Pos.Y = FMath::Clamp(U.Pos.Y, -HalfHeight, HalfHeight);
 	return Step > KINDA_SMALL_NUMBER;
@@ -638,6 +775,10 @@ void FGFArenaSim::TickUnit(const FGFArenaData& Data, FGFArenaUnit& U, float Dt)
 	}
 	U.AttackTimer = FMath::Max(0.f, U.AttackTimer - Dt * Rate);
 	U.DecisionTimer = FMath::Max(0.f, U.DecisionTimer - Dt);
+	if (U.DashUntil > 0.f && Time >= U.DashUntil)
+	{
+		U.DashUntil = 0.f;
+	}
 	if (U.Has(EGFArenaStatus::Stun))
 	{
 		U.IdleTime = 0.f; // stunned isn't stuck
@@ -696,44 +837,8 @@ void FGFArenaSim::TickUnit(const FGFArenaData& Data, FGFArenaUnit& U, float Dt)
 		return;
 	}
 
-	// AI.
-	const int32 TargetId = SelectTarget(U);
-	FGFArenaUnit* T = Find(TargetId);
-	if (!T)
-	{
-		return;
-	}
-	const bool bFragile = U.Role == EGFArenaRole::Skirmisher || U.Role == EGFArenaRole::Assassin;
-	if (bFragile && U.HPFraction() < 0.25f && U.RetreatTime < 2.f)
-	{
-		U.RetreatTime += Dt;
-		const FVector2D Away = U.Pos + (U.Pos - T->Pos).GetSafeNormal() * 1000.f;
-		bActed = MoveToward(U, Away, 0.f, Dt);
-		if (!bActed)
-		{
-			U.RetreatTime = 2.f; // cornered: turn and fight
-		}
-	}
-	else
-	{
-		bActed = TryAbilities(Data, U, TargetId);
-		if (!bActed)
-		{
-			const float D = FVector2D::Distance(U.Pos, T->Pos);
-			if (D <= U.Range)
-			{
-				if (U.AttackTimer <= 0.f)
-				{
-					BasicAttack(U, *T);
-				}
-				bActed = true; // in range and swinging (or winding up)
-			}
-			else
-			{
-				bActed = MoveToward(U, T->Pos, U.Range * 0.9f, Dt);
-			}
-		}
-	}
+	// AI. The brain decides every 0.25 s. The steps in between just carry out that choice.
+	bActed = RunBrain(Data, U, Dt);
 	U.IdleTime = bActed ? 0.f : U.IdleTime + Dt;
 	U.MaxIdle = FMath::Max(U.MaxIdle, U.IdleTime);
 }
@@ -820,9 +925,29 @@ FName FGFArenaSim::Possess(const FString& Key, int32 UnitId)
 	{
 		return TEXT("Taken");
 	}
+	if (U->bControlBlocked)
+	{
+		return TEXT("Wary");
+	}
+	const int32 Current = PossessedBy(Key);
+	const bool bSwitch = Current != UnitId;
+	if (bSwitch)
+	{
+		if (const float* Ready = ControlReadyAt.Find(Key))
+		{
+			if (Time < *Ready)
+			{
+				return TEXT("Lockout");
+			}
+		}
+	}
 	Release(Key);
 	U->PossessedBy = Key;
 	U->CommandSlot = INDEX_NONE;
+	if (bSwitch)
+	{
+		ControlReadyAt.Add(Key, Time + ControlLockSeconds);
+	}
 	return TEXT("Ok");
 }
 
@@ -844,7 +969,10 @@ int32 FGFArenaSim::Cycle(const FString& Key)
 	}
 	const int32 At = Mine.IndexOfByKey(Current);
 	const int32 Next = Mine[(At + 1) % Mine.Num()]; // At == INDEX_NONE -> first
-	Possess(Key, Next);
+	if (Possess(Key, Next) == FName(TEXT("Lockout")))
+	{
+		return Current;
+	}
 	return PossessedBy(Key);
 }
 

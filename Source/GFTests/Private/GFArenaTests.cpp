@@ -286,7 +286,9 @@ bool FGFArenaPossessionTest::RunTest(const FString&)
 	Sim.Init(12, EGFArenaAI::Normal, EGFArenaAI::Normal);
 	const int32 A = Sim.AddUnit(D, 0, Dino(TEXT("Owner"), TEXT("Rex"), 1, 1));
 	const int32 B = Sim.AddUnit(D, 0, Dino(TEXT("Owner"), TEXT("Raptor"), 1, 4));
-	Sim.AddUnit(D, 1, Dino(FString(), TEXT("Hornback"), 1, 1));
+	const int32 Horn = Sim.AddUnit(D, 1, Dino(FString(), TEXT("Hornback"), 1, 1));
+	Sim.Find(Horn)->HP = Sim.Find(Horn)->MaxHP = 100000.f;
+	SetStatus(*Sim.Find(Horn), EGFArenaStatus::Stun, 60.f);
 
 	TestEqual(TEXT("Not theirs"), Sim.Possess(TEXT("Friend"), A).ToString(), FString(TEXT("NotOwner")));
 	TestEqual(TEXT("Possess"), Sim.Possess(TEXT("Owner"), A).ToString(), FString(TEXT("Ok")));
@@ -298,8 +300,20 @@ bool FGFArenaPossessionTest::RunTest(const FString&)
 		Sim.Step(D, FGFArenaSim::StepSeconds);
 	}
 	TestTrue(TEXT("The player steers it"), Sim.Find(A)->Pos.X > X0 + 50.f);
-	TestEqual(TEXT("Cycle to B"), Sim.Cycle(TEXT("Owner")), B);
+	// The first switch starts a 2 s lock. Cycling inside it stays on A.
+	TestEqual(TEXT("Lockout holds A"), Sim.Cycle(TEXT("Owner")), A);
+	TestEqual(TEXT("Still possessing A"), Sim.PossessedBy(TEXT("Owner")), A);
+	while (Sim.Time < 2.05f && !Sim.IsOver())
+	{
+		Sim.Step(D, FGFArenaSim::StepSeconds);
+	}
+	TestEqual(TEXT("Cycle to B after the lock"), Sim.Cycle(TEXT("Owner")), B);
 	TestTrue(TEXT("A back on AI"), Sim.Find(A)->PossessedBy.IsEmpty() && Sim.Find(A)->MoveInput.IsNearlyZero());
+	const float BackAt = Sim.Time + FGFArenaSim::ControlLockSeconds + 0.05f;
+	while (Sim.Time < BackAt && !Sim.IsOver())
+	{
+		Sim.Step(D, FGFArenaSim::StepSeconds);
+	}
 	TestEqual(TEXT("Cycle back to A"), Sim.Cycle(TEXT("Owner")), A);
 
 	// The player's dino faints under their control: they hop to the next one.

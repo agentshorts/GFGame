@@ -4,7 +4,7 @@
 #include "GFMiniGameGateSubsystem.h"
 #include "GFMobaGateSubsystem.generated.h"
 
-/** Gate B: the MOBA (M4). Target is now a true 5v5 (up to 10 players); PLAN.md M4 still has the older 3v3-vs-bots scope. Stub. */
+/** Gate B. The id stays Moba. The sign reads Crystal Clash. The mode itself is still notes only. */
 UCLASS()
 class GFMOBA_API UGFMobaGateSubsystem : public UGFMiniGameGateSubsystem
 {
@@ -13,5 +13,5 @@ class GFMOBA_API UGFMobaGateSubsystem : public UGFMiniGameGateSubsystem
 public:
 	virtual FName GetGateId() const override { return TEXT("Moba"); }
 	virtual FName GetMapName() const override { return TEXT("/Game/Maps/L_Moba"); }
-	virtual FText GetDisplayName() const override { return FText::FromString(TEXT("MOBA")); }
+	virtual FText GetDisplayName() const override { return FText::FromString(TEXT("Crystal Clash")); }
 };

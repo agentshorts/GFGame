@@ -69,7 +69,7 @@ const TArray<FGFMiniGameEntry>& FGFMiniGameCatalog::All()
 			FLinearColor(0.85f, 0.45f, 0.62f), true, 1,
 			TEXT("/Script/GFFashion.GFRunwayStage")),
 			TEXT("/Game/Art/Gates/Signs/SM_Sign_Runway.SM_Sign_Runway")),
-		WithSign(MapMode(TEXT("Moba"), TEXT("MOBA"), TEXT("/Game/Maps/L_Moba"),
+		WithSign(MapMode(TEXT("Moba"), TEXT("Crystal Clash"), TEXT("/Game/Maps/L_Moba"),
 			TEXT("/Game/Art/Gates/SM_Gate_Arena.SM_Gate_Arena"),
 			FLinearColor(0.75f, 0.22f, 0.18f), true, 2, nullptr),
 			TEXT("/Game/Art/Gates/Signs/SM_Sign_Moba.SM_Sign_Moba")),

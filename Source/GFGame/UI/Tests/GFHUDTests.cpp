@@ -15,7 +15,7 @@ namespace
 {
 	constexpr EAutomationTestFlags HUDFlags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 
-	bool Near(float A, float B)
+	bool HudNear(float A, float B)
 	{
 		return FMath::IsNearlyEqual(A, B, 0.05f);
 	}
@@ -65,16 +65,16 @@ bool FGFHUDHotbarLayoutTest::RunTest(const FString&)
 	TestFalse(TEXT("First unselected"), Row[0].bSelected);
 	TestTrue(TEXT("Middle selected"), Row[1].bSelected);
 	TestFalse(TEXT("Last unselected"), Row[2].bSelected);
-	TestTrue(TEXT("Preferred width"), Near(Row[0].W, GFHUD::HotbarSlotW));
-	TestTrue(TEXT("Preferred height"), Near(Row[0].H, GFHUD::HotbarSlotH));
-	TestTrue(TEXT("Shared row"), Near(Row[0].Y, Row[1].Y) && Near(Row[1].Y, Row[2].Y));
-	TestTrue(TEXT("Gap"), Near(Row[1].X, Row[0].X + Row[0].W + GFHUD::HotbarGap));
+	TestTrue(TEXT("Preferred width"), HudNear(Row[0].W, GFHUD::HotbarSlotW));
+	TestTrue(TEXT("Preferred height"), HudNear(Row[0].H, GFHUD::HotbarSlotH));
+	TestTrue(TEXT("Shared row"), HudNear(Row[0].Y, Row[1].Y) && HudNear(Row[1].Y, Row[2].Y));
+	TestTrue(TEXT("Gap"), HudNear(Row[1].X, Row[0].X + Row[0].W + GFHUD::HotbarGap));
 	TestTrue(TEXT("No overlap"), Row[0].X + Row[0].W <= Row[1].X + 0.01f && Row[1].X + Row[1].W <= Row[2].X + 0.01f);
 	const float Left = Row[0].X;
 	const float RightGap = 400.f - (Row[2].X + Row[2].W);
-	TestTrue(TEXT("Centred"), Near(Left, RightGap));
+	TestTrue(TEXT("Centred"), HudNear(Left, RightGap));
 	TestTrue(TEXT("Above the bottom edge"), Row[0].Y + Row[0].H <= 300.f);
-	TestTrue(TEXT("Sits on the bottom margin"), Near(Row[0].Y, 300.f - GFHUD::HotbarBottomMargin - GFHUD::HotbarSlotH));
+	TestTrue(TEXT("Sits on the bottom margin"), HudNear(Row[0].Y, 300.f - GFHUD::HotbarBottomMargin - GFHUD::HotbarSlotH));
 
 	const TArray<FGFHUDSlotRect> None = GFLayoutHotbar(2, INDEX_NONE, 800.f, 600.f);
 	TestEqual(TEXT("Two wide slots"), None.Num(), 2);
@@ -83,7 +83,7 @@ bool FGFHUDHotbarLayoutTest::RunTest(const FString&)
 	const TArray<FGFHUDSlotRect> One = GFLayoutHotbar(1, 0, 200.f, 100.f);
 	TestEqual(TEXT("One slot"), One.Num(), 1);
 	TestTrue(TEXT("Only slot selected"), One[0].bSelected);
-	TestTrue(TEXT("Single slot centred"), Near(One[0].X + One[0].W * 0.5f, 100.f));
+	TestTrue(TEXT("Single slot centred"), HudNear(One[0].X + One[0].W * 0.5f, 100.f));
 
 	const TArray<FGFHUDSlotRect> Many = GFLayoutHotbar(20, 3, 400.f, 300.f);
 	if (!TestEqual(TEXT("Twenty slots"), Many.Num(), 20))
@@ -94,7 +94,7 @@ bool FGFHUDHotbarLayoutTest::RunTest(const FString&)
 	TestFalse(TEXT("First of many unselected"), Many[0].bSelected);
 	TestTrue(TEXT("Shrunk to the side margin"), Many[0].X >= GFHUD::HotbarSideMargin - 0.05f);
 	TestTrue(TEXT("Right side margin"), Many.Last().X + Many.Last().W <= 400.f - GFHUD::HotbarSideMargin + 0.05f);
-	TestTrue(TEXT("Still one row"), Near(Many[0].Y, Many.Last().Y));
+	TestTrue(TEXT("Still one row"), HudNear(Many[0].Y, Many.Last().Y));
 	TestTrue(TEXT("Narrower than the preferred slot"), Many[0].W < GFHUD::HotbarSlotW);
 	TestTrue(TEXT("Packed left to right"), Many[1].X >= Many[0].X + Many[0].W - 0.01f);
 	return true;
