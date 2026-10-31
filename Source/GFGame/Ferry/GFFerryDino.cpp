@@ -155,11 +155,11 @@ UStaticMeshComponent* AGFFerryDino::SpawnBasket()
 	{
 		return nullptr;
 	}
+	// SetIsReplicated is enough. AddReplicatedSubObject checks bReplicateUsingRegisteredSubObjectList, which stays false.
 	Basket->SetIsReplicated(true);
 	PrepareBasket(Basket);
 	Basket->RegisterComponent();
 	AddInstanceComponent(Basket);
-	AddReplicatedSubObject(Basket);
 	return Basket;
 }
 
