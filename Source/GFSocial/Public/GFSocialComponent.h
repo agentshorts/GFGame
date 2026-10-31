@@ -146,6 +146,9 @@ public:
 	/** Server: which mode a player is playing (DT_ModeRules key). TODO: set by the mode systems on enter / leave. */
 	void ServerSetPlayerMode(const FString& Key, FName Mode);
 	FName GetPlayerMode(const FString& Key) const;
+	/** Arm, or start the disarm channel. Duels are not this. */
+	FName ServerToggleVillain(AGFPlayerState* By);
+	FName ServerVillain(AGFPlayerState* By, FName Verb);
 
 	const FGFJailEntry* FindJail(const FString& Key) const;
 	bool IsJailed(const FString& Key) const { return FindJail(Key) != nullptr; }

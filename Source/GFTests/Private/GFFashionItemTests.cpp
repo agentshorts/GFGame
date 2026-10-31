@@ -159,7 +159,7 @@ bool FGFFashionItemRowsTest::RunTest(const FString&)
 			TestTrue(*FString::Printf(TEXT("%s is not a wearable"), *Id.ToString()), Row.OutfitSlot.IsNone());
 		}
 	});
-	TestEqual(TEXT("The rows that were already in DT_Items are still there"), Other, 72);
+	TestEqual(TEXT("The rows that were already in DT_Items are still there"), Other, 82);
 
 	const FGFItemRow* Coat = Items->FindRow<FGFItemRow>(TEXT("LabCoat"), TEXT("FashionItems"), false);
 	const FGFItemRow* Goggles = Items->FindRow<FGFItemRow>(TEXT("SafetyGoggles"), TEXT("FashionItems"), false);

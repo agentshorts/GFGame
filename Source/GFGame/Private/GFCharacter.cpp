@@ -2,7 +2,12 @@
 #include "GFCharacterMovementComponent.h"
 #include "GFFerryRiderComponent.h"
 #include "GFPlayerState.h"
+#include "GFGameState.h"
 #include "GFZoneSubsystem.h"
+#include "GFVillainSession.h"
+#include "GFSocialDirector.h"
+#include "GFSocialComponent.h"
+#include "GFTerritorySubsystem.h"
 #include "GFLog.h"
 #include "GFAssetMap.h"
 #include "GFSimpleAnimComponent.h"
@@ -381,6 +386,46 @@ void AGFCharacter::CycleBlock(int32 Direction)
 	SelectedBlock = Ids[Next];
 }
 
+namespace
+{
+	EGFVillainPlace VillainPlaceFor(UWorld* World, const AGFPlayerState* PS, const FVector& Location)
+	{
+		if (!World || !PS)
+		{
+			return EGFVillainPlace::Wild;
+		}
+		if (UGFSocialComponent* Social = AGFSocialDirector::GetSocial(World, false))
+		{
+			if (Social->IsJailed(PS->PlayerKey))
+			{
+				return EGFVillainPlace::Jail;
+			}
+			const FName Mode = Social->GetPlayerMode(PS->PlayerKey);
+			if (!Mode.IsNone() && Mode != UGFSocialComponent::DefaultPlayerMode && Mode != UGFSocialComponent::ModeName)
+			{
+				return EGFVillainPlace::MiniGame;
+			}
+		}
+		if (UGFTerritorySubsystem* Territory = World->GetSubsystem<UGFTerritorySubsystem>())
+		{
+			const FGFTerritoryZoneHit Hit = Territory->GetZoneAt(Location);
+			if (Hit.Zone == EGFTerritoryZone::Faction)
+			{
+				return EGFVillainPlace::Faction;
+			}
+			if (Hit.Zone == EGFTerritoryZone::Neutral)
+			{
+				return EGFVillainPlace::Neutral;
+			}
+			if (Territory->IsSafeFor(PS, Location))
+			{
+				return EGFVillainPlace::Safe;
+			}
+		}
+		return EGFVillainPlace::Wild;
+	}
+}
+
 float AGFCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
 	const float Applied = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
@@ -388,23 +433,31 @@ float AGFCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEve
 	{
 		return Applied;
 	}
-	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
-	if (!PS)
+	AGFPlayerState* Victim = GetPlayerState<AGFPlayerState>();
+	if (!Victim)
 	{
 		return Applied;
 	}
-	bool bPvP = false;
 	const APawn* InstigatorPawn = EventInstigator ? EventInstigator->GetPawn() : nullptr;
-	if (InstigatorPawn && InstigatorPawn != this && InstigatorPawn->GetPlayerState())
+	AGFPlayerState* Attacker = InstigatorPawn && InstigatorPawn != this ? InstigatorPawn->GetPlayerState<AGFPlayerState>() : nullptr;
+	if (!Attacker || !GetWorld())
 	{
-		if (const UWorld* World = GetWorld())
-		{
-			if (const UGFZoneSubsystem* Zones = World->GetSubsystem<UGFZoneSubsystem>())
-			{
-				bPvP = Zones->IsPvPAllowedAt(GetActorLocation());
-			}
-		}
+		Victim->NotifyTookDamage(false);
+		return Applied;
 	}
-	PS->NotifyTookDamage(bPvP);
-	return Applied;
+	const double Now = GetWorld()->GetTimeSeconds();
+	const EGFVillainPlace VictimPlace = VillainPlaceFor(GetWorld(), Victim, GetActorLocation());
+	const EGFVillainPlace AttackerPlace = VillainPlaceFor(GetWorld(), Attacker, InstigatorPawn->GetActorLocation());
+	const UDataTable* Items = nullptr;
+	if (AGFGameState* GS = Victim->GetGFGameState())
+	{
+		Items = GS->GetItemTable();
+	}
+	const FGFVillainHit Landed = FGFVillainSession::Resolve(*Attacker, *Victim, AttackerPlace, VictimPlace, Now, DamageAmount, Items);
+	Victim->NotifyTookDamage(Landed.bDamage);
+	if (Landed.bDamage)
+	{
+		Attacker->NotifyTookDamage(true);
+	}
+	return Landed.bDamage ? Landed.Damage : 0.f;
 }

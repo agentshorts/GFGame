@@ -201,6 +201,14 @@ struct GFNET_API FGFPlayerProgress
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") FGFMineCrew Crew;
 	/** Shardstones this player may hop to. Empty on older saves. A row that starts unlocked still counts. */
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") TArray<FName> UnlockedShardstones;
+
+	/** Class picked on first spawn. None until then. Saved with the character, not with Villain Mode. */
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Path") EGFPath Path = EGFPath::None;
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Path") bool bPathChosen = false;
+	/** How many respecs have been spent. The first one is free. */
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Path") int32 PathRespecs = 0;
+	/** Unix seconds of the last respec. 0 if they have never respecced. */
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Path") int64 PathRespecUnix = 0;
 };
 
 UINTERFACE(MinimalAPI, meta = (CannotImplementInterfaceInBlueprint))

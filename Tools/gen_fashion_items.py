@@ -59,7 +59,7 @@ KEPT_OUTFIT_SLOTS = {
 EXPECTED_HEADER = [
     "---", "DisplayName", "Icon", "Category", "StackMax", "Rarity", "SourceTag",
     "Tier", "Value", "MaterialCategory", "bWagerable", "bRentable", "Exclusive",
-    "bAccountBound", "OutfitSlot",
+    "bAccountBound", "PathTag", "OutfitSlot",
 ]
 
 
@@ -124,6 +124,7 @@ def fashion_row(item):
         "False",
         "None",
         "False",
+        "None",
         TYPE_SLOT[item["type"]],
     ]
 
@@ -192,7 +193,7 @@ def validate(text):
     if not wood or wood[-1] != "None" or wood[7] != "1":
         problems.append("Wood drifted")
     ferry = by_id.get("FerryPass")
-    if not ferry or ferry[-2] != "True" or ferry[-1] != "None":
+    if not ferry or ferry[EXPECTED_HEADER.index("bAccountBound")] != "True" or ferry[-1] != "None":
         problems.append("FerryPass account-bound flag drifted")
     parka = by_id.get("offrime_01")
     if not parka or "PARKA" not in parka[1] or parka[-1] != "Top":

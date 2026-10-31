@@ -6,7 +6,9 @@
 #include "GFKindleRing.h"
 #include "GFMovementPolicy.h"
 #include "GFMovementTuning.h"
+#include "GFPathRules.h"
 #include "GFStaminaSim.h"
+#include "GFVillainRules.h"
 #include "GFMiniGameGateSubsystem.h"
 #include "Components/SphereComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -90,6 +92,9 @@ bool FGFMovementSprintDrainTest::RunTest(const FString&)
 	TestEqual(TEXT("Sprint cost"), Tuning.SprintCostPerSecond, 15.f);
 	TestEqual(TEXT("Sprint multiplier"), Tuning.SprintSpeedMultiplier, 1.4f);
 	TestEqual(TEXT("Base run speed"), Tuning.BaseRunSpeed, 500.f);
+	TestEqual(TEXT("Scavenger does not run faster"), FGFPathRules::MoveSpeedMultiplier(EGFPath::Scavenger), 1.f);
+	TestEqual(TEXT("Villain Mode does not run faster"), FGFVillainRules::MoveSpeedMultiplier(), 1.f);
+	TestEqual(TEXT("Base run times either multiplier stays 500"), Tuning.BaseRunSpeed * FGFPathRules::MoveSpeedMultiplier(EGFPath::Scavenger) * FGFVillainRules::MoveSpeedMultiplier(), 500.f);
 
 	const AGFCharacter* Character = GetDefault<AGFCharacter>();
 	const UCharacterMovementComponent* Move = Character ? Character->GetCharacterMovement() : nullptr;

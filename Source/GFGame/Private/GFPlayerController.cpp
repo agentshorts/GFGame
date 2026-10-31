@@ -1,5 +1,7 @@
 #include "GFPlayerController.h"
 #include "GFDino.h"
+#include "GFSocialDirector.h"
+#include "GFSocialComponent.h"
 #include "GFGameState.h"
 #include "GFHUD.h"
 #include "GFPlayerState.h"
@@ -66,11 +68,24 @@ void AGFPlayerController::EnsureHudInput()
 		HintAction = Make(TEXT("IA_GFHint"));
 		CloseChatAction = Make(TEXT("IA_GFCloseChat"));
 		ShardhopAction = Make(TEXT("IA_GFShardhop"));
+		VillainAction = Make(TEXT("IA_GFVillain"));
+		const FKey PathKeys[] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five };
+		PathActions.Reset();
+		for (int32 Slot = 0; Slot < 5; ++Slot)
+		{
+			UInputAction* Action = Make(*FString::Printf(TEXT("IA_GFPath%d"), Slot + 1));
+			PathActions.Add(Action);
+		}
 		HudMapping = NewObject<UInputMappingContext>(this, TEXT("IMC_GFHUD"));
 		HudMapping->MapKey(ChatAction, EKeys::Enter);
 		HudMapping->MapKey(HintAction, EKeys::H);
 		HudMapping->MapKey(CloseChatAction, EKeys::Escape);
 		HudMapping->MapKey(ShardhopAction, EKeys::F);
+		HudMapping->MapKey(VillainAction, EKeys::G);
+		for (int32 Slot = 0; Slot < PathActions.Num() && Slot < UE_ARRAY_COUNT(PathKeys); ++Slot)
+		{
+			HudMapping->MapKey(PathActions[Slot], PathKeys[Slot]);
+		}
 	}
 	if (!bHudMappingAdded)
 	{
@@ -89,6 +104,15 @@ void AGFPlayerController::EnsureHudInput()
 			EIC->BindAction(HintAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleHintKey);
 			EIC->BindAction(CloseChatAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleCloseChatKey);
 			EIC->BindAction(ShardhopAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleShardhopKey);
+			EIC->BindAction(VillainAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleVillainKey);
+			if (PathActions.Num() == 5)
+			{
+				EIC->BindAction(PathActions[0], ETriggerEvent::Started, this, &AGFPlayerController::HandlePath1);
+				EIC->BindAction(PathActions[1], ETriggerEvent::Started, this, &AGFPlayerController::HandlePath2);
+				EIC->BindAction(PathActions[2], ETriggerEvent::Started, this, &AGFPlayerController::HandlePath3);
+				EIC->BindAction(PathActions[3], ETriggerEvent::Started, this, &AGFPlayerController::HandlePath4);
+				EIC->BindAction(PathActions[4], ETriggerEvent::Started, this, &AGFPlayerController::HandlePath5);
+			}
 			bHudActionsBound = true;
 		}
 	}
@@ -165,6 +189,43 @@ void AGFPlayerController::HandleShardhopKey()
 	if (!Dest.IsNone())
 	{
 		RequestShardhop(Dest);
+	}
+}
+
+void AGFPlayerController::SendPathSlot(int32 Slot)
+{
+	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	if (PS && !PS->Progress.bPathChosen)
+	{
+		PS->ServerChoosePath(static_cast<uint8>(Slot));
+	}
+}
+
+void AGFPlayerController::HandlePath1() { SendPathSlot(0); }
+void AGFPlayerController::HandlePath2() { SendPathSlot(1); }
+void AGFPlayerController::HandlePath3() { SendPathSlot(2); }
+void AGFPlayerController::HandlePath4() { SendPathSlot(3); }
+void AGFPlayerController::HandlePath5() { SendPathSlot(4); }
+
+void AGFPlayerController::HandleVillainKey()
+{
+	if (const AGFHUD* HUD = Cast<AGFHUD>(GetHUD()); HUD && HUD->IsChatOpen())
+	{
+		return;
+	}
+	ServerToggleVillain();
+}
+
+void AGFPlayerController::ServerToggleVillain_Implementation()
+{
+	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	if (!PS)
+	{
+		return;
+	}
+	if (UGFSocialComponent* Social = AGFSocialDirector::GetSocial(GetWorld(), false))
+	{
+		Social->ServerToggleVillain(PS);
 	}
 }
 

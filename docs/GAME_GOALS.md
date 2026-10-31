@@ -213,9 +213,28 @@
 **Open questions (default in force)**
 - The ferry decision issues disagree with each other (fare, pass cost, mob table). Default: the newest consolidated decision (#65) wins, and the older issues get a superseded note.
 
+## 16. Paths
+**Stated goals**
+- Five classes. Three are named: Delver, Wrangler, Scavenger. Two slots stay pickable with their names unset, so a later name does not move save data or `PathTag` rows. (#164)
+- You pick a class the first time you spawn. It is saved on the character and shown as a nameplate icon. One respec is free. The next one waits a day and costs a large pile of materials, at an elder.
+- Open-world finds follow the class. Anyone can hold, trade, gift, wager, or craft any material. Mode exclusives, garden dyes, and Pebble Mine yields are not filtered. An off-path open-world find still happens at 5% of the normal rate.
+- Delver breaks stone faster, digs two layers deeper, and takes half damage from lava and burn. Wrangler spends less food and less time taming, pays less to rent, and gains family reputation faster. Scavenger sees loot glints from twice as far.
+- Nobody gets a run-speed bonus. The Delver crew-slot bonus and the Wrangler cart bonus stay off while those modes are on hold. (#160, #161)
+- The Big Grumble endgame spends unique items from any three of the five classes. It does not ask for all five. A party of three can do it from their own bags.
+
+## 17. Villain Mode
+**Stated goals**
+- PvP is opt-in. Both people have to turn it on, and it only lands in the wild (and in a hazard box out there). Safe circles, faction land, the neutral disc, and mini-game maps ignore it. Walking into a safe circle pauses it. It does not switch off. (#163)
+- A jailed player cannot turn it on. A jailed player can still be targeted. Jail is not a safe circle. (#83)
+- Arming has a short warm-up with no PvP damage either way. After a PvP hit, disarm is locked and every new hit starts that lock over. Disarm then takes a few seconds. The choice lasts for the session only.
+- Hitting someone who is not a villain bonks. No health change, no shove, no loot. A faint drops a tenth of the materials in the bag (not tools, not outfits), capped, and nobody loses reputation. Respawn gives a short immunity.
+- Tamed dinos follow their owner's choice. Rentals refuse. A villain does not gain build rights and does not change how Big Grumble picks people. Run speed stays the same.
+- The duel request is parked. It cannot start a fight. (#122)
+
 ---
 
 ## Changelog
 - v1 (Oct 30 2026): first version.
 - v2 (Oct 30 2026): section 1 names the Shatter Flats prison planet. The safe circle stays cozy. Outside it is dangerous. `README.md` and `PLAN.md` use that same sentence. Camp colours are the render swatches, and Cinderwrights is ember `#D9542B`. Spawn defaults from #113, #136 and #137 are logged as team defaults.
 - v3 (Oct 30 2026): private source tags are gone. The goals stay, written as design goals.
+- v4 (Oct 31 2026): sections 16 and 17 record Paths and Villain Mode. Five classes, endgame needs three of them, no run-speed perk. Villain Mode is opt-in. Duels stay parked. Jail can be targeted.

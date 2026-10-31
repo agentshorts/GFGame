@@ -16,6 +16,7 @@
 class AGFDino;
 class AGFGameState;
 class AGFPlayerState;
+class UDataTable;
 
 namespace GFUnbindingIds
 {
@@ -99,6 +100,8 @@ struct FGFUnbindingCodes
 	static const FName NotSpawned;
 	/** AGFDino (diet tame) is not Big Grumble. */
 	static const FName NotBigGrumble;
+	/** The bags do not hold unique items from three of the five classes. */
+	static const FName NeedPaths;
 };
 
 struct FGFUnbindingResult
@@ -170,6 +173,12 @@ struct FGFUnbinding
 	 * or the player is not holding it. Companion bodies are refused without spending.
 	 */
 	FGFUnbindingResult AttemptTame(const FString& ByKey);
+	/**
+	 * The endgame tame. Needs unique items from three of the five classes somewhere in Bags, then spends
+	 * one of each (out of the bag that already holds it) and one tamestone from ByKey.
+	 * AttemptTame alone still only spends the tamestone, so older callers stay put.
+	 */
+	FGFUnbindingResult AttemptEndgame(const FString& ByKey, const UDataTable* Items);
 	FGFUnbindingResult RejectCompanion(const AGFDino* Dino) const;
 
 	/** Server: make PS's inventory match the material this record says they hold. Faction and host stay put. */

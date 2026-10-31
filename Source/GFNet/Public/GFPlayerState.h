@@ -9,6 +9,16 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGFOnZoneChanged, FName, OldZoneId, FName, NewZoneId);
 
+/** Someone who landed a villain hit, and the world time. Session only. */
+USTRUCT(BlueprintType)
+struct GFNET_API FGFVillainRecentHit
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Villain") FString Key;
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Villain") float AtSeconds = 0.f;
+};
+
 class UGFInventoryComponent;
 class AGFGameState;
 class AGFVoxelWorld;
@@ -84,9 +94,29 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_CurrentZoneId, BlueprintReadOnly, Category = "GF|Zone")
 	FName CurrentZoneId;
 
-	/** Villain Mode. The toggle that sets this lives on another task. */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Zone")
+	/** Class icon for the nameplate. Saved on Progress and copied here so other clients can see it. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Path")
+	EGFPath ChosenPath = EGFPath::None;
+
+	/**
+	 * Villain Mode, this session only. Not written into the character save.
+	 * Warm-up, lock, disarm channel and immunity are world seconds. Negative means inactive.
+	 */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Villain")
 	bool bVillainMode = false;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Villain") float VillainWarmupUntil = -1.f;
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Villain") float VillainLockUntil = -1.f;
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Villain") float VillainDisarmUntil = -1.f;
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Villain") float VillainImmuneUntil = -1.f;
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Villain") int32 VillainTitle = -1;
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Villain") bool bVillainTitleSpent = false;
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Villain") int32 VillainWinStreak = 0;
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Villain") float VillainHealth = 100.f;
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Villain") int32 VillainBonkSerial = 0;
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Villain") TArray<FGFVillainRecentHit> VillainRecentHits;
+	/** Materials left on the ground after a villain faint, for the winner to pick up. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Villain") TArray<FGFItemStack> VillainDropped;
 
 	UPROPERTY(BlueprintAssignable, Category = "GF|Zone")
 	FGFOnZoneChanged OnZoneChanged;
@@ -167,8 +197,13 @@ public:
 
 	/** Server. Broadcasts OnZoneChanged. The first write from None does not toast; the zone subsystem decides that. */
 	void SetCurrentZoneId(FName NewId);
-	/** Server. */
+	/** Server. Raw flag. Villain rules go through UGFSocialComponent; this only stores the result. */
 	void SetVillainMode(bool bOn);
+	/**
+	 * Server. First call picks the class. Later calls are the respec (one free, then a cooldown and a material cost).
+	 * Returns Ok, BadPath, SamePath, Cooldown, Cost, or NoAuthority.
+	 */
+	FName ChoosePath(EGFPath NewPath);
 	/** Server. Any hit bumps the serial. PvP-zone player damage also stamps the clock. */
 	void NotifyTookDamage(bool bFromPlayerInPvPZone);
 	/** Server. Remembers a Shardstone on the character. */
@@ -226,6 +261,10 @@ public:
 
 	UFUNCTION(Server, Reliable)
 	void ServerSetHeldItem(FName ItemId);
+
+	/** Slot 0..4: Delver, Wrangler, Scavenger, then the two unnamed classes. */
+	UFUNCTION(Server, Reliable)
+	void ServerChoosePath(uint8 Slot);
 
 	UFUNCTION(Server, Reliable)
 	void ServerUploadCharacter(const FGFCharacterData& Data);
