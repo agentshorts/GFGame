@@ -7,6 +7,7 @@
 #include "GFLiveChartGenerator.h"
 #include "GFMiniGameGateSubsystem.h"
 #include "GFEconomy.h"
+#include "GFBeatHopCourses.h"
 #include "GFBeatHopCourse.generated.h"
 
 class UStaticMeshComponent;
@@ -124,6 +125,10 @@ struct GFRHYTHM_API FGFBeatHopResultRow
 
 	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
 	EGFBeatHopGrade Grade = EGFBeatHopGrade::C;
+
+	/** True when this run crossed the finish. A song that runs out first is not a pass (#114). */
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
+	bool bPassed = false;
 };
 
 /**
@@ -306,8 +311,9 @@ struct GFRHYTHM_API FGFBeatHopVfx
 /**
  * Beat Hop greybox course (PLAN.md M5). Lays coloured bricks out from a beatmap (beat time x reference speed = distance,
  * lane = sideways offset), lights them to the beat (dim ~2 beats early, lit on the beat), and judges landings on the
- * server: landing on a lit brick pays materials straight into the player's ledger account. A song's end pays a
- * grade/combo bonus. Live mode ("Play to my music", solo only) streams bricks just ahead from the live beat tracker;
+ * server: landing on a lit brick pays materials straight into the player's ledger account. Passing the course
+ * (crossing the finish) pays the grade/combo bonus. A song that runs out first is not a win (#114).
+ * Live mode ("Play to my music", solo only) streams bricks just ahead from the live beat tracker;
  * a live run ends if a second player joins or live audio stops.
  *
  * Rewards: every mint goes through the GF game state's ledger (AGFGameState::ServerMint) with a fixed TxId built from
@@ -444,8 +450,39 @@ public:
 
 	/** Server: a pawn crossed the start gate. Starts the selected song; the run clock lines up with where it crossed. */
 	bool TryStartFromGate(APawn* Pawn, FString& OutReason);
-	/** Server: a pawn crossed the finish gate. Ends the run (results, then back to the hub). */
+	/** Server: a pawn crossed the finish gate. That is the win (#114). Ends the run (results, then back to the hub). */
 	bool ReachFinish(APawn* Pawn);
+
+	/** True after the last run ended on the finish. A timeout or an early end leaves this false until the next pass. */
+	bool DidPass() const { return bLastPassed; }
+
+	/** Server: pick the course for the next run (Fern, Rime, Cinder). False if unknown or mid-run. */
+	bool SelectCourse(FName CourseId);
+	FName GetSelectedCourseId() const { return SelectedCourseId; }
+	FName GetRunCourseId() const { return RunCourseId; }
+	int32 NumCourseTiles() const { return CourseTiles.Num(); }
+
+	/**
+	 * Server: burn GlowDust and hire a Ripwing for this player. The same player can't hire twice.
+	 * The dino catches NotifyFall until its catches run out.
+	 */
+	bool TryHireRescue(const FString& PlayerKey, FString& OutReason);
+	/** Catches left for this player, or 0 when they have no Ripwing. */
+	int32 GetRescueCatches(const FString& PlayerKey) const;
+	/**
+	 * Server, mid-run: a hired Ripwing catches this fall and puts the runner back on the next brick.
+	 * No hire, or no catches left, leaves the runner where they are (the catch floor still does its own job).
+	 */
+	bool NotifyFall(ACharacter* Character, const FString& PlayerKey);
+
+	/** Server: step ice skid and the revenge dino. Does not write walk speed, gravity or air control. */
+	void TickHazards(float DeltaSeconds);
+	/** Course-local spot of the revenge dino. Zero when this course has none. */
+	FVector GetRevengeLocal() const { return Revenge.Local; }
+	int32 GetRevengeKnocks() const { return Revenge.Knocks; }
+	bool HasRevengeDino() const { return Revenge.bSpawned; }
+	UStaticMeshComponent* GetRescueDino() const { return RescueDino; }
+	UStaticMeshComponent* GetRevengeDino() const { return RevengeDino; }
 	/** Server: results countdown, return to the hub, deferred gate starts. Tick calls this every frame. */
 	void UpdateSession();
 
@@ -593,6 +630,10 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_RunSpec)
 	FName RunSongId;
 
+	/** Course layout for this run (Fern, Rime, Cinder). Clients rebuild the same gaps and weave. */
+	UPROPERTY(ReplicatedUsing = OnRep_RunSpec)
+	FName RunCourseId;
+
 	UPROPERTY(ReplicatedUsing = OnRep_RunSpec)
 	EGFBeatDifficulty RunDifficulty = EGFBeatDifficulty::Normal;
 
@@ -659,14 +700,34 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_Session)
 	EGFBeatDifficulty SelectedDifficulty = EGFBeatDifficulty::Easy;
 
+	UPROPERTY(ReplicatedUsing = OnRep_Session)
+	FName SelectedCourseId;
+
 	UPROPERTY(Replicated)
 	TArray<FGFBeatHopResultRow> Results;
 
 	UPROPERTY(Replicated)
 	double ResultsEndServerTime = 0.0;
 
+	/** Revenge dino spot (course-local). Clients drop the greybox sphere here. */
+	UPROPERTY(ReplicatedUsing = OnRep_Hazards)
+	FVector_NetQuantize RevengeSpot;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Hazards)
+	uint8 bRevengeShown = 0;
+
+	/** Where the hired Ripwing was last seen (world). */
+	UPROPERTY(ReplicatedUsing = OnRep_Hazards)
+	FVector_NetQuantize RescueSpot;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Hazards)
+	uint8 bRescueShown = 0;
+
 	UFUNCTION()
 	void OnRep_Session();
+
+	UFUNCTION()
+	void OnRep_Hazards();
 
 private:
 	struct FPlayerRun
@@ -852,10 +913,22 @@ private:
 	TArray<TObjectPtr<UBoxComponent>> DifficultyTiles;
 
 	UPROPERTY()
+	TArray<TObjectPtr<UBoxComponent>> CourseTiles;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UBoxComponent>> RescueTiles;
+
+	UPROPERTY()
 	TArray<TObjectPtr<UMaterialInstanceDynamic>> SongTileMaterials;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UMaterialInstanceDynamic>> DifficultyTileMaterials;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> CourseTileMaterials;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> RescueTileMaterial;
 
 	UPROPERTY()
 	TObjectPtr<UTextRenderComponent> StatusText;
@@ -866,6 +939,26 @@ private:
 	int32 ShownScreenFrame = -1;
 
 	TArray<FName> SongTileIds;
+	TArray<FName> CourseTileIds;
+
+	/** Greybox spheres. The course builds them; the art dinos are not required for the rules. */
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> RescueDino;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> RevengeDino;
+
+	FGFBeatHopRescueBook Rescues;
+	FGFBeatHopRevengeState Revenge;
+	FGuid RescueSalt;
+	bool bCoursePassed = false;
+	bool bLastPassed = false;
+
+	void RefreshHazards(const APawn* Runner);
+	void EnsureDinoMeshes();
+	void ShowRescueAt(const FVector& WorldLocation);
+	void ApplyHazardPush(ACharacter* Character, const FVector& CourseLocalPush);
+	EGFTxResult BurnCost(const FGuid& TxId, const FString& PlayerKey, const TArray<FGFItemStack>& Stacks, FName Reason);
 	TMap<TWeakObjectPtr<ACharacter>, FSavedRunMove> SavedMoves;
 	/** Caught players put back mid-run stand still on their brick until the song reaches it (run time). */
 	TMap<TWeakObjectPtr<ACharacter>, double> HoldUntil;
