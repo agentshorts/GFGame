@@ -1,8 +1,10 @@
 #include "GFCharacterMovementComponent.h"
 #include "GFBeatHopCourse.h"
+#include "GFCharacter.h"
 #include "GFKindleRing.h"
 #include "GFMovementPolicy.h"
 #include "GFMovementTuning.h"
+#include "GFStairMovement.h"
 #include "GFMovementWorldSubsystem.h"
 #include "GFStaminaMode.h"
 #include "GameFramework/Character.h"
@@ -207,6 +209,8 @@ UGFCharacterMovementComponent::UGFCharacterMovementComponent()
 	// Constructor values match UGFMovementTuning. BeginPlay copies the asset, which may override them.
 	MaxWalkSpeed = 500.f;
 	JumpZVelocity = 520.f;
+	// 50 degrees matches UGFMovementTuning::WalkableFloorAngle. BeginPlay copies the asset.
+	SetWalkableFloorAngle(50.f);
 }
 
 void UGFCharacterMovementComponent::BeginPlay()
@@ -214,6 +218,7 @@ void UGFCharacterMovementComponent::BeginPlay()
 	Super::BeginPlay();
 	ApplyBaseRunSpeed();
 	ApplyJumpTuning();
+	ApplyStairTuning();
 	if (CharacterOwner && CharacterOwner->HasAuthority())
 	{
 		Sim.ResetFull(GetTuning());
@@ -263,6 +268,17 @@ void UGFCharacterMovementComponent::ApplyJumpTuning()
 	{
 		CharacterOwner->JumpMaxCount = FMath::Max(Tuning.JumpsPerAirtime, 0);
 	}
+}
+
+void UGFCharacterMovementComponent::ApplyStairTuning()
+{
+	const UGFMovementTuning& Tuning = GetTuning();
+	float Step = Tuning.MaxStepHeight;
+	if (const AGFCharacter* Body = Cast<AGFCharacter>(CharacterOwner))
+	{
+		Step = Body->PlayerMaxStepHeight;
+	}
+	GFStairMovement::Apply(this, Step, Tuning.WalkableFloorAngle);
 }
 
 const UGFMovementTuning& UGFCharacterMovementComponent::GetTuning() const

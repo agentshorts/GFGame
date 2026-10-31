@@ -7,6 +7,7 @@
 #include "GFGrumbleDigSite.h"
 #include "GFRegionGate.h"
 #include "GFShardstone.h"
+#include "GFStairCatalog.h"
 #include "GFZoneCatalog.h"
 #include "GFZoneLayout.h"
 #include "GFZoneProp.h"
@@ -144,6 +145,7 @@ void AGFWorldLayoutDirector::BeginPlay()
 	}
 
 	EnsureGrumbleDigSite();
+	GFStairCatalog::SpawnHubFlights(World);
 
 	UE_LOG(LogGF, Log, TEXT("Zones: hub layout spawned %d points of interest, %d stones, %d porches."),
 		Points.Num(), Catalog.Stones.Num(), FGFZoneLayout::Regions().Num());

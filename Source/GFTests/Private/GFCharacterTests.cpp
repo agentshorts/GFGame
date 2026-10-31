@@ -24,6 +24,7 @@ bool FGFCharacterStepHeightTest::RunTest(const FString&)
 	TestTrue(*FString::Printf(TEXT("MaxStepHeight %.1f cm >= one block (100 cm)"), Move->MaxStepHeight), Move->MaxStepHeight >= 100.f);
 	TestTrue(TEXT("GFBlockSize is still 100 cm"), FMath::IsNearlyEqual(GFBlockSize, 100.f));
 	TestEqual(TEXT("MaxStepHeight comes from PlayerMaxStepHeight"), Move->MaxStepHeight, CDO->PlayerMaxStepHeight);
+	TestTrue(TEXT("Walkable floor angle is 50 degrees"), FMath::IsNearlyEqual(Move->GetWalkableFloorAngle(), 50.f, 0.1f));
 
 	// StepUp rejects hits above the capsule cylinder top (HalfHeight - Radius above centre), so the step must fit under it.
 	const float Radius = Capsule->GetUnscaledCapsuleRadius();

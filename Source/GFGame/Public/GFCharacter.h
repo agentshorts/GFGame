@@ -12,6 +12,7 @@ class UInputAction;
 class UInputMappingContext;
 class UGFInventoryComponent;
 class UGFSimpleAnimComponent;
+class UGFFootIKComponent;
 class UGFFerryRiderComponent;
 class AGFVoxelWorld;
 class UGFCharacterMovementComponent;
@@ -54,6 +55,10 @@ public:
 	/** Idle / move on the skeletal mesh. Clips come from the Player.Base asset-map row. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Anim")
 	TObjectPtr<UGFSimpleAnimComponent> SimpleAnim;
+
+	/** Control Rig foot plant. Binds once the skeletal mesh is on. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Anim")
+	TObjectPtr<UGFFootIKComponent> FootIK;
 
 	UFUNCTION(BlueprintCallable, Category = "GF|Camera")
 	void SetFirstPerson(bool bEnable);

@@ -104,3 +104,9 @@ protected:
 
 	float LastAttackTime = -1000.f;
 };
+
+/** Called at the end of AGFDino::BeginPlay. The game module installs stair tuning and foot IK here. */
+using FGFDinoReadyHook = void (*)(AGFDino*);
+
+/** Pass null to clear. The last installer wins. */
+GFCOMPANION_API void GFSetDinoReadyHook(FGFDinoReadyHook Hook);
