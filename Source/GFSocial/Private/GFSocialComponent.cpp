@@ -1,5 +1,6 @@
 #include "GFSocialComponent.h"
 #include "GFJailCell.h"
+#include "GFVillainSession.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFSafeZone.h"
@@ -24,6 +25,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Sound/SoundBase.h"
 #include "TimerManager.h"
+#include "Math/RandomStream.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGFSocial, Log, All);
 
@@ -48,6 +50,10 @@ namespace GFSocialVerbs
 	static const FName Unguest(TEXT("Unguest"));
 	static const FName GrantToggle(TEXT("GrantToggle"));
 	static const FName RevokeToggle(TEXT("RevokeToggle"));
+	static const FName VillainOn(TEXT("VillainOn"));
+	static const FName VillainOff(TEXT("VillainOff"));
+	static const FName VillainReroll(TEXT("VillainReroll"));
+	static const FName Duel(TEXT("Duel"));
 }
 
 void UGFVoiceMuteStub::SetVoiceMuted(const FString& Key, bool bMuted)
@@ -278,6 +284,43 @@ FName UGFSocialComponent::GetPlayerMode(const FString& Key) const
 	return M ? *M : DefaultPlayerMode;
 }
 
+FName UGFSocialComponent::ServerToggleVillain(AGFPlayerState* By)
+{
+	if (!By)
+	{
+		return FGFSocialCodes::NoSuchPlayer;
+	}
+	return ServerVillain(By, By->IsVillainMode() ? FName(TEXT("VillainOff")) : FName(TEXT("VillainOn")));
+}
+
+FName UGFSocialComponent::ServerVillain(AGFPlayerState* By, FName Verb)
+{
+	if (!By)
+	{
+		return FGFSocialCodes::NoSuchPlayer;
+	}
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	FRandomStream Rng(GetTypeHash(By->PlayerKey) ^ static_cast<int32>(Now * 1000.0));
+	if (Verb == FName(TEXT("VillainOn")))
+	{
+		return FGFVillainSession::Arm(*By, Now, IsJailed(By->PlayerKey), Rng);
+	}
+	if (Verb == FName(TEXT("VillainOff")))
+	{
+		return FGFVillainSession::BeginDisarm(*By, Now);
+	}
+	if (Verb == FName(TEXT("VillainReroll")))
+	{
+		return FGFVillainSession::RerollTitle(*By, Rng);
+	}
+	if (Verb == FName(TEXT("Duel")))
+	{
+		bool bStarted = false;
+		return FGFVillainRules::RequestDuel(bStarted);
+	}
+	return TEXT("UnknownVerb");
+}
+
 // ---------------- Mode handler ----------------
 
 FGFModeResult UGFSocialComponent::HandleModeRequest(AGFPlayerState* By, const FGFModeRequest& Request)
@@ -312,6 +355,7 @@ FGFModeResult UGFSocialComponent::HandleModeRequest(AGFPlayerState* By, const FG
 	else if (V == Unguest) Code = ServerSetGuest(By, Target, false);
 	else if (V == GrantToggle) Code = ServerSetToggleGrant(By, Target, true);
 	else if (V == RevokeToggle) Code = ServerSetToggleGrant(By, Target, false);
+	else if (V == VillainOn || V == VillainOff || V == VillainReroll || V == Duel) Code = ServerVillain(By, V);
 	else return FGFModeResult::Fail(TEXT("UnknownVerb"));
 	return Code == FGFSocialCodes::Ok ? FGFModeResult::Ok() : FGFModeResult::Fail(Code);
 }
@@ -1110,6 +1154,20 @@ void UGFSocialComponent::TickServer(float Dt)
 		if (Step > 1.f)
 		{
 			TP->SetActorLocation(From + Delta.GetSafeNormal() * Step, true);
+		}
+	}
+	if (UWorld* World = GetWorld())
+	{
+		const double Now = World->GetTimeSeconds();
+		if (AGFGameState* G = GS())
+		{
+			for (APlayerState* P : G->PlayerArray)
+			{
+				if (AGFPlayerState* GPS = Cast<AGFPlayerState>(P))
+				{
+					FGFVillainSession::Tick(*GPS, Now);
+				}
+			}
 		}
 	}
 	// A jailed pawn that somehow left the cell goes back in.

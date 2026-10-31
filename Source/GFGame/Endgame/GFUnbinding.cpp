@@ -1,4 +1,5 @@
 #include "GFUnbinding.h"
+#include "GFPathRules.h"
 #include "GFDino.h"
 #include "GFTamingComponent.h"
 #include "Engine/World.h"
@@ -15,6 +16,7 @@ const FName FGFUnbindingCodes::RecipientAbsent(TEXT("RecipientAbsent"));
 const FName FGFUnbindingCodes::NoMaterial(TEXT("NoMaterial"));
 const FName FGFUnbindingCodes::NotSpawned(TEXT("NotSpawned"));
 const FName FGFUnbindingCodes::NotBigGrumble(TEXT("NotBigGrumble"));
+const FName FGFUnbindingCodes::NeedPaths(TEXT("NeedPaths"));
 
 namespace
 {
@@ -266,6 +268,37 @@ bool FGFUnbinding::NotifySpawned(const FString& DisplayName)
 void FGFUnbinding::NotifyGone()
 {
 	bGiantSpawned = false;
+}
+
+FGFUnbindingResult FGFUnbinding::AttemptEndgame(const FString& ByKey, const UDataTable* Items)
+{
+	if (!bGiantSpawned)
+	{
+		return Fail(FGFUnbindingCodes::NotSpawned);
+	}
+	if (ByKey.IsEmpty() || MaterialOf(ByKey) < FGFUnbindingRules::MaterialPerCompletion)
+	{
+		return Fail(FGFUnbindingCodes::NoMaterial);
+	}
+
+	TArray<FString> Keys;
+	Bags.GetKeys(Keys);
+	Keys.Sort();
+	TArray<FGFInventory> Pooled;
+	Pooled.Reserve(Keys.Num());
+	for (const FString& Key : Keys)
+	{
+		Pooled.Add(Bags[Key]);
+	}
+	if (!FGFPathRules::SpendEndgame(Pooled, Items))
+	{
+		return Fail(FGFUnbindingCodes::NeedPaths);
+	}
+	for (int32 Index = 0; Index < Keys.Num(); ++Index)
+	{
+		Bags[Keys[Index]] = Pooled[Index];
+	}
+	return AttemptTame(ByKey);
 }
 
 FGFUnbindingResult FGFUnbinding::AttemptTame(const FString& ByKey)

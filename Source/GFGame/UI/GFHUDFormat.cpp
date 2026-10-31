@@ -141,3 +141,54 @@ bool GFHintVisible(float ElapsedSeconds, bool bUserOverride, bool bUserWantsVisi
 	}
 	return ElapsedSeconds < GFHUD::HintAutoHideSeconds;
 }
+
+FGFNameplateText GFFormatNameplate(const FString& Name, EGFPath Path, bool bVillain, const FString& Title, bool bWithinSight)
+{
+	FGFNameplateText Out;
+	const FString Icon = FGFPathRules::IconId(Path);
+	Out.bShowPath = !Icon.IsEmpty();
+	Out.PathIcon = Icon;
+	Out.bShowVillain = bVillain && bWithinSight;
+	Out.VillainIcon = Out.bShowVillain ? FString(TEXT("Villain.Skull")) : FString();
+	FString Line = Name.IsEmpty() ? FString(TEXT("Someone")) : Name;
+	if (Out.bShowPath)
+	{
+		Line += FString(TEXT(" [")) + FGFPathRules::DisplayName(Path) + TEXT("]");
+	}
+	if (Out.bShowVillain)
+	{
+		Line += TEXT(" *");
+		if (!Title.IsEmpty())
+		{
+			Line += FString(TEXT(" ")) + Title;
+		}
+	}
+	Out.Line = Line;
+	return Out;
+}
+
+FString GFFormatVillainBadge(bool bOn, float LockSecondsLeft)
+{
+	if (!bOn)
+	{
+		return FString();
+	}
+	if (LockSecondsLeft > 0.f)
+	{
+		return FString::Printf(TEXT("VILLAIN %ds"), FMath::CeilToInt(LockSecondsLeft));
+	}
+	return TEXT("VILLAIN");
+}
+
+TArray<FString> GFFormatPathCards(const TArray<FGFPathCard>& Cards)
+{
+	TArray<FString> Lines;
+	Lines.Add(TEXT("Pick a path"));
+	for (int32 Index = 0; Index < Cards.Num(); ++Index)
+	{
+		const FGFPathCard& Card = Cards[Index];
+		Lines.Add(FString::Printf(TEXT("%d  %s"), Index + 1, *Card.Name));
+		Lines.Add(Card.Blurb);
+	}
+	return Lines;
+}

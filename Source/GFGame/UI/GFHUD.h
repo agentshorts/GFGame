@@ -32,6 +32,7 @@ public:
 	virtual void DrawHUD() override;
 
 	void ToggleControlsHint();
+	void DrawPathsAndVillains();
 
 	bool IsChatOpen() const { return bChatOpen; }
 	void OpenChat();

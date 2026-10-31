@@ -44,6 +44,21 @@ enum class EGFExclusive : uint8
 	Lab
 };
 
+/**
+ * Class that may find an item in the open world. None means everyone.
+ * Two slots keep stable ids until they are named. Do not reorder: saves and CSV rows store the name.
+ */
+UENUM(BlueprintType)
+enum class EGFPath : uint8
+{
+	None,
+	Delver,
+	Wrangler,
+	Scavenger,
+	UnnamedFourth,
+	UnnamedFifth
+};
+
 UENUM(BlueprintType)
 enum class EGFRarity : uint8
 {
@@ -102,6 +117,13 @@ struct GFCORE_API FGFItemRow : public FTableRowBase
 	/** Stays on the account that received it. Gifts, mail, wagers and rent cannot move it. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Economy")
 	bool bAccountBound = false;
+
+	/**
+	 * Open-world find filter. None = everyone. Owning, trading, gifting, wagering and crafting ignore this.
+	 * Pebble Mine, mode exclusives and garden dyes are not filtered by it.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Path")
+	EGFPath PathTag = EGFPath::None;
 };
 
 /** An item id and a count. Used for inventory slots, recipe inputs/outputs and rewards. */

@@ -7,6 +7,7 @@
 #include "GFZoneLayout.h"
 #include "GFZoneSubsystem.h"
 #include "GFHUDFormat.h"
+#include "GFVillainRules.h"
 #include "GFCharacter.h"
 #include "GFCharacterMovementComponent.h"
 #include "GFMovementTuning.h"
@@ -158,6 +159,63 @@ UFont* AGFHUD::HudFont() const
 	return GEngine ? GEngine->GetSmallFont() : nullptr;
 }
 
+void AGFHUD::DrawPathsAndVillains()
+{
+	if (!Canvas)
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	APlayerController* PC = GetOwningPlayerController();
+	if (!World || !PC)
+	{
+		return;
+	}
+	AGFPlayerState* Me = PC->GetPlayerState<AGFPlayerState>();
+	UFont* Font = HudFont();
+	const float Scale = FMath::Clamp(Canvas->ClipY / 720.f, 1.f, 3.f);
+	const double Now = World->GetTimeSeconds();
+	if (Me && !Me->Progress.bPathChosen)
+	{
+		float Y = 12.f * Scale;
+		for (const FString& Line : GFFormatPathCards(FGFPathRules::Cards()))
+		{
+			DrawText(Line, FLinearColor(0.95f, 0.90f, 0.70f), 16.f, Y, Font, 0.65f * Scale, false);
+			Y += 14.f * Scale;
+		}
+	}
+	if (Me && Me->IsVillainMode())
+	{
+		const float LockLeft = FMath::Max(0.f, Me->VillainLockUntil - static_cast<float>(Now));
+		DrawText(GFFormatVillainBadge(true, LockLeft), FLinearColor(0.72f, 0.28f, 0.85f), Canvas->ClipX - 180.f, 16.f, Font, Scale, false);
+	}
+	const APawn* MyPawn = GetOwningPawn();
+	const AGameStateBase* GS = World->GetGameState();
+	if (!MyPawn || !GS)
+	{
+		return;
+	}
+	for (const APlayerState* PS : GS->PlayerArray)
+	{
+		const AGFPlayerState* Other = Cast<AGFPlayerState>(PS);
+		const APawn* Pawn = Other ? Other->GetPawn() : nullptr;
+		if (!Other || !Pawn || Pawn == MyPawn)
+		{
+			continue;
+		}
+		const float Distance = FVector::Dist(MyPawn->GetActorLocation(), Pawn->GetActorLocation());
+		const FGFNameplateText Plate = GFFormatNameplate(Other->GetPlayerName(), Other->ChosenPath, Other->IsVillainMode(),
+			FGFVillainRules::TitleAt(Other->VillainTitle), Distance <= GFHUD::VillainSightCm);
+		FVector Screen;
+		if (!PC->ProjectWorldLocationToScreen(Pawn->GetActorLocation() + FVector(0.f, 0.f, 120.f), Screen, true))
+		{
+			continue;
+		}
+		const FLinearColor Tint = Plate.bShowVillain ? FLinearColor(0.78f, 0.45f, 0.95f) : FLinearColor::White;
+		DrawText(Plate.Line, Tint, Screen.X, Screen.Y, Font, 0.7f * Scale, true);
+	}
+}
+
 void AGFHUD::DrawHUD()
 {
 	Super::DrawHUD();
@@ -188,6 +246,7 @@ void AGFHUD::DrawHUD()
 	DrawToasts();
 	DrawHotbar();
 	DrawHint();
+	DrawPathsAndVillains();
 }
 
 void AGFHUD::DrawCrosshair()

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GFTerritoryTypes.h"
+#include "GFPathRules.h"
 
 namespace GFHUD
 {
@@ -29,6 +30,9 @@ namespace GFHUD
 
 	/** Name-tag slots. AGFGameMode assigns ColorIndex from 0. The palette wraps. */
 	constexpr int32 PlayerColorCount = 10;
+
+	/** Villain skull and title hide past this. The class icon stays. */
+	constexpr float VillainSightCm = 6000.f;
 
 	inline const TCHAR* ControlsHint()
 	{
@@ -77,3 +81,21 @@ GFGAME_API FLinearColor GFPlayerColor(int32 ColorIndex);
 
 /** Auto-hide until the player presses H. After that, bUserWantsVisible sticks. */
 GFGAME_API bool GFHintVisible(float ElapsedSeconds, bool bUserOverride, bool bUserWantsVisible);
+
+struct GFGAME_API FGFNameplateText
+{
+	FString Line;
+	FString PathIcon;
+	FString VillainIcon;
+	bool bShowPath = false;
+	bool bShowVillain = false;
+};
+
+/** Class icon always (once picked). Villain skull and title only inside sight and only while armed. */
+GFGAME_API FGFNameplateText GFFormatNameplate(const FString& Name, EGFPath Path, bool bVillain, const FString& Title, bool bWithinSight);
+
+/** "VILLAIN" plus the disarm-lock countdown, or empty when it is off. */
+GFGAME_API FString GFFormatVillainBadge(bool bOn, float LockSecondsLeft);
+
+/** One line per class card, for the first-spawn pick. */
+GFGAME_API TArray<FString> GFFormatPathCards(const TArray<FGFPathCard>& Cards);

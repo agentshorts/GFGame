@@ -29,6 +29,9 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerRequestShardhop(FName DestId);
 
+	UFUNCTION(Server, Reliable)
+	void ServerToggleVillain();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnRep_PlayerState() override;
@@ -39,6 +42,13 @@ protected:
 	void HandleHintKey();
 	void HandleCloseChatKey();
 	void HandleShardhopKey();
+	void HandleVillainKey();
+	void HandlePath1();
+	void HandlePath2();
+	void HandlePath3();
+	void HandlePath4();
+	void HandlePath5();
+	void SendPathSlot(int32 Slot);
 	void TickShardhop();
 	void FinishShardhop(FName DestId);
 
@@ -56,6 +66,12 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> ShardhopAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> VillainAction;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UInputAction>> PathActions;
 
 	FTimerHandle ShardhopTimer;
 	bool bShardhopActive = false;

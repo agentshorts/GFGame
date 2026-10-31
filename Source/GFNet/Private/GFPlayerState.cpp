@@ -2,6 +2,7 @@
 #include "GFGameState.h"
 #include "GFLocalProfileSubsystem.h"
 #include "GFInventoryComponent.h"
+#include "GFPathRules.h"
 #include "GFVoxelWorld.h"
 #include "GFTamingComponent.h"
 #include "GameFramework/Character.h"
@@ -35,7 +36,19 @@ void AGFPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME_CONDITION(AGFPlayerState, Mailbox, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(AGFPlayerState, Progress, COND_OwnerOnly);
 	DOREPLIFETIME(AGFPlayerState, CurrentZoneId);
+	DOREPLIFETIME(AGFPlayerState, ChosenPath);
 	DOREPLIFETIME(AGFPlayerState, bVillainMode);
+	DOREPLIFETIME(AGFPlayerState, VillainWarmupUntil);
+	DOREPLIFETIME(AGFPlayerState, VillainLockUntil);
+	DOREPLIFETIME(AGFPlayerState, VillainDisarmUntil);
+	DOREPLIFETIME(AGFPlayerState, VillainImmuneUntil);
+	DOREPLIFETIME(AGFPlayerState, VillainTitle);
+	DOREPLIFETIME(AGFPlayerState, bVillainTitleSpent);
+	DOREPLIFETIME(AGFPlayerState, VillainWinStreak);
+	DOREPLIFETIME(AGFPlayerState, VillainHealth);
+	DOREPLIFETIME(AGFPlayerState, VillainBonkSerial);
+	DOREPLIFETIME(AGFPlayerState, VillainRecentHits);
+	DOREPLIFETIME(AGFPlayerState, VillainDropped);
 }
 
 void AGFPlayerState::BeginPlay()
@@ -168,6 +181,7 @@ void AGFPlayerState::ApplyCharacterData(const FGFCharacterData& Data)
 	Journal = Data.Journal;
 	Blueprints = Data.Blueprints;
 	Progress = Data.Progress;
+	ChosenPath = Progress.Path;
 	if (Companions.Num() > 0)
 	{
 		Progress.bHasTamed = true; // characters from before the flag existed
@@ -355,6 +369,57 @@ void AGFPlayerState::SetVillainMode(bool bOn)
 	}
 	bVillainMode = bOn;
 	ForceNetUpdate();
+}
+
+void AGFPlayerState::ServerChoosePath_Implementation(uint8 Slot)
+{
+	EGFPath Path = EGFPath::None;
+	if (!FGFPathRules::PathFromSlot(static_cast<int32>(Slot), Path))
+	{
+		return;
+	}
+	ChoosePath(Path);
+}
+
+FName AGFPlayerState::ChoosePath(EGFPath NewPath)
+{
+	if (!HasAuthority())
+	{
+		return TEXT("NoAuthority");
+	}
+	FGFPathRecord Record;
+	Record.Path = Progress.Path;
+	Record.bChosen = Progress.bPathChosen;
+	Record.Respecs = Progress.PathRespecs;
+	Record.RespecUnix = Progress.PathRespecUnix;
+	const UDataTable* Items = nullptr;
+	FGFInventory Bag = Inventory ? Inventory->GetInventory() : FGFInventory();
+	if (AGFGameState* GS = GetGFGameState())
+	{
+		Items = GS->GetItemTable();
+	}
+	const int32 Available = FGFPathRules::TradeableValue(Items, Bag);
+	const int64 Now = FDateTime::UtcNow().ToUnixTimestamp();
+	const FGFPathChange Change = FGFPathRules::Evaluate(Record, NewPath, Now, Available);
+	if (!Change.bOk)
+	{
+		return Change.Code;
+	}
+	if (Change.CostValue > 0)
+	{
+		if (!Inventory || !FGFPathRules::PayValue(Items, Bag, Change.CostValue) || !Inventory->SetInventory(Bag))
+		{
+			return TEXT("Cost");
+		}
+	}
+	FGFPathRules::Commit(Record, NewPath, Now);
+	Progress.Path = Record.Path;
+	Progress.bPathChosen = Record.bChosen;
+	Progress.PathRespecs = Record.Respecs;
+	Progress.PathRespecUnix = Record.RespecUnix;
+	ChosenPath = Record.Path;
+	MarkCharacterChanged();
+	return TEXT("Ok");
 }
 
 void AGFPlayerState::NotifyTookDamage(bool bFromPlayerInPvPZone)
