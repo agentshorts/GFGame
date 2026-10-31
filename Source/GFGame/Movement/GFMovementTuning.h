@@ -241,4 +241,27 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "BeatHop")
 	FGFBeatHopTraversalProfile BeatHop;
+
+	/**
+	 * Tallest ledge a dino walks up without jumping, cm. Copied onto CharacterMovement MaxStepHeight.
+	 * Players keep AGFCharacter::PlayerMaxStepHeight (same default, config on the character) so one-block
+	 * voxel stairs stay on that knob. One block is 100 cm. Stay under the capsule step limit
+	 * (2 * half height - radius).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stair", meta = (ClampMin = "0"))
+	float MaxStepHeight = 105.f;
+
+	/**
+	 * CharacterMovement WalkableFloorAngle, degrees, for players and dinos.
+	 * Hub stair ramps stay under this so the capsule slides up the slope. A slope at the limit is not a floor.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stair", meta = (ClampMin = "0", ClampMax = "90"))
+	float WalkableFloorAngle = 50.f;
+
+	/**
+	 * How far the ankle sits above a tread, cm, so the sole plants.
+	 * The player foot is 2 mv tall (28 mv = 175 cm, so 2 mv = 12.5 cm).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stair", meta = (ClampMin = "0"))
+	float FootSoleOffsetCm = 12.5f;
 };

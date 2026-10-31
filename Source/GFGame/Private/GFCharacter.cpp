@@ -13,6 +13,7 @@
 #include "GFAssetMap.h"
 #include "GFAnimMap.h"
 #include "GFSimpleAnimComponent.h"
+#include "GFFootIKComponent.h"
 #include "GFVoxelWorld.h"
 #include "GFBlockIntegritySubsystem.h"
 #include "GFMagicComponent.h"
@@ -92,6 +93,7 @@ AGFCharacter::AGFCharacter(const FObjectInitializer& ObjectInitializer)
 		}
 	}
 	SimpleAnim = CreateDefaultSubobject<UGFSimpleAnimComponent>(TEXT("SimpleAnim"));
+	FootIK = CreateDefaultSubobject<UGFFootIKComponent>(TEXT("FootIK"));
 }
 
 void AGFCharacter::BeginPlay()
@@ -110,6 +112,10 @@ void AGFCharacter::BeginPlay()
 	{
 		CycleBlock(0);
 	}
+	if (FootIK)
+	{
+		FootIK->Bind();
+	}
 }
 
 void AGFCharacter::PostInitializeComponents()
@@ -118,7 +124,7 @@ void AGFCharacter::PostInitializeComponents()
 	// Re-apply once config and Blueprint defaults have loaded, so a tuned PlayerMaxStepHeight reaches the movement component.
 	if (UGFCharacterMovementComponent* Move = GetGFMovement())
 	{
-		Move->MaxStepHeight = PlayerMaxStepHeight;
+		Move->ApplyStairTuning();
 		Move->ApplyBaseRunSpeed();
 		Move->ApplyJumpTuning();
 	}

@@ -38,6 +38,12 @@ public:
 	/** Copies jump speed and the airtime jump count from the tuning asset. */
 	void ApplyJumpTuning();
 
+	/**
+	 * Copies the stair step height and walkable floor angle onto this component.
+	 * Players use AGFCharacter::PlayerMaxStepHeight. Everyone else uses the tuning asset step height.
+	 */
+	void ApplyStairTuning();
+
 	void SetSprintHeld(bool bHeld);
 	void NotifyDashPressed();
 	void SetGrappleSwingHeld(bool bHeld);
@@ -149,6 +155,8 @@ protected:
 private:
 	void RefreshStaminaGate();
 	void ApplyStaminaGate();
+	/** Possess never ran, so the mode is still None. None does not walk. Hub speed stays on. */
+	void PrepareControllerlessWalk();
 	FVector LiveCameraForward() const;
 	void GatherLiveContact(FGFTraversalContact& Contact);
 	void ApplyFlipPose(float TimeLeft);

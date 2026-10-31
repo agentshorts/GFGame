@@ -4,7 +4,7 @@
 	"Category": "",
 	"Description": "GFGame: a cozy co-op dino builder (voxel home and garden hub, dino taming and mini-games).",
 	"Modules": [
-		{ "Name": "GFGame", "Type": "Runtime", "LoadingPhase": "Default", "AdditionalDependencies": [ "Engine", "EnhancedInput" ] },
+		{ "Name": "GFGame", "Type": "Runtime", "LoadingPhase": "Default", "AdditionalDependencies": [ "Engine", "EnhancedInput", "ControlRig" ] },
 		{ "Name": "GFCore", "Type": "Runtime", "LoadingPhase": "Default" },
 		{ "Name": "GFVoxel", "Type": "Runtime", "LoadingPhase": "Default" },
 		{ "Name": "GFBuild", "Type": "Runtime", "LoadingPhase": "Default" },
@@ -35,6 +35,8 @@
 		{ "Name": "ModelContextProtocol", "Enabled": true, "TargetAllowList": [ "Editor" ] },
 		{ "Name": "AllToolsets", "Enabled": true, "TargetAllowList": [ "Editor" ] },
 		{ "Name": "AndroidFileServer", "Enabled": false },
-		{ "Name": "VoxelFinish", "Enabled": true }
+		{ "Name": "VoxelFinish", "Enabled": true },
+		{ "Name": "ControlRig", "Enabled": true },
+		{ "Name": "RigVM", "Enabled": true }
 	]
 }

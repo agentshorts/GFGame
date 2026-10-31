@@ -4,6 +4,7 @@
 #include "GFSimpleAnimComponent.h"
 #include "GFProtectedActor.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -37,6 +38,22 @@ AGFDino::AGFDino()
 	}
 	SimpleAnim = CreateDefaultSubobject<UGFSimpleAnimComponent>(TEXT("SimpleAnim"));
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+	// Same defaults as UGFMovementTuning stair fields. BeginPlay copies the asset through the game-module hook.
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->MaxStepHeight = 105.f;
+		Move->SetWalkableFloorAngle(50.f);
+	}
+}
+
+namespace GFDinoReadyHook
+{
+	static FGFDinoReadyHook Installed = nullptr;
+}
+
+void GFSetDinoReadyHook(FGFDinoReadyHook Hook)
+{
+	GFDinoReadyHook::Installed = Hook;
 }
 
 FName AGFDino::AssetKey(FName Species)
@@ -63,6 +80,10 @@ void AGFDino::BeginPlay()
 	Super::BeginPlay();
 	ApplyPlaceholder();
 	Taming->OnTameStateChanged.AddDynamic(this, &AGFDino::HandleTameStateChanged);
+	if (GFDinoReadyHook::Installed)
+	{
+		GFDinoReadyHook::Installed(this);
+	}
 }
 
 void AGFDino::HandleTameStateChanged(EGFTameState NewState)
