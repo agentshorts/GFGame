@@ -127,6 +127,154 @@ struct GFRHYTHM_API FGFBeatHopResultRow
 };
 
 /**
+ * One judged hop, replicated to every machine (#214). OffsetSeconds is landing time minus the note
+ * (negative = early). A miss swept after the window uses the same clock, measured past the note's end.
+ */
+USTRUCT()
+struct GFRHYTHM_API FGFBeatHopJudgementRep
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString PlayerKey;
+
+	UPROPERTY()
+	int32 BrickIndex = INDEX_NONE;
+
+	UPROPERTY()
+	EGFJudgement Result = EGFJudgement::None;
+
+	UPROPERTY()
+	float OffsetSeconds = 0.f;
+
+	UPROPERTY()
+	int32 Combo = 0;
+
+	/** Bumps on every record so a repeated hop on the same brick still replicates. */
+	UPROPERTY()
+	uint16 Seq = 0;
+};
+
+/** One player's live score. The results board is a separate snapshot taken when the run ends. */
+USTRUCT()
+struct GFRHYTHM_API FGFBeatHopScoreRep
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString PlayerKey;
+
+	UPROPERTY()
+	int32 Score = 0;
+
+	UPROPERTY()
+	int32 Combo = 0;
+
+	UPROPERTY()
+	int32 BestCombo = 0;
+
+	UPROPERTY()
+	int32 Perfects = 0;
+
+	UPROPERTY()
+	int32 Goods = 0;
+
+	UPROPERTY()
+	int32 Misses = 0;
+};
+
+/**
+ * The hop clip a character is playing (#207), so remote pawns don't guess Perfect / Stumble from movement alone.
+ * Clip is a DT_AnimMap key (Player.Land_Perfect, Player.Stumble, Player.Bhop_Air, ...).
+ */
+USTRUCT()
+struct GFRHYTHM_API FGFBeatHopAnimRep
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString PlayerKey;
+
+	UPROPERTY()
+	FName Clip;
+
+	UPROPERTY()
+	float PlayRate = 1.f;
+
+	UPROPERTY()
+	uint8 bOneShot = 0;
+
+	UPROPERTY()
+	uint16 Seq = 0;
+};
+
+/**
+ * Run movement mirrored onto the owning client (#214). Phase 0 = none, 1 = auto-run on, 2 = handed back.
+ * The three live floats are what prediction must use; the saved floats are the movement the run replaced.
+ */
+USTRUCT()
+struct GFRHYTHM_API FGFBeatHopMoveRep
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString PlayerKey;
+
+	UPROPERTY()
+	float MaxWalkSpeed = 0.f;
+
+	UPROPERTY()
+	float GravityScale = 1.f;
+
+	UPROPERTY()
+	float AirControl = 0.f;
+
+	UPROPERTY()
+	float SavedWalkSpeed = 0.f;
+
+	UPROPERTY()
+	float SavedGravityScale = 1.f;
+
+	UPROPERTY()
+	float SavedAirControl = 0.f;
+
+	UPROPERTY()
+	uint8 Phase = 0;
+
+	/** INDEX_NONE unless this runner is waiting on a put-back brick (#221). */
+	UPROPERTY()
+	int32 HoldBrick = INDEX_NONE;
+
+	UPROPERTY()
+	double HoldUntilRunTime = -1.0;
+};
+
+/** A server teleport (mid-run put-back, lobby, checkpoint) the owning client snaps to instead of smoothing. */
+USTRUCT()
+struct GFRHYTHM_API FGFBeatHopPlacementRep
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString PlayerKey;
+
+	UPROPERTY()
+	FVector_NetQuantize Location = FVector::ZeroVector;
+
+	UPROPERTY()
+	float Yaw = 0.f;
+
+	UPROPERTY()
+	FVector_NetQuantize10 Velocity = FVector::ZeroVector;
+
+	UPROPERTY()
+	uint8 bFalling = 0;
+
+	UPROPERTY()
+	uint16 Seq = 0;
+};
+
+/**
  * Beat Hop VFX sprite sheet (art batch beat_hop_v1, #209): T_VFX_Judgement is a 64x64 one-colour sheet whose
  * rects come from T_VFX_Judgement_layout.json; T_VFX_Sparkle is a 4x1 flipbook of 16x16 frames.
  */
@@ -167,7 +315,9 @@ struct GFRHYTHM_API FGFBeatHopVfx
  * player's account isn't readable yet, the grant waits here (server side, keyed by player) and is retried with the
  * same TxId. Nothing is handed to the mini-game gate's unkeyed PendingRewards.
  *
- * Songs mode runs on the replicated server world clock, so co-op players see the same lit bricks.
+ * Songs mode runs on the replicated server world clock (run start + the host's calibration, snapshotted for the run),
+ * so co-op players see the same lit bricks and the same StartGate countdown. Judgements, live scores, hit bricks,
+ * hop clips, run-movement tuning and mid-run teleports replicate so every screen shows every player's hops (#214).
  *
  * Art (batch beat_hop_v1, #201): bricks are the SM_Block_Beat_* meshes (L1-L5 by lane, Hold, Pad, Switch), each with a
  * MID made from the mesh's own MI on M_GF_BeatBrick so UpdateLights drives `Color`; the engine cube is only a fallback
@@ -241,6 +391,10 @@ public:
 	bool IsRunning() const { return bRunning; }
 	const FGFBeatmap& GetBeatmap() const { return Beatmap; }
 	const FGFRhythmScore* GetScore(const FString& PlayerKey) const;
+	/** Every player in the run: the server's judges, plus any replicated rows a client has that the server doesn't. */
+	void GetScoreboard(TArray<FGFBeatHopScoreRep>& Out) const;
+	/** True once anyone has landed a Perfect or Good on this brick (replicated, so clients don't crumble it). */
+	bool IsBrickHitByAnyone(int32 Index) const;
 	/** Everything this player earned this run (paid into the ledger, or pending in GetPendingGrants). */
 	const FGFInventory* GetEarnedRewards(const FString& PlayerKey) const;
 	/** World location of a brick's top centre. */
@@ -333,6 +487,40 @@ public:
 	/** Pushes the countdown cell to the screen (Tick does this every frame). */
 	void UpdateScreen(double WorldNow);
 
+	/**
+	 * Host calibration (seconds) snapshotted when the run starts and replicated. GetRunTime subtracts this on every
+	 * machine, so a client's own Songs offset can't drift the countdown or the brick lights off the host.
+	 */
+	double GetRunCalibrationSeconds() const { return RunCalibrationSeconds; }
+	double GetRunStartServerTime() const { return RunStartServerTime; }
+	/** Tests: take the replicated clock (start + calibration) the way a client does when those properties arrive. */
+	void AdoptSharedClock(double StartServerTime, double CalibrationSeconds);
+
+	/** Clip a landing plays (#207). None stays None. */
+	static FName LandingClipFor(EGFJudgement Judgement);
+	/**
+	 * Which clip a viewer plays. A simulated proxy uses the replicated clip. The owning client keeps its local
+	 * takeoff / air, and takes the replicated clip only when both sides are brick landings (Land / Perfect / Stumble),
+	 * so a late judgement can still correct the feet.
+	 */
+	static FName ClipForViewer(bool bSimulatedProxy, FName LocalClip, FName ReplicatedClip);
+
+	const TArray<FGFBeatHopJudgementRep>& GetJudgements() const { return Judgements; }
+	const TArray<FGFBeatHopScoreRep>& GetScoreReps() const { return ScoreReps; }
+	const TArray<int32>& GetHitBricks() const { return HitBricks; }
+	const TArray<FGFBeatHopAnimRep>& GetAnimReps() const { return AnimReps; }
+	const TArray<FGFBeatHopMoveRep>& GetMoveReps() const { return MoveReps; }
+	const TArray<FGFBeatHopPlacementRep>& GetPlacements() const { return Placements; }
+
+	/** Client apply path for the replicated run view (OnRep calls these; tests call them on a second course). */
+	void ReceiveRemoteJudgements(const TArray<FGFBeatHopJudgementRep>& In);
+	void ReceiveRemoteScores(const TArray<FGFBeatHopScoreRep>& In);
+	void ReceiveRemoteHitBricks(const TArray<int32>& In);
+	/** Owning client: copy replicated auto-run speed, beat-length gravity and air control onto the local character. */
+	void ApplyMoveRep(ACharacter* Character, const FGFBeatHopMoveRep& Row);
+	/** Owning client: snap onto a replicated teleport. Sets bJustTeleported so the mesh doesn't lerp across the gap. */
+	void ApplyPlacement(ACharacter* Character, const FGFBeatHopPlacementRep& Row);
+
 	UBoxComponent* GetStartTrigger() const { return StartTrigger; }
 	UBoxComponent* GetFinishTrigger() const { return FinishTrigger; }
 	int32 NumSongTiles() const { return SongTiles.Num(); }
@@ -420,8 +608,47 @@ protected:
 	UPROPERTY(Replicated)
 	bool bRunning = false;
 
+	/** Host's Songs offset (seconds) at the moment the run started. Clients use this, not their own setting. */
+	UPROPERTY(Replicated)
+	double RunCalibrationSeconds = 0.0;
+
 	UFUNCTION()
 	void OnRep_RunSpec();
+
+	/** Recent judgements (a short ring). Clients turn these into pops and landing clips. */
+	UPROPERTY(ReplicatedUsing = OnRep_Judgements)
+	TArray<FGFBeatHopJudgementRep> Judgements;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Scores)
+	TArray<FGFBeatHopScoreRep> ScoreReps;
+
+	/** Brick indices anyone has hit. Clients mark those bricks so a late joiner doesn't crumble them. */
+	UPROPERTY(ReplicatedUsing = OnRep_HitBricks)
+	TArray<int32> HitBricks;
+
+	UPROPERTY(Replicated)
+	TArray<FGFBeatHopAnimRep> AnimReps;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Moves)
+	TArray<FGFBeatHopMoveRep> MoveReps;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Placements)
+	TArray<FGFBeatHopPlacementRep> Placements;
+
+	UFUNCTION()
+	void OnRep_Judgements();
+
+	UFUNCTION()
+	void OnRep_Scores();
+
+	UFUNCTION()
+	void OnRep_HitBricks();
+
+	UFUNCTION()
+	void OnRep_Moves();
+
+	UFUNCTION()
+	void OnRep_Placements();
 
 	UPROPERTY(ReplicatedUsing = OnRep_Session)
 	bool bSession = false;
@@ -473,6 +700,23 @@ private:
 	void UpdatePulse(double Now);
 	void DriveAnims(double Now);
 	void AddPop(const FString& PlayerKey, const FVector& WorldTop, EGFJudgement Judgement, int32 Combo, const FLinearColor& Color);
+	void RecordJudgement(const FString& PlayerKey, int32 BrickIndex, EGFJudgement Result, double OffsetSeconds, int32 Combo);
+	void PublishScore(const FString& PlayerKey, const FGFRhythmScore& Score);
+	void PublishHit(int32 BrickIndex);
+	void PublishAnim(const FString& PlayerKey, FName Clip, float PlayRate, bool bOneShot);
+	void PublishMove(ACharacter* Character, uint8 Phase);
+	void PublishHold(ACharacter* Character, const FString& PlayerKey, int32 BrickIndex, double UntilRunTime);
+	void PublishPlacement(ACharacter* Character, const FString& PlayerKey, const FVector& Velocity, bool bFalling);
+	void ApplyIncomingJudgements();
+	void ApplyIncomingScores();
+	void ApplyIncomingHitBricks();
+	void MirrorOwnerMovement();
+	void ClearTeleportForgiveness();
+	FString RunnerId(const ACharacter* Character) const;
+	FGFBeatHopMoveRep* FindMoveRep(const FString& PlayerKey);
+	const FGFBeatHopAnimRep* FindAnimRep(const FString& PlayerKey) const;
+	ACharacter* FindRunner(const FString& PlayerKey) const;
+	void TeleportRunner(ACharacter* Character, const FString& PlayerKey, const FVector& Dest, const FRotator& Rot, const FVector& Velocity, bool bFalling);
 	void ClearTrackKit();
 	UStaticMeshComponent* AddKitMesh(const TCHAR* Path, const FTransform& Relative, bool bCollide);
 	UInstancedStaticMeshComponent* AddKitInstances(const TCHAR* Path, const TArray<FTransform>& Relative, bool bCollide);
@@ -635,4 +879,13 @@ private:
 	FString LastTravelMap;
 	double DebugServerTime = -1.0;
 	bool bTravelled = false;
+
+	/** Client-side scores built from ScoreReps (the server reads FPlayerRun instead). */
+	TMap<FString, FGFRhythmScore> RemoteScores;
+	TSet<uint16> AppliedJudgementSeqs;
+	TMap<FString, uint16> AppliedPlacementSeqs;
+	/** Server: ignore in-flight client moves until this world time, so a teleport isn't yanked back. */
+	TMap<TWeakObjectPtr<ACharacter>, double> TeleportForgiveUntil;
+	uint16 NextJudgementSeq = 0;
+	uint16 NextPlacementSeq = 0;
 };
