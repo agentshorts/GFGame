@@ -6,6 +6,7 @@ import type { WebLlmCompletion } from "../engines/types";
 import { createBrowserWebLlm, detectWebGpu, modelChoice } from "../engines/webllmBrowser";
 import type { LoadProgress } from "../engines/webllmBrowser";
 import { alignmentDecision, decide, DEFAULT_SMELL_FT, hintItem, type Decision, type DecisionInput } from "../logic/alignment";
+import { createBrainPool } from "../logic/brainPool";
 import { contextBlob, type ContextState } from "../logic/context";
 import {
   applyAffinity,
@@ -139,6 +140,38 @@ export function useLab() {
   const lineEngines = ENGINE_CHOICES.filter((choice) => !choice.needsModel);
   const selected = computed(() => personas.find((persona) => persona.id === selectedId.value) ?? personas[0]!);
   const roster = computed(() => activePersonas(personas, mode.value, selectedId.value, checkedIds.value));
+  const brain = createBrainPool({
+    engine: {
+      get loadedModelId() {
+        return browser.loadedModelId;
+      },
+      complete: (args) => browser.complete({
+        messages: args.messages,
+        temperature: args.temperature,
+        maxTokens: args.maxTokens,
+      }),
+    },
+    classic: async (turn) => {
+      const persona = personas.find((item) => item.id === turn.dinoId);
+      if (!persona) return { text: "...", source: "fallback" };
+      const reply = await engines[engineId.value].reply({
+        persona,
+        history: turn.recentTurns.map((item) => ({
+          speaker: item.speaker,
+          role: item.role === "dino" || item.role === "system" ? item.role : "user",
+          text: item.text,
+        })),
+        utterance: turn.utterance,
+        mode: mode.value,
+        systemPrompt: turn.personaBlock,
+        temperature: turn.temperature,
+        maxTokens: turn.maxTokens,
+        peerNames: peerNames(roster.value, turn.dinoId),
+        contextBudget: turn.budget,
+      });
+      return { text: reply.text, source: engineId.value };
+    },
+  });
 
   function alignmentFor(persona: Persona): Alignment {
     if (persona.id === selected.value.id && alignmentPick.value !== "persona") return alignmentPick.value;
@@ -678,6 +711,7 @@ export function useLab() {
     };
     let line = "";
     let rephrased = false;
+    let fromBrain = false;
     let stats = steered.stats;
     let promptTokens: number | null = null;
     let completionTokens: number | null = null;
@@ -696,21 +730,75 @@ export function useLab() {
         peerNames: peerNames(roster.value, persona.id),
         contextBudget: window.budget,
       };
+      if (browser.loadedModelId) {
+        const pooled = await brain.ask({
+          dinoId: persona.id,
+          personaName: persona.name,
+          personaBlock: personaPrompt,
+          worldNote: window.worldNote,
+          dinoSummary: window.memory.summary,
+          relationshipSummary: rel.summary,
+          subjectName: heard.speaker,
+          elder,
+          playerRecord: elder ? record : "",
+          recentTurns: window.turns,
+          budget: window.budget,
+          replyReserve: Math.max(knobs.value.replyReserve, maxTokens.value),
+          temperature: temperature.value,
+          maxTokens: maxTokens.value,
+          utterance: steer.utterance,
+        });
+        if (pooled.status === "dropped") return false;
+        if (pooled.status === "model") {
+          fromBrain = true;
+          line = pooled.text;
+          chosenSource = "webllm";
+          stats = statsFrom({
+            text: pooled.text,
+            promptTokens: pooled.promptTokens,
+            completionTokens: pooled.completionTokens,
+            tokensPerSec: pooled.tokensPerSec,
+            prefillTokensPerSec: pooled.prefillTokensPerSec,
+            runtimeStatsText: pooled.runtimeStatsText,
+          });
+          promptTokens = pooled.promptTokens ?? null;
+          completionTokens = pooled.completionTokens ?? null;
+          llm = {
+            ...llm,
+            text: line,
+            ms: roundMs((llm.ms ?? 0) + pooled.ms),
+            prompt: renderPrompt(pooled.prompt),
+            loaded: true,
+          };
+        } else if (pooled.attempted && pooled.fallbackReason) {
+          fallbackReason = pooled.fallbackReason;
+          llm = {
+            ...llm,
+            ms: roundMs((llm.ms ?? 0) + pooled.ms),
+            prompt: renderPrompt(pooled.prompt),
+            loaded: true,
+          };
+          if (pooled.text.trim()) {
+            line = pooled.text;
+            chosenSource = pooled.source === "webllm" || pooled.source === "none" ? engineId.value : pooled.source;
+          }
+        }
+      }
       const sources = traceEnabled() ? CLASSIC_SOURCES : [engineId.value];
       candidates = await probeClassic(async (source) => {
         const reply = await engines[source].reply(request);
-        if (source === engineId.value) {
+        if (source === engineId.value && !line.trim()) {
           line = reply.text;
           stats = reply.stats ?? steered.stats;
           promptTokens = reply.stats?.promptTokens ?? null;
           completionTokens = reply.stats?.completionTokens ?? null;
           if (reply.fellBack) {
-            fallbackReason = `${source} had no line of its own and used the persona fallback.`;
+            fallbackReason = fallbackReason ?? `${source} had no line of its own and used the persona fallback.`;
           }
         }
         return { text: reply.text, fellBack: reply.fellBack };
       }, sources);
-      if (rephraseWithModel.value && browser.loadedModelId) {
+      if (rephraseWithModel.value && browser.loadedModelId && !fromBrain && !fallbackReason) {
         const rephraseMessages = buildRephraseMessages({
           systemPrompt: personaPrompt,
           classicLine: line,
@@ -748,7 +836,7 @@ export function useLab() {
       if (!line.trim()) {
         line = persona.fallbackReplies[0] ?? "...";
         chosenSource = "fallback";
-        fallbackReason = "The selected engine returned nothing. The persona fallback stands.";
+        fallbackReason = fallbackReason ?? "The selected engine returned nothing. The persona fallback stands.";
       }
     } else {
       line = record;
@@ -762,11 +850,13 @@ export function useLab() {
         ms: llm.ms,
         note: !llm.loaded
           ? "model not loaded"
-          : rephrased
-            ? "rephrased the classic line"
-            : llm.steerText
-              ? "steered the intent"
-              : "no model line",
+          : fromBrain
+            ? "shared brain"
+            : rephrased
+              ? "rephrased the classic line"
+              : llm.steerText
+                ? "steered the intent"
+                : "no model line",
       },
     ];
     const presented = presentReply(line, {
@@ -828,9 +918,11 @@ export function useLab() {
       fallbackReason,
       pickReason: asking
         ? "This elder quoted the player record instead of an engine."
-        : rephrased
-          ? "WebLLM rephrased the classic line, so the spoken line is the model."
-          : undefined,
+        : fromBrain
+          ? "The shared WebLLM brain wrote this line."
+          : rephrased
+            ? "WebLLM rephrased the classic line, so the spoken line is the model."
+            : undefined,
       timings: { total: spent, steer: steered.ms ?? 0 },
     }));
     storage.appendLog({
@@ -946,6 +1038,7 @@ export function useLab() {
   }
 
   function resetChat() {
+    brain.unload();
     messages.value = [];
     draft.value = "";
     notice.value = "";
