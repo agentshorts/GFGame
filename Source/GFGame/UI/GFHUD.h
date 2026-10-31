@@ -58,6 +58,8 @@ private:
 	void DrawBeatHopPops();
 	/** Beat Hop session (#212): the song pick, the run readout and the results panel. */
 	void DrawBeatHopSession();
+	/** Pebble Mine (#216): verb prompts while the local pawn is on the mine pad. */
+	void DrawMineSession();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);

@@ -264,11 +264,10 @@ void AGFPlayerState::ServerModeRequest_Implementation(const FGFModeRequest& Requ
 	{
 		UE_LOG(LogGF, Verbose, TEXT("Mode: %s %s.%s -> %s"), *PlayerKey, *Request.Mode.ToString(), *Request.Verb.ToString(), *R.Code.ToString());
 	}
-	if (IsLocallyOwned())
-	{
-		ModeResults.Add(R.RequestId, R);
-	}
-	else
+	// The authority keeps the answer too. A listen host is locally owned and reads it here.
+	// A dedicated server is not locally owned, and the mine site still needs the code (Locked, CantAfford, ...).
+	ModeResults.Add(R.RequestId, R);
+	if (!IsLocallyOwned())
 	{
 		ClientModeResult(R);
 	}
