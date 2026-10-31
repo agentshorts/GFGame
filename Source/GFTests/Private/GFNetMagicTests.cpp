@@ -56,7 +56,6 @@ bool FGFNetMagicMiningTest::RunTest(const FString&)
 {
 	using namespace GFNetTest;
 	using namespace GFNetMagicTest;
-	AddExpectedMessage(TEXT("Your connection to the host has been lost"), ELogVerbosity::Error, EAutomationExpectedMessageFlags::Contains, 0, false);
 	FCtxRef Ctx = Start(this, 2);
 	TSharedRef<FString> Key = MakeShared<FString>();
 	TSharedRef<int32> DirtBefore = MakeShared<int32>(0);
