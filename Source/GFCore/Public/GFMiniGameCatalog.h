@@ -20,6 +20,8 @@ struct GFCORE_API FGFMiniGameEntry
 	/** Object path (/Game/.../SM_X.SM_X). Empty when no mesh was authored. */
 	FString ArtObject;
 	FLinearColor PlaceholderColor = FLinearColor::White;
+	/** Pictogram sign (/Game/Art/Gates/Signs/SM_Sign_X.SM_Sign_X) beside the hub portal. Empty when the mode has none. */
+	FString SignObject;
 	/** True when the mesh is already in Content/Art/Gates and the gate should use it. */
 	bool bExpectArt = false;
 	int32 RingIndex = 0;
@@ -52,6 +54,12 @@ struct GFCORE_API FGFMiniGameCatalog
 	static constexpr float SimStandUpCm = 120.f;
 	/** Solid slab under a sim pad (cm). The voxel overworld only covers about ±5400 in Y. */
 	static constexpr float PadFloorThicknessCm = 100.f;
+	/** Shared sim portal. Its _M R takes the entry PlaceholderColor through Dye_R. */
+	static constexpr const TCHAR* SimGateObject = TEXT("/Game/Art/Gates/SM_Gate_Sim.SM_Gate_Sim");
+	/** Sim pad slab, 4000 cm square, origin on the walk surface (slab Z -100..0). Dyed like the sim portal. */
+	static constexpr const TCHAR* PadObject = TEXT("/Game/Art/Gates/SM_GatePad.SM_GatePad");
+	/** Mode sign beside a hub portal, on the gate's right (actor +Y), same yaw as the gate (cm). */
+	static constexpr float SignRightCm = 300.f;
 
 	static const TArray<FGFMiniGameEntry>& All();
 	static const FGFMiniGameEntry* Find(FName Id);

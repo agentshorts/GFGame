@@ -17,7 +17,10 @@
 #include "GFLandTypes.h"
 #include "GFProtectedActor.h"
 #include "GFTerritorySubsystem.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/Engine.h"
+#include "Engine/SkeletalMesh.h"
+#include "Materials/MaterialInterface.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
@@ -329,6 +332,12 @@ bool FGFFerryNoAttackTest::RunTest(const FString&)
 	TestFalse(TEXT("Ferry cannot be damaged"), Parked->CanBeDamaged());
 	TestTrue(TEXT("Faction protected tag"), FGFProtectedActor::Is(Parked));
 	TestTrue(TEXT("Tag name"), Parked->ActorHasTag(FGFProtectedActor::Tag));
+	if (USkeletalMeshComponent* Bird = Parked->GetBird(); Bird && Bird->GetSkeletalMeshAsset())
+	{
+		// The ferry MI lives in Ripwing/Materials. A wrong path loads nothing and leaves the wild look on.
+		UMaterialInterface* Mat = Bird->GetMaterial(0);
+		TestTrue(TEXT("Ferry bird wears MI_Dino_Ripwing_Ferry"), Mat && Mat->GetName() == TEXT("MI_Dino_Ripwing_Ferry"));
+	}
 	TestNull(TEXT("No taming component"), Parked->FindComponentByClass<UGFTamingComponent>());
 	TestEqual(TEXT("Ripwing placeholder"), Parked->BodyAssetKey, FName(TEXT("Dino.Ripwing")));
 	TestEqual(TEXT("Perch anim"), Parked->AnimKey, FGFFerryArt::PerchAnim());

@@ -73,6 +73,10 @@ ORDER = [
     "SM_Hazard_ForestThornBush", "SM_Hazard_ForestUndergrowth",
     # Rex (batches rex_v1, rex_v2): reuses the committed /Game/Art/Dinos/Rex/SKEL_Dino_Rex (no new bones)
     "SK_Dino_Rex",
+    # world map v1 (batch worldmap_v1): gate pad and portals, mode signs, Rime landmarks, ferry basket v2 (M_GF_Prop MIs).
+    # SK_Dino_Ripwing v3 is also tagged worldmap_v1 but only its _D changed: import this batch with GFART_ONLY, not GFART_BATCH.
+    "SM_GatePad", "SM_Gate_Beat", "SM_Gate_Sim", "SM_Sign_BeatHop", "SM_Sign_Runway", "SM_Sign_Moba",
+    "SM_Rime_Beacon", "SM_Rime_FrostPine", "SM_Rime_IceRock", "SM_Rime_Lantern", "SM_Rime_Signpost", "SM_FerryBasket",
 ]
 # Skeletons shared across species live in their own folder, not in the folder of whichever mesh created them.
 # The first import creates the skeleton there; later imports reuse it. Pre-clean never deletes a shared
@@ -96,7 +100,7 @@ if _only or _batches:
 CLIP_LIMIT_Z = -5.0  # cm: no clip may sink the posed mesh below this (manifest "limit -5")
 _probe_path = os.environ.get("GFART_PROBE", "").strip()
 PROBE = json.load(open(_probe_path, encoding="utf-8")) if _probe_path else {}
-PROP_MAT_BATCHES = ("3b", "7")
+PROP_MAT_BATCHES = ("3b", "7", "worldmap_v1")
 HAZARD_MAT_BATCHES = ("hazards1",)  # per-slot materials from unreal_material_hint (M_GF_Prop, M_GF_Lava)
 MAT_DIR = "/Game/Art/Materials"
 BAD_PATH = re.compile(r"[a-z]:[\\/]users[\\/]", re.I)  # source paths must not leak a username
@@ -452,6 +456,11 @@ def do_static(name, man, folder, r):
         r["collision_expected"] = int(ncol.group(1))  # "11 UCX boxes (UCX_..._00, UCX_..._01 ...)"
     else:
         r["collision_expected"] = len(re.findall(r"UCX_", cnote.group(1))) if cnote else None
+    if not r["collision_expected"]:
+        # worldmap_v1 notes describe the hulls in words ("the slab + the four pylons") and list the UCX names elsewhere
+        named = set(re.findall(r"UCX_" + re.escape(name) + r"_\d+", json.dumps(man)))
+        if named:
+            r["collision_expected"] = len(named)
     if "/Crops/" in man["unreal_target"]:
         chk["collision"] = "n/a"  # crops get no collision (brief 1.8); count still reported
     elif r["collision_expected"] is not None:

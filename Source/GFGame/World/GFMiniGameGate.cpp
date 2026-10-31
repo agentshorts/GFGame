@@ -13,6 +13,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/Pawn.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Net/UnrealNetwork.h"
 
 namespace
@@ -40,6 +41,19 @@ namespace
 			return GI->GetSubsystem<UGFBeatHopGateSubsystem>();
 		}
 		return nullptr;
+	}
+
+	/** M_GF_Prop dye: _M R takes Dye_R. A fresh dynamic MI per apply, so a re-applied gate never stacks tints. */
+	void DyeSlot0(UStaticMeshComponent* Comp, const FLinearColor& Color)
+	{
+		if (Comp && Comp->GetMaterial(0))
+		{
+			if (UMaterialInstanceDynamic* Dyed = UMaterialInstanceDynamic::Create(Comp->GetMaterial(0), Comp))
+			{
+				Dyed->SetVectorParameterValue(TEXT("Dye_R"), Color);
+				Comp->SetMaterial(0, Dyed);
+			}
+		}
 	}
 }
 
@@ -81,6 +95,13 @@ AGFMiniGameGate::AGFMiniGameGate()
 	PadFloor->SetCanEverAffectNavigation(false);
 	PadFloor->SetHiddenInGame(true);
 	PadFloor->SetVisibility(false);
+
+	ModeSign = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ModeSign"));
+	ModeSign->SetupAttachment(Root);
+	ModeSign->SetRelativeLocation(FVector(0.f, FGFMiniGameCatalog::SignRightCm, 0.f));
+	ModeSign->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	ModeSign->SetHiddenInGame(true);
+	ModeSign->SetVisibility(false);
 }
 
 void AGFMiniGameGate::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -145,6 +166,11 @@ void AGFMiniGameGate::ApplyVisuals()
 				Mesh->SetRelativeScale3D(FVector::OneVector);
 				Mesh->SetRelativeLocation(FVector::ZeroVector);
 				Mesh->EmptyOverrideMaterials();
+				if (Entry->HasSim())
+				{
+					// The four sims share SM_Gate_Sim; the entry colour tells them apart.
+					DyeSlot0(Mesh, Entry->PlaceholderColor);
+				}
 				bUsingPlaceholder = false;
 			}
 		}
@@ -178,9 +204,21 @@ void AGFMiniGameGate::ApplyVisuals()
 		{
 			PadFloor->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		}
+		else if (UStaticMesh* PadArt = LoadObject<UStaticMesh>(nullptr, FGFMiniGameCatalog::PadObject, nullptr, LOAD_NoWarn | LOAD_Quiet))
+		{
+			// SM_GatePad origin is the walk surface, so it drops in at scale 1 and Z 0 (slab Z -100..0).
+			PadFloor->SetStaticMesh(PadArt);
+			PadFloor->SetRelativeScale3D(FVector::OneVector);
+			PadFloor->SetRelativeLocation(FVector::ZeroVector);
+			PadFloor->SetCollisionProfileName(TEXT("BlockAll"));
+			PadFloor->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			PadFloor->SetCanEverAffectNavigation(false);
+			PadFloor->EmptyOverrideMaterials();
+			DyeSlot0(PadFloor, Entry->PlaceholderColor);
+		}
 		else
 		{
-			// Engine cube is 100 cm and centred. Top of the slab sits on the marker origin.
+			// No pad art: engine cube is 100 cm and centred. Top of the slab sits on the marker origin.
 			const float CubeCm = 100.f;
 			const float Thickness = FGFMiniGameCatalog::PadFloorThicknessCm;
 			PadFloor->SetStaticMesh(FGFAssetMap::PlaceholderMesh(EGFPlaceholderShape::Cube));
@@ -193,6 +231,29 @@ void AGFMiniGameGate::ApplyVisuals()
 			PadFloor->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 			PadFloor->SetCanEverAffectNavigation(false);
 			PadFloor->SetMaterial(0, FGFAssetMap::MakeTint(PadFloor, Entry->PlaceholderColor));
+		}
+	}
+
+	if (ModeSign)
+	{
+		UStaticMesh* SignArt = nullptr;
+		if (GateRole == EGFMiniGameGateRole::Portal && Entry && !Entry->SignObject.IsEmpty())
+		{
+			SignArt = LoadObject<UStaticMesh>(nullptr, *Entry->SignObject, nullptr, LOAD_NoWarn | LOAD_Quiet);
+		}
+		ModeSign->SetStaticMesh(SignArt);
+		ModeSign->SetRelativeLocation(FVector(0.f, FGFMiniGameCatalog::SignRightCm, 0.f));
+		ModeSign->SetRelativeRotation(FRotator::ZeroRotator);
+		ModeSign->SetHiddenInGame(SignArt == nullptr);
+		ModeSign->SetVisibility(SignArt != nullptr);
+		if (SignArt)
+		{
+			ModeSign->SetCollisionProfileName(TEXT("BlockAll"));
+			ModeSign->SetCanEverAffectNavigation(false);
+		}
+		else
+		{
+			ModeSign->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		}
 	}
 }

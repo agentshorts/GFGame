@@ -12,6 +12,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/DefaultPawn.h"
@@ -125,7 +126,16 @@ namespace GFHubGateTests
 			&& Floor->GetCollisionResponseToChannel(ECC_WorldStatic) == ECR_Block;
 	}
 
-	/** Engine cube is 100 cm and centred. The slab top sits on the marker origin and covers the pad. */
+	static bool IsPadArt(const UStaticMeshComponent* Floor)
+	{
+		return Floor && Floor->GetStaticMesh() && Floor->GetStaticMesh()->GetPathName() == FGFMiniGameCatalog::PadObject;
+	}
+
+	/**
+	 * The slab covers the pad and its walk surface sits on the marker origin.
+	 * Engine cube: 100 cm and centred, so the top of its box is the surface.
+	 * SM_GatePad: the origin is the surface (its pylons rise above it), so the relative Z is the surface.
+	 */
 	static bool FloorCoversPad(const UStaticMeshComponent* Floor, const FGFMiniGameEntry& Entry)
 	{
 		if (!FloorBlocks(Floor) || !Floor->GetStaticMesh() || Floor->bHiddenInGame)
@@ -133,10 +143,12 @@ namespace GFHubGateTests
 			return false;
 		}
 		const FVector Scale = Floor->GetRelativeScale3D();
-		const float HalfX = Scale.X * 50.f;
-		const float HalfY = Scale.Y * 50.f;
-		const float Thickness = Scale.Z * 100.f;
-		const float TopZ = Floor->GetRelativeLocation().Z + Thickness * 0.5f;
+		const FBox Box = Floor->GetStaticMesh()->GetBoundingBox();
+		const float RelZ = Floor->GetRelativeLocation().Z;
+		const float HalfX = Box.GetExtent().X * Scale.X;
+		const float HalfY = Box.GetExtent().Y * Scale.Y;
+		const float TopZ = IsPadArt(Floor) ? RelZ : RelZ + Box.Max.Z * Scale.Z;
+		const float Thickness = TopZ - (RelZ + Box.Min.Z * Scale.Z);
 		return HalfX + 0.5f >= Entry.PadHalfExtent.X
 			&& HalfY + 0.5f >= Entry.PadHalfExtent.Y
 			&& Thickness + 0.5f >= FGFMiniGameCatalog::PadFloorThicknessCm
@@ -499,6 +511,107 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 		}
 		TestNull(TEXT("MOBA map has no Depths sign"), FindSpawnedGate(MobaWorld.World, TEXT("Depths"), EGFMiniGameGateRole::Marker));
 	}
+	return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFHubGateArtTest, "GFGame.Gates.Art", GFHubGateTests::Flags)
+bool FGFHubGateArtTest::RunTest(const FString&)
+{
+	using namespace GFHubGateTests;
+	// World map v1: the shared sim portal and pad slab carry the entry colour, and map portals get their sign.
+	FWorldScope Scope;
+	if (!TestNotNull(TEXT("World"), Scope.World))
+	{
+		return false;
+	}
+	const bool bSimArt = FPackageName::DoesPackageExist(TEXT("/Game/Art/Gates/SM_Gate_Sim"));
+	const bool bPadArt = FPackageName::DoesPackageExist(TEXT("/Game/Art/Gates/SM_GatePad"));
+	TestTrue(TEXT("SM_Gate_Sim imported"), bSimArt);
+	TestTrue(TEXT("SM_GatePad imported"), bPadArt);
+
+	auto DyeOf = [](const UStaticMeshComponent* Comp, FLinearColor& Out)
+	{
+		const UMaterialInstanceDynamic* Dyed = Comp ? Cast<UMaterialInstanceDynamic>(Comp->GetMaterial(0)) : nullptr;
+		return Dyed && Dyed->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Dye_R")), Out);
+	};
+
+	int32 Signs = 0;
+	for (const FGFMiniGameEntry& Entry : FGFMiniGameCatalog::All())
+	{
+		const FString Id = Entry.Id.ToString();
+		const FRotator Yaw(0.f, 30.f + Entry.RingIndex * 45.f, 0.f);
+		const FTransform Xform(Yaw, FVector(Entry.RingIndex * 1000.f, 0.f, 0.f));
+		for (EGFMiniGameGateRole Role : { EGFMiniGameGateRole::Portal, EGFMiniGameGateRole::Marker })
+		{
+			AGFMiniGameGate* Gate = Scope.World->SpawnActorDeferred<AGFMiniGameGate>(AGFMiniGameGate::StaticClass(), Xform);
+			if (!TestNotNull(*Id, Gate))
+			{
+				continue;
+			}
+			Gate->EntryId = Entry.Id;
+			Gate->GateRole = Role;
+			FinishSpawnedGate(Gate, Xform);
+			const bool bPortal = Role == EGFMiniGameGateRole::Portal;
+			const FString Tag = Id + (bPortal ? TEXT(" portal") : TEXT(" marker"));
+
+			if (Entry.HasSim())
+			{
+				TestEqual(*(Tag + TEXT(" art")), Entry.ArtObject, FString(FGFMiniGameCatalog::SimGateObject));
+				if (bSimArt)
+				{
+					UStaticMeshComponent* GateMesh = Gate->GetGateMesh();
+					TestFalse(*(Tag + TEXT(" uses SM_Gate_Sim")), Gate->IsUsingPlaceholder());
+					TestTrue(*(Tag + TEXT(" at scale 1 on the ground")), GateMesh && GateMesh->GetRelativeScale3D().Equals(FVector::OneVector) && GateMesh->GetRelativeLocation().IsNearlyZero());
+					FLinearColor Dye;
+					TestTrue(*(Tag + TEXT(" Dye_R is the entry colour")), DyeOf(GateMesh, Dye) && Dye.Equals(Entry.PlaceholderColor, 0.001f));
+				}
+			}
+
+			UStaticMeshComponent* Floor = Gate->GetPadFloor();
+			if (!bPortal && Entry.bHasPad && bPadArt)
+			{
+				TestTrue(*(Tag + TEXT(" floor is SM_GatePad")), IsPadArt(Floor));
+				TestTrue(*(Tag + TEXT(" floor at scale 1, Z 0")), Floor && Floor->GetRelativeScale3D().Equals(FVector::OneVector) && Floor->GetRelativeLocation().IsNearlyZero());
+				TestTrue(*(Tag + TEXT(" floor blocks")), FloorBlocks(Floor));
+				TestTrue(*(Tag + TEXT(" floor covers the pad")), FloorCoversPad(Floor, Entry));
+				FLinearColor Dye;
+				TestTrue(*(Tag + TEXT(" floor Dye_R is the entry colour")), DyeOf(Floor, Dye) && Dye.Equals(Entry.PlaceholderColor, 0.001f));
+				Gate->ApplyVisuals();
+				TestTrue(*(Tag + TEXT(" re-apply keeps one dye")), DyeOf(Floor, Dye) && Dye.Equals(Entry.PlaceholderColor, 0.001f));
+			}
+
+			UStaticMeshComponent* Sign = Gate->GetModeSign();
+			if (!TestNotNull(*(Tag + TEXT(" sign component")), Sign))
+			{
+				continue;
+			}
+			const bool bWantSign = bPortal && !Entry.SignObject.IsEmpty();
+			if (bWantSign)
+			{
+				++Signs;
+				TestTrue(*(Tag + TEXT(" sign asset exists")), FPackageName::DoesPackageExist(FSoftObjectPath(Entry.SignObject).GetLongPackageName()));
+				TestTrue(*(Tag + TEXT(" sign mesh")), Sign->GetStaticMesh() && Sign->GetStaticMesh()->GetPathName() == Entry.SignObject);
+				TestFalse(*(Tag + TEXT(" sign shows")), Sign->bHiddenInGame);
+				TestTrue(*(Tag + TEXT(" sign blocks")), Sign->GetCollisionEnabled() != ECollisionEnabled::NoCollision);
+				const FVector Want = Xform.GetLocation() + Yaw.RotateVector(FVector(0.f, FGFMiniGameCatalog::SignRightCm, 0.f));
+				TestTrue(*(Tag + TEXT(" sign 300 cm to the gate's right")), Sign->GetComponentLocation().Equals(Want, 1.f));
+				TestTrue(*(Tag + TEXT(" sign keeps the gate yaw")), FMath::IsNearlyEqual(FRotator::NormalizeAxis(Sign->GetComponentRotation().Yaw - Yaw.Yaw), 0.f, 0.1f));
+			}
+			else
+			{
+				TestTrue(*(Tag + TEXT(" no sign")), Sign->bHiddenInGame && Sign->GetCollisionEnabled() == ECollisionEnabled::NoCollision);
+			}
+		}
+	}
+	TestEqual(TEXT("Beat Hop, Runway and MOBA portals have signs"), Signs, 3);
+	for (const TCHAR* Id : { TEXT("BeatHop"), TEXT("Fashion"), TEXT("Moba") })
+	{
+		const FGFMiniGameEntry* Row = FGFMiniGameCatalog::Find(Id);
+		TestTrue(*FString::Printf(TEXT("%s sign under Gates/Signs"), Id), Row && Row->SignObject.StartsWith(TEXT("/Game/Art/Gates/Signs/SM_Sign_")));
+	}
+	const FGFMiniGameEntry* Beat = FGFMiniGameCatalog::Find(TEXT("BeatHop"));
+	TestTrue(TEXT("Beat Hop expects SM_Gate_Beat now"), Beat && Beat->bExpectArt);
 	return true;
 }
 

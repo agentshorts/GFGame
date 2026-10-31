@@ -3,6 +3,8 @@
 // One mini-game gate. Portals stand on the ring around the Rime hub.
 // Markers stand on a mode map, or on a sim pad, and show that mode's name.
 // Missing gate art falls back to a tinted block so the gate still reads.
+// Sim portals share one dyeable mesh and their pads share one dyeable slab, both tinted with the entry colour.
+// Map-mode portals on the hub ring get their pictogram sign beside them.
 // A sim pad sits outside the voxel floor, so its marker carries a solid slab.
 // Visuals are applied in OnConstruction. A bare automation world never begins play,
 // so BeginPlay alone would leave the sign blank and the mesh empty.
@@ -68,6 +70,8 @@ public:
 	UStaticMeshComponent* GetGateMesh() const { return Mesh; }
 	/** Solid floor under a sim-pad marker. Hidden and non-blocking on portals and mode-map signs. */
 	UStaticMeshComponent* GetPadFloor() const { return PadFloor; }
+	/** Pictogram sign beside a hub portal. Hidden, with no mesh and no collision, when the mode has no sign or this is a marker. */
+	UStaticMeshComponent* GetModeSign() const { return ModeSign; }
 
 private:
 	UFUNCTION()
@@ -87,6 +91,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UStaticMeshComponent> PadFloor;
+
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UStaticMeshComponent> ModeSign;
 
 	UPROPERTY(VisibleAnywhere)
 	FString Label;

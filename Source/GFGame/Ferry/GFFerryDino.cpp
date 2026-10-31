@@ -16,7 +16,7 @@ namespace GFFerryDinoPrivate
 	const TCHAR* SkelPath = TEXT("/Game/Art/Dinos/Ripwing/SK_Dino_Ripwing.SK_Dino_Ripwing");
 	const TCHAR* PerchPath = TEXT("/Game/Art/Props/Ferry/SM_FerryPerch.SM_FerryPerch");
 	const TCHAR* BasketPath = TEXT("/Game/Art/Props/Ferry/SM_FerryBasket.SM_FerryBasket");
-	const TCHAR* MatPath = TEXT("/Game/Art/Dinos/Ripwing/MI_Dino_Ripwing_Ferry.MI_Dino_Ripwing_Ferry");
+	const TCHAR* MatPath = TEXT("/Game/Art/Dinos/Ripwing/Materials/MI_Dino_Ripwing_Ferry.MI_Dino_Ripwing_Ferry");
 }
 
 AGFFerryDino::AGFFerryDino()

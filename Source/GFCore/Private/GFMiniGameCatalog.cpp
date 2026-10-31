@@ -24,6 +24,12 @@ namespace
 		return Entry;
 	}
 
+	FGFMiniGameEntry WithSign(FGFMiniGameEntry Entry, const TCHAR* SignObject)
+	{
+		Entry.SignObject = SignObject;
+		return Entry;
+	}
+
 	FGFMiniGameEntry SimMode(
 		const TCHAR* Id,
 		const TCHAR* Label,
@@ -39,6 +45,7 @@ namespace
 		Entry.SimMode = Id;
 		Entry.ArtObject = ArtObject ? ArtObject : TEXT("");
 		Entry.PlaceholderColor = Color;
+		Entry.bExpectArt = !Entry.ArtObject.IsEmpty();
 		Entry.RingIndex = RingIndex;
 		Entry.bHasPad = true;
 		const float Stride = FGFMiniGameCatalog::PadHalfCm * 2.f + FGFMiniGameCatalog::PadGapCm;
@@ -57,27 +64,30 @@ const TArray<FGFMiniGameEntry>& FGFMiniGameCatalog::All()
 		MapMode(TEXT("Taming"), TEXT("Valley"), TEXT("/Game/Maps/L_Valley"),
 			TEXT("/Game/Art/Gates/SM_Gate_Valley.SM_Gate_Valley"),
 			FLinearColor(0.45f, 0.62f, 0.40f), true, 0, nullptr),
-		MapMode(TEXT("Fashion"), TEXT("Runway"), TEXT("/Game/Maps/L_Runway"),
+		WithSign(MapMode(TEXT("Fashion"), TEXT("Runway"), TEXT("/Game/Maps/L_Runway"),
 			TEXT("/Game/Art/Gates/SM_Gate_Runway.SM_Gate_Runway"),
 			FLinearColor(0.85f, 0.45f, 0.62f), true, 1,
 			TEXT("/Script/GFFashion.GFRunwayStage")),
-		MapMode(TEXT("Moba"), TEXT("MOBA"), TEXT("/Game/Maps/L_Moba"),
+			TEXT("/Game/Art/Gates/Signs/SM_Sign_Runway.SM_Sign_Runway")),
+		WithSign(MapMode(TEXT("Moba"), TEXT("MOBA"), TEXT("/Game/Maps/L_Moba"),
 			TEXT("/Game/Art/Gates/SM_Gate_Arena.SM_Gate_Arena"),
 			FLinearColor(0.75f, 0.22f, 0.18f), true, 2, nullptr),
-		MapMode(TEXT("BeatHop"), TEXT("Beat Hop"), TEXT("/Game/Maps/L_Beat"),
+			TEXT("/Game/Art/Gates/Signs/SM_Sign_Moba.SM_Sign_Moba")),
+		WithSign(MapMode(TEXT("BeatHop"), TEXT("Beat Hop"), TEXT("/Game/Maps/L_Beat"),
 			TEXT("/Game/Art/Gates/SM_Gate_Beat.SM_Gate_Beat"),
-			FLinearColor(0.72f, 0.52f, 1.00f), false, 3,
+			FLinearColor(0.72f, 0.52f, 1.00f), true, 3,
 			TEXT("/Script/GFRhythm.GFBeatHopCourse")),
-		SimMode(TEXT("Arena"), TEXT("Arena"), nullptr,
+			TEXT("/Game/Art/Gates/Signs/SM_Sign_BeatHop.SM_Sign_BeatHop")),
+		SimMode(TEXT("Arena"), TEXT("Arena"), FGFMiniGameCatalog::SimGateObject,
 			FLinearColor(0.80f, 0.65f, 0.30f), 4, 0,
 			TEXT("/Script/GFArena.GFArenaDirector")),
-		SimMode(TEXT("Depths"), TEXT("Depths"), nullptr,
+		SimMode(TEXT("Depths"), TEXT("Depths"), FGFMiniGameCatalog::SimGateObject,
 			FLinearColor(0.35f, 0.25f, 0.55f), 5, 1,
 			TEXT("/Script/GFDepths.GFDepthsDirector")),
-		SimMode(TEXT("Mine"), TEXT("Pebble Mine"), nullptr,
+		SimMode(TEXT("Mine"), TEXT("Pebble Mine"), FGFMiniGameCatalog::SimGateObject,
 			FLinearColor(0.55f, 0.52f, 0.45f), 6, 2,
 			TEXT("/Script/GFMine.GFMineDirector")),
-		SimMode(TEXT("Lab"), TEXT("Overtime"), nullptr,
+		SimMode(TEXT("Lab"), TEXT("Overtime"), FGFMiniGameCatalog::SimGateObject,
 			FLinearColor(0.30f, 0.70f, 0.72f), 7, 3,
 			TEXT("/Script/GFLab.GFLabDirector")),
 	};
