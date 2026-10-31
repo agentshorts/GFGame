@@ -1,11 +1,14 @@
 #pragma once
 
 // Playable fashion show on L_Runway. The hub gate already opens that map and the director
-// already places AGFRunwayStage. This actor builds the greybox (theme, look, start, finish, hub)
-// out of engine cubes and drives the stage. Scores and rewards stay on the stage.
+// already places AGFRunwayStage. This actor builds the greybox (theme spots, a wardrobe rack
+// for the starter looks, a labelled start arch, finish, hub) out of engine cubes and drives
+// the stage. Scores and rewards stay on the stage. A suggested theme and look are not worn
+// until the player stands on the spots.
 
 #include "CoreMinimal.h"
 #include "Components/BoxComponent.h"
+#include "Components/TextRenderComponent.h"
 #include "GameFramework/Actor.h"
 #include "GFRunwaySite.generated.h"
 
@@ -42,8 +45,16 @@ public:
 	int32 NumThemeSpots() const;
 	int32 NumLookSpots() const;
 
+	/** Suggested ids. GetSelectedLook can be Garden before anyone has stood on the wardrobe. */
 	FName GetSelectedTheme() const { return SelectedTheme; }
 	FName GetSelectedLook() const { return SelectedLook; }
+	bool HasChosenTheme() const { return bThemeChosen; }
+	bool HasChosenLook() const { return bLookChosen; }
+
+	/** What the start arch says right now. Changes when a theme or look is still missing. */
+	FString GetStartCue() const;
+	/** What the wardrobe says right now. Names both looks until one is worn. */
+	FString GetWearingCue() const;
 
 	/** Server. Theme and look can be picked before the show. Start opens it. Finish scores it. */
 	bool TrySelectTheme(APawn* Pawn, FName ThemeId);
@@ -58,8 +69,9 @@ public:
 	bool HasTravelled() const { return bTravelled; }
 
 	/**
-	 * Lines for the HUD. Always names Start, Finish and Hub.
-	 * LastPrompt is the last spot result.
+	 * Lines for the HUD while the pawn is near the runway.
+	 * The current step begins with "> ". Always names Start, Finish and Hub.
+	 * LastPrompt is the last spot result (a refused start says why).
 	 */
 	void GetPromptLines(const AGFPlayerState* PS, TArray<FString>& OutLines) const;
 
@@ -80,6 +92,9 @@ protected:
 	UFUNCTION()
 	void OnRep_Ready();
 
+	UFUNCTION()
+	void OnRep_Choices();
+
 private:
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USceneComponent> Root;
@@ -92,6 +107,14 @@ private:
 
 	UPROPERTY(Replicated)
 	FName SelectedLook;
+
+	/** False until the player stands on a theme spot. The suggested theme does not count. */
+	UPROPERTY(ReplicatedUsing = OnRep_Choices)
+	bool bThemeChosen = false;
+
+	/** False until the player stands on a wardrobe look. The suggested look does not count. */
+	UPROPERTY(ReplicatedUsing = OnRep_Choices)
+	bool bLookChosen = false;
 
 	bool bVisualsBuilt = false;
 	bool bTravelled = false;
@@ -109,6 +132,12 @@ private:
 	UPROPERTY()
 	TArray<TObjectPtr<UBoxComponent>> Triggers;
 
+	UPROPERTY()
+	TObjectPtr<UTextRenderComponent> StartCue;
+
+	UPROPERTY()
+	TObjectPtr<UTextRenderComponent> WearingCue;
+
 	TArray<FName> TriggerVerbs;
 	TArray<FName> TriggerNames;
 	TArray<TSet<TWeakObjectPtr<APawn>>> SpotInside;
@@ -119,8 +148,9 @@ private:
 
 	void BuildVisuals();
 	void AddBlock(const FVector& LocalCenter, const FVector& SizeCm, const FLinearColor& Color, bool bBlock);
-	void AddLabel(const FString& Text, const FVector& Local);
+	UTextRenderComponent* AddLabel(const FString& Text, const FVector& Local, float WorldSize = 42.f);
 	UBoxComponent* AddTrigger(FName Verb, FName Name, const FVector& Local, const FVector& Extent);
+	void RefreshCues();
 	void PollSpots();
 	void SeatFarPawns();
 	void TravelToHub();

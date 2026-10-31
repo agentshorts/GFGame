@@ -98,6 +98,28 @@ namespace
 		return Outfit;
 	}
 
+	FString LookPieces(FName Id)
+	{
+		FString Names;
+		const FGFOutfit Outfit = MakeLook(Id);
+		for (const FName PieceId : Outfit.GetPieceIds())
+		{
+			if (!Names.IsEmpty())
+			{
+				Names += TEXT(", ");
+			}
+			if (const FGFFashionPiece* Piece = FGFFashionCatalog::FindPiece(PieceId))
+			{
+				Names += Piece->DisplayName;
+			}
+			else
+			{
+				Names += PieceId.ToString();
+			}
+		}
+		return Names;
+	}
+
 	bool Usable(const APawn* Pawn, const AGFPlayerState* PS)
 	{
 		return Pawn && (Pawn->IsPlayerControlled() || PS);
@@ -112,6 +134,7 @@ AGFRunwaySite::AGFRunwaySite()
 	bAlwaysRelevant = true;
 	SetReplicatingMovement(false);
 
+	// Suggested greybox picks only. Standing on a spot is what wears a look.
 	SelectedTheme = ThemeGarden;
 	SelectedLook = LookGarden;
 
@@ -127,6 +150,8 @@ void AGFRunwaySite::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AGFRunwaySite, LastPrompt);
 	DOREPLIFETIME(AGFRunwaySite, SelectedTheme);
 	DOREPLIFETIME(AGFRunwaySite, SelectedLook);
+	DOREPLIFETIME(AGFRunwaySite, bThemeChosen);
+	DOREPLIFETIME(AGFRunwaySite, bLookChosen);
 }
 
 void AGFRunwaySite::BeginPlay()
@@ -146,9 +171,16 @@ void AGFRunwaySite::OnRep_Ready()
 	}
 }
 
+void AGFRunwaySite::OnRep_Choices()
+{
+	RefreshCues();
+}
+
 void AGFRunwaySite::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	// The arch and the wardrobe sign follow the phase. Clients do not run the spots.
+	RefreshCues();
 	if (!HasAuthority())
 	{
 		return;
@@ -304,12 +336,12 @@ void AGFRunwaySite::AddBlock(const FVector& LocalCenter, const FVector& SizeCm, 
 	Mesh->RegisterComponent();
 }
 
-void AGFRunwaySite::AddLabel(const FString& Text, const FVector& Local)
+UTextRenderComponent* AGFRunwaySite::AddLabel(const FString& Text, const FVector& Local, float WorldSize)
 {
 	UTextRenderComponent* Label = NewObject<UTextRenderComponent>(this);
 	Label->SetupAttachment(Root);
 	Label->SetText(FText::FromString(Text));
-	Label->SetWorldSize(42.f);
+	Label->SetWorldSize(WorldSize);
 	Label->SetHorizontalAlignment(EHTA_Center);
 	Label->SetVerticalAlignment(EVRTA_TextCenter);
 	Label->SetTextRenderColor(FColor::White);
@@ -326,6 +358,7 @@ void AGFRunwaySite::AddLabel(const FString& Text, const FVector& Local)
 	Label->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Label->SetCanEverAffectNavigation(false);
 	Label->RegisterComponent();
+	return Label;
 }
 
 UBoxComponent* AGFRunwaySite::AddTrigger(FName Verb, FName Name, const FVector& Local, const FVector& Extent)
@@ -365,20 +398,40 @@ void AGFRunwaySite::BuildVisuals()
 		AddTrigger(VerbTheme, Themes[i].Id, At + FVector(0.f, 0.f, 100.f), FVector(70.f, 70.f, 100.f));
 	}
 
-	const FVector GardenAt(520.f, -180.f, 0.f);
-	const FVector ExplorerAt(520.f, 180.f, 0.f);
+	// Wardrobe before the start arch, close enough to read from the dressing end.
+	// Posts sit outside the look triggers so a player can stand on a look.
+	const FVector GardenAt(460.f, -180.f, 0.f);
+	const FVector ExplorerAt(460.f, 180.f, 0.f);
+	const FVector RackAt(460.f, 0.f, 0.f);
+	const FLinearColor Wood(0.45f, 0.28f, 0.18f);
+	const FLinearColor Brass(0.72f, 0.58f, 0.28f);
+	AddBlock(RackAt + FVector(-55.f, -300.f, 120.f), FVector(18.f, 18.f, 240.f), Wood, true);
+	AddBlock(RackAt + FVector(-55.f, 300.f, 120.f), FVector(18.f, 18.f, 240.f), Wood, true);
+	AddBlock(RackAt + FVector(-55.f, 0.f, 232.f), FVector(14.f, 620.f, 12.f), Brass, true);
+	AddLabel(TEXT("WARDROBE"), RackAt + FVector(0.f, 0.f, 310.f), 52.f);
+	WearingCue = AddLabel(GetWearingCue(), RackAt + FVector(10.f, 0.f, 255.f), 32.f);
+	// Busts are not solid: the look spot has to be walked onto.
 	AddBlock(GardenAt + FVector(0.f, 0.f, 4.f), FVector(160.f, 140.f, 8.f), FLinearColor(0.85f, 0.55f, 0.65f), false);
 	AddBlock(ExplorerAt + FVector(0.f, 0.f, 4.f), FVector(160.f, 140.f, 8.f), FLinearColor(0.55f, 0.42f, 0.28f), false);
-	AddLabel(TEXT("Garden"), GardenAt + FVector(0.f, 0.f, 160.f));
-	AddLabel(TEXT("Explorer"), ExplorerAt + FVector(0.f, 0.f, 160.f));
+	AddBlock(GardenAt + FVector(0.f, 0.f, 78.f), FVector(36.f, 28.f, 72.f), FLinearColor(0.85f, 0.55f, 0.65f), false);
+	AddBlock(GardenAt + FVector(0.f, 0.f, 128.f), FVector(22.f, 22.f, 22.f), FLinearColor(0.93f, 0.78f, 0.68f), false);
+	AddBlock(ExplorerAt + FVector(0.f, 0.f, 78.f), FVector(36.f, 28.f, 72.f), FLinearColor(0.55f, 0.42f, 0.28f), false);
+	AddBlock(ExplorerAt + FVector(0.f, 0.f, 128.f), FVector(22.f, 22.f, 22.f), FLinearColor(0.93f, 0.78f, 0.68f), false);
+	AddLabel(TEXT("Garden"), GardenAt + FVector(0.f, 0.f, 190.f));
+	AddLabel(TEXT("Explorer"), ExplorerAt + FVector(0.f, 0.f, 190.f));
+	AddLabel(TEXT("Stand here"), GardenAt + FVector(0.f, 0.f, 155.f), 28.f);
+	AddLabel(TEXT("Stand here"), ExplorerAt + FVector(0.f, 0.f, 155.f), 28.f);
 	AddTrigger(VerbLook, LookGarden, GardenAt + FVector(0.f, 0.f, 100.f), FVector(70.f, 70.f, 100.f));
 	AddTrigger(VerbLook, LookExplorer, ExplorerAt + FVector(0.f, 0.f, 100.f), FVector(70.f, 70.f, 100.f));
+
+	AddLabel(TEXT("Theme, then wardrobe, then Start"), FVector(160.f, 0.f, 230.f), 32.f);
 
 	const FVector StartAt(860.f, 0.f, 0.f);
 	AddBlock(StartAt + FVector(0.f, -140.f, 140.f), FVector(30.f, 30.f, 280.f), FLinearColor(0.85f, 0.45f, 0.62f), true);
 	AddBlock(StartAt + FVector(0.f, 140.f, 140.f), FVector(30.f, 30.f, 280.f), FLinearColor(0.85f, 0.45f, 0.62f), true);
 	AddBlock(StartAt + FVector(0.f, 0.f, 290.f), FVector(30.f, 310.f, 24.f), FLinearColor(0.85f, 0.45f, 0.62f), true);
-	AddLabel(TEXT("Start"), StartAt + FVector(0.f, 0.f, 340.f));
+	AddLabel(TEXT("START"), StartAt + FVector(0.f, 0.f, 360.f), 64.f);
+	StartCue = AddLabel(GetStartCue(), StartAt + FVector(30.f, 0.f, 180.f), 36.f);
 	AddTrigger(VerbStart, NAME_None, StartAt + FVector(0.f, 0.f, 120.f), FVector(90.f, 90.f, 120.f));
 
 	AddBlock(FVector(1200.f, -220.f, 40.f), FVector(700.f, 16.f, 80.f), FLinearColor(0.72f, 0.62f, 0.66f), true);
@@ -428,7 +481,9 @@ bool AGFRunwaySite::TrySelectTheme(APawn* Pawn, FName ThemeId)
 		return false;
 	}
 	SelectedTheme = ThemeId;
+	bThemeChosen = true;
 	LastPrompt = FString::Printf(TEXT("Theme: %s"), *ThemeTitle(ThemeId));
+	RefreshCues();
 	return true;
 }
 
@@ -444,13 +499,22 @@ bool AGFRunwaySite::TrySelectLook(APawn* Pawn, FName LookId)
 		return false;
 	}
 	SelectedLook = LookId;
+	bLookChosen = true;
 	AGFRunwayStage* Stage = AGFRunwayStage::Find(GetWorld());
 	AGFPlayerState* PS = PlayerOf(Pawn);
-	if (Stage && Stage->GetPhase() == EGFRunwayPhase::Dressing && PS)
+	const bool bDuringShow = Stage && Stage->GetPhase() == EGFRunwayPhase::Dressing && PS;
+	const bool bWorn = bDuringShow && ApplyLook(PS->PlayerKey);
+	if (bDuringShow && !bWorn)
 	{
-		ApplyLook(PS->PlayerKey);
+		LastPrompt = FString::Printf(TEXT("Look: %s, outfit refused"), *LookTitle(LookId));
 	}
-	LastPrompt = FString::Printf(TEXT("Look: %s"), *LookTitle(LookId));
+	else
+	{
+		// The wardrobe lends the catalog look. Nothing is taken from the bag.
+		const TCHAR* How = bWorn ? TEXT("Wearing") : TEXT("Granted");
+		LastPrompt = FString::Printf(TEXT("Look: %s. %s %s."), *LookTitle(LookId), How, *LookPieces(LookId));
+	}
+	RefreshCues();
 	return true;
 }
 
@@ -478,13 +542,18 @@ bool AGFRunwaySite::TryStart(APawn* Pawn)
 		LastPrompt = TEXT("Start: show already on");
 		return false;
 	}
-	if (!FGFFashionCatalog::FindTheme(SelectedTheme))
+	// A suggested name is not a choice. Say so on the arch instead of opening the show undressed.
+	if (!bThemeChosen || !FGFFashionCatalog::FindTheme(SelectedTheme))
 	{
-		SelectedTheme = FGFFashionCatalog::Themes().Num() > 0 ? FGFFashionCatalog::Themes()[0].Id : ThemeGarden;
+		LastPrompt = TEXT("Pick a theme first");
+		RefreshCues();
+		return false;
 	}
-	if (!IsLook(SelectedLook))
+	if (!bLookChosen || !IsLook(SelectedLook))
 	{
-		SelectedLook = LookGarden;
+		LastPrompt = TEXT("Pick a look first");
+		RefreshCues();
+		return false;
 	}
 
 	// Short enough to walk in one visit. The stage's 75/8/4 defaults stay until a show starts here.
@@ -518,6 +587,7 @@ bool AGFRunwaySite::TryStart(APawn* Pawn)
 	LastPrompt = bDressed
 		? FString::Printf(TEXT("Start: %s in %s"), *LookTitle(SelectedLook), *ThemeTitle(SelectedTheme))
 		: TEXT("Start: show on, outfit refused");
+	RefreshCues();
 	return true;
 }
 
@@ -555,6 +625,7 @@ bool AGFRunwaySite::TryFinish(APawn* Pawn)
 	}
 	const bool bDone = Stage->GetPhase() == EGFRunwayPhase::Results;
 	LastPrompt = bDone ? TEXT("Finish: scores are up") : TEXT("Finish: the show is still going");
+	RefreshCues();
 	return bDone;
 }
 
@@ -635,18 +706,58 @@ void AGFRunwaySite::SeatFarPawns()
 			continue;
 		}
 		Pawn->SetActorLocation(Stand, false, nullptr, ETeleportType::TeleportPhysics);
+		// Face down the catwalk, toward the wardrobe and the start arch.
+		Pawn->SetActorRotation(GetActorRotation());
 		Seated.Add(Key);
 	}
+}
+
+FString AGFRunwaySite::GetStartCue() const
+{
+	const AGFRunwayStage* Stage = AGFRunwayStage::Find(GetWorld());
+	const EGFRunwayPhase Phase = Stage ? Stage->GetPhase() : EGFRunwayPhase::Idle;
+	if (Phase != EGFRunwayPhase::Idle && Phase != EGFRunwayPhase::Results)
+	{
+		return TEXT("Show is on. Walk to Finish.");
+	}
+	if (!bThemeChosen)
+	{
+		return TEXT("Pick a theme first");
+	}
+	if (!bLookChosen)
+	{
+		return TEXT("Pick a look first");
+	}
+	return TEXT("Walk through to start the show");
+}
+
+FString AGFRunwaySite::GetWearingCue() const
+{
+	if (!bLookChosen)
+	{
+		return TEXT("Stand on Garden or Explorer");
+	}
+	return FString::Printf(TEXT("Wearing %s"), *LookTitle(SelectedLook));
+}
+
+void AGFRunwaySite::RefreshCues()
+{
+	auto Set = [](UTextRenderComponent* Label, const FString& Text)
+	{
+		if (!Label || Label->Text.ToString() == Text)
+		{
+			return;
+		}
+		Label->SetText(FText::FromString(Text));
+	};
+	Set(StartCue, GetStartCue());
+	Set(WearingCue, GetWearingCue());
 }
 
 void AGFRunwaySite::GetPromptLines(const AGFPlayerState* PS, TArray<FString>& OutLines) const
 {
 	OutLines.Reset();
 	OutLines.Add(TEXT("RUNWAY"));
-	OutLines.Add(TEXT("Walk the spots: theme, look, Start, Finish, Hub."));
-	OutLines.Add(FString::Printf(TEXT("Theme: %s"), *ThemeTitle(SelectedTheme)));
-	OutLines.Add(FString::Printf(TEXT("Look: %s"), *LookTitle(SelectedLook)));
-	OutLines.Add(TEXT("Start opens the show. Finish walks it to the scores. The hub arch leaves."));
 
 	const AGFRunwayStage* Stage = AGFRunwayStage::Find(GetWorld());
 	const EGFRunwayPhase Phase = Stage ? Stage->GetPhase() : EGFRunwayPhase::Idle;
@@ -670,10 +781,39 @@ void AGFRunwaySite::GetPromptLines(const AGFPlayerState* PS, TArray<FString>& Ou
 			}
 			OutLines.Add(FString::Printf(TEXT("%s  rank %d  %s  %.1f  %s"), *C.PlayerKey, C.Rank, *TierName(C.Score.Tier), C.Score.Total, *Pay));
 		}
-		OutLines.Add(TEXT("The hub arch takes you back."));
+		OutLines.Add(TEXT("The Hub arch takes you back."));
 	}
 	else
 	{
+		// 0 theme, 1 look, 2 start arch, 3 finish arch. One of them is the step to do next.
+		const int32 Step = !bThemeChosen ? 0 : (!bLookChosen ? 1 : (Phase == EGFRunwayPhase::Idle ? 2 : 3));
+		const TCHAR* Steps[] = {
+			TEXT("Pick a theme."),
+			TEXT("Pick a look on the wardrobe."),
+			TEXT("Walk through the Start arch."),
+			TEXT("Walk to the Finish arch."),
+		};
+		for (int32 i = 0; i < UE_ARRAY_COUNT(Steps); ++i)
+		{
+			OutLines.Add(FString::Printf(TEXT("%s%s"), i == Step ? TEXT("> ") : TEXT("  "), Steps[i]));
+		}
+		if (!bLookChosen)
+		{
+			OutLines.Add(TEXT("Look: none. The wardrobe lends Garden or Explorer. Pick a look first."));
+		}
+		else
+		{
+			OutLines.Add(FString::Printf(TEXT("Look: %s. Wearing %s."), *LookTitle(SelectedLook), *LookPieces(SelectedLook)));
+		}
+		if (bThemeChosen)
+		{
+			OutLines.Add(FString::Printf(TEXT("Theme: %s"), *ThemeTitle(SelectedTheme)));
+		}
+		else
+		{
+			OutLines.Add(TEXT("Theme: not chosen."));
+		}
+		OutLines.Add(TEXT("The Hub arch leaves."));
 		const int32 Left = Stage ? Stage->GetState().PhaseSecondsLeft : 0;
 		OutLines.Add(FString::Printf(TEXT("Phase: %s (%ds)"), *PhaseName(Phase), Left));
 	}
