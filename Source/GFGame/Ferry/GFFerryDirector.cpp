@@ -1,6 +1,7 @@
 #include "GFFerryDirector.h"
 #include "GFFerryDino.h"
 #include "GFFerryRiderComponent.h"
+#include "GFFerryStand.h"
 #include "GFDino.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
@@ -107,6 +108,7 @@ void AGFFerryDirector::BeginPlay()
 	SpawnWait = MobSpawn.SpawnIntervalSeconds;
 	MobRng.GenerateNewSeed();
 	SpawnStopDinos();
+	SpawnStands();
 }
 
 void AGFFerryDirector::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -134,6 +136,13 @@ void AGFFerryDirector::Tick(float DeltaSeconds)
 
 FGFFerryResult AGFFerryDirector::RequestTrip(APawn* Rider, FName FromStop, const FGuid& RequestId)
 {
+	const FGFFerryRoute* Route = FGFFerryRules::FindRouteFrom(Routes, FromStop);
+	const FName ToStop = Route ? FGFFerryRules::OtherStop(*Route, FromStop) : NAME_None;
+	return RequestTripTo(Rider, FromStop, ToStop, RequestId);
+}
+
+FGFFerryResult AGFFerryDirector::RequestTripTo(APawn* Rider, FName FromStop, FName ToStop, const FGuid& RequestId)
+{
 	if (!HasAuthority() || !Rider || !RequestId.IsValid())
 	{
 		return GFFerryDirectorPrivate::FerryDirectorFail(FGFFerryCodes::NotAuthority);
@@ -158,9 +167,9 @@ FGFFerryResult AGFFerryDirector::RequestTrip(APawn* Rider, FName FromStop, const
 	UGFFerryRiderComponent* Ride = Rider->FindComponentByClass<UGFFerryRiderComponent>();
 	const bool bInFlight = Ride && Ride->IsInFlight();
 	const FGFFerryStop* From = FGFFerryRules::FindStop(Stops, FromStop);
-	const FGFFerryRoute* Route = From ? FGFFerryRules::FindRouteFrom(Routes, FromStop) : nullptr;
-	const FGFFerryStop* To = Route ? FGFFerryRules::FindStop(Stops, FGFFerryRules::OtherStop(*Route, FromStop)) : nullptr;
-	const FGFFerryStop* BoardStop = (From && To) ? From : nullptr;
+	const FGFFerryStop* To = FGFFerryRules::FindStop(Stops, ToStop);
+	const FGFFerryRoute* Route = (From && To) ? FGFFerryRules::FindRouteBetween(Routes, From->Id, To->Id) : nullptr;
+	const FGFFerryStop* BoardStop = Route ? From : nullptr;
 
 	FGFInventory Inventory;
 	if (!GS->Accounts().ReadAccount(PS->PlayerKey, Inventory))
@@ -171,6 +180,10 @@ FGFFerryResult AGFFerryDirector::RequestTrip(APawn* Rider, FName FromStop, const
 		true, bInFlight, false, BoardStop, Rider->GetActorLocation(), Inventory, Tuning);
 	if (!Plan.Result.bOk)
 	{
+		if (Plan.Result.Code == FGFFerryCodes::UnknownStop && From && To && !Route)
+		{
+			return GFFerryDirectorPrivate::FerryDirectorFail(FGFFerryCodes::NoRoute);
+		}
 		return Plan.Result;
 	}
 	EGFTxResult Burned = EGFTxResult::AlreadyApplied;
@@ -182,7 +195,7 @@ FGFFerryResult AGFFerryDirector::RequestTrip(APawn* Rider, FName FromStop, const
 			return GFFerryDirectorPrivate::FerryDirectorFail(FGFFerryCodes::CantAfford);
 		}
 	}
-	if (!StartFlight(Rider, *From, *To))
+	if (!From || !To || !StartFlight(Rider, *From, *To))
 	{
 		if (Plan.bCharge && Burned == EGFTxResult::Applied)
 		{
@@ -236,6 +249,31 @@ void AGFFerryDirector::SpawnStopDinos()
 		Dino->ParkAt(Stop.Location);
 		Dino->SetStopId(Stop.Id);
 		StopDinos.Add(Dino);
+	}
+}
+
+void AGFFerryDirector::SpawnStands()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	for (const FGFFerryStop& Stop : Stops)
+	{
+		if (Stop.Id.IsNone())
+		{
+			continue;
+		}
+		AGFFerryStand* Stand = World->SpawnActor<AGFFerryStand>(AGFFerryStand::StaticClass(), Stop.Location, FRotator::ZeroRotator, Params);
+		if (!Stand)
+		{
+			continue;
+		}
+		Stand->Configure(this, Stop.Id);
+		Stands.Add(Stand);
 	}
 }
 
@@ -622,4 +660,12 @@ void AGFFerryDirector::DestroySpawned()
 		}
 	}
 	StopDinos.Reset();
+	for (AGFFerryStand* Stand : Stands)
+	{
+		if (Stand)
+		{
+			Stand->Destroy();
+		}
+	}
+	Stands.Reset();
 }

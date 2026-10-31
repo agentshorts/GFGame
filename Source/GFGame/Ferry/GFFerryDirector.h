@@ -1,7 +1,7 @@
 #pragma once
 
-// Spawns one parked ferry per stop and flies a rider between the stops on that route.
-// Also spawns hostile dinos on the route's wild hazard while someone is on foot nearby.
+// Spawns one parked ferry and one greybox stand per stop, and flies a rider between linked stops.
+// Also spawns hostile dinos on a route's wild hazard while someone is on foot nearby.
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -10,6 +10,7 @@
 
 class AGFDino;
 class AGFFerryDino;
+class AGFFerryStand;
 class APawn;
 class UGFFerryRiderComponent;
 class UStaticMeshComponent;
@@ -36,9 +37,16 @@ public:
 
 	/**
 	 * Server. Charges the fare or accepts a pass, then starts the flight.
+	 * The destination is the other end of the first route that touches FromStop.
 	 * RequestId is the fare TxId. A second call with the same id does not charge and does not start another flight.
 	 */
 	FGFFerryResult RequestTrip(APawn* Rider, FName FromStop, const FGuid& RequestId);
+
+	/**
+	 * Server. Same charge and flight as RequestTrip, to a named stop on a route from FromStop.
+	 * NoRoute when both stops exist and nothing links them.
+	 */
+	FGFFerryResult RequestTripTo(APawn* Rider, FName FromStop, FName ToStop, const FGuid& RequestId);
 
 	/** Server. Burns the pass material and mints one pass. A failed mint rolls the burn back. */
 	FGFFerryResult BuyPass(APawn* Rider, FName AtStop, const FGuid& RequestId);
@@ -80,6 +88,7 @@ private:
 	};
 
 	void SpawnStopDinos();
+	void SpawnStands();
 	bool StartFlight(APawn* Rider, const FGFFerryStop& From, const FGFFerryStop& To);
 	/** True when the flight entry should be dropped. */
 	bool AdvanceFlight(FFlight& Flight, float DeltaSeconds);
@@ -90,6 +99,9 @@ private:
 
 	UPROPERTY()
 	TArray<TObjectPtr<AGFFerryDino>> StopDinos;
+
+	UPROPERTY()
+	TArray<TObjectPtr<AGFFerryStand>> Stands;
 
 	TArray<FFlight> Flights;
 	TArray<FRouteMob> Mobs;

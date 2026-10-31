@@ -8,6 +8,7 @@ const FName FGFFerryCodes::AlreadyHasPass(TEXT("AlreadyHasPass"));
 const FName FGFFerryCodes::InFlight(TEXT("InFlight"));
 const FName FGFFerryCodes::NotAuthority(TEXT("NotAuthority"));
 const FName FGFFerryCodes::FlightFailed(TEXT("FlightFailed"));
+const FName FGFFerryCodes::NoRoute(TEXT("NoRoute"));
 
 namespace GFFerryRulesPrivate
 {
@@ -437,6 +438,18 @@ const FGFFerryRoute* FGFFerryRules::FindRouteFrom(const TArray<FGFFerryRoute>& R
 	});
 }
 
+const FGFFerryRoute* FGFFerryRules::FindRouteBetween(const TArray<FGFFerryRoute>& Routes, FName StopA, FName StopB)
+{
+	if (StopA.IsNone() || StopB.IsNone() || StopA == StopB)
+	{
+		return nullptr;
+	}
+	return Routes.FindByPredicate([StopA, StopB](const FGFFerryRoute& Route)
+	{
+		return (Route.StopA == StopA && Route.StopB == StopB) || (Route.StopA == StopB && Route.StopB == StopA);
+	});
+}
+
 FName FGFFerryRules::OtherStop(const FGFFerryRoute& Route, FName FromStopId)
 {
 	if (Route.StopA == FromStopId)
@@ -448,6 +461,26 @@ FName FGFFerryRules::OtherStop(const FGFFerryRoute& Route, FName FromStopId)
 		return Route.StopA;
 	}
 	return NAME_None;
+}
+
+void FGFFerryRules::CollectDestinations(const TArray<FGFFerryStop>& Stops, const TArray<FGFFerryRoute>& Routes, FName FromStopId, TArray<FName>& OutStopIds)
+{
+	OutStopIds.Reset();
+	if (FromStopId.IsNone())
+	{
+		return;
+	}
+	for (const FGFFerryStop& Stop : Stops)
+	{
+		if (Stop.Id.IsNone() || Stop.Id == FromStopId)
+		{
+			continue;
+		}
+		if (FindRouteBetween(Routes, FromStopId, Stop.Id))
+		{
+			OutStopIds.Add(Stop.Id);
+		}
+	}
 }
 
 float FGFFerryRouteSpawnRules::ScaledAttackDamage(float BaseDamage, int32 MobLevel, float MobDamagePerLevel)

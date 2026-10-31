@@ -20,6 +20,18 @@ struct GFGAME_API FGFFerryCodes
 	static const FName NotAuthority;
 	/** StartFlight did not begin. A fare that was burned for this request is minted back. */
 	static const FName FlightFailed;
+	/** Both stops exist and neither route joins them. */
+	static const FName NoRoute;
+};
+
+/**
+ * The ferry is a route craft. It parks on the perch of a stop and does not follow a player.
+ * ParkedGoal is the perch, whatever the player does.
+ */
+struct GFGAME_API FGFFerryFollow
+{
+	static bool WantsToFollow() { return false; }
+	static FVector ParkedGoal(const FVector& Perch) { return Perch; }
 };
 
 /**
@@ -203,8 +215,13 @@ struct GFGAME_API FGFFerryRules
 	static FVector DropPoint(const FVector& From, const FVector& To, const FVector& RiderLocation, float BoardRadius);
 
 	static const FGFFerryStop* FindStop(const TArray<FGFFerryStop>& Stops, FName Id);
+	/** First route that touches StopId. A stop on several routes still resolves to that first one. */
 	static const FGFFerryRoute* FindRouteFrom(const TArray<FGFFerryRoute>& Routes, FName StopId);
+	/** The route whose ends are StopA and StopB, either order. Null when they are the same or unlinked. */
+	static const FGFFerryRoute* FindRouteBetween(const TArray<FGFFerryRoute>& Routes, FName StopA, FName StopB);
 	static FName OtherStop(const FGFFerryRoute& Route, FName FromStopId);
+	/** Other stops that share a route with FromStopId, in stop-array order. */
+	static void CollectDestinations(const TArray<FGFFerryStop>& Stops, const TArray<FGFFerryRoute>& Routes, FName FromStopId, TArray<FName>& OutStopIds);
 };
 
 struct GFGAME_API FGFFerryRouteSpawnRules

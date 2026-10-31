@@ -68,6 +68,8 @@ private:
 	void DrawGrumbleSession();
 	/** Hallow Night: start, finish, results and hub prompts while the local pawn is on the Depths pad. */
 	void DrawDepthsSession();
+	/** Ferry stand: fare, destinations and the lifetime pass while the local pawn is at a stop. */
+	void DrawFerryStand();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);
