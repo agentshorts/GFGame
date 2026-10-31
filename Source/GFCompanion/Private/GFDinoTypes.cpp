@@ -447,9 +447,10 @@ EGFOfferResult FGFTameMachine::Offer(const FDinoDietRow& Row, float Now, const F
 	if (Kind == EGFFeedResult::Rejected)
 	{
 		++Aggravation;
-		if (Aggravation >= 2 && !IsCalmed(Now))
+		// Wrong food attacks. One refused snack is enough. Calming Mist still swallows it.
+		if (!IsCalmed(Now) && State != EGFTameState::Hostile)
 		{
-			SetState(EGFTameState::Threat);
+			SetState(EGFTameState::Hostile);
 			TargetKey = Key;
 		}
 		return EGFOfferResult::Refused;

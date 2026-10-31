@@ -153,7 +153,12 @@ EGFOfferResult UGFTamingComponent::ServerOffer(UObject* TamerObj, FName Food)
 		return EGFOfferResult::NotNow;
 	}
 	const FString Key = Tamer->GetTamerKey();
+	const EGFTameState Before = Machine.State;
 	const EGFOfferResult Result = Machine.Offer(*Row, GetWorld()->GetTimeSeconds(), Key, Food);
+	if (Row->bPack && !PackId.IsNone() && Machine.State == EGFTameState::Hostile && Before != EGFTameState::Hostile)
+	{
+		CallPack(Key);
+	}
 	if (Result == EGFOfferResult::Accepted || Result == EGFOfferResult::Favourite || Result == EGFOfferResult::Refused)
 	{
 		const EGFFeedResult Feed = FGFDinoDiet::ToFeedResult(Result);
