@@ -85,6 +85,8 @@ namespace GFBeatHopCourse
 	static constexpr double LobbySpawnX = -2050.0;
 	static constexpr double SongRowX = -1700.0;
 	static constexpr double DifficultyRowX = -1250.0;
+	static constexpr double CourseRowX = -800.0;
+	static constexpr double HireRowX = -450.0;
 	static constexpr double TileSpacingY = 160.0;
 	static constexpr double LostMarginCm = 1500.0;
 	static const FLinearColor Sunflower(0.913f, 0.578f, 0.054f);
@@ -182,6 +184,8 @@ AGFBeatHopCourse::AGFBeatHopCourse()
 		FLinearColor(0.209f, 0.578f, 0.888f),
 		FLinearColor(0.456f, 0.266f, 0.745f),
 	};
+	RescueSalt = FGuid::NewGuid();
+	SelectedCourseId = FGFBeatHopCourses::Default().Id;
 }
 
 void AGFBeatHopCourse::BeginPlay()
@@ -201,6 +205,7 @@ void AGFBeatHopCourse::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AGFBeatHopCourse, RunSongId);
+	DOREPLIFETIME(AGFBeatHopCourse, RunCourseId);
 	DOREPLIFETIME(AGFBeatHopCourse, RunDifficulty);
 	DOREPLIFETIME(AGFBeatHopCourse, RunMode);
 	DOREPLIFETIME(AGFBeatHopCourse, bRunCozy);
@@ -216,8 +221,13 @@ void AGFBeatHopCourse::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(AGFBeatHopCourse, bSession);
 	DOREPLIFETIME(AGFBeatHopCourse, SelectedSong);
 	DOREPLIFETIME(AGFBeatHopCourse, SelectedDifficulty);
+	DOREPLIFETIME(AGFBeatHopCourse, SelectedCourseId);
 	DOREPLIFETIME(AGFBeatHopCourse, Results);
 	DOREPLIFETIME(AGFBeatHopCourse, ResultsEndServerTime);
+	DOREPLIFETIME(AGFBeatHopCourse, RevengeSpot);
+	DOREPLIFETIME(AGFBeatHopCourse, bRevengeShown);
+	DOREPLIFETIME(AGFBeatHopCourse, RescueSpot);
+	DOREPLIFETIME(AGFBeatHopCourse, bRescueShown);
 }
 
 bool AGFBeatHopCourse::StartRun(FName SongId, EGFBeatDifficulty Difficulty, EGFBeatHopMode Mode, bool bCozy, FString& OutReason)
@@ -249,6 +259,11 @@ bool AGFBeatHopCourse::StartRunForPlayers(FName SongId, EGFBeatDifficulty Diffic
 	Runs.Reset();
 	WasFalling.Reset();
 	EndReason.Reset();
+	bCoursePassed = false;
+	bLastPassed = false;
+	RunCourseId = SelectedCourseId.IsNone() || !FGFBeatHopCourses::Find(SelectedCourseId)
+		? FGFBeatHopCourses::Default().Id
+		: SelectedCourseId;
 	RunId = FGuid::NewGuid(); // identifies the run; every grant's TxId is derived from it
 	Judgements.Reset();
 	ScoreReps.Reset();
@@ -302,6 +317,7 @@ bool AGFBeatHopCourse::StartRunForPlayers(FName SongId, EGFBeatDifficulty Diffic
 			return false;
 		}
 	}
+	RefreshHazards(nullptr);
 	// Snapshot the host's songs offset. Every client subtracts this same value, not its own setting.
 	RunCalibrationSeconds = RunMode == EGFBeatHopMode::Songs
 		? static_cast<double>(GetDefault<UGFRhythmSettings>()->SongsOffsetMs) / 1000.0
@@ -386,8 +402,20 @@ int32 AGFBeatHopCourse::AddBrick(double Time, double LenSeconds, int32 Lane, int
 	const double Speed = RunMode == EGFBeatHopMode::Live ? GFBeatHopCourse::LiveSpeedCms : static_cast<double>(Beatmap.RefSpeedCms);
 	const double StartTime = RunMode == EGFBeatHopMode::Live ? LiveStartClock : 0.0;
 	const double Length = BrickSizeCm.X + LenSeconds * Speed;
-	const double X = (Time - StartTime) * Speed + LenSeconds * Speed * 0.5;
-	const double Y = (Lane - (Lanes - 1) * 0.5) * LaneWidthCm;
+	double X = (Time - StartTime) * Speed + LenSeconds * Speed * 0.5;
+	double Y = (Lane - (Lanes - 1) * 0.5) * LaneWidthCm;
+	// Songs follow the selected course. Fern is the chart itself. Live bricks stay on the chart (#114).
+	if (RunMode == EGFBeatHopMode::Songs)
+	{
+		const FGFBeatHopCourseDef* Layout = FGFBeatHopCourses::Find(RunCourseId);
+		if (!Layout)
+		{
+			Layout = &FGFBeatHopCourses::Default();
+		}
+		const FVector2D At = FGFBeatHopCourses::Place(*Layout, Bricks.Num(), X, Y, LaneWidthCm);
+		X = At.X;
+		Y = At.Y;
+	}
 
 	FGFBeatHopBrick B;
 	B.Time = Time;
@@ -1006,11 +1034,17 @@ void AGFBeatHopCourse::FinishRun()
 	{
 		Gate = GI->GetSubsystem<UGFBeatHopGateSubsystem>();
 	}
+	bLastPassed = bCoursePassed;
+	bCoursePassed = false;
 	for (TPair<FString, FPlayerRun>& Pair : Runs)
 	{
 		FPlayerRun& Run = Pair.Value;
 		const FGFRhythmScore& Score = Run.Judge.GetScore();
-		Grant(Pair.Key, Run, FGFBeatHopRewards::ForSongEnd(Score, TotalNotes, Rewards, bRunCozy), TEXT("BeatHop.SongEnd"), TEXT("SongEnd"));
+		// The grade bundle is the win payout. A timeout still scores, and it does not pay (#114).
+		if (bLastPassed)
+		{
+			Grant(Pair.Key, Run, FGFBeatHopRewards::ForSongEnd(Score, TotalNotes, Rewards, bRunCozy), TEXT("BeatHop.SongEnd"), TEXT("SongEnd"));
+		}
 
 		FGFMiniGameResult Result;
 		Result.Score = Score.Score;
@@ -1053,6 +1087,10 @@ void AGFBeatHopCourse::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	UpdateRun();
+	if (HasAuthority())
+	{
+		TickHazards(DeltaSeconds);
+	}
 	if (bSession && HasAuthority())
 	{
 		UpdateSession();
@@ -1979,9 +2017,14 @@ void AGFBeatHopCourse::BuildTrackKit()
 	if (!bLive && bAny && CheckpointEveryBeats > 0 && Beatmap.Bpm > 0.f)
 	{
 		const double Speed = static_cast<double>(Beatmap.RefSpeedCms);
+		double GapScale = 1.0;
+		if (const FGFBeatHopCourseDef* Layout = FGFBeatHopCourses::Find(RunCourseId))
+		{
+			GapScale = FMath::Max(0.1, static_cast<double>(Layout->GapScale));
+		}
 		for (int32 Beat = CheckpointEveryBeats; ; Beat += CheckpointEveryBeats)
 		{
-			const double X = Beatmap.BeatToSeconds(Beat) * Speed;
+			const double X = Beatmap.BeatToSeconds(Beat) * Speed * GapScale;
 			if (X >= LastX - 150.0)
 			{
 				break;
@@ -2256,6 +2299,17 @@ void AGFBeatHopCourse::DriveAnims(double Now)
 			continue;
 		}
 
+		// A hired Ripwing catches a real drop. A hop that stays on the bricks never gets this low.
+		// With no hire, NotifyFall does nothing and the catch floor below still does its own job.
+		if (HasAuthority() && bRunning && bFalling && Local.Z < -FallBelowTopCm && !HoldUntil.Contains(Char))
+		{
+			if (NotifyFall(Char, RunnerId(Char)))
+			{
+				H->bWasFalling = false;
+				continue;
+			}
+		}
+
 		if (bRunEnded && !bFalling)
 		{
 			Set(AnimVictory, 1.f, false);
@@ -2412,9 +2466,15 @@ void AGFBeatHopCourse::BeginSession()
 			SelectedSong = Ids[0];
 		}
 		SelectedDifficulty = EGFBeatDifficulty::Easy;
+		if (!FGFBeatHopCourses::Find(SelectedCourseId))
+		{
+			SelectedCourseId = FGFBeatHopCourses::Default().Id;
+		}
 		BuildLobby();
 		RebuildPreview();
-		UE_LOG(LogGF, Log, TEXT("Beat Hop: session on, %s (%s) ready at the start gate"), *SongTitle(SelectedSong), *DifficultyName(SelectedDifficulty));
+		const FGFBeatHopCourseDef* Layout = FGFBeatHopCourses::Find(SelectedCourseId);
+		UE_LOG(LogGF, Log, TEXT("Beat Hop: session on, %s, %s (%s) ready at the start gate"),
+			Layout ? *Layout->Title : TEXT("Fern Lane"), *SongTitle(SelectedSong), *DifficultyName(SelectedDifficulty));
 	}
 	ForEachPlayerPawn([this](APawn* Pawn)
 	{
@@ -2472,10 +2532,19 @@ void AGFBeatHopCourse::BuildLobby()
 		return;
 	}
 	SongTileIds = FGFBuiltInSongs::SongIds();
+	CourseTileIds.Reset();
+	for (const FGFBeatHopCourseDef& Course : FGFBeatHopCourses::All())
+	{
+		CourseTileIds.Add(Course.Id);
+	}
 	SongTiles.Reset();
 	DifficultyTiles.Reset();
+	CourseTiles.Reset();
+	RescueTiles.Reset();
 	SongTileMaterials.Reset();
 	DifficultyTileMaterials.Reset();
+	CourseTileMaterials.Reset();
+	RescueTileMaterial = nullptr;
 
 	// Floor: neutral bricks five lanes wide (wide enough for Hard), or one engine-cube slab if the art is missing.
 	{
@@ -2554,8 +2623,22 @@ void AGFBeatHopCourse::BuildLobby()
 	{
 		Tile(DifficultyRowX, (i - 1) * TileSpacingY, DifficultyName(Diffs[i]), DifficultyTiles, DifficultyTileMaterials);
 	}
+	const int32 NumCourses = CourseTileIds.Num();
+	for (int32 i = 0; i < NumCourses; ++i)
+	{
+		const FGFBeatHopCourseDef* Course = FGFBeatHopCourses::Find(CourseTileIds[i]);
+		Tile(CourseRowX, (i - (NumCourses - 1) * 0.5) * TileSpacingY, Course ? Course->Title : CourseTileIds[i].ToString(), CourseTiles, CourseTileMaterials);
+	}
+	Tile(HireRowX, 0.0, TEXT("Hire Ripwing"), RescueTiles, CourseTileMaterials);
+	// The hire plate's material was appended onto the course list. Keep it on its own so the course row stays one-to-one.
+	if (CourseTileMaterials.Num() == NumCourses + 1)
+	{
+		RescueTileMaterial = CourseTileMaterials.Last();
+		CourseTileMaterials.RemoveAt(CourseTileMaterials.Num() - 1);
+	}
 	AddLobbyText(TEXT("SONG"), FVector(SongRowX, 0.0, 250.0), 34.f, Sunflower.ToFColor(true));
 	AddLobbyText(TEXT("DIFFICULTY"), FVector(DifficultyRowX, 0.0, 250.0), 34.f, Mint.ToFColor(true));
+	AddLobbyText(TEXT("COURSE"), FVector(CourseRowX, 0.0, 250.0), 34.f, Coral.ToFColor(true));
 	AddLobbyText(TEXT("BEAT HOP"), FVector(-600.0, 0.0, 430.0), 80.f, Lavender.ToFColor(true));
 	StatusText = AddLobbyText(TEXT(""), FVector(-600.0, 0.0, 350.0), 30.f, FColor::White);
 	UpdateLobbyLook();
@@ -2581,20 +2664,35 @@ void AGFBeatHopCourse::UpdateLobbyLook()
 			Mid->SetVectorParameterValue(ColorParam, bOn ? DiffColors[i % 3] : TileOff);
 		}
 	}
+	for (int32 i = 0; i < CourseTileMaterials.Num(); ++i)
+	{
+		if (UMaterialInstanceDynamic* Mid = CourseTileMaterials[i])
+		{
+			const FGFBeatHopCourseDef* Course = CourseTileIds.IsValidIndex(i) ? FGFBeatHopCourses::Find(CourseTileIds[i]) : nullptr;
+			const bool bOn = Course && Course->Id == SelectedCourseId;
+			Mid->SetVectorParameterValue(ColorParam, bOn && Course ? Course->Tint : TileOff);
+		}
+	}
+	if (RescueTileMaterial)
+	{
+		RescueTileMaterial->SetVectorParameterValue(ColorParam, Rescues.Hires.Num() > 0 ? Mint : TileOff);
+	}
 	if (StatusText)
 	{
+		const FGFBeatHopCourseDef* Course = FGFBeatHopCourses::Find(bRunning ? RunCourseId : SelectedCourseId);
+		const FString CourseTitle = Course ? Course->Title : TEXT("Fern Lane");
 		FString Line;
 		if (IsShowingResults())
 		{
-			Line = TEXT("Finished! Back to the hub in a moment");
+			Line = bLastPassed ? TEXT("Course passed! Back to the hub in a moment") : TEXT("Not this time. Back to the hub in a moment");
 		}
 		else if (bRunning)
 		{
-			Line = FString::Printf(TEXT("%s (%s) is on: hop!"), *SongTitle(RunSongId), *DifficultyName(RunDifficulty));
+			Line = FString::Printf(TEXT("%s, %s (%s) is on: hop!"), *CourseTitle, *SongTitle(RunSongId), *DifficultyName(RunDifficulty));
 		}
 		else
 		{
-			Line = FString::Printf(TEXT("%s (%s): run through the gate"), *SongTitle(SelectedSong), *DifficultyName(SelectedDifficulty));
+			Line = FString::Printf(TEXT("%s, %s (%s): run through the gate"), *CourseTitle, *SongTitle(SelectedSong), *DifficultyName(SelectedDifficulty));
 		}
 		StatusText->SetText(FText::FromString(Line));
 	}
@@ -2617,6 +2715,9 @@ void AGFBeatHopCourse::RebuildPreview()
 	RunMode = EGFBeatHopMode::Songs;
 	RunSongId = SelectedSong;
 	RunDifficulty = SelectedDifficulty;
+	RunCourseId = SelectedCourseId.IsNone() || !FGFBeatHopCourses::Find(SelectedCourseId)
+		? FGFBeatHopCourses::Default().Id
+		: SelectedCourseId;
 	Windows = FGFJudgeWindows::For(EGFBeatHopMode::Songs, SelectedDifficulty);
 	BuildFromBeatmap(*Map);
 	UpdateLobbyLook();
@@ -2679,6 +2780,32 @@ void AGFBeatHopCourse::OnLobbyTileOverlap(UPrimitiveComponent* OverlappedCompone
 			return;
 		}
 	}
+	for (int32 i = 0; i < CourseTiles.Num(); ++i)
+	{
+		if (CourseTiles[i] == OverlappedComponent && CourseTileIds.IsValidIndex(i))
+		{
+			SelectCourse(CourseTileIds[i]);
+			return;
+		}
+	}
+	for (UBoxComponent* RescueTile : RescueTiles)
+	{
+		if (RescueTile == OverlappedComponent)
+		{
+			FString Key;
+			if (const AGFPlayerState* GFPS = Pawn->GetPlayerState<AGFPlayerState>())
+			{
+				Key = GFPS->PlayerKey;
+			}
+			if (Key.IsEmpty())
+			{
+				Key = Pawn->GetName();
+			}
+			FString Why;
+			TryHireRescue(Key, Why);
+			return;
+		}
+	}
 }
 
 void AGFBeatHopCourse::OnStartTriggerOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
@@ -2702,7 +2829,15 @@ void AGFBeatHopCourse::OnFinishTriggerOverlap(UPrimitiveComponent* OverlappedCom
 double AGFBeatHopCourse::RunTimeAtLocalX(double LocalX) const
 {
 	const double Speed = FMath::Max(1.0, static_cast<double>(Beatmap.RefSpeedCms));
-	return LocalX / Speed;
+	double Scale = 1.0;
+	if (RunMode != EGFBeatHopMode::Live)
+	{
+		if (const FGFBeatHopCourseDef* Layout = FGFBeatHopCourses::Find(RunCourseId))
+		{
+			Scale = FMath::Max(0.1, static_cast<double>(Layout->GapScale));
+		}
+	}
+	return (LocalX / Scale) / Speed;
 }
 
 bool AGFBeatHopCourse::TryStartFromGate(APawn* Pawn, FString& OutReason)
@@ -2787,9 +2922,11 @@ bool AGFBeatHopCourse::TryStartFromGate(APawn* Pawn, FString& OutReason)
 	}
 	HoldUntil.Reset();
 	HoldBrick.Reset();
+	RefreshHazards(Pawn);
 	UpdateLobbyLook();
-	UE_LOG(LogGF, Log, TEXT("Beat Hop: run started at the gate: %s (%s), clock %.2f s, song ends at %.2f s"),
-		*SongTitle(RunSongId), *DifficultyName(RunDifficulty), GetRunTime(), EndTime);
+	const FGFBeatHopCourseDef* Layout = FGFBeatHopCourses::Find(RunCourseId);
+	UE_LOG(LogGF, Log, TEXT("Beat Hop: run started at the gate: %s on %s (%s), clock %.2f s, song ends at %.2f s"),
+		*SongTitle(RunSongId), Layout ? *Layout->Title : TEXT("Fern Lane"), *DifficultyName(RunDifficulty), GetRunTime(), EndTime);
 	return true;
 }
 
@@ -2801,6 +2938,7 @@ bool AGFBeatHopCourse::ReachFinish(APawn* Pawn)
 		return false;
 	}
 	UE_LOG(LogGF, Log, TEXT("Beat Hop: %s crossed the finish at %.2f s"), Pawn ? *Pawn->GetName() : TEXT("someone"), GetRunTime());
+	bCoursePassed = true;
 	FinishRun();
 	return true;
 }
@@ -3128,6 +3266,7 @@ void AGFBeatHopCourse::OnSessionRunFinished()
 		Row.Goods = Score.Goods;
 		Row.Misses = Score.Misses;
 		Row.Grade = FGFRhythmJudge::GradeFor(Score);
+		Row.bPassed = bLastPassed;
 		Results.Add(Row);
 	}
 	Results.Sort([](const FGFBeatHopResultRow& A, const FGFBeatHopResultRow& B) { return A.Score > B.Score; });
@@ -3143,8 +3282,9 @@ void AGFBeatHopCourse::OnSessionRunFinished()
 	UpdateLobbyLook();
 	for (const FGFBeatHopResultRow& Row : Results)
 	{
-		UE_LOG(LogGF, Log, TEXT("Beat Hop: result %s: score %d, best combo %d, grade %s (P%d G%d M%d)"), *Row.PlayerName, Row.Score, Row.BestCombo,
-			*StaticEnum<EGFBeatHopGrade>()->GetNameStringByValue(static_cast<int64>(Row.Grade)), Row.Perfects, Row.Goods, Row.Misses);
+		UE_LOG(LogGF, Log, TEXT("Beat Hop: result %s: score %d, best combo %d, grade %s, %s (P%d G%d M%d)"), *Row.PlayerName, Row.Score, Row.BestCombo,
+			*StaticEnum<EGFBeatHopGrade>()->GetNameStringByValue(static_cast<int64>(Row.Grade)),
+			Row.bPassed ? TEXT("passed") : TEXT("did not pass"), Row.Perfects, Row.Goods, Row.Misses);
 	}
 }
 
@@ -3222,5 +3362,270 @@ void AGFBeatHopCourse::UpdateScreen(double WorldNow)
 	{
 		ShownScreenFrame = Frame;
 		ScreenMaterial->SetScalarParameterValue(GFBeatHopCourse::ScreenFrameParam, static_cast<float>(Frame));
+	}
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Courses, rescue Ripwings, revenge dinos (#114). Hazards add velocity. They do not write the run's walk speed,
+// gravity or air control; that feel stays on ApplyRunMovement.
+
+bool AGFBeatHopCourse::SelectCourse(FName CourseId)
+{
+	if (!HasAuthority() || bRunning || IsShowingResults() || !FGFBeatHopCourses::Find(CourseId))
+	{
+		return false;
+	}
+	if (CourseId != SelectedCourseId)
+	{
+		SelectedCourseId = CourseId;
+		if (!RunSongId.IsNone() || bSession)
+		{
+			RebuildPreview();
+		}
+		else
+		{
+			RunCourseId = CourseId;
+			UpdateLobbyLook();
+		}
+		const FGFBeatHopCourseDef* Course = FGFBeatHopCourses::Find(CourseId);
+		UE_LOG(LogGF, Log, TEXT("Beat Hop: course %s"), Course ? *Course->Title : *CourseId.ToString());
+	}
+	return true;
+}
+
+int32 AGFBeatHopCourse::GetRescueCatches(const FString& PlayerKey) const
+{
+	const FGFBeatHopRescueBook::FHire* Hire = Rescues.Find(PlayerKey);
+	return Hire ? Hire->CatchesLeft : 0;
+}
+
+EGFTxResult AGFBeatHopCourse::BurnCost(const FGuid& TxId, const FString& PlayerKey, const TArray<FGFItemStack>& Stacks, FName Reason)
+{
+	if (LedgerOverride && AccountsOverride)
+	{
+		return LedgerOverride->Burn(*AccountsOverride, TxId, PlayerKey, Stacks, Reason);
+	}
+	AGFGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGFGameState>() : nullptr;
+	if (GS && HasAuthority())
+	{
+		return GS->ServerBurn(TxId, PlayerKey, Stacks, Reason);
+	}
+	return EGFTxResult::UnknownAccount;
+}
+
+bool AGFBeatHopCourse::TryHireRescue(const FString& PlayerKey, FString& OutReason)
+{
+	OutReason.Reset();
+	if (!HasAuthority())
+	{
+		OutReason = TEXT("Only the host hires a rescue dino.");
+		return false;
+	}
+	if (PlayerKey.IsEmpty())
+	{
+		OutReason = TEXT("Nobody to hire for.");
+		return false;
+	}
+	if (Rescues.Find(PlayerKey))
+	{
+		OutReason = TEXT("This Ripwing is already hired.");
+		return false;
+	}
+	const TArray<FGFItemStack> Cost = { FGFItemStack(FGFBeatHopRescueRules::CostItem(), FGFBeatHopRescueRules::Cost) };
+	const FGuid Tx = MakeGrantTxId(RescueSalt, PlayerKey, TEXT("RescueHire"));
+	const EGFTxResult Paid = BurnCost(Tx, PlayerKey, Cost, TEXT("BeatHop.RescueHire"));
+	if (Paid != EGFTxResult::Applied && Paid != EGFTxResult::AlreadyApplied)
+	{
+		OutReason = FString::Printf(TEXT("A rescue Ripwing costs %d GlowDust."), FGFBeatHopRescueRules::Cost);
+		return false;
+	}
+	if (!Rescues.Hire(PlayerKey, FGFBeatHopRescueRules::Catches))
+	{
+		OutReason = TEXT("This Ripwing is already hired.");
+		return false;
+	}
+	EnsureDinoMeshes();
+	UpdateLobbyLook();
+	UE_LOG(LogGF, Log, TEXT("Beat Hop: %s hired a Ripwing (%d catches)"), *PlayerKey, FGFBeatHopRescueRules::Catches);
+	return true;
+}
+
+bool AGFBeatHopCourse::NotifyFall(ACharacter* Character, const FString& PlayerKey)
+{
+	if (!HasAuthority() || !bRunning || !Character)
+	{
+		return false;
+	}
+	if (!Rescues.SpendCatch(PlayerKey))
+	{
+		return false;
+	}
+	ShowRescueAt(Character->GetActorLocation() + FVector(0.f, 0.f, 180.f));
+	PutBackMidRun(Character, PlayerKey);
+	UE_LOG(LogGF, Log, TEXT("Beat Hop: Ripwing caught %s (%d catches left)"), *PlayerKey, GetRescueCatches(PlayerKey));
+	return true;
+}
+
+void AGFBeatHopCourse::EnsureDinoMeshes()
+{
+	if (RescueDino && RevengeDino)
+	{
+		return;
+	}
+	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"), nullptr, LOAD_Quiet | LOAD_NoWarn);
+	UMaterialInterface* Basic = BaseMaterial ? BaseMaterial.Get() : LoadObject<UMaterialInterface>(nullptr, GFBeatHopCourse::MaterialPath, nullptr, LOAD_Quiet | LOAD_NoWarn);
+	auto Make = [&](const TCHAR* Name, const FLinearColor& Tint) -> UStaticMeshComponent*
+	{
+		UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(this, Name, RF_Transient);
+		Mesh->SetupAttachment(Root);
+		if (Sphere)
+		{
+			Mesh->SetStaticMesh(Sphere);
+		}
+		Mesh->SetRelativeScale3D(FVector(1.2f));
+		Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Mesh->SetCanEverAffectNavigation(false);
+		Mesh->SetHiddenInGame(true);
+		if (Basic)
+		{
+			UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(Basic, this);
+			if (Mid)
+			{
+				Mid->SetVectorParameterValue(GFBeatHopCourse::ColorParam, Tint);
+				Mesh->SetMaterial(0, Mid);
+			}
+		}
+		Mesh->RegisterComponent();
+		return Mesh;
+	};
+	if (!RescueDino)
+	{
+		RescueDino = Make(TEXT("RescueDino"), GFBeatHopCourse::Mint);
+	}
+	if (!RevengeDino)
+	{
+		RevengeDino = Make(TEXT("RevengeDino"), GFBeatHopCourse::Coral);
+	}
+}
+
+void AGFBeatHopCourse::ShowRescueAt(const FVector& WorldLocation)
+{
+	EnsureDinoMeshes();
+	bRescueShown = 1;
+	RescueSpot = WorldLocation;
+	if (RescueDino)
+	{
+		RescueDino->SetRelativeLocation(GetActorTransform().InverseTransformPosition(WorldLocation));
+		RescueDino->SetHiddenInGame(false);
+	}
+}
+
+void AGFBeatHopCourse::ApplyHazardPush(ACharacter* Character, const FVector& CourseLocalPush)
+{
+	UCharacterMovementComponent* Move = Character ? Character->GetCharacterMovement() : nullptr;
+	if (!Move || CourseLocalPush.IsNearlyZero())
+	{
+		return;
+	}
+	// A shove, not a retune: walk speed, gravity and air control stay where the run left them.
+	Move->Velocity += GetActorTransform().TransformVector(CourseLocalPush);
+}
+
+void AGFBeatHopCourse::RefreshHazards(const APawn* Runner)
+{
+	// Live bricks stay on the chart. Course hazards belong to the song courses.
+	if (RunMode == EGFBeatHopMode::Live)
+	{
+		Revenge.bSpawned = false;
+		bRevengeShown = 0;
+		if (RevengeDino)
+		{
+			RevengeDino->SetHiddenInGame(true);
+		}
+		return;
+	}
+	const FGFBeatHopCourseDef* Layout = FGFBeatHopCourses::Find(RunCourseId);
+	if (!Layout)
+	{
+		Layout = &FGFBeatHopCourses::Default();
+	}
+	float StationX = 0.f;
+	float RunnerX = 0.f;
+	if (Bricks.Num() > 0 && Bricks[0].Mesh && Bricks.Last().Mesh)
+	{
+		StationX = static_cast<float>((Bricks[0].Mesh->GetRelativeLocation().X + Bricks.Last().Mesh->GetRelativeLocation().X) * 0.5);
+		RunnerX = static_cast<float>(Bricks[0].Mesh->GetRelativeLocation().X);
+	}
+	if (Runner)
+	{
+		RunnerX = static_cast<float>(GetActorTransform().InverseTransformPosition(Runner->GetActorLocation()).X);
+	}
+	Revenge.Reset(*Layout, StationX, RunnerX);
+	bRevengeShown = Revenge.bSpawned ? 1 : 0;
+	RevengeSpot = Revenge.Local;
+	EnsureDinoMeshes();
+	if (RevengeDino)
+	{
+		RevengeDino->SetRelativeLocation(Revenge.Local);
+		RevengeDino->SetHiddenInGame(!Revenge.bSpawned);
+		if (UMaterialInstanceDynamic* Mid = Cast<UMaterialInstanceDynamic>(RevengeDino->GetMaterial(0)))
+		{
+			Mid->SetVectorParameterValue(GFBeatHopCourse::ColorParam, Layout->Tint);
+		}
+	}
+}
+
+void AGFBeatHopCourse::TickHazards(float DeltaSeconds)
+{
+	if (!HasAuthority() || !bRunning || DeltaSeconds <= 0.f || RunMode == EGFBeatHopMode::Live)
+	{
+		return;
+	}
+	const FGFBeatHopCourseDef* Layout = FGFBeatHopCourses::Find(RunCourseId);
+	if (!Layout)
+	{
+		Layout = &FGFBeatHopCourses::Default();
+	}
+	const FVector Right = GetActorRightVector();
+	for (const TPair<TWeakObjectPtr<ACharacter>, FSavedRunMove>& Pair : SavedMoves)
+	{
+		ACharacter* Char = Pair.Key.Get();
+		UCharacterMovementComponent* Move = Char ? Char->GetCharacterMovement() : nullptr;
+		if (!Char || !Move)
+		{
+			continue;
+		}
+		if (Layout->IsSkiddy())
+		{
+			Move->Velocity = FGFBeatHopCourses::ApplySkid(Move->Velocity, Right, Layout->SkidCmPerSec, DeltaSeconds);
+		}
+		const FVector Local = GetActorTransform().InverseTransformPosition(Char->GetActorLocation());
+		const FGFBeatHopRevengeState::FStep Step = Revenge.Step(RunnerId(Char), Local, DeltaSeconds, *Layout);
+		if (Step.bKnocked || !Step.Push.IsNearlyZero())
+		{
+			ApplyHazardPush(Char, Step.Push);
+		}
+	}
+	if (Revenge.bSpawned && RevengeDino)
+	{
+		bRevengeShown = 1;
+		RevengeSpot = Revenge.Local;
+		RevengeDino->SetRelativeLocation(Revenge.Local);
+		RevengeDino->SetHiddenInGame(false);
+	}
+}
+
+void AGFBeatHopCourse::OnRep_Hazards()
+{
+	EnsureDinoMeshes();
+	if (RevengeDino)
+	{
+		RevengeDino->SetRelativeLocation(FVector(RevengeSpot));
+		RevengeDino->SetHiddenInGame(bRevengeShown == 0);
+	}
+	if (RescueDino)
+	{
+		RescueDino->SetWorldLocation(FVector(RescueSpot));
+		RescueDino->SetHiddenInGame(bRescueShown == 0);
 	}
 }

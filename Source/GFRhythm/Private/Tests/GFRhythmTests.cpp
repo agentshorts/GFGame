@@ -392,15 +392,16 @@ bool FGFRhythmCourseTest::RunTest(const FString&)
 	TestEqual(TEXT("Skipped brick is a miss for B"), Course->GetScore(TEXT("B"))->Misses, 1);
 	TestEqual(TEXT("A's late landing counted once"), Course->GetScore(TEXT("A"))->Misses, 1);
 
-	// Song end: everything left is missed and the grade reward is paid.
+	// The song runs out before anyone reaches the finish. Grade is still C. That is not a pass, so it pays nothing (#114).
 	Course->SetDebugRunTime(1.0e6);
 	Course->UpdateRun();
 	TestFalse(TEXT("Run ends after the last note"), Course->IsRunning());
 	TestEqual(TEXT("All bricks judged for A"), Course->GetScore(TEXT("A"))->Judged(), Course->NumBricks());
 	TestTrue(TEXT("Low accuracy is grade C"), FGFRhythmJudge::GradeFor(*Course->GetScore(TEXT("A"))) == EGFBeatHopGrade::C);
-	TestEqual(TEXT("C grade pays 1 PrismShard"), Held(TEXT("A"), TEXT("PrismShard")), 1);
+	TestFalse(TEXT("Timing out is not a pass"), Course->DidPass());
+	TestEqual(TEXT("A grade without the finish pays no PrismShard"), Held(TEXT("A"), TEXT("PrismShard")), 0);
 	TestEqual(TEXT("No rare without a full combo"), Held(TEXT("A"), TEXT("GoldNote")), 0);
-	TestTrue(TEXT("Song end used the fixed TxId"), Ledger.WasApplied(AGFBeatHopCourse::MakeGrantTxId(Course->GetRunId(), TEXT("A"), TEXT("SongEnd"))));
+	TestFalse(TEXT("Song end waits for the finish"), Ledger.WasApplied(AGFBeatHopCourse::MakeGrantTxId(Course->GetRunId(), TEXT("A"), TEXT("SongEnd"))));
 	TestEqual(TEXT("Nothing left pending"), Course->GetPendingGrants().Num(), 0);
 	const FGuid FirstRun = Course->GetRunId();
 
@@ -414,8 +415,8 @@ bool FGFRhythmCourseTest::RunTest(const FString&)
 		Course->UpdateRun();
 		TestTrue(TEXT("Perfect"), Course->HandleLanding(TEXT("Solo"), i, T) == EGFJudgement::Perfect);
 	}
-	Course->SetDebugRunTime(1.0e6);
-	Course->UpdateRun();
+	TestTrue(TEXT("The finish is the win"), Course->ReachFinish(nullptr));
+	TestTrue(TEXT("Clean run passed the course"), Course->DidPass());
 	const FGFRhythmScore* Clean = Course->GetScore(TEXT("Solo"));
 	TestTrue(TEXT("Clean run is S"), Clean && FGFRhythmJudge::GradeFor(*Clean) == EGFBeatHopGrade::S);
 	TestTrue(TEXT("A new run gets a new run id"), Course->GetRunId() != FirstRun);

@@ -55,11 +55,13 @@
 - A rhythm bunny-hop ("bhop") mini-game, named **Beat Hop**.
 - Live mode syncs to whatever the player is already playing on their PC (output-device loopback, never the mic), so the player's own music is the soundtrack and there's nothing to license. Built-in songs mode keeps a few licence-free tracks. (PLAN Q12, resolved Oct 29)
 - Mini-game materials pay on a win.
+- A win is passing the course: crossing the finish. A song that runs out before that is not a win, and the end-of-course materials pay only on a pass. Grades still show, for bragging rights. (#114)
+- Courses get harder. Fern Lane is the plain chart. Rime Skate is skiddy ice where a revenge dino chases. Cinder Drop is lava where a revenge dino knocks you off. A hired rescue dino (a Ripwing) catches you when you fall. (#114)
 
 **Inspired by:** lane-based rhythm games and obby/bhop courses (PLAN).
 
 **Open questions (default in force)**
-- Whether a Beat Hop "win" is a grade threshold or finishing the song. Default: grade B or better counts as a win.
+- None for the win. Co-op stays as it is: friends share the run, and the best score is for bragging rights. (#114)
 
 ## 3. Fashion show
 **Stated goals**
