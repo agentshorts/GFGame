@@ -155,6 +155,8 @@ protected:
 private:
 	void RefreshStaminaGate();
 	void ApplyStaminaGate();
+	/** Possess never ran, so the mode is still None. None does not walk. Hub speed stays on. */
+	void PrepareControllerlessWalk();
 	FVector LiveCameraForward() const;
 	void GatherLiveContact(FGFTraversalContact& Contact);
 	void ApplyFlipPose(float TimeLeft);

@@ -714,8 +714,32 @@ void UGFCharacterMovementComponent::OnRep_FlipTime()
 	}
 }
 
+void UGFCharacterMovementComponent::PrepareControllerlessWalk()
+{
+	if (!CharacterOwner || CharacterOwner->GetController() || !bRunPhysicsWithNoController)
+	{
+		return;
+	}
+	// Possess calls Restart, which is what switches MOVE_None over to walking. A test pawn is never possessed,
+	// so StartNewPhysics never runs and the capsule stays on the approach.
+	if (MovementMode == MOVE_None)
+	{
+		SetDefaultMovementMode();
+	}
+	if (MaxWalkSpeed <= KINDA_SMALL_NUMBER)
+	{
+		const float Hub = GetTuning().BaseRunSpeed;
+		MaxWalkSpeed = Hub > KINDA_SMALL_NUMBER ? Hub : 500.f;
+	}
+	if (MaxAcceleration <= KINDA_SMALL_NUMBER)
+	{
+		MaxAcceleration = 2048.f;
+	}
+}
+
 void UGFCharacterMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
+	PrepareControllerlessWalk();
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	if (CharacterOwner && CharacterOwner->GetLocalRole() == ROLE_SimulatedProxy)
 	{

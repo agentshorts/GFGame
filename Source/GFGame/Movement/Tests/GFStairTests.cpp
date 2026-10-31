@@ -8,6 +8,7 @@
 #include "GFStairCatalog.h"
 #include "GFStairFlight.h"
 #include "GFStairMovement.h"
+#include "GFCharacterMovementComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -67,8 +68,50 @@ namespace GFStairTestsDetail
 		bool bOk = false;
 		float Along = 0.f;
 		float FeetZ = 0.f;
+		float Speed = 0.f;
+		float Accel = 0.f;
+		float MaxSpeed = 0.f;
+		float MaxAccel = 0.f;
+		int32 Mode = 0;
 		const TCHAR* Why = TEXT("not run");
 	};
+
+	// A spawned pawn with no controller never runs ACharacter::Restart, so MovementMode stays None.
+	// StartNewPhysics ignores None, and the capsule sits on the approach (along -70, feet 2).
+	void ArmWalker(UCharacterMovementComponent* Move)
+	{
+		if (!Move)
+		{
+			return;
+		}
+		Move->bRunPhysicsWithNoController = true;
+		if (Move->MovementMode == MOVE_None)
+		{
+			Move->SetDefaultMovementMode();
+		}
+		if (Move->MaxWalkSpeed <= KINDA_SMALL_NUMBER)
+		{
+			const float Hub = GetDefault<UGFMovementTuning>()->BaseRunSpeed;
+			Move->MaxWalkSpeed = Hub > KINDA_SMALL_NUMBER ? Hub : 500.f;
+		}
+		if (Move->MaxAcceleration <= KINDA_SMALL_NUMBER)
+		{
+			Move->MaxAcceleration = 2048.f;
+		}
+	}
+
+	void SampleMotion(const UCharacterMovementComponent* Move, FWalkOut& Out)
+	{
+		if (!Move)
+		{
+			return;
+		}
+		Out.Speed = Move->Velocity.Size2D();
+		Out.Accel = Move->GetCurrentAcceleration().Size();
+		Out.MaxSpeed = Move->GetMaxSpeed();
+		Out.MaxAccel = Move->GetMaxAcceleration();
+		Out.Mode = static_cast<int32>(Move->MovementMode);
+	}
 
 	float AlongOf(const AGFStairFlight* Flight, const AActor* Actor)
 	{
@@ -90,7 +133,7 @@ namespace GFStairTestsDetail
 			Out.Why = TEXT("missing pawn");
 			return Out;
 		}
-		Move->bRunPhysicsWithNoController = true;
+		ArmWalker(Move);
 		Move->StopMovementImmediately();
 		const float Dt = 1.f / 60.f;
 		for (int32 Index = 0; Index < 30; ++Index)
@@ -109,6 +152,14 @@ namespace GFStairTestsDetail
 			const float Feet = FeetOf(Pawn);
 			Out.Along = Along;
 			Out.FeetZ = Feet;
+			SampleMotion(Move, Out);
+			if (Index < 4)
+			{
+				const UGFCharacterMovementComponent* GFMove = Cast<UGFCharacterMovementComponent>(Move);
+				UE_LOG(LogTemp, Display, TEXT("StairClimb tick %d up %d mode %d speed %.1f accel %.1f maxSpeed %.1f maxAccel %.1f along %.1f feet %.1f stamina %d"),
+					Index, bUp ? 1 : 0, Out.Mode, Out.Speed, Out.Accel, Out.MaxSpeed, Out.MaxAccel, Along, Feet,
+					GFMove && GFMove->IsStaminaEnabled() ? 1 : 0);
+			}
 			if (Feet < Flight->GetActorLocation().Z - 40.f)
 			{
 				Out.Why = TEXT("fell off the flight");
@@ -128,6 +179,8 @@ namespace GFStairTestsDetail
 			if (Stall >= 24)
 			{
 				Out.Why = TEXT("stalled");
+				UE_LOG(LogTemp, Display, TEXT("StairClimb stalled tick %d up %d mode %d speed %.1f accel %.1f maxSpeed %.1f maxAccel %.1f along %.1f feet %.1f"),
+					Index, bUp ? 1 : 0, Out.Mode, Out.Speed, Out.Accel, Out.MaxSpeed, Out.MaxAccel, Along, Feet);
 				return Out;
 			}
 		}
@@ -168,7 +221,7 @@ namespace GFStairTestsDetail
 		if (UCharacterMovementComponent* Move = Pawn->GetCharacterMovement())
 		{
 			Move->SetComponentTickEnabled(false);
-			Move->bRunPhysicsWithNoController = true;
+			ArmWalker(Move);
 			Move->StopMovementImmediately();
 		}
 		return Pawn;
@@ -343,12 +396,12 @@ bool FGFStairClimbTest::RunTest(const FString&)
 
 			// Run+50 puts a 40 cm radius capsule fully on the landing, which covers the run to run+100.
 			const FWalkOut Up = Walk(Pawn, Flight, Flight->Spec.RunCm() + 50.f, true);
-			TestTrue(*FString::Printf(TEXT("%s climbs %s (%s, along %.0f, feet %.0f)"), Walker.Label, *Flight->Spec.Id.ToString(), Up.Why, Up.Along, Up.FeetZ), Up.bOk);
+			TestTrue(*FString::Printf(TEXT("%s climbs %s (%s, along %.0f, feet %.0f, mode %d, speed %.0f, accel %.0f, max %.0f, maxAccel %.0f)"), Walker.Label, *Flight->Spec.Id.ToString(), Up.Why, Up.Along, Up.FeetZ, Up.Mode, Up.Speed, Up.Accel, Up.MaxSpeed, Up.MaxAccel), Up.bOk);
 			const float TopFeet = Flight->GetActorLocation().Z + Flight->Spec.RiseCm();
 			TestTrue(*FString::Printf(TEXT("%s feet reach the landing of %s (%.0f vs %.0f)"), Walker.Label, *Flight->Spec.Id.ToString(), Up.FeetZ, TopFeet), Up.bOk && Near(Up.FeetZ, TopFeet, 30.f));
 
 			const FWalkOut Down = Walk(Pawn, Flight, -40.f, false);
-			TestTrue(*FString::Printf(TEXT("%s walks down %s (%s, along %.0f, feet %.0f)"), Walker.Label, *Flight->Spec.Id.ToString(), Down.Why, Down.Along, Down.FeetZ), Down.bOk);
+			TestTrue(*FString::Printf(TEXT("%s walks down %s (%s, along %.0f, feet %.0f, mode %d, speed %.0f, accel %.0f, max %.0f, maxAccel %.0f)"), Walker.Label, *Flight->Spec.Id.ToString(), Down.Why, Down.Along, Down.FeetZ, Down.Mode, Down.Speed, Down.Accel, Down.MaxSpeed, Down.MaxAccel), Down.bOk);
 			TestTrue(*FString::Printf(TEXT("%s feet return to the pad of %s"), Walker.Label, *Flight->Spec.Id.ToString()), Down.bOk && Near(Down.FeetZ, Flight->GetActorLocation().Z, 30.f));
 			Pawn->Destroy();
 		}
