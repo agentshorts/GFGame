@@ -11,3 +11,7 @@ Lava,"NSLOCTEXT(""GFBlocks"", ""Lava"", ""Lava"")",/Game/Art/Blocks/SM_Block_Lav
 Farmland,"NSLOCTEXT(""GFBlocks"", ""Farmland"", ""Farmland"")",/Game/Art/Blocks/SM_Block_Farmland.SM_Block_Farmland,None,True,"(R=0.45,G=0.32,B=0.16,A=1.0)",0.5,Dirt,True,False,False,Soil
 Log,"NSLOCTEXT(""GFBlocks"", ""Log"", ""Log"")",/Game/Art/Blocks/SM_Block_Log.SM_Block_Log,None,True,"(R=0.45,G=0.28,B=0.14,A=1.0)",1.0,WoodPlank,True,False,False,Wood
 Leaves,"NSLOCTEXT(""GFBlocks"", ""Leaves"", ""Leaves"")",/Game/Art/Blocks/SM_Block_Leaves.SM_Block_Leaves,None,True,"(R=0.20,G=0.45,B=0.18,A=1.0)",0.3,WoodPlank,True,False,False,Wood
+ClayBed,"NSLOCTEXT(""GFBlocks"", ""ClayBed"", ""Clay Bed"")",/Game/Art/Blocks/SM_Block_Ore_ClayBed.SM_Block_Ore_ClayBed,None,True,"(R=0.78,G=0.48,B=0.36,A=1.0)",0.5,Clay,True,False,False,Soil
+OreMetal,"NSLOCTEXT(""GFBlocks"", ""OreMetal"", ""Ore Metal"")",/Game/Art/Blocks/SM_Block_Ore_OreMetal.SM_Block_Ore_OreMetal,None,True,"(R=0.65,G=0.70,B=0.74,A=1.0)",2.5,OreMetal,True,False,False,Stone
+CoalnutSeam,"NSLOCTEXT(""GFBlocks"", ""CoalnutSeam"", ""Coalnut Seam"")",/Game/Art/Blocks/SM_Block_Ore_CoalnutSeam.SM_Block_Ore_CoalnutSeam,None,True,"(R=0.23,G=0.21,B=0.20,A=1.0)",1.5,Coalnut,True,False,False,Stone
+CrystalVein,"NSLOCTEXT(""GFBlocks"", ""CrystalVein"", ""Crystal Vein"")",/Game/Art/Blocks/SM_Block_Ore_CrystalVein.SM_Block_Ore_CrystalVein,None,True,"(R=0.50,G=0.89,B=0.94,A=1.0)",2.0,Crystal,True,False,True,Glass

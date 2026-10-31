@@ -1,0 +1,1317 @@
+{
+ "schema": "gf/mining_range_dressing/v2",
+ "supersedes": "MiningRange_Dressing_v1 (only lava_edge_trim yaws changed (+90; v1 assumed the strip ran along mesh X, it runs along UE local Y); badge and handle got explicit UE-local values; everything else identical)",
+ "level": "L_MiningRange",
+ "source": "MiningRange_Rows_v1",
+ "cell_cm": 100,
+ "frame": "range-local cm, same origin and axes as MiningRange_Rows_v1 (X down the lane, +Y left of the lane, Z = ground top)",
+ "signs": [
+  {
+   "row_id": "Common_Dirt",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    250.0,
+    600,
+    360
+   ],
+   "yaw_deg": -90,
+   "text": [
+    "Dirt",
+    "Hardness 0.5",
+    "drops Dirt"
+   ]
+  },
+  {
+   "row_id": "Common_Stone",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    1050.0,
+    600,
+    360
+   ],
+   "yaw_deg": -90,
+   "text": [
+    "Stone",
+    "Hardness 1.5",
+    "drops Stone"
+   ]
+  },
+  {
+   "row_id": "Common_Fabric",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    250.0,
+    -600,
+    360
+   ],
+   "yaw_deg": 90,
+   "text": [
+    "Fabric",
+    "Hardness 0.3",
+    "drops Fabric"
+   ]
+  },
+  {
+   "row_id": "Common_PlayerWall",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    1050.0,
+    -600,
+    360
+   ],
+   "yaw_deg": 90,
+   "text": [
+    "WoodPlank (built)",
+    "Hardness 1.0",
+    "drops WoodPlank"
+   ]
+  },
+  {
+   "row_id": "Verdant_Log",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    2250.0,
+    600,
+    360
+   ],
+   "yaw_deg": -90,
+   "text": [
+    "Log",
+    "Hardness 1.0",
+    "drops WoodPlank"
+   ]
+  },
+  {
+   "row_id": "Verdant_Leaves",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    3050.0,
+    600,
+    360
+   ],
+   "yaw_deg": -90,
+   "text": [
+    "Leaves",
+    "Hardness 0.3",
+    "drops WoodPlank"
+   ]
+  },
+  {
+   "row_id": "Verdant_WoodPlank",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    3850.0,
+    600,
+    360
+   ],
+   "yaw_deg": -90,
+   "text": [
+    "WoodPlank",
+    "Hardness 1.0",
+    "drops WoodPlank"
+   ]
+  },
+  {
+   "row_id": "Verdant_Grass",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    2250.0,
+    -600,
+    360
+   ],
+   "yaw_deg": 90,
+   "text": [
+    "Grass",
+    "Hardness 0.5",
+    "drops Dirt"
+   ]
+  },
+  {
+   "row_id": "Verdant_Farmland",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    3050.0,
+    -600,
+    360
+   ],
+   "yaw_deg": 90,
+   "text": [
+    "Farmland",
+    "Hardness 0.5",
+    "drops Dirt"
+   ]
+  },
+  {
+   "row_id": "Verdant_TreePlot",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    3850.0,
+    -600,
+    760
+   ],
+   "yaw_deg": 90,
+   "text": [
+    "TreePlot",
+    "Fell me",
+    ""
+   ]
+  },
+  {
+   "row_id": "Rime_Ice",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    5050.0,
+    600,
+    360
+   ],
+   "yaw_deg": -90,
+   "text": [
+    "Ice",
+    "Hardness 0.5",
+    "drops Stone"
+   ]
+  },
+  {
+   "row_id": "Rime_Glass",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    5850.0,
+    600,
+    360
+   ],
+   "yaw_deg": -90,
+   "text": [
+    "Glass",
+    "Hardness 0.3",
+    "drops Glass"
+   ]
+  },
+  {
+   "row_id": "Rime_RakeLane",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    5100.0,
+    -500,
+    260
+   ],
+   "yaw_deg": 90,
+   "text": [
+    "Stone",
+    "Clawcall lane",
+    ""
+   ]
+  },
+  {
+   "row_id": "Cinderwrights_Lava",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    7050.0,
+    600,
+    160
+   ],
+   "yaw_deg": -90,
+   "text": [
+    "Lava",
+    "Hardness 1.5",
+    "drops Stone"
+   ]
+  },
+  {
+   "row_id": "Cinderwrights_Basalt",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    7850.0,
+    600,
+    360
+   ],
+   "yaw_deg": -90,
+   "text": [
+    "Basalt",
+    "Hardness 1.5",
+    "drops Stone"
+   ]
+  },
+  {
+   "row_id": "Cinderwrights_Stone",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    8650.0,
+    600,
+    360
+   ],
+   "yaw_deg": -90,
+   "text": [
+    "Stone",
+    "Hardness 1.5",
+    "drops Stone"
+   ]
+  },
+  {
+   "row_id": "Cinderwrights_SparkStation",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    7050.0,
+    -600,
+    360
+   ],
+   "yaw_deg": 90,
+   "text": [
+    "Stone",
+    "Sparkfield 8 m",
+    ""
+   ]
+  },
+  {
+   "row_id": "Ore_ClayBed",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    9850.0,
+    600,
+    360
+   ],
+   "yaw_deg": -90,
+   "text": [
+    "ClayBed",
+    "Hardness 0.5",
+    "drops Clay (today Dirt)"
+   ]
+  },
+  {
+   "row_id": "Ore_OreMetal",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    10650.0,
+    600,
+    360
+   ],
+   "yaw_deg": -90,
+   "text": [
+    "OreMetal",
+    "Hardness 2.5",
+    "drops OreMetal (today Stone)"
+   ]
+  },
+  {
+   "row_id": "Ore_CoalnutSeam",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    9850.0,
+    -600,
+    360
+   ],
+   "yaw_deg": 90,
+   "text": [
+    "CoalnutSeam",
+    "Hardness 1.5",
+    "drops Coalnut (today Stone)"
+   ]
+  },
+  {
+   "row_id": "Ore_CrystalVein",
+   "mesh": "SM_Prop_Range_Sign",
+   "location_cm": [
+    10650.0,
+    -600,
+    360
+   ],
+   "yaw_deg": 90,
+   "text": [
+    "CrystalVein",
+    "Hardness 2.0",
+    "drops Crystal (today Glass)"
+   ]
+  }
+ ],
+ "badges": [
+  {
+   "row_id": "Common_Fabric",
+   "mesh": "SM_Prop_Range_Badge_SpellProof",
+   "attach_to": "sign of Common_Fabric",
+   "sign_local_offset_cm": {
+    "forward": 4,
+    "right": 44,
+    "up": 10
+   },
+   "yaw_deg": 90,
+   "sign_local_offset_ue_cm": [
+    4,
+    -44,
+    10
+   ]
+  },
+  {
+   "row_id": "Common_PlayerWall",
+   "mesh": "SM_Prop_Range_Badge_SpellProof",
+   "attach_to": "sign of Common_PlayerWall",
+   "sign_local_offset_cm": {
+    "forward": 4,
+    "right": 44,
+    "up": 10
+   },
+   "yaw_deg": 90,
+   "sign_local_offset_ue_cm": [
+    4,
+    -44,
+    10
+   ]
+  }
+ ],
+ "reset_lever": {
+  "base": {
+   "mesh": "SM_Prop_Range_ResetLever_Base",
+   "location_cm": [
+    -500,
+    -300,
+    0
+   ],
+   "yaw_deg": 90
+  },
+  "handle": {
+   "mesh": "SM_Prop_Range_ResetLever_Handle",
+   "attach_to": "base",
+   "local_offset_cm": [
+    0,
+    0,
+    73
+   ],
+   "hinge_axis": "UE local Y (pitch), side to side",
+   "rest_pitch_deg": -35,
+   "pulled_pitch_deg": 35,
+   "note": "interact = rotate to pulled, run gf.MineRange reset, spring back"
+  }
+ },
+ "lava_edge_trim": [
+  {
+   "mesh": "SM_Prop_Range_LavaEdgeTrim",
+   "location_cm": [
+    6750,
+    510,
+    100
+   ],
+   "yaw_deg": 90
+  },
+  {
+   "mesh": "SM_Prop_Range_LavaEdgeTrim",
+   "location_cm": [
+    6850,
+    510,
+    100
+   ],
+   "yaw_deg": 90
+  },
+  {
+   "mesh": "SM_Prop_Range_LavaEdgeTrim",
+   "location_cm": [
+    6950,
+    510,
+    100
+   ],
+   "yaw_deg": 90
+  },
+  {
+   "mesh": "SM_Prop_Range_LavaEdgeTrim",
+   "location_cm": [
+    7050,
+    510,
+    100
+   ],
+   "yaw_deg": 90
+  },
+  {
+   "mesh": "SM_Prop_Range_LavaEdgeTrim",
+   "location_cm": [
+    7150,
+    510,
+    100
+   ],
+   "yaw_deg": 90
+  },
+  {
+   "mesh": "SM_Prop_Range_LavaEdgeTrim",
+   "location_cm": [
+    7250,
+    510,
+    100
+   ],
+   "yaw_deg": 90
+  },
+  {
+   "mesh": "SM_Prop_Range_LavaEdgeTrim",
+   "location_cm": [
+    7350,
+    510,
+    100
+   ],
+   "yaw_deg": 90
+  },
+  {
+   "mesh": "SM_Prop_Range_LavaEdgeTrim",
+   "location_cm": [
+    6710,
+    650,
+    100
+   ],
+   "yaw_deg": 180
+  },
+  {
+   "mesh": "SM_Prop_Range_LavaEdgeTrim",
+   "location_cm": [
+    7390,
+    650,
+    100
+   ],
+   "yaw_deg": 180
+  },
+  {
+   "mesh": "SM_Prop_Range_LavaEdgeTrim",
+   "location_cm": [
+    6710,
+    750,
+    100
+   ],
+   "yaw_deg": 180
+  },
+  {
+   "mesh": "SM_Prop_Range_LavaEdgeTrim",
+   "location_cm": [
+    7390,
+    750,
+    100
+   ],
+   "yaw_deg": 180
+  }
+ ],
+ "floor_tints": [
+  {
+   "zone": "Common",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Common",
+   "location_cm": [
+    100,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Common",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Common",
+   "location_cm": [
+    100,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Common",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Common",
+   "location_cm": [
+    100,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Common",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Common",
+   "location_cm": [
+    500,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Common",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Common",
+   "location_cm": [
+    500,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Common",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Common",
+   "location_cm": [
+    500,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Common",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Common",
+   "location_cm": [
+    900,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Common",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Common",
+   "location_cm": [
+    900,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Common",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Common",
+   "location_cm": [
+    900,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Common",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Common",
+   "location_cm": [
+    1300,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Common",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Common",
+   "location_cm": [
+    1300,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Common",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Common",
+   "location_cm": [
+    1300,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    2100,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    2100,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    2100,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    2500,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    2500,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    2500,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    2900,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    2900,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    2900,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    3300,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    3300,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    3300,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    3700,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    3700,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    3700,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    4100,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    4100,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Verdant",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Verdant",
+   "location_cm": [
+    4100,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Rime",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Rime",
+   "location_cm": [
+    4900,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Rime",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Rime",
+   "location_cm": [
+    4900,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Rime",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Rime",
+   "location_cm": [
+    4900,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Rime",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Rime",
+   "location_cm": [
+    5300,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Rime",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Rime",
+   "location_cm": [
+    5300,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Rime",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Rime",
+   "location_cm": [
+    5300,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Rime",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Rime",
+   "location_cm": [
+    5700,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Rime",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Rime",
+   "location_cm": [
+    5700,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Rime",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Rime",
+   "location_cm": [
+    5700,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Rime",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Rime",
+   "location_cm": [
+    6100,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Rime",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Rime",
+   "location_cm": [
+    6100,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Rime",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Rime",
+   "location_cm": [
+    6100,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    6900,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    6900,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    6900,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    7300,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    7300,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    7300,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    7700,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    7700,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    7700,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    8100,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    8100,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    8100,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    8500,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    8500,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    8500,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    8900,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    8900,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Cinderwrights",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Cinderwrights",
+   "location_cm": [
+    8900,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Ore",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Ore",
+   "location_cm": [
+    9700,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Ore",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Ore",
+   "location_cm": [
+    9700,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Ore",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Ore",
+   "location_cm": [
+    9700,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Ore",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Ore",
+   "location_cm": [
+    10100,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Ore",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Ore",
+   "location_cm": [
+    10100,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Ore",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Ore",
+   "location_cm": [
+    10100,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Ore",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Ore",
+   "location_cm": [
+    10500,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Ore",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Ore",
+   "location_cm": [
+    10500,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Ore",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Ore",
+   "location_cm": [
+    10500,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Ore",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Ore",
+   "location_cm": [
+    10900,
+    -400,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Ore",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Ore",
+   "location_cm": [
+    10900,
+    0,
+    0
+   ],
+   "yaw_deg": 0
+  },
+  {
+   "zone": "Ore",
+   "mesh": "SM_Prop_Range_FloorTint",
+   "material": "MI_Prop_Range_Floor_Ore",
+   "location_cm": [
+    10900,
+    400,
+    0
+   ],
+   "yaw_deg": 0
+  }
+ ],
+ "floor_tint_spans_cm": {
+  "Common": [
+   -100,
+   1500
+  ],
+  "Verdant": [
+   1900,
+   4300
+  ],
+  "Rime": [
+   4700,
+   6300
+  ],
+  "Cinderwrights": [
+   6700,
+   9100
+  ],
+  "Ore": [
+   9500,
+   11100
+  ]
+ },
+ "sign_text_style": {
+  "component": "TextRender (or a widget)",
+  "colour_hex": "#2A2430",
+  "lines": 3,
+  "panel_cm": [
+   128,
+   58
+  ],
+  "note": "read Hardness / DropItem from DT_Blocks at runtime; the baked text in this file is the layout-time value"
+ },
+ "counts": {
+  "signs": 21,
+  "badges": 2,
+  "trims": 11,
+  "floor_tints": 72
+ },
+ "mesh_axes_note": "All yaws are Unreal yaws for the imported meshes (front = UE +X, Force Front X). SM_Prop_Range_LavaEdgeTrim is 20 x 100 x 6 cm in UE (long along local Y)."
+}

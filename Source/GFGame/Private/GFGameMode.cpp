@@ -12,6 +12,7 @@
 #include "GFDataTables.h"
 #include "GFOverworldBuild.h"
 #include "GFOverworldGround.h"
+#include "GFMiningRangeLayout.h"
 #include "GFShardTravelSubsystem.h"
 #include "GFShardhop.h"
 #include "GFZoneCatalog.h"
@@ -33,7 +34,7 @@ namespace GFGameModeKindleSpawn
 	void GFEnsureHubKindleRing(const AGFGameMode* Mode)
 	{
 		UWorld* World = Mode ? Mode->GetWorld() : nullptr;
-		if (!World || World->GetNetMode() == NM_Client || GFMovementPolicy::IsMiniGameWorld(World))
+		if (!World || World->GetNetMode() == NM_Client || GFMovementPolicy::IsMiniGameWorld(World) || GFMiningMaps::IsMiningRange(World))
 		{
 			return;
 		}
@@ -238,6 +239,12 @@ AGFVoxelWorld* AGFGameMode::EnsureVoxelWorld()
 	{
 		BindOverworldEditQuery();
 		return *It;
+	}
+
+	// The mining range director owns this grid. A starter plot here would be a second voxel world.
+	if (GFMiningMaps::IsMiningRange(GetWorld()))
+	{
+		return nullptr;
 	}
 
 	const bool bHub = AGFOverworldGround::IsVoxelOverworldMap(GetWorld());

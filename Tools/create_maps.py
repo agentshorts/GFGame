@@ -3,6 +3,7 @@ UnrealEditor-Cmd.exe GFGame.uproject -ExecutePythonScript="<abs>/Tools/create_ma
 
 L_Hub is the Rime hub (gates are spawned there at play).
 L_Valley, L_Runway, L_Moba and L_Beat are the mode maps the hub gates open.
+L_MiningRange is the mining test area. Its rows are stamped when the map starts.
 The runway map hosts the runway stage. The Beat Hop map hosts the course.
 Depths, the dino arena, the mine and the lab have no map; they sit on pads in the hub.
 """
@@ -15,6 +16,7 @@ MAPS = [
     "/Game/Maps/L_Runway",
     "/Game/Maps/L_Moba",
     "/Game/Maps/L_Beat",
+    "/Game/Maps/L_MiningRange",
 ]
 
 les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)

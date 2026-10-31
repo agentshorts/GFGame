@@ -1,0 +1,1301 @@
+{
+ "schema": "gf/mining_range_rows/v1",
+ "level": "L_MiningRange",
+ "issue_refs": [
+  "#270",
+  "#269"
+ ],
+ "cell_cm": 100,
+ "origin": "range-local; X runs down the lane away from spawn, +Y = left of the lane looking down +X, Z = 0 is the ground top",
+ "grid_rule": "cell (i,j,k) spans [100i,100i+100) per axis; block pivot (bottom centre) = ((i+.5)*100, (j+.5)*100, 100k)",
+ "lane": {
+  "centre_y_cm": 0,
+  "width_cm": 1200,
+  "from_x_cm": -1000,
+  "to_x_cm": 12000,
+  "ground": "Stone, protected (spells and reset never touch it)"
+ },
+ "spawn": {
+  "location_cm": [
+   -500,
+   0,
+   0
+  ],
+  "yaw_deg": 0,
+  "note": "gf.MineRange teleports here"
+ },
+ "reset_lever": {
+  "location_cm": [
+   -500,
+   -300,
+   0
+  ],
+  "yaw_deg": 90,
+  "note": "physical RESET (same as gf.MineRange reset); faces the spawn"
+ },
+ "return_gate": {
+  "location_cm": [
+   -900,
+   0,
+   0
+  ],
+  "yaw_deg": 0,
+  "note": "#266 return gate back to the hub spawn stand; you arrive facing down the lane"
+ },
+ "hud_capture_cams": {
+  "note": "suggested camera spots for the #270 screenshots (one per zone + wide + HUD on)",
+  "wide": {
+   "location_cm": [
+    -1200,
+    -2400,
+    2600
+   ],
+   "look_at_cm": [
+    5500,
+    0,
+    0
+   ]
+  },
+  "per_zone": {
+   "Common": {
+    "location_cm": [
+     800,
+     0,
+     450
+    ],
+    "look_at_cm": [
+     1700,
+     0,
+     150
+    ]
+   },
+   "Verdant": {
+    "location_cm": [
+     2800,
+     0,
+     450
+    ],
+    "look_at_cm": [
+     3700,
+     0,
+     150
+    ]
+   },
+   "Rime": {
+    "location_cm": [
+     5600,
+     0,
+     450
+    ],
+    "look_at_cm": [
+     6500,
+     0,
+     150
+    ]
+   },
+   "Cinderwrights": {
+    "location_cm": [
+     7600,
+     0,
+     450
+    ],
+    "look_at_cm": [
+     8500,
+     0,
+     150
+    ]
+   },
+   "Ore": {
+    "location_cm": [
+     10400,
+     0,
+     450
+    ],
+    "look_at_cm": [
+     11300,
+     0,
+     150
+    ]
+   }
+  }
+ },
+ "row_size_cells": {
+  "length": 5,
+  "depth": 2,
+  "height": 3
+ },
+ "row_pitch_cells": 8,
+ "row_face_offset_cells": 6,
+ "zones": [
+  {
+   "zone": "Common",
+   "bay_start_cell_x": 0,
+   "left": [
+    "Dirt",
+    "Stone"
+   ],
+   "right": [
+    "Fabric",
+    "PlayerWall"
+   ]
+  },
+  {
+   "zone": "Verdant",
+   "bay_start_cell_x": 20,
+   "left": [
+    "Log",
+    "Leaves",
+    "WoodPlank"
+   ],
+   "right": [
+    "Grass",
+    "Farmland",
+    "TreePlot"
+   ]
+  },
+  {
+   "zone": "Rime",
+   "bay_start_cell_x": 48,
+   "left": [
+    "Ice",
+    "Glass"
+   ],
+   "right": [
+    "RakeLane"
+   ]
+  },
+  {
+   "zone": "Cinderwrights",
+   "bay_start_cell_x": 68,
+   "left": [
+    "Lava",
+    "Basalt",
+    "Stone"
+   ],
+   "right": [
+    "SparkStation"
+   ]
+  },
+  {
+   "zone": "Ore",
+   "bay_start_cell_x": 96,
+   "left": [
+    "ClayBed",
+    "OreMetal"
+   ],
+   "right": [
+    "CoalnutSeam",
+    "CrystalVein"
+   ]
+  }
+ ],
+ "rows": [
+  {
+   "row_id": "Common_Dirt",
+   "zone": "Common",
+   "side": "left(+Y)",
+   "kind": "block_row",
+   "cell_min": [
+    0,
+    6,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "-Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "Dirt",
+   "hardness": 0.5,
+   "drop_item": "Dirt",
+   "dt_row_exists": true,
+   "sign": {
+    "location_cm": [
+     250.0,
+     600,
+     360
+    ],
+    "yaw_deg": -90,
+    "faces": "lane",
+    "line1": "Dirt",
+    "line2": "Hardness 0.5",
+    "line3": "drops Dirt",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    0,
+    600,
+    0
+   ],
+   "world_max_cm": [
+    500,
+    800,
+    300
+   ]
+  },
+  {
+   "row_id": "Common_Stone",
+   "zone": "Common",
+   "side": "left(+Y)",
+   "kind": "block_row",
+   "cell_min": [
+    8,
+    6,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "-Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "Stone",
+   "hardness": 1.5,
+   "drop_item": "Stone",
+   "dt_row_exists": true,
+   "sign": {
+    "location_cm": [
+     1050.0,
+     600,
+     360
+    ],
+    "yaw_deg": -90,
+    "faces": "lane",
+    "line1": "Stone",
+    "line2": "Hardness 1.5",
+    "line3": "drops Stone",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    800,
+    600,
+    0
+   ],
+   "world_max_cm": [
+    1300,
+    800,
+    300
+   ]
+  },
+  {
+   "row_id": "Common_Fabric",
+   "zone": "Common",
+   "side": "right(-Y)",
+   "kind": "block_row",
+   "cell_min": [
+    0,
+    -8,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "+Y",
+   "protected": false,
+   "spell_proof": true,
+   "block": "Fabric",
+   "hardness": 0.3,
+   "drop_item": "Fabric",
+   "dt_row_exists": true,
+   "dyeable": true,
+   "sign": {
+    "location_cm": [
+     250.0,
+     -600,
+     360
+    ],
+    "yaw_deg": 90,
+    "faces": "lane",
+    "line1": "Fabric",
+    "line2": "Hardness 0.3",
+    "line3": "drops Fabric",
+    "badge": "SPELL-PROOF"
+   },
+   "cells": 30,
+   "world_min_cm": [
+    0,
+    -800,
+    0
+   ],
+   "world_max_cm": [
+    500,
+    -600,
+    300
+   ]
+  },
+  {
+   "row_id": "Common_PlayerWall",
+   "zone": "Common",
+   "side": "right(-Y)",
+   "kind": "block_row",
+   "cell_min": [
+    8,
+    -8,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "+Y",
+   "protected": false,
+   "spell_proof": true,
+   "block": "WoodPlank",
+   "placed": true,
+   "hardness": 1.0,
+   "drop_item": "WoodPlank",
+   "dt_row_exists": true,
+   "note": "cells authored as player-placed (the per-cell placed bit from #269); spells must not break them",
+   "sign": {
+    "location_cm": [
+     1050.0,
+     -600,
+     360
+    ],
+    "yaw_deg": 90,
+    "faces": "lane",
+    "line1": "WoodPlank (built)",
+    "line2": "Hardness 1.0",
+    "line3": "drops WoodPlank",
+    "badge": "SPELL-PROOF"
+   },
+   "cells": 30,
+   "world_min_cm": [
+    800,
+    -800,
+    0
+   ],
+   "world_max_cm": [
+    1300,
+    -600,
+    300
+   ]
+  },
+  {
+   "row_id": "Verdant_Log",
+   "zone": "Verdant",
+   "side": "left(+Y)",
+   "kind": "block_row",
+   "cell_min": [
+    20,
+    6,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "-Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "Log",
+   "hardness": 1.0,
+   "drop_item": "WoodPlank",
+   "dt_row_exists": true,
+   "sign": {
+    "location_cm": [
+     2250.0,
+     600,
+     360
+    ],
+    "yaw_deg": -90,
+    "faces": "lane",
+    "line1": "Log",
+    "line2": "Hardness 1.0",
+    "line3": "drops WoodPlank",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    2000,
+    600,
+    0
+   ],
+   "world_max_cm": [
+    2500,
+    800,
+    300
+   ]
+  },
+  {
+   "row_id": "Verdant_Leaves",
+   "zone": "Verdant",
+   "side": "left(+Y)",
+   "kind": "block_row",
+   "cell_min": [
+    28,
+    6,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "-Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "Leaves",
+   "hardness": 0.3,
+   "drop_item": "WoodPlank",
+   "dt_row_exists": true,
+   "sign": {
+    "location_cm": [
+     3050.0,
+     600,
+     360
+    ],
+    "yaw_deg": -90,
+    "faces": "lane",
+    "line1": "Leaves",
+    "line2": "Hardness 0.3",
+    "line3": "drops WoodPlank",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    2800,
+    600,
+    0
+   ],
+   "world_max_cm": [
+    3300,
+    800,
+    300
+   ]
+  },
+  {
+   "row_id": "Verdant_WoodPlank",
+   "zone": "Verdant",
+   "side": "left(+Y)",
+   "kind": "block_row",
+   "cell_min": [
+    36,
+    6,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "-Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "WoodPlank",
+   "hardness": 1.0,
+   "drop_item": "WoodPlank",
+   "dt_row_exists": true,
+   "sign": {
+    "location_cm": [
+     3850.0,
+     600,
+     360
+    ],
+    "yaw_deg": -90,
+    "faces": "lane",
+    "line1": "WoodPlank",
+    "line2": "Hardness 1.0",
+    "line3": "drops WoodPlank",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    3600,
+    600,
+    0
+   ],
+   "world_max_cm": [
+    4100,
+    800,
+    300
+   ]
+  },
+  {
+   "row_id": "Verdant_Grass",
+   "zone": "Verdant",
+   "side": "right(-Y)",
+   "kind": "block_row",
+   "cell_min": [
+    20,
+    -8,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "+Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "Grass",
+   "hardness": 0.5,
+   "drop_item": "Dirt",
+   "dt_row_exists": true,
+   "sign": {
+    "location_cm": [
+     2250.0,
+     -600,
+     360
+    ],
+    "yaw_deg": 90,
+    "faces": "lane",
+    "line1": "Grass",
+    "line2": "Hardness 0.5",
+    "line3": "drops Dirt",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    2000,
+    -800,
+    0
+   ],
+   "world_max_cm": [
+    2500,
+    -600,
+    300
+   ]
+  },
+  {
+   "row_id": "Verdant_Farmland",
+   "zone": "Verdant",
+   "side": "right(-Y)",
+   "kind": "block_row",
+   "cell_min": [
+    28,
+    -8,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "+Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "Farmland",
+   "hardness": 0.5,
+   "drop_item": "Dirt",
+   "dt_row_exists": true,
+   "sign": {
+    "location_cm": [
+     3050.0,
+     -600,
+     360
+    ],
+    "yaw_deg": 90,
+    "faces": "lane",
+    "line1": "Farmland",
+    "line2": "Hardness 0.5",
+    "line3": "drops Dirt",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    2800,
+    -800,
+    0
+   ],
+   "world_max_cm": [
+    3300,
+    -600,
+    300
+   ]
+  },
+  {
+   "row_id": "Verdant_TreePlot",
+   "zone": "Verdant",
+   "side": "right(-Y)",
+   "kind": "tree_plot",
+   "cell_min": [
+    36,
+    -11,
+    0
+   ],
+   "size_cells": [
+    5,
+    5,
+    7
+   ],
+   "faces": "+Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": null,
+   "note": "full Verdant tree for felling (Log trunk + Leaves canopy), cell list in a later delivery (chunk 2); ground under it = Grass",
+   "sign": {
+    "location_cm": [
+     3850.0,
+     -600,
+     760
+    ],
+    "yaw_deg": 90,
+    "faces": "lane",
+    "line1": "TreePlot",
+    "line2": "Fell me",
+    "line3": "",
+    "badge": ""
+   },
+   "cells": null,
+   "world_min_cm": [
+    3600,
+    -1100,
+    0
+   ],
+   "world_max_cm": [
+    4100,
+    -600,
+    700
+   ]
+  },
+  {
+   "row_id": "Rime_Ice",
+   "zone": "Rime",
+   "side": "left(+Y)",
+   "kind": "block_row",
+   "cell_min": [
+    48,
+    6,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "-Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "Ice",
+   "hardness": 0.5,
+   "drop_item": "Stone",
+   "dt_row_exists": true,
+   "sign": {
+    "location_cm": [
+     5050.0,
+     600,
+     360
+    ],
+    "yaw_deg": -90,
+    "faces": "lane",
+    "line1": "Ice",
+    "line2": "Hardness 0.5",
+    "line3": "drops Stone",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    4800,
+    600,
+    0
+   ],
+   "world_max_cm": [
+    5300,
+    800,
+    300
+   ]
+  },
+  {
+   "row_id": "Rime_Glass",
+   "zone": "Rime",
+   "side": "left(+Y)",
+   "kind": "block_row",
+   "cell_min": [
+    56,
+    6,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "-Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "Glass",
+   "hardness": 0.3,
+   "drop_item": "Glass",
+   "dt_row_exists": true,
+   "sign": {
+    "location_cm": [
+     5850.0,
+     600,
+     360
+    ],
+    "yaw_deg": -90,
+    "faces": "lane",
+    "line1": "Glass",
+    "line2": "Hardness 0.3",
+    "line3": "drops Glass",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    5600,
+    600,
+    0
+   ],
+   "world_max_cm": [
+    6100,
+    800,
+    300
+   ]
+  },
+  {
+   "row_id": "Rime_RakeLane",
+   "zone": "Rime",
+   "side": "right(-Y)",
+   "kind": "station",
+   "cell_min": [
+    48,
+    -8,
+    0
+   ],
+   "size_cells": [
+    6,
+    3,
+    2
+   ],
+   "faces": "+Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "Stone",
+   "note": "#269 Clawcall rake lane (6 x 3 x 2 Stone); usable today as an extra Stone row",
+   "sign": {
+    "location_cm": [
+     5100.0,
+     -500,
+     260
+    ],
+    "yaw_deg": 90,
+    "faces": "lane",
+    "line1": "Stone",
+    "line2": "Clawcall lane",
+    "line3": "",
+    "badge": ""
+   },
+   "cells": 36,
+   "world_min_cm": [
+    4800,
+    -800,
+    0
+   ],
+   "world_max_cm": [
+    5400,
+    -500,
+    200
+   ]
+  },
+  {
+   "row_id": "Cinderwrights_Lava",
+   "zone": "Cinderwrights",
+   "side": "left(+Y)",
+   "kind": "pool",
+   "cell_min": [
+    68,
+    6,
+    -3
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "up",
+   "protected": false,
+   "spell_proof": false,
+   "block": "Lava",
+   "hardness": 1.5,
+   "drop_item": "Stone",
+   "dt_row_exists": true,
+   "lip": {
+    "block": "Basalt",
+    "placed": true,
+    "protected": true,
+    "cell_min": [
+     67,
+     5,
+     0
+    ],
+    "size_cells": [
+     7,
+     1,
+     1
+    ],
+    "also_end_caps": [
+     [
+      67,
+      6,
+      0
+     ],
+     [
+      73,
+      6,
+      0
+     ],
+     [
+      67,
+      7,
+      0
+     ],
+     [
+      73,
+      7,
+      0
+     ]
+    ]
+   },
+   "note": "pool 5 x 2, 3 deep (Z -300..0), top flush with the ground; a 1-cell placed Basalt lip on the lane side and ends; only Frost Quench (#269) may touch it (Quench -> Basalt)",
+   "sign": {
+    "location_cm": [
+     7050.0,
+     600,
+     160
+    ],
+    "yaw_deg": -90,
+    "faces": "lane",
+    "line1": "Lava",
+    "line2": "Hardness 1.5",
+    "line3": "drops Stone",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    6800,
+    600,
+    -300
+   ],
+   "world_max_cm": [
+    7300,
+    800,
+    0
+   ]
+  },
+  {
+   "row_id": "Cinderwrights_Basalt",
+   "zone": "Cinderwrights",
+   "side": "left(+Y)",
+   "kind": "block_row",
+   "cell_min": [
+    76,
+    6,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "-Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "Basalt",
+   "hardness": 1.5,
+   "drop_item": "Stone",
+   "dt_row_exists": true,
+   "sign": {
+    "location_cm": [
+     7850.0,
+     600,
+     360
+    ],
+    "yaw_deg": -90,
+    "faces": "lane",
+    "line1": "Basalt",
+    "line2": "Hardness 1.5",
+    "line3": "drops Stone",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    7600,
+    600,
+    0
+   ],
+   "world_max_cm": [
+    8100,
+    800,
+    300
+   ]
+  },
+  {
+   "row_id": "Cinderwrights_Stone",
+   "zone": "Cinderwrights",
+   "side": "left(+Y)",
+   "kind": "block_row",
+   "cell_min": [
+    84,
+    6,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "-Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "Stone",
+   "hardness": 1.5,
+   "drop_item": "Stone",
+   "dt_row_exists": true,
+   "sign": {
+    "location_cm": [
+     8650.0,
+     600,
+     360
+    ],
+    "yaw_deg": -90,
+    "faces": "lane",
+    "line1": "Stone",
+    "line2": "Hardness 1.5",
+    "line3": "drops Stone",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    8400,
+    600,
+    0
+   ],
+   "world_max_cm": [
+    8900,
+    800,
+    300
+   ]
+  },
+  {
+   "row_id": "Cinderwrights_SparkStation",
+   "zone": "Cinderwrights",
+   "side": "right(-Y)",
+   "kind": "station",
+   "cell_min": [
+    68,
+    -7,
+    0
+   ],
+   "size_cells": [
+    5,
+    1,
+    3
+   ],
+   "faces": "+Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "Stone",
+   "note": "#269 Sparkfield 8 m line: a 1-deep Stone wall whose face is exactly 8 m from the lane-side marker at j = 0 (marker at cell [70, 1, 0])",
+   "sign": {
+    "location_cm": [
+     7050.0,
+     -600,
+     360
+    ],
+    "yaw_deg": 90,
+    "faces": "lane",
+    "line1": "Stone",
+    "line2": "Sparkfield 8 m",
+    "line3": "",
+    "badge": ""
+   },
+   "cells": 15,
+   "world_min_cm": [
+    6800,
+    -700,
+    0
+   ],
+   "world_max_cm": [
+    7300,
+    -600,
+    300
+   ]
+  },
+  {
+   "row_id": "Ore_ClayBed",
+   "zone": "Ore",
+   "side": "left(+Y)",
+   "kind": "block_row",
+   "cell_min": [
+    96,
+    6,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "-Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "ClayBed",
+   "hardness": 0.5,
+   "drop_item": "Clay",
+   "drop_item_today": "Dirt",
+   "dt_row_exists": false,
+   "mesh": "/Game/Art/Blocks/SM_Block_Ore_ClayBed.SM_Block_Ore_ClayBed",
+   "proposed_dt_row": {
+    "Hardness": 0.5,
+    "DropItem": "Clay",
+    "DropItem_today": "Dirt",
+    "SoundSet": "Soil",
+    "DebugColor": "(R=0.78,G=0.48,B=0.36,A=1.0)",
+    "bEmissive": false
+   },
+   "stand_in": "until DT_Blocks has the row, fill with Stone cells and show the ore mesh via the sign plinth sample (see notes)",
+   "sign": {
+    "location_cm": [
+     9850.0,
+     600,
+     360
+    ],
+    "yaw_deg": -90,
+    "faces": "lane",
+    "line1": "ClayBed",
+    "line2": "Hardness 0.5",
+    "line3": "drops Clay (today Dirt)",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    9600,
+    600,
+    0
+   ],
+   "world_max_cm": [
+    10100,
+    800,
+    300
+   ]
+  },
+  {
+   "row_id": "Ore_OreMetal",
+   "zone": "Ore",
+   "side": "left(+Y)",
+   "kind": "block_row",
+   "cell_min": [
+    104,
+    6,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "-Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "OreMetal",
+   "hardness": 2.5,
+   "drop_item": "OreMetal",
+   "drop_item_today": "Stone",
+   "dt_row_exists": false,
+   "mesh": "/Game/Art/Blocks/SM_Block_Ore_OreMetal.SM_Block_Ore_OreMetal",
+   "proposed_dt_row": {
+    "Hardness": 2.5,
+    "DropItem": "OreMetal",
+    "DropItem_today": "Stone",
+    "SoundSet": "Stone",
+    "DebugColor": "(R=0.65,G=0.70,B=0.74,A=1.0)",
+    "bEmissive": false
+   },
+   "stand_in": "until DT_Blocks has the row, fill with Stone cells and show the ore mesh via the sign plinth sample (see notes)",
+   "sign": {
+    "location_cm": [
+     10650.0,
+     600,
+     360
+    ],
+    "yaw_deg": -90,
+    "faces": "lane",
+    "line1": "OreMetal",
+    "line2": "Hardness 2.5",
+    "line3": "drops OreMetal (today Stone)",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    10400,
+    600,
+    0
+   ],
+   "world_max_cm": [
+    10900,
+    800,
+    300
+   ]
+  },
+  {
+   "row_id": "Ore_CoalnutSeam",
+   "zone": "Ore",
+   "side": "right(-Y)",
+   "kind": "block_row",
+   "cell_min": [
+    96,
+    -8,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "+Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "CoalnutSeam",
+   "hardness": 1.5,
+   "drop_item": "Coalnut",
+   "drop_item_today": "Stone",
+   "dt_row_exists": false,
+   "mesh": "/Game/Art/Blocks/SM_Block_Ore_CoalnutSeam.SM_Block_Ore_CoalnutSeam",
+   "proposed_dt_row": {
+    "Hardness": 1.5,
+    "DropItem": "Coalnut",
+    "DropItem_today": "Stone",
+    "SoundSet": "Stone",
+    "DebugColor": "(R=0.23,G=0.21,B=0.20,A=1.0)",
+    "bEmissive": false
+   },
+   "stand_in": "until DT_Blocks has the row, fill with Stone cells and show the ore mesh via the sign plinth sample (see notes)",
+   "sign": {
+    "location_cm": [
+     9850.0,
+     -600,
+     360
+    ],
+    "yaw_deg": 90,
+    "faces": "lane",
+    "line1": "CoalnutSeam",
+    "line2": "Hardness 1.5",
+    "line3": "drops Coalnut (today Stone)",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    9600,
+    -800,
+    0
+   ],
+   "world_max_cm": [
+    10100,
+    -600,
+    300
+   ]
+  },
+  {
+   "row_id": "Ore_CrystalVein",
+   "zone": "Ore",
+   "side": "right(-Y)",
+   "kind": "block_row",
+   "cell_min": [
+    104,
+    -8,
+    0
+   ],
+   "size_cells": [
+    5,
+    2,
+    3
+   ],
+   "faces": "+Y",
+   "protected": false,
+   "spell_proof": false,
+   "block": "CrystalVein",
+   "hardness": 2.0,
+   "drop_item": "Crystal",
+   "drop_item_today": "Glass",
+   "dt_row_exists": false,
+   "mesh": "/Game/Art/Blocks/SM_Block_Ore_CrystalVein.SM_Block_Ore_CrystalVein",
+   "proposed_dt_row": {
+    "Hardness": 2.0,
+    "DropItem": "Crystal",
+    "DropItem_today": "Glass",
+    "SoundSet": "Glass",
+    "DebugColor": "(R=0.50,G=0.89,B=0.94,A=1.0)",
+    "bEmissive": true
+   },
+   "stand_in": "until DT_Blocks has the row, fill with Stone cells and show the ore mesh via the sign plinth sample (see notes)",
+   "sign": {
+    "location_cm": [
+     10650.0,
+     -600,
+     360
+    ],
+    "yaw_deg": 90,
+    "faces": "lane",
+    "line1": "CrystalVein",
+    "line2": "Hardness 2.0",
+    "line3": "drops Crystal (today Glass)",
+    "badge": ""
+   },
+   "cells": 30,
+   "world_min_cm": [
+    10400,
+    -800,
+    0
+   ],
+   "world_max_cm": [
+    10900,
+    -600,
+    300
+   ]
+  }
+ ],
+ "proposed_dt_blocks_rows": {
+  "ClayBed": {
+   "Hardness": 0.5,
+   "DropItem": "Clay",
+   "DropItem_today": "Dirt",
+   "SoundSet": "Soil",
+   "DebugColor": "(R=0.78,G=0.48,B=0.36,A=1.0)",
+   "bEmissive": false
+  },
+  "OreMetal": {
+   "Hardness": 2.5,
+   "DropItem": "OreMetal",
+   "DropItem_today": "Stone",
+   "SoundSet": "Stone",
+   "DebugColor": "(R=0.65,G=0.70,B=0.74,A=1.0)",
+   "bEmissive": false
+  },
+  "CoalnutSeam": {
+   "Hardness": 1.5,
+   "DropItem": "Coalnut",
+   "DropItem_today": "Stone",
+   "SoundSet": "Stone",
+   "DebugColor": "(R=0.23,G=0.21,B=0.20,A=1.0)",
+   "bEmissive": false
+  },
+  "CrystalVein": {
+   "Hardness": 2.0,
+   "DropItem": "Crystal",
+   "DropItem_today": "Glass",
+   "SoundSet": "Glass",
+   "DebugColor": "(R=0.50,G=0.89,B=0.94,A=1.0)",
+   "bEmissive": true
+  }
+ },
+ "notes": [
+  "Every row id is unique (Stone appears twice: Common_Stone and Cinderwrights_Stone).",
+  "Rows are 2 deep so Clawcall (6x3x2) and conductive chains have something to chew; 30 cells per standard row.",
+  "3-cell gaps between rows keep a 1-cell-radius Sparkfield from touching two rows, so per-row break counts stay clean.",
+  "Ore rows: until DT_Blocks has the ore rows, author them as Stone and place one SM_Block_Ore_* mesh on the sign plinth as a visual stand-in; once the rows exist, swap the block id (cells and tests stay the same).",
+  "Signs: block name / Hardness / DropItem from DT_Blocks, read at runtime so they never go stale; SPELL-PROOF badge on Fabric and the built wall."
+ ]
+}

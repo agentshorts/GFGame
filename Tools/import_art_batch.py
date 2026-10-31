@@ -11,7 +11,7 @@ Batches 3b, 7, worldmap_v1 and beat_hop_v1 keep their static-mesh materials: M_G
 Writes Saved/ArtImport/ue_report.json. Manifest types: static_mesh, skeletal_mesh, texture_set (UI PNGs, batch 8+). Settings: Force Front X Axis, convert scene + scene units,
 uniform scale 1, no redundant-key removal (scale tracks kept), no materials (slots keep names).
 """
-import json, math, os, re, traceback
+import hashlib, json, math, os, re, traceback
 
 MAT_DIR = "/Game/Art/Materials"
 PLAYER_MAT_DIR = "/Game/Art/Characters/Player/Materials"
@@ -249,6 +249,21 @@ def _infer_textures(man, parent):
 
 def _slot_specs(man, hint):
     slots_named = [str(s) for s in (man.get("material_slots") or [])]
+    # "slot_instances": {"Rim": "MI_Prop_Range_Wood", "All": {"mi": "MI_Block_Ore_ClayBed", ...}} names one instance per slot
+    # (text after the name, e.g. "(alternates ...)", is a note). Several meshes can share one named instance.
+    named = hint.get("slot_instances")
+    if isinstance(named, dict) and named:
+        out = {}
+        for slot, val in named.items():
+            if slots_named and str(slot) not in slots_named:
+                continue
+            mi = val.get("mi") if isinstance(val, dict) else val
+            spec = {k: v for k, v in hint.items() if k != "slot_instances"}
+            if isinstance(mi, str) and mi.split():
+                spec["instance"] = mi.split()[0]
+            out[str(slot)] = spec
+        if out:
+            return out
     keyed = {}
     for key, val in hint.items():
         if not isinstance(val, dict) or key in _HINT_NON_SLOTS:
@@ -639,6 +654,15 @@ ORDER = [
     # SK_Player_Base v7 is also tagged beat_hop_v2, but only Fall and Crouch_Walk changed: use Tools/reimport_player_clips.py
     # for those two, not GFART_BATCH=beat_hop_v2 (which would re-create SKEL_GF_Humanoid and drag the outfits).
     "VFX_BeatHop_Countdown_v1",
+    # mining v1 (batch mining_v1, #270 / #273): ore stand-in blocks for the mining test range. After the import run
+    # handoff/inbox/SM_Block_Ore_ClayBed/ue/MI_Ores_setup.py (MI_Block_Ore_* under M_GF_Block, pixel settings, slot All).
+    # MiningRange_Rows_v1 and MiningRange_Tree_Verdant_v1 are layout data (Data/MiningRange), never listed here.
+    "SM_Block_Ore_ClayBed", "SM_Block_Ore_OreMetal", "SM_Block_Ore_CoalnutSeam", "SM_Block_Ore_CrystalVein",
+    # mining v1 range dressing (#273): to /Game/Art/Props/MiningRange. Then run handoff/inbox/SM_Prop_Range_Sign/ue/MI_Dressing_setup.py.
+    # T_Prop_Range_Wood_D and T_Prop_Range_LeverMetal_D ship in two folders each (identical bytes) and are imported once.
+    # MiningRange_Dressing_v2 is layout data (Data/MiningRange, supersedes v1), never listed here.
+    "SM_Prop_Range_Sign", "SM_Prop_Range_Badge_SpellProof", "SM_Prop_Range_ResetLever_Base", "SM_Prop_Range_ResetLever_Handle",
+    "SM_Prop_Range_LavaEdgeTrim", "SM_Prop_Range_FloorTint",
 ]
 # Skeletons shared across species live in their own folder, not in the folder of whichever mesh created them.
 # The first import creates the skeleton there; later imports reuse it. Pre-clean never deletes a shared
@@ -647,7 +671,13 @@ SHARED_SKELETONS = {"SKEL_Dino_Rex": "/Game/Art/Dinos/Rex"}
 _ALL = list(ORDER)
 _only = [a.strip() for a in os.environ.get("GFART_ONLY", "").split(",") if a.strip()]
 _batches = [b.strip() for b in os.environ.get("GFART_BATCH", "").split(",") if b.strip()]
-def _batch_of(a): return str(json.load(open(os.path.join(INBOX, a, "manifest.json"), encoding="utf-8")).get("batch", "1"))
+def _inbox_man(a):
+    """Manifest of an inbox folder, or None once the folder has moved out of the inbox (already imported)."""
+    f = os.path.join(INBOX, a, "manifest.json")
+    return json.load(open(f, encoding="utf-8")) if os.path.exists(f) else None
+def _batch_of(a):
+    m = _inbox_man(a)
+    return str(m.get("batch", "1")) if m is not None else None
 if _only or _batches:
     # GFART_ONLY=SK_Dino_Raptor re-imports just that asset; GFART_BATCH=2 or 3b,7 imports manifests with that "batch"
     # (no field = batch 1). Both together select the union (e.g. batch 3b + 7 plus the batch-8 fixes by name).
@@ -655,7 +685,7 @@ if _only or _batches:
 if _only or _batches:
     # A re-imported skeleton is deleted and re-created, so every asset that reuses it must come along
     # (e.g. SK_Player_Base v2 in batch 8 drags SK_Outfit_Top_GardenTee, which reuses SKEL_GF_Humanoid).
-    def _man(a): return json.load(open(os.path.join(INBOX, a, "manifest.json"), encoding="utf-8"))
+    def _man(a): return _inbox_man(a) or {}
     _defs = {(_man(a).get("skeleton") or {}).get("skeleton_name") for a in ORDER if not (_man(a).get("skeleton") or {}).get("reuse_existing")}
     _defs.discard(None)
     ORDER = [a for a in _ALL if a in ORDER or (_man(a).get("skeleton") or {}).get("reuse_existing") in _defs]
@@ -734,10 +764,23 @@ def run_import(path, dest, name, options):
         raise RuntimeError("import produced nothing at " + obj + " (task paths: " + str(list(t.imported_object_paths)) + ")")
     return unreal.load_asset(obj)
 
+_IMPORTED_TEX = {}  # UE texture path -> sha1 of its source PNG, for textures shipped in more than one folder
+
 def import_textures(man, folder, dest):
     out = []
     for tex in man["files"].get("textures", []):
         name = os.path.splitext(tex)[0]
+        upath = dest + "/Textures/" + name
+        with open(os.path.join(folder, tex), "rb") as fh:
+            digest = hashlib.sha1(fh.read()).hexdigest()
+        if upath in _IMPORTED_TEX:
+            # byte-identical copy (e.g. T_Prop_Range_Wood_D in the sign and badge folders): import once
+            if _IMPORTED_TEX[upath] != digest:
+                raise RuntimeError("texture {} ships in two folders with different bytes".format(name))
+            log("texture {} already imported this run (identical copy), skipped".format(name))
+            out.append(name)
+            continue
+        _IMPORTED_TEX[upath] = digest
         t = run_import(os.path.join(folder, tex), dest + "/Textures", name, None)
         try_set(t, "filter", unreal.TextureFilter.TF_NEAREST)
         if hint_slots(man):
@@ -1732,6 +1775,10 @@ def _hint_parent(parent, tex, inst):
             loaded("Mask", "T_GF_MaskBlack", (0, 0, 0), True))
     if isinstance(parent, str) and parent.startswith("/Game/") and EAL.does_asset_exist(parent):
         return unreal.load_asset(parent)
+    # Descriptive hints like "M_GF_Block (/Game/Art/Blocks/Materials/M_GF_Block, ...)": use the first existing /Game/ path in the text.
+    found = re.search(r"/Game/[A-Za-z0-9_/]+", parent) if isinstance(parent, str) else None
+    if found and EAL.does_asset_exist(found.group(0)):
+        return unreal.load_asset(found.group(0))
     raise RuntimeError("no material parent for hint: " + str(parent))
 
 def _set_skel_slots(man, by_slot):

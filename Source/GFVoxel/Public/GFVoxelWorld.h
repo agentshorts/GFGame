@@ -74,6 +74,12 @@ public:
 	 */
 	void ServerStamp(TFunctionRef<FName(const FIntVector& Cell)> BlockAt);
 
+	/**
+	 * Server: writes a cell even when the block is unplaceable or the cell is already solid.
+	 * No-ops (and returns true) when the cell already holds BlockId. None clears the cell.
+	 */
+	bool ServerAuthorCell(const FIntVector& Cell, FName BlockId);
+
 	/** Server: removes every block in [Min, Max]. Returns how many were removed. */
 	int32 ClearRegion(const FIntVector& Min, const FIntVector& Max);
 	/** Server: clears [Min, Min+size) and writes Data (relative to Min) into it. */
@@ -164,6 +170,8 @@ protected:
 
 	void EnsureGridSize();
 	void EnsureBlockTable();
+	/** Shared by ServerApplyEdit and ServerAuthorCell. The cell is in bounds and the id is a real change. */
+	bool CommitCell(const FIntVector& Cell, FName BlockId, FName Previous);
 	/** Server: bring the replicated base of a chunk up to date with the grid and clear its deltas. */
 	void ServerRebaseChunk(const FIntVector& ChunkCoord);
 	void ServerRebaseAll();

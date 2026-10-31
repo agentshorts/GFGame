@@ -266,6 +266,34 @@ bool AGFVoxelWorld::ServerApplyEdit(const FIntVector& Cell, FName BlockId, FName
 		return Fail(TEXT("cell empty"));
 	}
 
+	if (OutPrevious)
+	{
+		*OutPrevious = Previous;
+	}
+	return CommitCell(Cell, BlockId, Previous);
+}
+
+bool AGFVoxelWorld::ServerAuthorCell(const FIntVector& Cell, FName BlockId)
+{
+	if (!HasAuthority())
+	{
+		return false;
+	}
+	EnsureGridSize();
+	if (!Grid.IsInBounds(Cell))
+	{
+		return false;
+	}
+	const FName Previous = Grid.Get(Cell);
+	if (Previous == BlockId)
+	{
+		return true;
+	}
+	return CommitCell(Cell, BlockId, Previous);
+}
+
+bool AGFVoxelWorld::CommitCell(const FIntVector& Cell, FName BlockId, FName Previous)
+{
 	Grid.Set(Cell, BlockId);
 	const FIntVector ChunkCoord = FGFVoxelGrid::CellToChunk(Cell);
 	FGFChunkBaseItem* Base = FindBase(ChunkCoord);
@@ -293,11 +321,8 @@ bool AGFVoxelWorld::ServerApplyEdit(const FIntVector& Cell, FName BlockId, FName
 	}
 	ForceNetUpdate();
 	MarkChunkDirty(ChunkCoord);
-	if (OutPrevious)
-	{
-		*OutPrevious = Previous;
-	}
 	OnBlockChanged.Broadcast(Cell, BlockId);
+	(void)Previous;
 	return true;
 }
 
