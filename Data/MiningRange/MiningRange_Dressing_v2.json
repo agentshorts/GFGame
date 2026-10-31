@@ -1,9 +1,6 @@
 {
  "schema": "gf/mining_range_dressing/v2",
- "notes": [
-  "v2 turns every lava-edge trim yaw by +90 so the long axis runs along the lip (sides 90, end caps 180).",
-  "Badge sign_local_offset_ue_cm is [4, -44, 10]: 4 cm forward, 44 cm to the viewer's right, 10 cm up."
- ],
+ "supersedes": "MiningRange_Dressing_v1 (only lava_edge_trim yaws changed (+90; v1 assumed the strip ran along mesh X, it runs along UE local Y); badge and handle got explicit UE-local values; everything else identical)",
  "level": "L_MiningRange",
  "source": "MiningRange_Rows_v1",
  "cell_cm": 100,
@@ -377,7 +374,7 @@
     0,
     73
    ],
-   "hinge_axis": "mesh side-to-side axis",
+   "hinge_axis": "UE local Y (pitch), side to side",
    "rest_pitch_deg": -35,
    "pulled_pitch_deg": 35,
    "note": "interact = rotate to pulled, run gf.MineRange reset, spring back"
@@ -1315,5 +1312,6 @@
   "badges": 2,
   "trims": 11,
   "floor_tints": 72
- }
+ },
+ "mesh_axes_note": "All yaws are Unreal yaws for the imported meshes (front = UE +X, Force Front X). SM_Prop_Range_LavaEdgeTrim is 20 x 100 x 6 cm in UE (long along local Y)."
 }

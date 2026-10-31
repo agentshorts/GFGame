@@ -660,7 +660,7 @@ ORDER = [
     "SM_Block_Ore_ClayBed", "SM_Block_Ore_OreMetal", "SM_Block_Ore_CoalnutSeam", "SM_Block_Ore_CrystalVein",
     # mining v1 range dressing (#273): to /Game/Art/Props/MiningRange. Then run handoff/inbox/SM_Prop_Range_Sign/ue/MI_Dressing_setup.py.
     # T_Prop_Range_Wood_D and T_Prop_Range_LeverMetal_D ship in two folders each (identical bytes) and are imported once.
-    # MiningRange_Dressing_v1 is layout data (Data/MiningRange), never listed here.
+    # MiningRange_Dressing_v2 is layout data (Data/MiningRange, supersedes v1), never listed here.
     "SM_Prop_Range_Sign", "SM_Prop_Range_Badge_SpellProof", "SM_Prop_Range_ResetLever_Base", "SM_Prop_Range_ResetLever_Handle",
     "SM_Prop_Range_LavaEdgeTrim", "SM_Prop_Range_FloorTint",
 ]
