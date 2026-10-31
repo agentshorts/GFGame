@@ -1,7 +1,6 @@
 #pragma once
 
-// Every stamina, sprint, dash, hearth and arc number lives here.
-// A traversal kit should add fields to this asset instead of planting new constants in the movement component.
+// Every stamina, sprint, dash, traversal, hearth and arc number lives here.
 // UGFCharacterMovementComponent uses the asset when one is assigned, otherwise this class default.
 
 #include "CoreMinimal.h"
@@ -79,4 +78,124 @@ public:
 	/** The arc hides when stamina is within this of MaxStamina. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "HUD", meta = (ClampMin = "0"))
 	float HudHideEpsilon = 0.5f;
+
+	/** Fraction of dash speed that must be lost on a wall hit before an auto-grip. Above this, not equal. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grip", meta = (ClampMin = "0", ClampMax = "1"))
+	float DashGripSpeedLoss = 0.6f;
+
+	/** Longest cling, seconds. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grip", meta = (ClampMin = "0"))
+	float DashGripMaxSeconds = 2.f;
+
+	/** Stamina per second while clinging. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grip", meta = (ClampMin = "0"))
+	float DashGripDrainPerSecond = 10.f;
+
+	/** A hit whose normal Z is above this is a floor, not a wall. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grip", meta = (ClampMin = "0", ClampMax = "1"))
+	float WallNormalMaxZ = 0.35f;
+
+	/** cm/s into the wall while clinging, so the capsule stays in contact. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grip", meta = (ClampMin = "0"))
+	float GripStickSpeed = 30.f;
+
+	/** Horizontal speed of the jump off a cling, cm/s, along the wall normal. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grip", meta = (ClampMin = "0"))
+	float WallKickSpeed = 700.f;
+
+	/** Upward speed added to a wall-kick, cm/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grip", meta = (ClampMin = "0"))
+	float WallKickUp = 420.f;
+
+	/** Wall run requires horizontal speed strictly above this, cm/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallRun", meta = (ClampMin = "0"))
+	float WallRunMinSpeed = 400.f;
+
+	/** Longest wall run per visit to a wall, seconds. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallRun", meta = (ClampMin = "0"))
+	float WallRunMaxSeconds = 1.5f;
+
+	/** Stamina per second while wall running. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallRun", meta = (ClampMin = "0"))
+	float WallRunDrainPerSecond = 15.f;
+
+	/** cm/s into the wall while running, so the run stays stuck to the surface. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallRun", meta = (ClampMin = "0"))
+	float WallStickSpeed = 40.f;
+
+	/** Minimum |dot| of the move input with the wall tangent. Into-the-wall input does not qualify. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallRun", meta = (ClampMin = "0", ClampMax = "1"))
+	float WallRunAlongMin = 0.5f;
+
+	/** How far past the capsule to look for a wall, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallRun", meta = (ClampMin = "0"))
+	float WallProbeDistance = 48.f;
+
+	/** Untagged colliders wider than this are not swivels, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Swivel", meta = (ClampMin = "0"))
+	float SwivelMaxThickness = 80.f;
+
+	/** Untagged colliders shorter than this are not swivels, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Swivel", meta = (ClampMin = "0"))
+	float SwivelMinHeight = 180.f;
+
+	/** Untagged height must be at least this many times the horizontal thickness. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Swivel", meta = (ClampMin = "0"))
+	float SwivelMinAspect = 2.f;
+
+	/** Orbit speed used when the player hits the pole slower than this, cm/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Swivel", meta = (ClampMin = "0"))
+	float SwivelMinSpeed = 300.f;
+
+	/** Closest orbit radius, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Swivel", meta = (ClampMin = "1"))
+	float SwivelMinRadius = 40.f;
+
+	/** Launch speed is the orbit speed times this. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Swivel", meta = (ClampMin = "0"))
+	float SwivelLaunchBoost = 1.5f;
+
+	/** Upward speed added when launching off a swivel, cm/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Swivel", meta = (ClampMin = "0"))
+	float SwivelLaunchUp = 280.f;
+
+	/** Grapple trace length, cm. 15 m. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grapple", meta = (ClampMin = "0"))
+	float GrappleRange = 1500.f;
+
+	/** Seconds before another grapple. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grapple", meta = (ClampMin = "0"))
+	float GrappleCooldown = 2.f;
+
+	/** Stamina paid when a swing or a yank attaches. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grapple", meta = (ClampMin = "0"))
+	float GrappleCost = 20.f;
+
+	/** Tangential velocity scale when a swing is released. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grapple", meta = (ClampMin = "0"))
+	float GrappleReleaseBoost = 1.35f;
+
+	/** Pull speed toward the anchor, cm/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grapple", meta = (ClampMin = "0"))
+	float GrappleYankSpeed = 1400.f;
+
+	/** Distance to the anchor that counts as arrived, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grapple", meta = (ClampMin = "0"))
+	float GrappleYankArrive = 80.f;
+
+	/** Gravity used by the pendulum, cm/s^2. Negative is down. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Grapple")
+	float GrappleGravity = -980.f;
+
+	/** How far ahead the landing trace looks, seconds. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Landing", meta = (ClampMin = "0.05"))
+	float LandingLookahead = 2.5f;
+
+	/** Seconds between ballistic samples. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Landing", meta = (ClampMin = "0.02"))
+	float LandingSampleSeconds = 0.08f;
+
+	/** Impact normals flatter than this are walls, and the marker skips them. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Landing", meta = (ClampMin = "0", ClampMax = "1"))
+	float LandingMinFloorNormalZ = 0.5f;
 };

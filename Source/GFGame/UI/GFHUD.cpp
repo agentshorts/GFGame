@@ -166,6 +166,7 @@ void AGFHUD::DrawHUD()
 	DrawCrosshair();
 	DrawCompass();
 	DrawStaminaArc();
+	DrawLandingMarker();
 	DrawZoneLabel();
 	DrawChat();
 	DrawToasts();
@@ -278,6 +279,47 @@ void AGFHUD::DrawStaminaArc()
 	DrawSweep(FullTurn, Track, TrackSteps);
 	const int32 FillSteps = FMath::Clamp(FMath::CeilToInt(static_cast<float>(TrackSteps) * Fraction), 2, TrackSteps);
 	DrawSweep(FullTurn * Fraction, Fill, FillSteps);
+}
+
+void AGFHUD::DrawLandingMarker()
+{
+	const AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn());
+	UGFCharacterMovementComponent* Move = Character ? Character->GetGFMovement() : nullptr;
+	if (!Move)
+	{
+		return;
+	}
+	FVector WorldPoint = FVector::ZeroVector;
+	if (!Move->GetLandingMarker(WorldPoint))
+	{
+		return;
+	}
+	APlayerController* Controller = GetOwningPlayerController();
+	FVector2D Screen = FVector2D::ZeroVector;
+	if (!Controller || !Controller->ProjectWorldLocationToScreen(WorldPoint, Screen, true))
+	{
+		return;
+	}
+	if (Screen.X < 0.f || Screen.Y < 0.f || Screen.X > Canvas->ClipX || Screen.Y > Canvas->ClipY)
+	{
+		return;
+	}
+	const float Distance = static_cast<float>(FVector::Dist(Character->GetActorLocation(), WorldPoint));
+	const float Radius = FMath::Clamp(900.f / FMath::Max(Distance, 150.f) * 18.f, 6.f, 28.f);
+	const FLinearColor Color(0.45f, 0.92f, 0.55f, 0.9f);
+	const int32 Steps = 16;
+	const float Turn = 6.2831855f;
+	float PreviousX = Screen.X + Radius;
+	float PreviousY = Screen.Y;
+	for (int32 Index = 1; Index <= Steps; ++Index)
+	{
+		const float Angle = Turn * static_cast<float>(Index) / static_cast<float>(Steps);
+		const float X = Screen.X + Radius * FMath::Cos(Angle);
+		const float Y = Screen.Y + Radius * FMath::Sin(Angle);
+		DrawLine(PreviousX, PreviousY, X, Y, Color, 2.f);
+		PreviousX = X;
+		PreviousY = Y;
+	}
 }
 
 void AGFHUD::DrawZoneLabel()

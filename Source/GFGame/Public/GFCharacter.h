@@ -19,7 +19,7 @@ struct FInputActionValue;
  * The player character. Third-person by default (spring arm ~450 cm, pitch ~-20, FOV 90 per ASSET_BRIEFS),
  * V toggles first-person. LMB removes a block, RMB places the selected block, wheel cycles the hotbar.
  * Input assets are optional: if none are assigned, a default mapping is built in C++ at runtime.
- * Shift sprints and Ctrl dashes through UGFCharacterMovementComponent. MaxWalkSpeed stays the base run.
+ * Shift sprints, Ctrl dashes, Q swings a grapple and E yanks it. MaxWalkSpeed stays the base run.
  */
 UCLASS(Config = Game)
 class GFGAME_API AGFCharacter : public ACharacter
@@ -95,6 +95,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> HotbarAction;
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> SprintAction;
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> DashAction;
+	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> GrappleSwingAction;
+	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> GrappleYankAction;
 
 protected:
 	virtual void BeginPlay() override;
@@ -115,6 +117,9 @@ protected:
 	void OnSprint(const FInputActionValue& Value);
 	void OnSprintStopped(const FInputActionValue& Value);
 	void OnDash(const FInputActionValue& Value);
+	void OnGrappleSwing(const FInputActionValue& Value);
+	void OnGrappleSwingStopped(const FInputActionValue& Value);
+	void OnGrappleYank(const FInputActionValue& Value);
 
 	bool bFirstPerson = false;
 };

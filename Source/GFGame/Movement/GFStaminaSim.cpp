@@ -25,6 +25,30 @@ void FGFStaminaState::ResetFull(const UGFMovementTuning& Tuning)
 	bDashing = false;
 	bWasGrounded = true;
 	DashDir = FVector::ForwardVector;
+	bGripping = false;
+	GripTimeLeft = 0.f;
+	GripNormal = FVector::ForwardVector;
+	bWallRunning = false;
+	bWallRunBlocked = false;
+	WallRunTimeLeft = Tuning.WallRunMaxSeconds;
+	WallRunSpeed = 0.f;
+	WallRunDir = FVector::ForwardVector;
+	WallNormal = FVector::ForwardVector;
+	bSwiveling = false;
+	SwivelAngle = 0.f;
+	SwivelRadius = 0.f;
+	SwivelSpeed = 0.f;
+	SwivelSign = 1.f;
+	SwivelOrigin = FVector::ZeroVector;
+	bSwinging = false;
+	bYanking = false;
+	GrappleCooldownLeft = 0.f;
+	RopeLength = 0.f;
+	GrappleAnchor = FVector::ZeroVector;
+	TravelLocation = FVector::ZeroVector;
+	SwingVelocity = FVector::ZeroVector;
+	bOverrideVelocity = false;
+	OverrideVelocity = FVector::ZeroVector;
 }
 
 FVector GFStaminaSim::ResolveDashDirection(const FVector& MoveDirection, const FVector& CameraForward)
@@ -48,6 +72,11 @@ float GFStaminaSim::HorizontalSpeed(const FGFStaminaState& State, const UGFMovem
 	{
 		return Tuning.DashSpeed;
 	}
+	if (State.bOverrideVelocity)
+	{
+		const float OverrideSpeed = static_cast<float>(State.OverrideVelocity.Size());
+		return FMath::Max(LiveWalkSpeed, OverrideSpeed);
+	}
 	if (State.bSprinting)
 	{
 		return LiveWalkSpeed * Tuning.SprintSpeedMultiplier;
@@ -60,6 +89,10 @@ float GFStaminaSim::GravityScale(const FGFStaminaState& State, const UGFMovement
 	if (State.bDashing)
 	{
 		return Tuning.DashGravityScale;
+	}
+	if (State.bGripping || State.bWallRunning || State.bSwiveling || State.bSwinging || State.bYanking)
+	{
+		return 0.f;
 	}
 	return 1.f;
 }
@@ -86,6 +119,7 @@ FGFStaminaState GFStaminaSim::Step(const FGFStaminaState& State, const FGFStamin
 		Idle.DashTimeLeft = 0.f;
 		Idle.bSprintBlocked = false;
 		Idle.bWasGrounded = Command.bGrounded;
+		GFTraversalSim::ClearActivity(Idle, Tuning);
 		return Idle;
 	}
 
@@ -111,9 +145,10 @@ FGFStaminaState GFStaminaSim::Step(const FGFStaminaState& State, const FGFStamin
 	}
 
 	const bool bInfinite = Command.bInsideKindleRing;
-	bool bSpent = false;
+	bool bSpent = GFTraversalSim::Apply(Next, Command, Tuning);
 
-	if (Command.bDashPressed && !Next.bDashing && Tuning.DashDuration > 0.f)
+	const bool bTraversalBusy = Next.bGripping || Next.bWallRunning || Next.bSwiveling || Next.bSwinging || Next.bYanking;
+	if (Command.bDashPressed && !Next.bDashing && !bTraversalBusy && Tuning.DashDuration > 0.f)
 	{
 		const bool bAir = !Command.bGrounded;
 		const bool bAirOk = bAir && Next.AirDashesUsed < Tuning.AirDashesPerAirtime;
@@ -142,7 +177,7 @@ FGFStaminaState GFStaminaSim::Step(const FGFStaminaState& State, const FGFStamin
 	}
 
 	Next.bSprinting = false;
-	if (Command.bSprintHeld && !Next.bSprintBlocked && !Next.bDashing)
+	if (Command.bSprintHeld && !Next.bSprintBlocked && !Next.bDashing && !bTraversalBusy && !Next.bOverrideVelocity)
 	{
 		if (bInfinite)
 		{

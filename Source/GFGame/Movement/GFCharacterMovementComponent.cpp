@@ -7,6 +7,7 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/GameModeBase.h"
 #include "Components/CapsuleComponent.h"
+#include "CollisionQueryParams.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Net/UnrealNetwork.h"
@@ -82,7 +83,11 @@ class FSavedMove_GFCharacter : public FSavedMove_Character
 public:
 	bool bSavedSprint = false;
 	bool bSavedDash = false;
+	bool bSavedSwing = false;
+	bool bSavedYank = false;
+	bool bSavedJump = false;
 	FGFStaminaState StartSim;
+	FGFTraversalContact SavedContact;
 	FVector SavedCameraForward = FVector::ForwardVector;
 
 	virtual void Clear() override
@@ -90,7 +95,11 @@ public:
 		Super::Clear();
 		bSavedSprint = false;
 		bSavedDash = false;
+		bSavedSwing = false;
+		bSavedYank = false;
+		bSavedJump = false;
 		StartSim = FGFStaminaState();
+		SavedContact = FGFTraversalContact();
 		SavedCameraForward = FVector::ForwardVector;
 	}
 
@@ -104,9 +113,14 @@ public:
 		}
 		bSavedSprint = Move->WantsSprint();
 		bSavedDash = Move->WasDashRecorded();
+		bSavedSwing = Move->WantsGrappleSwing();
+		bSavedYank = Move->WasYankRecorded();
+		bSavedJump = Move->WasJumpUsed();
 		StartSim = Move->GetSimAtMoveStart();
+		SavedContact = Move->GetContactAtMoveStart();
 		SavedCameraForward = Move->GetLastCameraForward();
 		Move->ClearDashRecorded();
+		Move->ClearYankRecorded();
 	}
 
 	virtual void PrepMoveFor(ACharacter* C) override
@@ -121,6 +135,7 @@ public:
 		Move->SetDashFromReplay(bSavedDash);
 		Move->RestoreSim(StartSim);
 		Move->SetReplayCamera(SavedCameraForward);
+		Move->SetReplayTraversal(bSavedJump, bSavedYank, bSavedSwing, SavedContact);
 	}
 
 	virtual uint8 GetCompressedFlags() const override
@@ -134,6 +149,14 @@ public:
 		{
 			Flags |= FSavedMove_Character::FLAG_Custom_1;
 		}
+		if (bSavedSwing)
+		{
+			Flags |= FSavedMove_Character::FLAG_Custom_2;
+		}
+		if (bSavedYank)
+		{
+			Flags |= FSavedMove_Character::FLAG_Custom_3;
+		}
 		return Flags;
 	}
 
@@ -141,6 +164,18 @@ public:
 	{
 		const FSavedMove_GFCharacter* Next = static_cast<const FSavedMove_GFCharacter*>(NewMove.Get());
 		if (!Next || bSavedDash || Next->bSavedDash || bSavedSprint != Next->bSavedSprint)
+		{
+			return false;
+		}
+		if (bSavedYank || Next->bSavedYank || bSavedSwing != Next->bSavedSwing || bSavedJump != Next->bSavedJump)
+		{
+			return false;
+		}
+		if (SavedContact.bDashImpact || Next->SavedContact.bDashImpact || SavedContact.bWallContact != Next->SavedContact.bWallContact)
+		{
+			return false;
+		}
+		if (SavedContact.bSwivelContact != Next->SavedContact.bSwivelContact || SavedContact.bGrappleHit != Next->SavedContact.bGrappleHit)
 		{
 			return false;
 		}
@@ -242,6 +277,25 @@ void UGFCharacterMovementComponent::SetReplayCamera(const FVector& Forward)
 	bUseReplayCamera = true;
 }
 
+void UGFCharacterMovementComponent::SetReplayTraversal(bool bJump, bool bYank, bool bSwing, const FGFTraversalContact& Contact)
+{
+	bUseReplayTraversal = true;
+	bReplayJump = bJump;
+	bReplayYank = bYank;
+	bReplaySwing = bSwing;
+	ReplayContact = Contact;
+}
+
+void UGFCharacterMovementComponent::SetGrappleSwingHeld(bool bHeld)
+{
+	bWantsGrappleSwing = bHeld;
+}
+
+void UGFCharacterMovementComponent::NotifyGrappleYank()
+{
+	bYankThisMove = true;
+}
+
 void UGFCharacterMovementComponent::ApplyStaminaGate()
 {
 	if (ReplicatedStaminaGate == 1)
@@ -307,6 +361,8 @@ void UGFCharacterMovementComponent::UpdateFromCompressedFlags(uint8 Flags)
 	Super::UpdateFromCompressedFlags(Flags);
 	bWantsToSprint = (Flags & FSavedMove_Character::FLAG_Custom_0) != 0;
 	bDashThisMove = (Flags & FSavedMove_Character::FLAG_Custom_1) != 0;
+	bWantsGrappleSwing = (Flags & FSavedMove_Character::FLAG_Custom_2) != 0;
+	bYankThisMove = (Flags & FSavedMove_Character::FLAG_Custom_3) != 0;
 }
 
 FNetworkPredictionData_Client* UGFCharacterMovementComponent::GetPredictionData_Client() const
@@ -325,6 +381,7 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 {
 	if (!CharacterOwner)
 	{
+		StepDeltaSeconds = 0.f;
 		Super::PerformMovement(DeltaTime);
 		return;
 	}
@@ -332,6 +389,7 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 	const bool bLocal = CharacterOwner->IsLocallyControlled();
 	if (!bAuthoritative && !bLocal)
 	{
+		StepDeltaSeconds = 0.f;
 		Super::PerformMovement(DeltaTime);
 		return;
 	}
@@ -347,11 +405,41 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 	bDashThisMove = false;
 	bDashRecorded = bDash;
 
+	bool bJump = false;
+	bool bYank = false;
+	bool bSwing = bWantsGrappleSwing;
+	if (bUseReplayTraversal)
+	{
+		bJump = bReplayJump;
+		bYank = bReplayYank;
+		bSwing = bReplaySwing;
+		ContactAtMoveStart = ReplayContact;
+		bUseReplayTraversal = false;
+		bPendingDashHit = false;
+	}
+	else
+	{
+		bJump = CharacterOwner->bPressedJump;
+		bYank = bYankThisMove;
+		GatherLiveContact(ContactAtMoveStart);
+		bPendingDashHit = false;
+	}
+	bYankThisMove = false;
+	bYankRecorded = bYank;
+	bJumpUsedThisMove = bJump;
+
 	FGFStaminaCommand Command;
 	Command.bSprintHeld = bWantsToSprint;
 	Command.bDashPressed = bDash;
+	Command.bJumpPressed = bJump;
+	Command.bGrappleSwingHeld = bSwing;
+	Command.bGrappleYankPressed = bYank;
 	Command.bGrounded = IsMovingOnGround();
 	Command.bStaminaEnabled = bStaminaEnabled;
+	Command.HorizontalSpeed = static_cast<float>(FVector(Velocity.X, Velocity.Y, 0.0).Size());
+	Command.Velocity = Velocity;
+	Command.PlayerLocation = CharacterOwner->GetActorLocation();
+	Command.Contact = ContactAtMoveStart;
 	const bool bReplayMove = bUseReplayCamera;
 	// Replay uses the hearth at the rewound location only. The live replicated bit is for the current move.
 	Command.bInsideKindleRing = bLocalInsideKindle || (!bReplayMove && !bAuthoritative && bInsideKindleRing);
@@ -368,6 +456,9 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 	}
 	LastCameraForward = Command.CameraForward;
 	Sim = GFStaminaSim::Step(Sim, Command, GetTuning());
+	// Substeps share this frame's start so a rope, yank, or orbit lands on TravelLocation.
+	LocationAtStepStart = Command.PlayerLocation;
+	StepDeltaSeconds = DeltaTime;
 
 	if (bAuthoritative)
 	{
@@ -399,9 +490,37 @@ void UGFCharacterMovementComponent::CalcVelocity(float DeltaTime, float Friction
 		const FVector Flat = FVector(Sim.DashDir.X, Sim.DashDir.Y, 0.0).GetSafeNormal();
 		Velocity.X = Flat.X * Speed;
 		Velocity.Y = Flat.Y * Speed;
+		DashPlanarSpeed = static_cast<float>(Speed);
+		return;
+	}
+	if (Sim.bOverrideVelocity)
+	{
+		// Tangential OverrideVelocity is what a release boost reads. While the constraint is active,
+		// the capsule tracks TravelLocation so movement substeps do not walk off the rope or the pole.
+		if (StepDeltaSeconds > 0.f && CharacterOwner && (Sim.bSwinging || Sim.bYanking || Sim.bSwiveling))
+		{
+			const double Dt = static_cast<double>(StepDeltaSeconds);
+			Velocity = (Sim.TravelLocation - LocationAtStepStart) / Dt;
+			return;
+		}
+		Velocity = Sim.OverrideVelocity;
 		return;
 	}
 	Super::CalcVelocity(DeltaTime, Friction, bFluid, BrakingDeceleration);
+}
+
+void UGFCharacterMovementComponent::HandleImpact(const FHitResult& Hit, float TimeSlice, const FVector& MoveDelta)
+{
+	Super::HandleImpact(Hit, TimeSlice, MoveDelta);
+	if (!Sim.bDashing || !Hit.bBlockingHit)
+	{
+		return;
+	}
+	// Consumed on the next step so the saved move replays the same contact.
+	bPendingDashHit = true;
+	PendingImpactNormal = Hit.ImpactNormal;
+	PendingSpeedBefore = DashPlanarSpeed > 0.f ? DashPlanarSpeed : GetTuning().DashSpeed;
+	PendingSpeedAfter = static_cast<float>(FVector(Velocity.X, Velocity.Y, 0.0).Size());
 }
 
 void UGFCharacterMovementComponent::OnRep_StaminaGate()
@@ -442,4 +561,147 @@ void UGFCharacterMovementComponent::OnRep_AuthoritativeStamina()
 			}
 		}
 	}
+}
+
+void UGFCharacterMovementComponent::GatherLiveContact(FGFTraversalContact& Contact)
+{
+	Contact = FGFTraversalContact();
+	if (bPendingDashHit)
+	{
+		Contact.bDashImpact = true;
+		Contact.ImpactNormal = PendingImpactNormal;
+		Contact.SpeedBefore = PendingSpeedBefore;
+		Contact.SpeedAfter = PendingSpeedAfter;
+	}
+	UWorld* World = GetWorld();
+	if (!World || !CharacterOwner)
+	{
+		return;
+	}
+
+	const UGFMovementTuning& Tuning = GetTuning();
+	const FVector Center = CharacterOwner->GetActorLocation();
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GFTraversal), false, CharacterOwner);
+	const float CapsuleRadius = CharacterOwner->GetCapsuleComponent() ? CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleRadius() : 40.f;
+	const float Reach = CapsuleRadius + Tuning.WallProbeDistance;
+	FVector Planar = FVector(Velocity.X, Velocity.Y, 0.0);
+	if (Planar.IsNearlyZero())
+	{
+		Planar = FVector(Acceleration.X, Acceleration.Y, 0.0);
+	}
+	const FVector Forward = Planar.GetSafeNormal();
+	if (!Forward.IsNearlyZero())
+	{
+		const FVector Right = FVector::CrossProduct(FVector::UpVector, Forward);
+		const FVector Sides[2] = { Right, Right * -1.0 };
+		double Closest = 0.0;
+		for (const FVector& Side : Sides)
+		{
+			if (Side.IsNearlyZero())
+			{
+				continue;
+			}
+			FHitResult Hit;
+			const FVector End = Center + Side.GetSafeNormal() * static_cast<double>(Reach);
+			if (World->SweepSingleByChannel(Hit, Center, End, FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(12.f), Params)
+				&& FMath::Abs(Hit.ImpactNormal.Z) <= static_cast<double>(Tuning.WallNormalMaxZ)
+				&& (!Contact.bWallContact || Hit.Distance < Closest))
+			{
+				Contact.bWallContact = true;
+				Contact.WallNormal = Hit.ImpactNormal;
+				Closest = Hit.Distance;
+			}
+		}
+	}
+
+	const float HalfHeight = CharacterOwner->GetCapsuleComponent() ? CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 88.f;
+	TArray<FOverlapResult> Overlaps;
+	FCollisionObjectQueryParams Objects;
+	Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
+	World->OverlapMultiByObjectType(Overlaps, Center, FQuat::Identity, Objects, FCollisionShape::MakeCapsule(CapsuleRadius + 16.f, HalfHeight), Params);
+	double BestSwivel = 0.0;
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		const AActor* Actor = Overlap.GetActor();
+		if (!Actor || Actor == CharacterOwner)
+		{
+			continue;
+		}
+		const bool bTagged = Actor->ActorHasTag(GFTraversalSim::SwivelTag());
+		const FVector BoundsSize = Actor->GetComponentsBoundingBox().GetSize();
+		if (!GFTraversalSim::IsSwivelTarget(bTagged, BoundsSize, Tuning))
+		{
+			continue;
+		}
+		FVector Origin = Actor->GetComponentsBoundingBox().GetCenter();
+		Origin.Z = Center.Z;
+		const FVector Flat = Origin - Center;
+		const double Dist = Flat.X * Flat.X + Flat.Y * Flat.Y;
+		if (!Contact.bSwivelContact || Dist < BestSwivel)
+		{
+			Contact.bSwivelContact = true;
+			Contact.SwivelOrigin = Origin;
+			BestSwivel = Dist;
+		}
+	}
+
+	if ((bWantsGrappleSwing || bYankThisMove) && !Sim.bSwinging && !Sim.bYanking)
+	{
+		const FVector Aim = CharacterOwner->GetControlRotation().Vector();
+		FHitResult Hit;
+		const FVector Start = CharacterOwner->GetPawnViewLocation();
+		const FVector End = Start + Aim * static_cast<double>(Tuning.GrappleRange);
+		if (World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params))
+		{
+			Contact.bGrappleHit = true;
+			Contact.GrapplePoint = Hit.ImpactPoint;
+		}
+	}
+}
+
+namespace GFCharacterMovementLanding
+{
+	bool GFMovementFloorNormal(const FVector& Normal, float MinZ)
+	{
+		return Normal.Z >= static_cast<double>(MinZ);
+	}
+}
+
+bool UGFCharacterMovementComponent::GetLandingMarker(FVector& OutPoint) const
+{
+	if (!CharacterOwner || !GFTraversalSim::ShouldShowLandingMarker(Sim, IsMovingOnGround(), bStaminaEnabled))
+	{
+		return false;
+	}
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+	const UGFMovementTuning& Tuning = GetTuning();
+	const float Sample = FMath::Max(Tuning.LandingSampleSeconds, 0.02f);
+	const int32 Steps = FMath::Clamp(FMath::CeilToInt(Tuning.LandingLookahead / Sample), 1, 64);
+	const float StepTime = Tuning.LandingLookahead / static_cast<float>(Steps);
+	FVector Origin = CharacterOwner->GetActorLocation();
+	if (const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent())
+	{
+		Origin.Z -= static_cast<double>(Capsule->GetScaledCapsuleHalfHeight());
+	}
+	const float Gravity = Super::GetGravityZ();
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GFLanding), false, CharacterOwner);
+	FVector Previous = Origin;
+	for (int32 Index = 1; Index <= Steps; ++Index)
+	{
+		const FVector Next = GFTraversalSim::BallisticPoint(Origin, Velocity, Gravity, StepTime * static_cast<float>(Index));
+		FHitResult Hit;
+		if (World->LineTraceSingleByChannel(Hit, Previous, Next, ECC_Visibility, Params)
+			&& GFCharacterMovementLanding::GFMovementFloorNormal(Hit.ImpactNormal, Tuning.LandingMinFloorNormalZ))
+		{
+			OutPoint = Hit.ImpactPoint;
+			return true;
+		}
+		Previous = Next;
+	}
+	return false;
 }

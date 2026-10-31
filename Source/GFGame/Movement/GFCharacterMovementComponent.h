@@ -1,9 +1,10 @@
 #pragma once
 
 // Server-authoritative stamina on the player character.
-// Sprint and dash ride FSavedMove_Character custom flags (FLAG_Custom_0, FLAG_Custom_1) so the server
-// applies the same presses the client predicted. The pool is stepped inside PerformMovement, which is
-// what a correction replays. A replicated stamina value pulls the owner back when the two diverge.
+// Sprint, dash, swing, and yank ride FSavedMove_Character custom flags
+// (FLAG_Custom_0 through FLAG_Custom_3) so the server applies the same presses the client predicted.
+// The pool and the traversal step run inside PerformMovement, which is what a correction replays.
+// A replicated stamina value pulls the owner back when the two diverge.
 // MaxWalkSpeed stays the tuned base run speed. Sprint only changes GetMaxSpeed.
 
 #include "CoreMinimal.h"
@@ -34,6 +35,8 @@ public:
 
 	void SetSprintHeld(bool bHeld);
 	void NotifyDashPressed();
+	void SetGrappleSwingHeld(bool bHeld);
+	void NotifyGrappleYank();
 
 	UFUNCTION(BlueprintPure, Category = "GF|Movement")
 	float GetStamina() const { return Sim.Stamina; }
@@ -50,6 +53,24 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GF|Movement")
 	bool IsDashing() const { return Sim.bDashing; }
 
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	bool IsGripping() const { return Sim.bGripping; }
+
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	bool IsWallRunning() const { return Sim.bWallRunning; }
+
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	bool IsSwiveling() const { return Sim.bSwiveling; }
+
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	bool IsSwinging() const { return Sim.bSwinging; }
+
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	bool IsYanking() const { return Sim.bYanking; }
+
+	/** Ballistic ground point. False when the marker should stay hidden or the trace misses. */
+	bool GetLandingMarker(FVector& OutPoint) const;
+
 	const UGFMovementTuning& GetTuning() const;
 
 	void RefreshKindleOverlaps();
@@ -58,14 +79,21 @@ public:
 	void SetDashFromReplay(bool bDash) { bDashThisMove = bDash; }
 	void RestoreSim(const FGFStaminaState& InSim) { Sim = InSim; }
 	void SetReplayCamera(const FVector& Forward);
+	void SetReplayTraversal(bool bJump, bool bYank, bool bSwing, const FGFTraversalContact& Contact);
 	bool WantsSprint() const { return bWantsToSprint; }
+	bool WantsGrappleSwing() const { return bWantsGrappleSwing; }
 	bool WasDashRecorded() const { return bDashRecorded; }
+	bool WasYankRecorded() const { return bYankRecorded; }
+	bool WasJumpUsed() const { return bJumpUsedThisMove; }
 	void ClearDashRecorded() { bDashRecorded = false; }
+	void ClearYankRecorded() { bYankRecorded = false; }
 	const FGFStaminaState& GetSimAtMoveStart() const { return SimAtMoveStart; }
 	const FVector& GetLastCameraForward() const { return LastCameraForward; }
+	const FGFTraversalContact& GetContactAtMoveStart() const { return ContactAtMoveStart; }
 
 protected:
 	virtual void CalcVelocity(float DeltaTime, float Friction, bool bFluid, float BrakingDeceleration) override;
+	virtual void HandleImpact(const FHitResult& Hit, float TimeSlice, const FVector& MoveDelta) override;
 
 	UFUNCTION()
 	void OnRep_AuthoritativeStamina();
@@ -94,15 +122,33 @@ private:
 	void RefreshStaminaGate();
 	void ApplyStaminaGate();
 	FVector LiveCameraForward() const;
+	void GatherLiveContact(FGFTraversalContact& Contact);
 
 	FGFStaminaState Sim;
 	FGFStaminaState SimAtMoveStart;
+	FGFTraversalContact ContactAtMoveStart;
+	FGFTraversalContact ReplayContact;
 	FVector LastCameraForward = FVector::ForwardVector;
 	FVector ReplayCameraForward = FVector::ForwardVector;
 	bool bUseReplayCamera = false;
+	bool bUseReplayTraversal = false;
 	bool bWantsToSprint = false;
+	bool bWantsGrappleSwing = false;
 	bool bDashThisMove = false;
 	bool bDashRecorded = false;
+	bool bYankThisMove = false;
+	bool bYankRecorded = false;
+	bool bJumpUsedThisMove = false;
+	bool bReplayJump = false;
+	bool bReplayYank = false;
+	bool bReplaySwing = false;
+	bool bPendingDashHit = false;
+	float StepDeltaSeconds = 0.f;
+	FVector LocationAtStepStart = FVector::ZeroVector;
+	float PendingSpeedBefore = 0.f;
+	float PendingSpeedAfter = 0.f;
+	float DashPlanarSpeed = 0.f;
+	FVector PendingImpactNormal = FVector::UpVector;
 	bool bLocalInsideKindle = false;
 	bool bStaminaEnabled = true;
 	bool bGotAuthoritativeStamina = false;
