@@ -2,6 +2,7 @@ import { BUDGET_CAPS, canSpeak, defaultKnobs, fallbackSummarize, type ContextTur
 import { createEngines } from "../engines";
 import { decide, DEFAULT_SMELL_FT } from "../logic/alignment";
 import { presentReply } from "../logic/present";
+import { buildChatTrace, CLASSIC_SOURCES, nextTraceId, probeClassic, recordTrace, traceEnabled } from "../logic/trace";
 import type { Persona } from "../logic/types";
 import { scoreInterest } from "./interest";
 import { personaForTest, type ManagedDino } from "./profile";
@@ -10,6 +11,7 @@ export interface TestLine {
   speaker: string;
   role: "user" | "dino" | "note";
   text: string;
+  traceId?: string;
 }
 
 export interface TurnInput {
@@ -44,25 +46,56 @@ function engines() {
   return enginePromise;
 }
 
-async function classicReply(persona: Persona, utterance: string, playerName: string): Promise<string> {
-  const engine = engines().eliza;
-  engine.reset(persona.id);
-  await engine.ready(persona);
-  const reply = await engine.reply({
+async function classicReply(persona: Persona, utterance: string, playerName: string, dinoId: string): Promise<{ text: string; traceId: string }> {
+  const pack = engines();
+  const request = {
     persona,
     history: [],
     utterance,
-    mode: "direct",
-    systemPrompt: "",
+    mode: "direct" as const,
+    systemPrompt: `${persona.name}. ${persona.personality}`,
     temperature: 0.7,
     maxTokens: 80,
     peerNames: [],
-  });
-  return presentReply(reply.text, {
+  };
+  for (const source of CLASSIC_SOURCES) pack[source].reset(persona.id);
+  const sources = traceEnabled() ? CLASSIC_SOURCES : ["eliza" as const];
+  let elizaText = "";
+  const candidates = await probeClassic(async (source) => {
+    const reply = await pack[source].reply(request);
+    if (source === "eliza") elizaText = reply.text;
+    return { text: reply.text, fellBack: reply.fellBack };
+  }, sources);
+  const presented = presentReply(elizaText || persona.fallbackReplies[0] || "...", {
     playerName,
     maxReplyLength: persona.maxReplyLength,
     maxTokens: 80,
-  }).text;
+  });
+  const trace = recordTrace(buildChatTrace({
+    id: nextTraceId(),
+    at: new Date().toISOString(),
+    dinoId,
+    dinoName: persona.name,
+    inputText: utterance,
+    candidates: [
+      ...candidates,
+      { source: "webllm", text: null, ms: 0, note: "model not loaded" },
+    ],
+    chosenSource: "eliza",
+    finalText: presented.text,
+    presentedDecisions: presented.decisions,
+    llm: {
+      text: null,
+      ms: 0,
+      persona: request.systemPrompt,
+      memory: "",
+      context: "budget 4096\n(manager test chat has no 4k window)",
+      prompt: request.systemPrompt,
+      loaded: false,
+    },
+    pickReason: "The persona test chat speaks with ELIZA. The other engines are beside it when Trace is on.",
+  }));
+  return { text: presented.text, traceId: trace.id };
 }
 
 export async function runManagerTurn(input: TurnInput): Promise<TurnResult> {
@@ -92,10 +125,13 @@ export async function runManagerTurn(input: TurnInput): Promise<TurnResult> {
   let action = quota.ok ? interest.action : "skip_quota";
   let replyText = "";
   const lines: TestLine[] = [{ speaker: player, role: "user", text: input.text }];
+  let traceId: string | undefined;
   if (action === "reply") {
     const persona = personaForTest(input.dino);
-    replyText = await classicReply(persona, input.text, player);
-    lines.push({ speaker: input.dino.persona.name, role: "dino", text: replyText });
+    const spoken = await classicReply(persona, input.text, player, input.dino.persona.id);
+    replyText = spoken.text;
+    traceId = spoken.traceId;
+    lines.push({ speaker: input.dino.persona.name, role: "dino", text: replyText, traceId });
   } else if (action === "like") {
     lines.push({ speaker: input.dino.persona.name, role: "note", text: "Liked. No reply." });
   } else if (action === "ignore") {

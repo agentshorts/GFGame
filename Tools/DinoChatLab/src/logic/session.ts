@@ -47,6 +47,7 @@ export function nextMessage(partial: Omit<TranscriptMessage, "seq" | "channel" |
     contextTokens: partial.contextTokens,
     contextBudget: partial.contextBudget,
     rephrased: partial.rephrased,
+    traceId: partial.traceId,
   };
 }
 

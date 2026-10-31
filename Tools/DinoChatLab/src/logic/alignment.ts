@@ -1,4 +1,5 @@
 import type { RepBand } from "../core/types";
+import type { TraceDecision } from "./traceTypes";
 import type { Alignment, Intent, ItemStack, Want } from "./types";
 
 /** Lab rules. Alignment, Dinobook, and mango blocks are not in the game data. */
@@ -169,5 +170,15 @@ export function decide(input: DecisionInput): Decision {
     speechHint: speechHint(chosen.intent, item),
     todo: LAB_DECISION_TODO,
     smelledWant: wanted,
+  };
+}
+
+export function alignmentDecision(decision: Decision): TraceDecision {
+  const because = decision.reasons[decision.reasons.length - 1] ?? decision.intent;
+  return {
+    stage: "alignment",
+    chosen: decision.intent,
+    reason: because,
+    detail: { intent: decision.intent, hint: decision.speechHint },
   };
 }

@@ -1,10 +1,13 @@
 import { createApp, type App as VueApp } from "vue";
 import App from "./App.vue";
 import PersonaManager from "./manager/PersonaManager.vue";
+import TraceLog from "./trace/TraceLog.vue";
 import "./style.css";
 
 function rootComponent() {
-  return location.hash.startsWith("#/personas") ? PersonaManager : App;
+  if (location.hash.startsWith("#/personas")) return PersonaManager;
+  if (location.hash.startsWith("#/trace")) return TraceLog;
+  return App;
 }
 
 let app: VueApp = createApp(rootComponent());

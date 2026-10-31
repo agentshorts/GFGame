@@ -2,6 +2,9 @@
 import { ref } from "vue";
 import { SPEECH_PATTERNS, type Sentiment } from "./profile";
 import { useManager } from "./useManager";
+import TraceRow from "../trace/TraceRow.vue";
+import TraceToggle from "../trace/TraceToggle.vue";
+import { useTrace } from "../trace/useTrace";
 import "./manager.css";
 
 const {
@@ -52,6 +55,7 @@ const {
   onImport,
 } = useManager();
 
+const { enabled: tracesOn, byId: traceById } = useTrace();
 const topicName = ref("");
 const topicSentiment = ref<Sentiment>("like");
 const relSubject = ref("");
@@ -89,12 +93,16 @@ function onFile(event: Event) {
         <p class="eyebrow">Persona manager</p>
         <h1>Dino roster</h1>
         <a class="lab-link" href="#/">Back to the chat lab</a>
+        <a class="lab-link" href="#/trace">Trace log</a>
       </div>
-      <p class="status">
-        {{ username || "no name yet" }}
-        · {{ mode === "local" ? "this browser only" : "shared hub" }}
-        · memory core
-      </p>
+      <div class="status">
+        <TraceToggle />
+        <p>
+          {{ username || "no name yet" }}
+          · {{ mode === "local" ? "this browser only" : "shared hub" }}
+          · memory core
+        </p>
+      </div>
     </header>
 
     <div v-if="needsName" class="gate">
@@ -303,6 +311,7 @@ function onFile(event: Event) {
           <article v-for="(line, index) in chatLines" :key="index" class="bubble">
             <p class="who">{{ line.speaker }} · {{ line.role }}</p>
             <p>{{ line.text }}</p>
+            <TraceRow v-if="tracesOn && line.traceId" :trace="traceById(line.traceId)" />
           </article>
         </div>
         <form class="composer" @submit.prevent="send">

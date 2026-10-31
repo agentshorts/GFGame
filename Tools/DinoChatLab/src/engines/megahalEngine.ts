@@ -34,12 +34,8 @@ export function createMegahalEngine(rng?: MegaHalRng): ChatEngine {
       const hal = bots.get(request.persona.id);
       if (!hal) throw new Error(`MegaHAL was not ready for ${request.persona.name}.`);
       const generated = hal.generate(request.utterance);
-      return {
-        engine: "megahal",
-        text: (generated && generated.trim().length > 0)
-          ? generated.trim()
-          : (request.persona.fallbackReplies[0] ?? "..."),
-      };
+      if (generated && generated.trim().length > 0) return { engine: "megahal", text: generated.trim() };
+      return { engine: "megahal", text: request.persona.fallbackReplies[0] ?? "...", fellBack: true };
     },
     reset(personaId?: string) {
       if (personaId) bots.delete(personaId);

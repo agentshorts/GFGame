@@ -25,10 +25,8 @@ export function createAimlEngine(): ChatEngine {
       if (!bot) throw new Error(`AIML was not ready for ${request.persona.name}.`);
       const result = await bot.talk(request.utterance, request.persona.id);
       const text = result.response.trim();
-      return {
-        engine: "aiml",
-        text: text.length > 0 ? text : (request.persona.fallbackReplies[0] ?? "..."),
-      };
+      if (text.length > 0) return { engine: "aiml", text };
+      return { engine: "aiml", text: request.persona.fallbackReplies[0] ?? "...", fellBack: true };
     },
     reset(personaId?: string) {
       if (personaId) bots.delete(personaId);

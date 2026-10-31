@@ -19,6 +19,8 @@ export interface EngineReply {
   text: string;
   engine: EngineId;
   stats?: ReplyStats;
+  /** Set when the engine had nothing of its own and used the persona fallback. */
+  fellBack?: boolean;
 }
 
 export interface ChatEngine {

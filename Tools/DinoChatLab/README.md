@@ -78,6 +78,14 @@ A neutral-evil dino that smells a wanted material within 30 ft attacks when it t
 
 The chat demo starts with an empty pack and the player 40 ft away, so "why you running" stays a chat cue.
 
+## Trace
+
+The header switch **Trace** is on by default. Each chat reply and each Dinobook post keeps a structured trace: the line from ELIZA, AIML, RiveScript, and MegaHAL (or none), the WebLLM text when a model ran, and the persona, memory, and context window that model was given. The chosen source is a colour badge. The reason lists scores, the PG filter, steer, alignment, `{Target}` fill, and fallbacks, plus a timing for each engine.
+
+Turn Trace off to skip the extra engine calls. The **Trace log** (`#/trace`) lists chat turns, Dinobook posts, paydays, and elder picks in time order. Filter by dino or by source, then export JSON. The log is the in-memory capture for this tab. It is not a string scrape of the bubbles.
+
+Dinobook groups each button press under an event header with a timestamp, and a day rule when the date changes. All-chat keeps every earlier event, not only the latest. The player name is the one in Talk. Elder notes after `Still noted:` stay short, and a reply credits the post it hangs under.
+
 ## Dinobook feed
 
 The band under the three columns is a lab simulator. It is not a social system in the game. Elders post first, family members reply under their elder, and friendly dinos attach as side links. Event buttons are player joined, attacked, refused mango, rental downed, and summon Big Grumble.

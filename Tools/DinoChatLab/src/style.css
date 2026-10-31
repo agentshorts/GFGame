@@ -61,7 +61,25 @@ button:disabled { opacity: 0.55; cursor: wait; }
 }
 
 h1 { margin: 0.15rem 0 0; font-size: 1.7rem; font-weight: 650; }
-.lab-link { color: var(--amber); font-size: 0.86rem; }
+.lab-link { color: var(--amber); font-size: 0.86rem; margin-right: 0.75rem; }
+.trace-toggle { margin: 0 0 0.25rem; justify-content: flex-end; }
+.day-rule {
+  margin: 0.85rem 0 0.2rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.event-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.7rem;
+  align-items: baseline;
+  margin: 0.35rem 0 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--rule);
+}
+.event-head strong { font-size: 0.95rem; }
+.event-head time, .event-head span { color: var(--paper-muted); font-size: 0.78rem; }
 
 .status {
   margin: 0;

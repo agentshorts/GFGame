@@ -28,9 +28,11 @@ export function createWebLlmEngine(getClient: () => WebLlmClient | null): ChatEn
         maxTokens: request.maxTokens,
       });
       const text = result.text.trim();
+      const fellBack = text.length === 0;
       return {
         engine: "webllm",
-        text: text.length > 0 ? text : (request.persona.fallbackReplies[0] ?? "..."),
+        text: fellBack ? (request.persona.fallbackReplies[0] ?? "...") : text,
+        fellBack,
         stats: {
           modelId: client.loadedModelId,
           tokensPerSec: result.tokensPerSec,

@@ -24,6 +24,7 @@ import {
   LAB_TREE,
   loadCorePort,
   normalizeLine,
+  NOTE_TOKEN_CAP,
   pickLeader,
   portFromCore,
   POST_TOKEN_CAP,
@@ -255,6 +256,75 @@ describe("Big Grumble", () => {
       finishBrief({ familyId: "swamp", rep: -50, kills: 2, bountiesOnPlayer: 4 }),
     ]);
     expect(chaseBeatsBounty.id).toBe("chase");
+  });
+});
+
+describe("trace and credit", () => {
+  it("caps elder notes instead of restacking earlier posts", () => {
+    let memory: Record<string, string> = {};
+    let prior: string[] = [];
+    let idStart = 0;
+    const leads: string[] = [];
+    for (let step = 0; step < 4; step += 1) {
+      const result = run("attacked", { memory, priorTexts: prior, idStart });
+      const lead = result.posts.find((post) => post.role === "lead");
+      if (step === 0) {
+        expect(lead?.authorId).toBe("lanternmaw");
+        expect(lead?.content.toLowerCase()).not.toContain("still noted");
+      } else if (step === 1) {
+        expect(lead?.authorId).toBe("lanternmaw");
+        expect(lead?.content.match(/still noted/gi)).toHaveLength(1);
+        expect(lead?.content.endsWith("…")).toBe(false);
+        expect(lead!.tokens).toBeLessThan(POST_TOKEN_CAP);
+      } else {
+        expect(lead).toBeUndefined();
+        expect(result.skipped.some((skip) => skip.dinoId === "lanternmaw" && skip.reason === "duplicate")).toBe(true);
+      }
+      if (lead) leads.push(lead.content);
+      const stored = result.memory.lanternmaw ?? "";
+      expect(stored.toLowerCase()).not.toContain("still noted");
+      expect(estimateTokens(stored)).toBeLessThanOrEqual(NOTE_TOKEN_CAP);
+      memory = result.memory;
+      prior = [
+        ...prior,
+        ...result.posts.map((post) => post.content),
+        ...result.allChat.map((line) => line.text),
+      ];
+      idStart = result.nextId;
+    }
+    expect(leads).toHaveLength(2);
+    expect(estimateTokens(leads[1]!) - estimateTokens(leads[0]!)).toBeLessThanOrEqual(NOTE_TOKEN_CAP + 4);
+    expect(leads[1]!.split(/still noted:/i)).toHaveLength(2);
+  });
+
+  it("credits the welcome author, not the dino who spoke in between", () => {
+    const welcome = run("player-joined", { policy: { maxSpeakersPerEvent: 6 } });
+    expect(welcome.posts.find((post) => post.role === "lead")?.authorId).toBe("chatty-bird");
+    const ripwing = welcome.posts.find((post) => post.authorId === "ripwing");
+    expect(ripwing?.content).toContain("Chatty Bird said it");
+    expect(ripwing?.content).not.toContain("Lanternmaw said it");
+    const trace = welcome.traces.find((row) => row.dinoId === "ripwing");
+    expect(trace?.attribution?.name).toBe("Chatty Bird");
+    expect(trace?.attribution?.because).toBe("parent");
+    expect(trace?.eventLabel).toBe("Player joined");
+    expect(welcome.posts.every((post) => post.runId === welcome.runId)).toBe(true);
+  });
+
+  it("credits Big Grumble on every elder report", () => {
+    const summon = run("summon-big-grumble", { policy: { maxSpeakersPerEvent: 6 } });
+    const reports = summon.posts.filter((post) => post.role === "report");
+    expect(reports.length).toBeGreaterThan(1);
+    for (const post of reports) expect(post.content).toContain("Big Grumble asked");
+    expect(summon.traces.some((row) => row.kind === "elder" && row.chosenSource === "alignment")).toBe(true);
+  });
+
+  it("credits the payday brag for a later find", () => {
+    const pay = run("payday", { policy: { maxSpeakersPerEvent: 6 } });
+    const brag = pay.posts.find((post) => post.role === "brag-pay");
+    const mineral = pay.posts.find((post) => post.role === "mineral-find");
+    expect(brag?.authorName).toBeTruthy();
+    expect(mineral?.content).toContain(`${brag?.authorName} talked pay`);
+    expect(pay.traces.some((row) => row.kind === "payday")).toBe(true);
   });
 });
 

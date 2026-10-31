@@ -1,3 +1,4 @@
+import type { TraceEvent } from "../logic/traceTypes";
 import type { Alignment } from "../logic/types";
 
 /** Estimated-token cap for one Dinobook post. Four characters count as one token. */
@@ -128,6 +129,8 @@ export const DEFAULT_CHAT_BUDGET: ChatBudget = {
 export interface DinobookPost {
   id: string;
   at: string;
+  /** One button press. Repeated events get a new id. */
+  runId: string;
   eventId: DinobookEventId;
   authorId: string;
   authorName: string;
@@ -142,11 +145,13 @@ export interface DinobookPost {
   interest: number;
   reason: string;
   filtered: boolean;
+  traceId?: string;
 }
 
 export interface AllChatLine {
   id: string;
   at: string;
+  runId: string;
   eventId: DinobookEventId;
   speakerId: string;
   speakerName: string;
@@ -155,6 +160,7 @@ export interface AllChatLine {
   tokens: number;
   reason: string;
   filtered: boolean;
+  traceId?: string;
 }
 
 export interface PostDecision {
@@ -185,6 +191,7 @@ export interface RunInput {
   wages?: readonly WageCard[];
   at?: string;
   idStart?: number;
+  runId?: string;
 }
 
 export interface RunResult {
@@ -200,6 +207,8 @@ export interface RunResult {
   memory: Record<string, string>;
   /** Unchanged, except payday, which returns the cards after the shift. */
   wages: WageCard[];
+  runId: string;
+  traces: TraceEvent[];
 }
 
 /**
