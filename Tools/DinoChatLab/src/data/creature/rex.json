@@ -1,0 +1,1058 @@
+{
+  "schema": "creature-rules/1",
+  "species": "Rex",
+  "voice": "rex",
+  "moods": {
+    "Friendly": {
+      "noises": [
+        "hrrk",
+        "mmm"
+      ],
+      "growl": "",
+      "questions": [
+        "why your hands smell of berry?"
+      ],
+      "fallbacks": [
+        "rex blinks. that word is new."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "why (1) smell of berry?"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "rex likes berry berry."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "rex likes berry berry."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "rex is sorry you hurt."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "rex is sorry you hurt."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "rex will help."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "rex will help."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "rex family is near."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "rex family is near."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello hello. rex is glad."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello hello. rex is glad."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi hi. rex waves."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi hi. rex waves."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "rex heard a bounty and shrugged."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "rex heard a bounty and shrugged."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Wary": {
+      "noises": [
+        "hrrk",
+        "stomp"
+      ],
+      "growl": "",
+      "questions": [
+        "why you standing so close to rex?"
+      ],
+      "fallbacks": [
+        "rex tilts. say a smaller word."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "back. your (2) is too close."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "rex heard hands. hrrk"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry? rex sniffs and steps back."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry? rex sniffs and steps back."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt. rex watches your hands."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt. rex watches your hands."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help? rex does not come closer."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help? rex does not come closer."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "family stays behind rex."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "family stays behind rex."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello. rex does not blink."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello. rex does not blink."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. stay where rex can see."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. stay where rex can see."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "bounty smell. rex keeps the gap."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "bounty smell. rex keeps the gap."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Angry": {
+      "noises": [
+        "mmm",
+        "hrrk"
+      ],
+      "growl": "grrr",
+      "questions": [
+        "why you still here?"
+      ],
+      "fallbacks": [
+        "rex snaps. say it again."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) made this one bite."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "rex heard hands. mmm"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry will not fix this. rex bites."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry will not fix this. rex bites."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 12,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) made this one bite."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "rex heard hurt. mmm"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "no help. rex already called."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "no help. rex already called."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "leave rex family alone."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "leave rex family alone."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello? rex is not glad."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello? rex is not glad."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. rex shows teeth."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. rex shows teeth."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "bounty makes rex louder."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "bounty makes rex louder."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Grieving": {
+      "noises": [
+        "mnn",
+        "hrrk"
+      ],
+      "growl": "",
+      "questions": [
+        "why you talk so loud at rex?"
+      ],
+      "fallbacks": [
+        "rex sighs. the word is gone."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 2,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) is quiet now."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "rex heard hands. mnn"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry is sweet. rex is not."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry is sweet. rex is not."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt stays. rex remembers."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt stays. rex remembers."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help came late for rex."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help came late for rex."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 12,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "rex family is gone."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "rex family is gone."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello falls quiet around rex."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello falls quiet around rex."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. rex does not wave."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. rex does not wave."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "a bounty cannot bring rex family back."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "a bounty cannot bring rex family back."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Bountied": {
+      "noises": [
+        "tik",
+        "hrrk"
+      ],
+      "growl": "",
+      "questions": [
+        "why your name on the post?"
+      ],
+      "fallbacks": [
+        "rex taps the post. that word is not on it."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) has a coin on it."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "rex heard hands. tik"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry does not pay the bounty on you."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry does not pay the bounty on you."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt or not, the bounty stands. rex knows."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt or not, the bounty stands. rex knows."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help will not clear rex bounty."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help will not clear rex bounty."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "rex family read the bounty too."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "rex family read the bounty too."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello, bounty-friend. rex counted the coin."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello, bounty-friend. rex counted the coin."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. the post already named you. rex saw."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. the post already named you. rex saw."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 11,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "the bounty is posted. rex can smell the coin."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "the bounty is posted. rex can smell the coin."
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "events": {
+    "hurt_by_player": [
+      "{player} hurt rex.",
+      "{player} made rex yelp."
+    ],
+    "bounty_posted": [
+      "a bounty is posted on {player}.",
+      "{player} has a coin on the post. rex saw."
+    ],
+    "family_lost": [
+      "{player} lost the rex family. rex family is gone.",
+      "{player} left rex family quiet."
+    ],
+    "called_for_help": [
+      "rex calls for help.",
+      "{player} made rex call the others."
+    ],
+    "pestered": [
+      "{player} pestered rex. why your hands smell of berry?",
+      "{player} poked rex again."
+    ]
+  }
+}

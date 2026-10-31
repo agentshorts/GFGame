@@ -117,7 +117,7 @@ function timingBits(trace: TraceEvent): string {
 .badge[data-source="aiml"] { background: #9fd6c8; }
 .badge[data-source="rivescript"] { background: #d7c4f3; }
 .badge[data-source="megahal"] { background: #b7d39a; }
-.badge[data-source="webllm"] { background: #9ec5ea; }
+.badge[data-source="creature"] { background: #b7d7a8; }
 .badge[data-source="canned"] { background: #e7b89a; }
 .badge[data-source="fallback"] { background: #e7a090; }
 .badge[data-source="alignment"] { background: #f3e29a; }

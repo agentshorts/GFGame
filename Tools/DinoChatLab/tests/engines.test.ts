@@ -5,7 +5,6 @@ import { createAimlEngine } from "../src/engines/aimlEngine";
 import { createElizaEngine } from "../src/engines/elizaEngine";
 import { createMegahalEngine } from "../src/engines/megahalEngine";
 import { createRiveScriptEngine } from "../src/engines/rivescriptEngine";
-import { createWebLlmEngine } from "../src/engines/webllmEngine";
 import type { EngineRequest } from "../src/engines/types";
 import { parsePersona } from "../src/logic/persona";
 import { fillTarget } from "../src/logic/fillTarget";
@@ -84,29 +83,5 @@ describe("classic engines", () => {
       maxTokens: 80,
     });
     expect(shown.text.length).toBeLessThanOrEqual(grumble.maxReplyLength);
-  });
-});
-
-describe("webllm engine", () => {
-  it("uses a fake client and refuses to run with no model", async () => {
-    const client = {
-      loadedModelId: "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
-      fromCache: true,
-      vramMb: 944,
-      complete: async () => ({
-        text: "Hello from the model",
-        tokensPerSec: 12,
-        promptTokens: 3,
-        completionTokens: 4,
-        runtimeStatsText: "decode 12 tok/s",
-      }),
-    };
-    const engine = createWebLlmEngine(() => client);
-    const reply = await engine.reply(request(grumble, "hi"));
-    expect(reply.text).toBe("Hello from the model");
-    expect(reply.stats?.tokensPerSec).toBe(12);
-    expect(reply.stats?.fromCache).toBe(true);
-    const empty = createWebLlmEngine(() => null);
-    await expect(empty.reply(request(grumble, "hi"))).rejects.toThrow(/Load a WebLLM model/);
   });
 });

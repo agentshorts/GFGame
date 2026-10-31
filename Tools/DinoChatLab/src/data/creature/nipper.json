@@ -1,0 +1,1058 @@
+{
+  "schema": "creature-rules/1",
+  "species": "Nipper",
+  "voice": "nipper",
+  "moods": {
+    "Friendly": {
+      "noises": [
+        "mip mip",
+        "nik"
+      ],
+      "growl": "",
+      "questions": [
+        "why your hands smell of berry?"
+      ],
+      "fallbacks": [
+        "nipper blinks. that word is new."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "why (1) smell of berry?"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "nipper likes berry berry."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "nipper likes berry berry."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "nipper is sorry you hurt."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "nipper is sorry you hurt."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "nipper will help."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "nipper will help."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "nipper family is near."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "nipper family is near."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello hello. nipper is glad."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello hello. nipper is glad."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi hi. nipper waves."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi hi. nipper waves."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "nipper heard a bounty and shrugged."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "nipper heard a bounty and shrugged."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Wary": {
+      "noises": [
+        "hrrk",
+        "nik"
+      ],
+      "growl": "",
+      "questions": [
+        "why you standing so close to nipper?"
+      ],
+      "fallbacks": [
+        "nipper tilts. say a smaller word."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "back. your (2) is too close."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "nipper heard hands. hrrk"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry? nipper sniffs and steps back."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry? nipper sniffs and steps back."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt. nipper watches your hands."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt. nipper watches your hands."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help? nipper does not come closer."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help? nipper does not come closer."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "family stays behind nipper."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "family stays behind nipper."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello. nipper does not blink."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello. nipper does not blink."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. stay where nipper can see."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. stay where nipper can see."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "bounty smell. nipper keeps the gap."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "bounty smell. nipper keeps the gap."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Angry": {
+      "noises": [
+        "nik nik",
+        "mip"
+      ],
+      "growl": "grrr",
+      "questions": [
+        "why you still here?"
+      ],
+      "fallbacks": [
+        "nipper snaps. say it again."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) made this one bite."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "nipper heard hands. nik nik"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry will not fix this. nipper bites."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry will not fix this. nipper bites."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 12,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) made this one bite."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "nipper heard hurt. nik nik"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "no help. nipper already called."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "no help. nipper already called."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "leave nipper family alone."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "leave nipper family alone."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello? nipper is not glad."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello? nipper is not glad."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. nipper shows teeth."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. nipper shows teeth."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "bounty makes nipper louder."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "bounty makes nipper louder."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Grieving": {
+      "noises": [
+        "mnn",
+        "nik"
+      ],
+      "growl": "",
+      "questions": [
+        "why you talk so loud at nipper?"
+      ],
+      "fallbacks": [
+        "nipper sighs. the word is gone."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 2,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) is quiet now."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "nipper heard hands. mnn"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry is sweet. nipper is not."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry is sweet. nipper is not."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt stays. nipper remembers."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt stays. nipper remembers."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help came late for nipper."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help came late for nipper."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 12,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "nipper family is gone."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "nipper family is gone."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello falls quiet around nipper."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello falls quiet around nipper."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. nipper does not wave."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. nipper does not wave."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "a bounty cannot bring nipper family back."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "a bounty cannot bring nipper family back."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Bountied": {
+      "noises": [
+        "tik",
+        "mip"
+      ],
+      "growl": "",
+      "questions": [
+        "why your name on the post?"
+      ],
+      "fallbacks": [
+        "nipper taps the post. that word is not on it."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) has a coin on it."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "nipper heard hands. tik"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry does not pay the bounty on you."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry does not pay the bounty on you."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt or not, the bounty stands. nipper knows."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt or not, the bounty stands. nipper knows."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help will not clear nipper bounty."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help will not clear nipper bounty."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "nipper family read the bounty too."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "nipper family read the bounty too."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello, bounty-friend. nipper counted the coin."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello, bounty-friend. nipper counted the coin."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. the post already named you. nipper saw."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. the post already named you. nipper saw."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 11,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "the bounty is posted. nipper can smell the coin."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "the bounty is posted. nipper can smell the coin."
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "events": {
+    "hurt_by_player": [
+      "{player} hurt nipper.",
+      "{player} made nipper yelp."
+    ],
+    "bounty_posted": [
+      "a bounty is posted on {player}.",
+      "{player} has a coin on the post. nipper saw."
+    ],
+    "family_lost": [
+      "{player} lost the nipper family. nipper family is gone.",
+      "{player} left nipper family quiet."
+    ],
+    "called_for_help": [
+      "nipper calls for help.",
+      "{player} made nipper call the others."
+    ],
+    "pestered": [
+      "{player} pestered nipper. why your hands smell of berry?",
+      "{player} poked nipper again."
+    ]
+  }
+}

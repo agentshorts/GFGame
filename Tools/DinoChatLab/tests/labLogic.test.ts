@@ -50,12 +50,12 @@ describe("transcript download", () => {
 });
 
 describe("lab steering default", () => {
-  it("leaves the context model off and follows the steered intent", () => {
+  it("keeps classic intent steering and does not steer with a model", () => {
     const source = readFileSync(new URL("../src/composables/useLab.ts", import.meta.url), "utf8");
-    expect(source).toMatch(/const steerWithModel = ref\(false\)/);
-    expect(source).toContain("reconcileSteeredDecision(");
-    expect(source).toContain("speechHint: finalDecision.speechHint");
-    expect(source).toContain("reasons: [plan.reason, ...finalDecision.reasons]");
+    expect(source).not.toContain("steerWithModel");
+    expect(source).toContain("pickSteer(");
+    expect(source).toContain("speechHint: decision.speechHint");
+    expect(source).toContain("reasons: [plan.reason, ...decision.reasons]");
     expect(source).toContain("revokeObjectUrlLater(url)");
     expect(source).not.toContain("URL.revokeObjectURL");
   });

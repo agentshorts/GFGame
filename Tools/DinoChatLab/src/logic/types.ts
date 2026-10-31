@@ -5,9 +5,9 @@ export const GAME_CHAT_MAX_CHARS = 200;
 
 export type ChatMode = "direct" | "all-chat" | "event";
 
-export type EngineId = "eliza" | "aiml" | "rivescript" | "megahal" | "webllm";
+export type EngineId = "creature" | "eliza" | "aiml" | "rivescript" | "megahal";
 
-export type LineEngineId = "eliza" | "aiml" | "rivescript" | "megahal";
+export type LineEngineId = EngineId;
 
 export const ALIGNMENTS = ["LG", "NG", "CG", "LN", "N", "CN", "LE", "NE", "CE"] as const;
 

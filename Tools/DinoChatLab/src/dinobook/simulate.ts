@@ -1,5 +1,6 @@
 import { estimateTokens } from "../logic/context";
 import { DINOBOOK_EVENTS } from "./types";
+import { dinobookCreatureBark } from "./creaturePosts";
 import { idleLlm, nextTraceId, roundMs, templateCandidates } from "../logic/trace";
 import type { LlmTrace, TraceAttribution, TraceDecision, TraceEvent, TraceKind } from "../logic/traceTypes";
 import { emptyBrief } from "./corePort";
@@ -190,7 +191,7 @@ export function runDinobookEvent(input: RunInput, tree: FamilyTree = LAB_TREE): 
       finalText: post.content,
       chosenSource: "canned",
       reason: `${draft.reason} ${creditReason(draft.attribution, previous)}`.trim(),
-      candidates: templateCandidates(post.content, ms),
+      candidates: templateCandidates(post.content, ms, dinobookCreatureBark(bag.eventId, draft.dino.id, player)),
       llm,
       decisions: [
         ...draft.decisions,
@@ -538,7 +539,11 @@ function speakAllChat(args: {
       finalText: accepted.text,
       chosenSource: "canned",
       reason: `${reason} ${creditReason(credit, priorSpeaker)}`.trim(),
-      candidates: templateCandidates(accepted.text, ms),
+      candidates: templateCandidates(
+        accepted.text,
+        ms,
+        dinobookCreatureBark(args.eventId, speaker.id, args.player),
+      ),
       llm: postLlm(speaker, "all-chat", "", feedContext(args.bag.eventLabel, args.plan, args.player, args.posts)),
       decisions: [
         { stage: "pick", chosen: "canned", reason: "All-chat keeps the demand template inside the token budget." },
@@ -839,7 +844,11 @@ function speakPayday(
     finalText: accepted.text,
     chosenSource: "canned",
     reason: "Leader payday line, inside the all-chat budget.",
-    candidates: templateCandidates(accepted.text, ms),
+    candidates: templateCandidates(
+      accepted.text,
+      ms,
+      dinobookCreatureBark(ctx.input.event, leader.id, ctx.input.playerName ?? ""),
+    ),
     llm: postLlm(leader, "payday", "", feedContext(ctx.bag.eventLabel, "payday", "", ctx.posts)),
     decisions: [{ stage: "payday", chosen: leader.id, reason: "The highest shift speaks the payday line in all-chat." }],
     timings: { template: ms },
@@ -900,7 +909,11 @@ function speakGrumble(
     finalText: accepted.text,
     chosenSource: "canned",
     reason: `All-chat follows the elder verdict: ${approach}.`,
-    candidates: templateCandidates(accepted.text, ms),
+    candidates: templateCandidates(
+      accepted.text,
+      ms,
+      dinobookCreatureBark(ctx.input.event, grumble.id, ctx.player),
+    ),
     llm: postLlm(grumble, "verdict", "", feedContext(ctx.bag.eventLabel, approach, ctx.player, ctx.posts)),
     decisions: [{ stage: "elder", chosen: approach, reason: `The canned giant line matches ${approach}.` }],
     timings: { template: ms },

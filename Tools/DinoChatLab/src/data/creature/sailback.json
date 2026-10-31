@@ -1,0 +1,1058 @@
+{
+  "schema": "creature-rules/1",
+  "species": "Sailback",
+  "voice": "sailback",
+  "moods": {
+    "Friendly": {
+      "noises": [
+        "hroon",
+        "glub"
+      ],
+      "growl": "",
+      "questions": [
+        "why your hands smell of berry?"
+      ],
+      "fallbacks": [
+        "sailback blinks. that word is new."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "why (1) smell of berry?"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "sailback likes berry berry."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "sailback likes berry berry."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "sailback is sorry you hurt."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "sailback is sorry you hurt."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "sailback will help."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "sailback will help."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "sailback family is near."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "sailback family is near."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello hello. sailback is glad."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello hello. sailback is glad."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi hi. sailback waves."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi hi. sailback waves."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "sailback heard a bounty and shrugged."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "sailback heard a bounty and shrugged."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Wary": {
+      "noises": [
+        "hrrk",
+        "hroon"
+      ],
+      "growl": "",
+      "questions": [
+        "why you standing so close to sailback?"
+      ],
+      "fallbacks": [
+        "sailback tilts. say a smaller word."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "back. your (2) is too close."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "sailback heard hands. hrrk"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry? sailback sniffs and steps back."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry? sailback sniffs and steps back."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt. sailback watches your hands."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt. sailback watches your hands."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help? sailback does not come closer."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help? sailback does not come closer."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "family stays behind sailback."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "family stays behind sailback."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello. sailback does not blink."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello. sailback does not blink."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. stay where sailback can see."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. stay where sailback can see."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "bounty smell. sailback keeps the gap."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "bounty smell. sailback keeps the gap."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Angry": {
+      "noises": [
+        "glub glub",
+        "hroon"
+      ],
+      "growl": "grrr",
+      "questions": [
+        "why you still here?"
+      ],
+      "fallbacks": [
+        "sailback snaps. say it again."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) made this one bite."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "sailback heard hands. glub glub"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry will not fix this. sailback bites."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry will not fix this. sailback bites."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 12,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) made this one bite."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "sailback heard hurt. glub glub"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "no help. sailback already called."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "no help. sailback already called."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "leave sailback family alone."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "leave sailback family alone."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello? sailback is not glad."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello? sailback is not glad."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. sailback shows teeth."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. sailback shows teeth."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "bounty makes sailback louder."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "bounty makes sailback louder."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Grieving": {
+      "noises": [
+        "mnn",
+        "hroon"
+      ],
+      "growl": "",
+      "questions": [
+        "why you talk so loud at sailback?"
+      ],
+      "fallbacks": [
+        "sailback sighs. the word is gone."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 2,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) is quiet now."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "sailback heard hands. mnn"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry is sweet. sailback is not."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry is sweet. sailback is not."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt stays. sailback remembers."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt stays. sailback remembers."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help came late for sailback."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help came late for sailback."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 12,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "sailback family is gone."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "sailback family is gone."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello falls quiet around sailback."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello falls quiet around sailback."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. sailback does not wave."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. sailback does not wave."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "a bounty cannot bring sailback family back."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "a bounty cannot bring sailback family back."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Bountied": {
+      "noises": [
+        "tik",
+        "hroon"
+      ],
+      "growl": "",
+      "questions": [
+        "why your name on the post?"
+      ],
+      "fallbacks": [
+        "sailback taps the post. that word is not on it."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) has a coin on it."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "sailback heard hands. tik"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry does not pay the bounty on you."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry does not pay the bounty on you."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt or not, the bounty stands. sailback knows."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt or not, the bounty stands. sailback knows."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help will not clear sailback bounty."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help will not clear sailback bounty."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "sailback family read the bounty too."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "sailback family read the bounty too."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello, bounty-friend. sailback counted the coin."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello, bounty-friend. sailback counted the coin."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. the post already named you. sailback saw."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. the post already named you. sailback saw."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 11,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "the bounty is posted. sailback can smell the coin."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "the bounty is posted. sailback can smell the coin."
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "events": {
+    "hurt_by_player": [
+      "{player} hurt sailback.",
+      "{player} made sailback yelp."
+    ],
+    "bounty_posted": [
+      "a bounty is posted on {player}.",
+      "{player} has a coin on the post. sailback saw."
+    ],
+    "family_lost": [
+      "{player} lost the sailback family. sailback family is gone.",
+      "{player} left sailback family quiet."
+    ],
+    "called_for_help": [
+      "sailback calls for help.",
+      "{player} made sailback call the others."
+    ],
+    "pestered": [
+      "{player} pestered sailback. why your hands smell of berry?",
+      "{player} poked sailback again."
+    ]
+  }
+}

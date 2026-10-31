@@ -16,7 +16,6 @@
     "help:screenshots": "node scripts/capture-help.mjs"
   },
   "dependencies": {
-    "@mlc-ai/web-llm": "^0.2.86",
     "aiml.js": "^1.0.2",
     "eliza-core": "^1.2.0-beta.0",
     "megahal": "^1.0.1",

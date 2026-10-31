@@ -42,7 +42,7 @@ export interface TurnResult {
 let enginePromise: ReturnType<typeof createEngines> | null = null;
 
 function engines() {
-  enginePromise ??= createEngines(() => null);
+  enginePromise ??= createEngines();
   return enginePromise;
 }
 
@@ -79,7 +79,7 @@ async function classicReply(persona: Persona, utterance: string, playerName: str
     inputText: utterance,
     candidates: [
       ...candidates,
-      { source: "webllm", text: null, ms: 0, note: "model not loaded" },
+      { source: "creature", text: null, ms: 0, note: "creature not asked" },
     ],
     chosenSource: "eliza",
     finalText: presented.text,

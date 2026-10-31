@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { decide, type DecisionInput } from "../src/logic/alignment";
-import { buildWebLlmMessages } from "../src/logic/prompt";
+import { buildContextMessages } from "../src/logic/prompt";
 import {
   assembleTurn,
   blankRelationship,
@@ -148,13 +148,13 @@ describe("budget", () => {
     expect(young[0]?.content).not.toContain("kills");
   });
 
-  it("trims WebLLM history to the budget and keeps the newest line", () => {
+  it("trims history to the budget and keeps the newest line", () => {
     const history = Array.from({ length: 40 }, (_, index) => ({
       speaker: index % 2 === 0 ? "Pip" : "Big Grumble",
       role: (index % 2 === 0 ? "user" : "dino") as "user" | "dino",
       text: `turn ${index} ${"word ".repeat(80)}`,
     }));
-    const messages = buildWebLlmMessages("You are Big Grumble. ".repeat(100), history, "Big Grumble", 4096, 80);
+    const messages = buildContextMessages("You are Big Grumble. ".repeat(100), history, "Big Grumble", 4096, 80);
     expect(messageTokenEstimate(messages)).toBeLessThanOrEqual(4096 - 80);
     expect(messages.at(-1)?.content).toContain("turn 39");
     expect(messages.some((message) => message.content.includes("turn 0"))).toBe(false);

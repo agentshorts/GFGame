@@ -1,0 +1,1058 @@
+{
+  "schema": "creature-rules/1",
+  "species": "Raptor",
+  "voice": "raptor",
+  "moods": {
+    "Friendly": {
+      "noises": [
+        "kek",
+        "skr"
+      ],
+      "growl": "",
+      "questions": [
+        "why your hands smell of berry?"
+      ],
+      "fallbacks": [
+        "raptor blinks. that word is new."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "why (1) smell of berry?"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "raptor likes berry berry."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "raptor likes berry berry."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "raptor is sorry you hurt."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "raptor is sorry you hurt."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "raptor will help."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "raptor will help."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "raptor family is near."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "raptor family is near."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello hello. raptor is glad."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello hello. raptor is glad."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi hi. raptor waves."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi hi. raptor waves."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "raptor heard a bounty and shrugged."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "raptor heard a bounty and shrugged."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Wary": {
+      "noises": [
+        "hrrk",
+        "kek"
+      ],
+      "growl": "",
+      "questions": [
+        "why you standing so close to raptor?"
+      ],
+      "fallbacks": [
+        "raptor tilts. say a smaller word."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "back. your (2) is too close."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "raptor heard hands. hrrk"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry? raptor sniffs and steps back."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry? raptor sniffs and steps back."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt. raptor watches your hands."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt. raptor watches your hands."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help? raptor does not come closer."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help? raptor does not come closer."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "family stays behind raptor."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "family stays behind raptor."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello. raptor does not blink."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello. raptor does not blink."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. stay where raptor can see."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. stay where raptor can see."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "bounty smell. raptor keeps the gap."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "bounty smell. raptor keeps the gap."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Angry": {
+      "noises": [
+        "skr skr",
+        "kek"
+      ],
+      "growl": "grrr",
+      "questions": [
+        "why you still here?"
+      ],
+      "fallbacks": [
+        "raptor snaps. say it again."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) made this one bite."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "raptor heard hands. skr skr"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry will not fix this. raptor bites."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry will not fix this. raptor bites."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 12,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) made this one bite."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "raptor heard hurt. skr skr"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "no help. raptor already called."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "no help. raptor already called."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "leave raptor family alone."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "leave raptor family alone."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello? raptor is not glad."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello? raptor is not glad."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. raptor shows teeth."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. raptor shows teeth."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "bounty makes raptor louder."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "bounty makes raptor louder."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Grieving": {
+      "noises": [
+        "mnn",
+        "kek"
+      ],
+      "growl": "",
+      "questions": [
+        "why you talk so loud at raptor?"
+      ],
+      "fallbacks": [
+        "raptor sighs. the word is gone."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 2,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) is quiet now."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "raptor heard hands. mnn"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry is sweet. raptor is not."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry is sweet. raptor is not."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt stays. raptor remembers."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt stays. raptor remembers."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help came late for raptor."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help came late for raptor."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 12,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "raptor family is gone."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "raptor family is gone."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello falls quiet around raptor."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello falls quiet around raptor."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. raptor does not wave."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. raptor does not wave."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "a bounty cannot bring raptor family back."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "a bounty cannot bring raptor family back."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Bountied": {
+      "noises": [
+        "tik",
+        "kek"
+      ],
+      "growl": "",
+      "questions": [
+        "why your name on the post?"
+      ],
+      "fallbacks": [
+        "raptor taps the post. that word is not on it."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) has a coin on it."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "raptor heard hands. tik"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry does not pay the bounty on you."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry does not pay the bounty on you."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt or not, the bounty stands. raptor knows."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt or not, the bounty stands. raptor knows."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help will not clear raptor bounty."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help will not clear raptor bounty."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "raptor family read the bounty too."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "raptor family read the bounty too."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello, bounty-friend. raptor counted the coin."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello, bounty-friend. raptor counted the coin."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. the post already named you. raptor saw."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. the post already named you. raptor saw."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 11,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "the bounty is posted. raptor can smell the coin."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "the bounty is posted. raptor can smell the coin."
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "events": {
+    "hurt_by_player": [
+      "{player} hurt raptor.",
+      "{player} made raptor yelp."
+    ],
+    "bounty_posted": [
+      "a bounty is posted on {player}.",
+      "{player} has a coin on the post. raptor saw."
+    ],
+    "family_lost": [
+      "{player} lost the raptor family. raptor family is gone.",
+      "{player} left raptor family quiet."
+    ],
+    "called_for_help": [
+      "raptor calls for help.",
+      "{player} made raptor call the others."
+    ],
+    "pestered": [
+      "{player} pestered raptor. why your hands smell of berry?",
+      "{player} poked raptor again."
+    ]
+  }
+}

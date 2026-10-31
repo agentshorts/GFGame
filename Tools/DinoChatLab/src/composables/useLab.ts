@@ -1,12 +1,10 @@
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
+import { CREATURE_MOODS, CREATURE_SPECIES, type CreatureMood, type CreatureSpecies } from "../data/creature/types";
 import { loadBundledPersonas } from "../data/loadPersonas";
 import { createEngines } from "../engines";
 import { ENGINE_CHOICES } from "../engines/types";
-import type { WebLlmCompletion } from "../engines/types";
-import { createBrowserWebLlm, detectWebGpu, modelChoice } from "../engines/webllmBrowser";
-import type { LoadProgress } from "../engines/webllmBrowser";
-import { alignmentDecision, decide, DEFAULT_SMELL_FT, hintItem, type Decision, type DecisionInput } from "../logic/alignment";
-import { createBrainPool } from "../logic/brainPool";
+import { speciesForPersona } from "../engines/creatureEliza";
+import { alignmentDecision, decide, DEFAULT_SMELL_FT, type Decision, type DecisionInput } from "../logic/alignment";
 import { contextBlob, type ContextState } from "../logic/context";
 import {
   applyAffinity,
@@ -23,9 +21,7 @@ import {
   resizeWindow,
   scoreInterest,
   shouldSummarize,
-  summarizePrompt,
   windowTokens,
-  clampSummary,
   type DinoWindow,
 } from "../core/memory";
 import { affinityDelta, asksForPlayerRecord, statsDigest } from "../core/stats";
@@ -47,7 +43,7 @@ import {
 } from "../core/types";
 import { revokeObjectUrlLater } from "../logic/download";
 import { clampChatText, presentReply } from "../logic/present";
-import { buildSystemPrompt, buildWebLlmMessages } from "../logic/prompt";
+import { buildSystemPrompt, buildContextMessages } from "../logic/prompt";
 import {
   activePersonas,
   nextMessage,
@@ -57,24 +53,20 @@ import {
   transcriptToJson,
 } from "../logic/session";
 import {
-  buildRephraseMessages,
-  buildSteerMessages,
   describeWorld,
-  parseModelSteer,
   pickSteer,
-  reconcileSteeredDecision,
   steerDecision,
 } from "../logic/steer";
 import {
   buildChatTrace,
   CLASSIC_SOURCES,
+  idleLlm,
   nextTraceId,
   probeClassic,
   recordTrace,
   renderPrompt,
   roundMs,
   traceEnabled,
-  type LlmTrace,
   type TraceCandidate,
   type TraceSource,
 } from "../logic/trace";
@@ -85,7 +77,6 @@ import {
   type ItemStack,
   type LineEngineId,
   type Persona,
-  type ReplyStats,
   type TranscriptMessage,
 } from "../logic/types";
 
@@ -104,11 +95,12 @@ export function useLab() {
   let storage = liveStorage();
   bindStorage(storage);
   const personas = loadBundledPersonas();
-  const browser = createBrowserWebLlm();
-  const engines = createEngines(() => (browser.loadedModelId ? browser : null));
+  const engines = createEngines();
 
   const mode = ref<ChatMode>("direct");
-  const engineId = ref<LineEngineId>("eliza");
+  const engineId = ref<LineEngineId>("creature");
+  const mood = ref<CreatureMood>("Friendly");
+  const species = ref<CreatureSpecies>(speciesForPersona(personas[0]?.id ?? ""));
   const selectedId = ref(personas[0]?.id ?? "big-grumble");
   const checkedIds = ref(personas.map((persona) => persona.id));
   const playerName = ref("");
@@ -144,52 +136,11 @@ export function useLab() {
   const allChatBudget = computed(() => knobs.value.allChatBudget);
   const activeBudget = computed(() => (mode.value === "all-chat" ? knobs.value.allChatBudget : knobs.value.contextBudget));
 
-  const webGpu = ref({ ok: false, detail: "Checking WebGPU…" });
-  const modelId = ref(browser.defaultModelId ?? "");
-  const loadProgress = ref<LoadProgress>({ progress: 0, text: "" });
-  const modelError = ref("");
-  const modelLoading = ref(false);
-  const loadedModelId = ref<string | null>(null);
-  const fromCache = ref(false);
-  const lastStats = ref<ReplyStats | null>(null);
-  /** Off until the lab opts in. A loaded model is slow, and it can disagree with the rule intent. */
-  const steerWithModel = ref(false);
-  const rephraseWithModel = ref(false);
-
   const lineEngines = ENGINE_CHOICES.filter((choice) => !choice.needsModel);
   const selected = computed(() => personas.find((persona) => persona.id === selectedId.value) ?? personas[0]!);
   const roster = computed(() => activePersonas(personas, mode.value, selectedId.value, checkedIds.value));
-  const brain = createBrainPool({
-    engine: {
-      get loadedModelId() {
-        return browser.loadedModelId;
-      },
-      complete: (args) => browser.complete({
-        messages: args.messages,
-        temperature: args.temperature,
-        maxTokens: args.maxTokens,
-      }),
-    },
-    classic: async (turn) => {
-      const persona = personas.find((item) => item.id === turn.dinoId);
-      if (!persona) return { text: "...", source: "fallback" };
-      const reply = await engines[engineId.value].reply({
-        persona,
-        history: turn.recentTurns.map((item) => ({
-          speaker: item.speaker,
-          role: item.role === "dino" || item.role === "system" ? item.role : "user",
-          text: item.text,
-        })),
-        utterance: turn.utterance,
-        mode: mode.value,
-        systemPrompt: turn.personaBlock,
-        temperature: turn.temperature,
-        maxTokens: turn.maxTokens,
-        peerNames: peerNames(roster.value, turn.dinoId),
-        contextBudget: turn.budget,
-      });
-      return { text: reply.text, source: engineId.value };
-    },
+  watch(selectedId, (id) => {
+    species.value = speciesForPersona(id);
   });
 
   function alignmentFor(persona: Persona): Alignment {
@@ -369,10 +320,6 @@ export function useLab() {
     link.click();
     revokeObjectUrlLater(url);
   }
-
-  onMounted(async () => {
-    webGpu.value = await detectWebGpu();
-  });
 
   function markPromptDirty() {
     promptDirty.value = true;
@@ -576,68 +523,13 @@ export function useLab() {
     };
   }
 
-  function statsFrom(result: WebLlmCompletion): ReplyStats {
-    return {
-      modelId: browser.loadedModelId ?? undefined,
-      tokensPerSec: result.tokensPerSec,
-      prefillTokensPerSec: result.prefillTokensPerSec,
-      promptTokens: result.promptTokens,
-      completionTokens: result.completionTokens,
-      vramMb: browser.vramMb,
-      bufferMb: browser.bufferMb,
-      runtimeStatsText: result.runtimeStatsText,
-      fromCache: browser.fromCache,
-    };
+  function talkSpecies(persona: Persona): CreatureSpecies {
+    if (persona.id === selected.value.id) return species.value;
+    return speciesForPersona(persona.id);
   }
 
-  async function maybeSteer(
-    persona: Persona,
-    decision: Decision,
-    window: DinoWindow,
-    relationshipText: string,
-  ): Promise<{ intent: Decision["intent"]; note: string; stats?: ReplyStats; window: DinoWindow; raw?: string; ms?: number }> {
-    if (!steerWithModel.value || !browser.loadedModelId) {
-      return { intent: decision.intent, note: "", window };
-    }
-    const started = performance.now();
-    try {
-      const result = await browser.complete({
-        messages: buildSteerMessages(steerState(window, relationshipText), decision, persona.name, window.budget),
-        temperature: temperature.value,
-        maxTokens: Math.max(16, Math.min(120, Math.floor(maxTokens.value))),
-      });
-      const parsed = parseModelSteer(result.text, decision.intent);
-      let next = window;
-      if (parsed.summary) {
-        next = {
-          ...window,
-          memory: {
-            ...window.memory,
-            summary: clampSummary(parsed.summary, knobs.value.dinoSummaryCap),
-            updatedAt: new Date().toISOString(),
-          },
-        };
-      }
-      const note = parsed.usedModel
-        ? `Context model chose ${parsed.intent}.`
-        : "Context model returned no intent. The alignment module stands.";
-      return {
-        intent: parsed.intent,
-        note,
-        stats: statsFrom(result),
-        window: next,
-        raw: result.text,
-        ms: roundMs(performance.now() - started),
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        intent: decision.intent,
-        note: `Context model failed (${message}). The alignment module stands.`,
-        window,
-        ms: roundMs(performance.now() - started),
-      };
-    }
+  function isClassic(id: LineEngineId): id is (typeof CLASSIC_SOURCES)[number] {
+    return (CLASSIC_SOURCES as readonly string[]).includes(id);
   }
 
   async function speak(
@@ -700,7 +592,7 @@ export function useLab() {
         detail: plan.reason,
         metadata,
         engine: engineId.value,
-        modelId: browser.loadedModelId,
+        modelId: null,
         promptTokens: null,
         completionTokens: null,
         durationMs: Math.round(performance.now() - started),
@@ -731,7 +623,7 @@ export function useLab() {
           memory: rel.summary,
           context: `budget ${activeBudget.value}\n${describeWorld(worldInput, decision.intent)}`,
           prompt: "",
-          loaded: Boolean(browser.loadedModelId),
+          loaded: false,
         },
         pickReason: plan.reason,
       }));
@@ -763,24 +655,15 @@ export function useLab() {
         role: speakerIsDino ? "dino" : "user",
       }, world, split).window;
     }
-    const steered = await maybeSteer(persona, decision, window, rel.summary);
-    window = steered.window;
-    const finalDecision = reconcileSteeredDecision(
-      decision,
-      steered.intent,
-      steered.note,
-      hintItem(worldInput),
-    );
-    metadata.intent = finalDecision.intent;
     const steer = pickSteer({
       mode: mode.value,
       speaker: heard.speaker,
       userText: heard.text,
-      intent: steered.intent,
+      intent: decision.intent,
       cues: persona.cues,
     });
     const asking = elder && asksForPlayerRecord(heard.text);
-    const personaPrompt = promptFor(persona, finalDecision);
+    const personaPrompt = promptFor(persona, decision);
     const memoryText = [window.memory.summary, rel.summary].filter((part) => part.length > 0).join("\n");
     const contextText = `budget ${window.budget}\n${contextBlob(steerState(window, rel.summary))}`;
     const history = window.turns.map((turn) => ({
@@ -788,31 +671,20 @@ export function useLab() {
       role: turn.role ?? "user" as const,
       text: turn.text,
     }));
-    const lineMessages = buildWebLlmMessages(
+    const lineMessages = buildContextMessages(
       personaPrompt,
       history,
       persona.name,
       window.budget,
       maxTokens.value,
     );
-    const steerMessages = buildSteerMessages(steerState(window, rel.summary), decision, persona.name, window.budget);
-    let llm: LlmTrace = {
-      text: steered.raw?.trim() || null,
-      ms: steered.ms ?? 0,
+    const llm = idleLlm({
       persona: personaPrompt,
       memory: memoryText,
       context: contextText,
-      prompt: renderPrompt(steered.raw ? steerMessages : lineMessages),
-      loaded: Boolean(browser.loadedModelId),
-      steerText: steered.raw ?? null,
-      steerMs: steered.ms,
-    };
+      prompt: renderPrompt(lineMessages),
+    });
     let line = "";
-    let rephrased = false;
-    let fromBrain = false;
-    let stats = steered.stats;
-    let promptTokens: number | null = null;
-    let completionTokens: number | null = null;
     let chosenSource: TraceSource = asking ? "stats" : engineId.value;
     let fallbackReason: string | undefined;
     let candidates: TraceCandidate[] = [];
@@ -827,109 +699,42 @@ export function useLab() {
         maxTokens: maxTokens.value,
         peerNames: peerNames(roster.value, persona.id),
         contextBudget: window.budget,
+        species: talkSpecies(persona),
+        mood: mood.value,
+        playerName: playerName.value.trim(),
       };
-      if (browser.loadedModelId) {
-        const pooled = await brain.ask({
-          dinoId: persona.id,
-          personaName: persona.name,
-          personaBlock: personaPrompt,
-          worldNote: window.worldNote,
-          dinoSummary: window.memory.summary,
-          relationshipSummary: rel.summary,
-          subjectName: heard.speaker,
-          elder,
-          playerRecord: elder ? record : "",
-          recentTurns: window.turns,
-          budget: window.budget,
-          replyReserve: Math.max(knobs.value.replyReserve, maxTokens.value),
-          temperature: temperature.value,
-          maxTokens: maxTokens.value,
-          utterance: steer.utterance,
-        });
-        if (pooled.status === "dropped") return false;
-        if (pooled.status === "model") {
-          fromBrain = true;
-          line = pooled.text;
-          chosenSource = "webllm";
-          stats = statsFrom({
-            text: pooled.text,
-            promptTokens: pooled.promptTokens,
-            completionTokens: pooled.completionTokens,
-            tokensPerSec: pooled.tokensPerSec,
-            prefillTokensPerSec: pooled.prefillTokensPerSec,
-            runtimeStatsText: pooled.runtimeStatsText,
-          });
-          promptTokens = pooled.promptTokens ?? null;
-          completionTokens = pooled.completionTokens ?? null;
-          llm = {
-            ...llm,
-            text: line,
-            ms: roundMs((llm.ms ?? 0) + pooled.ms),
-            prompt: renderPrompt(pooled.prompt),
-            loaded: true,
-          };
-        } else if (pooled.attempted && pooled.fallbackReason) {
-          fallbackReason = pooled.fallbackReason;
-          llm = {
-            ...llm,
-            ms: roundMs((llm.ms ?? 0) + pooled.ms),
-            prompt: renderPrompt(pooled.prompt),
-            loaded: true,
-          };
-          if (pooled.text.trim()) {
-            line = pooled.text;
-            chosenSource = pooled.source === "webllm" || pooled.source === "none" ? engineId.value : pooled.source;
-          }
-        }
-      }
-      const sources = traceEnabled() ? CLASSIC_SOURCES : [engineId.value];
+      const sources = traceEnabled()
+        ? CLASSIC_SOURCES
+        : isClassic(engineId.value) ? [engineId.value] : [];
       candidates = await probeClassic(async (source) => {
         const reply = await engines[source].reply(request);
         if (source === engineId.value && !line.trim()) {
           line = reply.text;
-          stats = reply.stats ?? steered.stats;
-          promptTokens = reply.stats?.promptTokens ?? null;
-          completionTokens = reply.stats?.completionTokens ?? null;
           if (reply.fellBack) {
-            fallbackReason = fallbackReason ?? `${source} had no line of its own and used the persona fallback.`;
+            fallbackReason = `${source} had no line of its own and used the persona fallback.`;
           }
         }
         return { text: reply.text, fellBack: reply.fellBack };
       }, sources);
-      if (rephraseWithModel.value && browser.loadedModelId && !fromBrain && !fallbackReason) {
-        const rephraseMessages = buildRephraseMessages({
-          systemPrompt: personaPrompt,
-          classicLine: line,
-          memory: contextBlob(steerState(window, rel.summary)),
-          budget: window.budget,
-        });
-        const rephraseStarted = performance.now();
-        try {
-          const result = await browser.complete({
-            messages: rephraseMessages,
-            temperature: temperature.value,
-            maxTokens: maxTokens.value,
-          });
-          const rephraseMs = roundMs(performance.now() - rephraseStarted);
-          llm = {
-            ...llm,
-            ms: roundMs((llm.ms ?? 0) + rephraseMs),
-            prompt: [renderPrompt(steerMessages), renderPrompt(rephraseMessages)].filter((part) => part.length > 0).join("\n\n"),
-          };
-          if (result.text.trim().length > 0) {
-            line = result.text.trim();
-            rephrased = true;
-            chosenSource = "webllm";
-            llm.text = line;
-            stats = statsFrom(result);
-            promptTokens = result.promptTokens ?? promptTokens;
-            completionTokens = result.completionTokens ?? completionTokens;
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          notice.value = `Rephrase failed (${message}). The classic line stands.`;
-          llm = { ...llm, ms: roundMs(performance.now() - rephraseStarted) };
+      if (engineId.value === "creature") {
+        const creatureStarted = performance.now();
+        const reply = await engines.creature.reply(request);
+        const creatureMs = roundMs(performance.now() - creatureStarted);
+        line = reply.text;
+        chosenSource = reply.text.trim() ? "creature" : "fallback";
+        if (reply.fellBack) {
+          fallbackReason = "Creature talk had no matching rule and used the mood fallback.";
         }
+        candidates = [
+          ...candidates,
+          {
+            source: "creature",
+            text: reply.text,
+            ms: creatureMs,
+            fellBack: reply.fellBack,
+            note: `${talkSpecies(persona)} ${mood.value}`,
+          },
+        ];
       }
       if (!line.trim()) {
         line = persona.fallbackReplies[0] ?? "...";
@@ -940,23 +745,6 @@ export function useLab() {
       line = record;
       candidates = [{ source: "stats", text: record, ms: 0, note: "player record" }];
     }
-    candidates = [
-      ...candidates,
-      {
-        source: "webllm",
-        text: llm.text,
-        ms: llm.ms,
-        note: !llm.loaded
-          ? "model not loaded"
-          : fromBrain
-            ? "shared brain"
-            : rephrased
-              ? "rephrased the classic line"
-              : llm.steerText
-                ? "steered the intent"
-                : "no model line",
-      },
-    ];
     const presented = presentReply(line, {
       playerName: playerName.value.trim(),
       maxReplyLength: persona.maxReplyLength,
@@ -968,19 +756,6 @@ export function useLab() {
     const needsSummary = shouldSummarize(window.memory, knobs.value.summarizeEvery)
       || overBudgetFraction(windowTokens(window, rel, elder ? record : ""), window.budget, knobs.value.summarizeAtFraction);
     if (needsSummary) {
-      let modelSummary: string | null = null;
-      if (browser.loadedModelId) {
-        try {
-          const result = await browser.complete({
-            messages: summarizePrompt(window.memory.summary, window.pending, knobs.value.dinoSummaryCap),
-            temperature: temperature.value,
-            maxTokens: Math.min(120, knobs.value.dinoSummaryCap),
-          });
-          modelSummary = result.text.trim();
-        } catch {
-          modelSummary = null;
-        }
-      }
       const folded = foldSummary({
         memory: window.memory,
         relationship: rel,
@@ -988,7 +763,7 @@ export function useLab() {
         now,
         dinoCap: knobs.value.dinoSummaryCap,
         relationshipCap: knobs.value.relationshipSummaryCap,
-        modelSummary,
+        modelSummary: null,
       });
       window = { ...window, memory: folded.memory, pending: [] };
       rel = folded.relationship;
@@ -996,7 +771,6 @@ export function useLab() {
     storage.putRelationship(rel);
     relTick.value += 1;
     commitWindow(window);
-    if (stats) lastStats.value = stats;
     const spent = Math.round(performance.now() - started);
     const trace = recordTrace(buildChatTrace({
       id: nextTraceId(),
@@ -1016,14 +790,10 @@ export function useLab() {
       fallbackReason,
       pickReason: asking
         ? "This elder quoted the player record instead of an engine."
-        : fromBrain
-          ? "The shared WebLLM brain wrote this line."
-          : rephrased
-            ? "WebLLM rephrased the classic line, so the spoken line is the model."
-            : undefined,
-      timings: { total: spent, steer: steered.ms ?? 0 },
+        : undefined,
+      timings: { total: spent },
     }));
-    const replyDetail = [plan.reason, steer.reason, steered.note].filter((part) => part.length > 0).join(" ");
+    const replyDetail = [plan.reason, steer.reason].filter((part) => part.length > 0).join(" ");
     storage.appendLog({
       id: "",
       at: now,
@@ -1034,9 +804,9 @@ export function useLab() {
       detail: replyDetail,
       metadata,
       engine: asking ? "stats" : engineId.value,
-      modelId: browser.loadedModelId,
-      promptTokens,
-      completionTokens,
+      modelId: null,
+      promptTokens: null,
+      completionTokens: null,
       durationMs: spent,
     });
     storage.appendBehavior({
@@ -1054,16 +824,12 @@ export function useLab() {
       replacements: presented.replacements,
       engine: engineId.value,
       mode: mode.value,
-      stats,
-      intent: finalDecision.intent,
-      reasons: [plan.reason, ...finalDecision.reasons],
-      speechHint: finalDecision.speechHint,
-      steer: asking
-        ? "Elder quotes the player record."
-        : [steer.reason, steered.note].filter((part) => part.length > 0).join(" "),
+      intent: decision.intent,
+      reasons: [plan.reason, ...decision.reasons],
+      speechHint: decision.speechHint,
+      steer: asking ? "Elder quotes the player record." : steer.reason,
       contextTokens: windowTokens(window, rel, elder ? record : ""),
       contextBudget: window.budget,
-      rephrased,
       traceId: trace.id,
     }));
     return true;
@@ -1143,11 +909,9 @@ export function useLab() {
   }
 
   function resetChat() {
-    brain.unload();
     messages.value = [];
     draft.value = "";
     notice.value = "";
-    lastStats.value = null;
     resetSeq(0);
     for (const persona of personas) {
       storage.deleteMemory(persona.id);
@@ -1165,7 +929,7 @@ export function useLab() {
       exportedAt: new Date().toISOString(),
       mode: mode.value,
       engine: engineId.value,
-      modelId: browser.loadedModelId,
+      modelId: null,
       temperature: temperature.value,
       maxTokens: maxTokens.value,
       playerName: playerName.value.trim(),
@@ -1186,25 +950,6 @@ export function useLab() {
     link.download = "dino-chat-lab-transcript.json";
     link.click();
     revokeObjectUrlLater(url);
-  }
-
-  async function loadModel() {
-    if (!modelId.value || modelLoading.value) return;
-    modelLoading.value = true;
-    modelError.value = "";
-    loadProgress.value = { progress: 0, text: "Starting…" };
-    try {
-      await browser.load(modelId.value, (progress) => {
-        loadProgress.value = progress;
-      });
-      loadedModelId.value = browser.loadedModelId;
-      fromCache.value = browser.fromCache;
-    } catch (error) {
-      modelError.value = error instanceof Error ? error.message : String(error);
-      loadedModelId.value = browser.loadedModelId;
-    } finally {
-      modelLoading.value = false;
-    }
   }
 
   function colorFor(name: string): string {
@@ -1257,20 +1002,10 @@ export function useLab() {
     focusDecision,
     previewSteer,
     selected,
-    webGpu,
-    modelChoices: browser.catalog.choices,
-    modelMissing: browser.catalog.missing,
-    modelId,
-    currentModel: computed(() => modelChoice(browser.catalog, modelId.value || null)),
-    loadProgress,
-    modelError,
-    modelLoading,
-    loadModel,
-    loadedModelId,
-    fromCache,
-    lastStats,
-    steerWithModel,
-    rephraseWithModel,
+    mood,
+    species,
+    creatureMoods: CREATURE_MOODS,
+    creatureSpecies: CREATURE_SPECIES,
     send,
     anotherRound,
     resetChat,

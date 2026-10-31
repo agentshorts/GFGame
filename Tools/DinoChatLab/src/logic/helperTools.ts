@@ -1,7 +1,7 @@
 /**
- * Tool registry for the WebLLM helper. Decision #19.
+ * Tool registry for the helper. Decision #19.
  *
- * The player asks in plain words. The model answers with one tool call.
+ * The player asks in plain words. A caller answers with one tool call.
  * This module checks that call and names the scripted behavior to load.
  * It does not download a model and it does not run the behavior.
  * Water dinos float. Flyers carry. Everyone else keeps their feet on the ground.

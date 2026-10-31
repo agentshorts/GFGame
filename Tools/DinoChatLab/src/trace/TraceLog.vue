@@ -22,7 +22,7 @@ const dinos = computed(() => {
 });
 
 const sources: { id: TraceSource; label: string }[] = (
-  ["eliza", "aiml", "rivescript", "megahal", "webllm", "canned", "fallback", "stats", "alignment", "none"] as const
+  ["eliza", "aiml", "rivescript", "megahal", "creature", "canned", "fallback", "stats", "alignment", "none"] as const
 ).map((id) => ({ id, label: SOURCE_LABEL[id] }));
 
 const shown = computed(() => filterTraces(events.value, { dinoId: dinoId.value, source: source.value }));

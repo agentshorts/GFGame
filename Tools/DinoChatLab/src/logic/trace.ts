@@ -147,7 +147,7 @@ export function scoreCandidates(utterance: string, candidates: readonly TraceCan
 
 const CANDIDATE_ORDER: TraceSource[] = [
   ...CLASSIC_SOURCES,
-  "webllm",
+  "creature",
   "canned",
   "fallback",
   "stats",
@@ -165,7 +165,11 @@ export function mergeCandidates(base: readonly TraceCandidate[], extra: readonly
   return [...map.values()].sort((a, b) => CANDIDATE_ORDER.indexOf(a.source) - CANDIDATE_ORDER.indexOf(b.source));
 }
 
-export function templateCandidates(text: string | null, ms: number): TraceCandidate[] {
+export function templateCandidates(
+  text: string | null,
+  ms: number,
+  creatureText: string | null = null,
+): TraceCandidate[] {
   return [
     ...CLASSIC_SOURCES.map((source) => ({
       source,
@@ -173,7 +177,12 @@ export function templateCandidates(text: string | null, ms: number): TraceCandid
       ms: 0,
       note: "not run",
     })),
-    { source: "webllm", text: null, ms: 0, note: "model not asked" },
+    {
+      source: "creature",
+      text: creatureText,
+      ms: creatureText ? ms : 0,
+      note: creatureText ? "event template" : "no creature event",
+    },
     { source: "canned", text, ms, note: "template" },
   ];
 }
@@ -292,8 +301,8 @@ export function buildChatTrace(input: ChatTraceInput): TraceEvent {
     decisions.push({ stage: "fallback", reason: input.fallbackReason, chosen: input.finalText });
   }
   const pickReason = input.pickReason
-    ?? (input.chosenSource === "webllm"
-      ? "WebLLM rephrased the classic line, so the spoken line is the model."
+    ?? (input.chosenSource === "creature"
+      ? "Creature talk spoke. The mood picked the rule set."
       : input.chosenSource === "stats"
         ? "This elder quoted the player record instead of an engine."
         : input.chosenSource === "fallback"
@@ -304,7 +313,7 @@ export function buildChatTrace(input: ChatTraceInput): TraceEvent {
   decisions.push({ stage: "pick", chosen: input.chosenSource, reason: pickReason });
   const timings: Record<string, number> = { ...(input.timings ?? {}) };
   for (const candidate of candidates) timings[candidate.source] = candidate.ms;
-  if (input.llm && timings.webllm == null) timings.webllm = input.llm.ms;
+  if (input.llm && timings.context == null) timings.context = input.llm.ms;
   const reason = [pickReason, input.steer?.reason, input.alignment?.reason, input.fallbackReason]
     .filter((part): part is string => !!part && part.length > 0)
     .join(" ");

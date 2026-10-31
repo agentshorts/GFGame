@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { prebuiltAppConfig } from "@mlc-ai/web-llm";
 import grumbleJson from "../personas/01-big-grumble.json";
 import tusksawJson from "../personas/02-tusksaw.json";
 import ripwingJson from "../personas/03-ripwing.json";
@@ -15,7 +14,6 @@ import {
   decide,
   DEFAULT_SMELL_FT,
   EXTORT_LINE,
-  hintItem,
   speechHint,
   type DecisionInput,
 } from "../src/logic/alignment";
@@ -30,7 +28,6 @@ import {
 } from "../src/logic/context";
 import { draggerName, fillTarget } from "../src/logic/fillTarget";
 import { filterOutput } from "../src/logic/filter";
-import { defaultModelId, listSmallModels, type PrebuiltModel } from "../src/logic/models";
 import { parsePersona } from "../src/logic/persona";
 import { presentReply, replyCharBudget } from "../src/logic/present";
 import { buildSystemPrompt } from "../src/logic/prompt";
@@ -43,14 +40,7 @@ import {
   transcriptToJson,
 } from "../src/logic/session";
 import { restoreTargetToken, shieldTargetToken } from "../src/logic/scripts";
-import {
-  buildRephraseMessages,
-  buildSteerMessages,
-  messageTokenEstimate,
-  parseModelSteer,
-  pickSteer,
-  reconcileSteeredDecision,
-} from "../src/logic/steer";
+import { pickSteer } from "../src/logic/steer";
 import { ALIGNMENTS, type Alignment, type Persona } from "../src/logic/types";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -204,26 +194,6 @@ describe("prompt and present", () => {
   });
 });
 
-describe("models", () => {
-  it("picks one small quant and skips a 70B row", () => {
-    const records: PrebuiltModel[] = [
-      { model_id: "Qwen2.5-0.5B-Instruct-q0f16-MLC", vram_required_MB: 1200 },
-      { model_id: "Qwen2.5-0.5B-Instruct-q4f16_1-MLC", vram_required_MB: 900, low_resource_required: true },
-      { model_id: "Llama-3.1-70B-Instruct-q4f16_1-MLC", vram_required_MB: 40000 },
-    ];
-    const listed = listSmallModels(records);
-    expect(listed.choices[0]?.modelId).toBe("Qwen2.5-0.5B-Instruct-q4f16_1-MLC");
-    expect(listed.choices.some((choice) => choice.modelId.includes("70B"))).toBe(false);
-  });
-
-  it("reads the installed WebLLM prebuilt list", () => {
-    const listed = listSmallModels(prebuiltAppConfig.model_list);
-    expect(listed.missing).toEqual([]);
-    expect(defaultModelId(listed.choices)).toMatch(/^Qwen2\.5-0\.5B-Instruct-q4f16_1/);
-    expect(listed.choices.some((choice) => /70B/.test(choice.modelId))).toBe(false);
-  });
-});
-
 describe("session", () => {
   it("keeps roster order and exports version 2", () => {
     expect(activePersonas(personas, "all-chat", "tusksaw", ["chatty-bird", "big-grumble"]).map((persona) => persona.id))
@@ -333,60 +303,6 @@ describe("context", () => {
 });
 
 describe("steer", () => {
-  it("parses a fenced model intent and stays inside the budget", () => {
-    expect(parseModelSteer("nope", "ignore")).toEqual({ intent: "ignore", rephrase: false, usedModel: false });
-    expect(parseModelSteer("```json\n{\"intent\":\"beg\",\"summary\":\"mango\",\"rephrase\":true}\n```", "ignore")).toMatchObject({
-      intent: "beg",
-      summary: "mango",
-      rephrase: true,
-      usedModel: true,
-    });
-    expect(parseModelSteer("{\"intent\":\"fly\"}", "barter").intent).toBe("barter");
-    const decision = decide(input({ alignment: "CN" }));
-    for (const budget of [128, 4096]) {
-      const steerMessages = buildSteerMessages(createContext(budget), decision, "Big Grumble", budget);
-      const rephraseMessages = buildRephraseMessages({
-        systemPrompt: "x".repeat(5000),
-        classicLine: "Come out and play!",
-        memory: "y".repeat(5000),
-        budget,
-      });
-      expect(messageTokenEstimate(steerMessages)).toBeLessThanOrEqual(budget);
-      expect(messageTokenEstimate(rephraseMessages)).toBeLessThanOrEqual(budget);
-    }
-  });
-
-  it("keeps the speech hint and reasons on the intent the model actually picked", () => {
-    const decision = decide(input({
-      alignment: "NE",
-      inventory: [{ id: "mango-block", name: "Mango block", count: 1 }],
-      distanceFt: 10,
-      winOdds: 0.8,
-      dinobook: false,
-    }));
-    expect(decision.intent).toBe("attack");
-    expect(decision.speechHint).toBe("I want what you're carrying.");
-    const item = hintItem(input({
-      alignment: "NE",
-      inventory: [{ id: "berry", name: "Berry", count: 1 }],
-      distanceFt: 10,
-      winOdds: 0.2,
-      dinobook: false,
-      wants: [{ id: "berry", name: "Berry" }],
-    }));
-    expect(item).toBe("Berry");
-    const overridden = reconcileSteeredDecision(decision, "beg", "Context model chose beg.", "Mango block");
-    expect(overridden.intent).toBe("beg");
-    expect(overridden.speechHint).toBe(BEG_MANGO);
-    expect(overridden.reasons.at(-1)).toBe("Context model chose beg.");
-    expect(overridden.reasons.join(" ")).not.toContain("attacks");
-    expect(overridden.reasons[0]).toContain("Alignment NE");
-    expect(reconcileSteeredDecision(decision, "attack", "Context model chose attack.")).toBe(decision);
-    const berry = reconcileSteeredDecision(decision, "beg", "", "Berry");
-    expect(berry.speechHint).toBe(speechHint("beg", "Berry"));
-    expect(berry.reasons.at(-1)).toContain("beg");
-  });
-
   it("steers with the intent word and otherwise keeps the chat line", () => {
     const attack = pickSteer({ mode: "direct", speaker: "You", userText: "why you running", intent: "attack", cues: grumble.cues });
     expect(attack.utterance).toBe("attack");

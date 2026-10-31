@@ -4,7 +4,7 @@ export type ClassicSource = (typeof CLASSIC_SOURCES)[number];
 
 export type TraceSource =
   | ClassicSource
-  | "webllm"
+  | "creature"
   | "canned"
   | "fallback"
   | "stats"
@@ -42,7 +42,7 @@ export interface TraceDecision {
   detail?: Record<string, string | number | boolean | null>;
 }
 
-/** What the context model was given, and what it sent back. Text is null when it did not run. */
+/** Persona, memory, and context packed for the turn. Text stays null. There is no chat model. */
 export interface LlmTrace {
   text: string | null;
   ms: number;
@@ -88,7 +88,7 @@ export const SOURCE_LABEL: Record<TraceSource, string> = {
   aiml: "AIML",
   rivescript: "RiveScript",
   megahal: "MegaHAL",
-  webllm: "WebLLM",
+  creature: "Creature",
   canned: "Template",
   fallback: "Fallback",
   stats: "Record",

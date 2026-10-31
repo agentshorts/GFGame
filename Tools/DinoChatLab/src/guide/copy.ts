@@ -103,11 +103,11 @@ export const WIZARDS: Record<WizardId, WizardCopy> = {
     steps: [
       {
         title: "Engines",
-        body: "ELIZA, AIML, RiveScript, and MegaHAL each try a line. They need no download. WebLLM is the context model. It stays quiet until you load one from Talk. The header switch Trace has to be on, or the extra engine calls are skipped and you only keep the chosen line.",
+        body: "Creature talk is the default. ELIZA, AIML, RiveScript, and MegaHAL each try a line beside it when Trace is on. They need no download. The header switch Trace has to be on, or the extra engine calls are skipped and you only keep the chosen line.",
       },
       {
         title: "The badge",
-        body: "Open Trace under a bubble. The coloured pill is the source that was kept: ELIZA, AIML, RiveScript, MegaHAL, WebLLM, Template, Fallback, Record, Alignment, or None. The card with the amber ring is that same pick. The others are what the rest of the engines said, or none.",
+        body: "Open Trace under a bubble. The coloured pill is the source that was kept: Creature, ELIZA, AIML, RiveScript, MegaHAL, Template, Fallback, Record, Alignment, or None. The card with the amber ring is that same pick. The others are what the rest of the engines said, or none.",
       },
       {
         title: "The reason line",
@@ -125,20 +125,20 @@ export const PANELS: Record<string, PanelCopy> = {
   talk: {
     id: "talk",
     title: "Talk",
-    purpose: "Choose who speaks, which classic engine writes the line, and whether a small context model steers or rephrases it.",
-    tryFirst: "Leave the engine on ELIZA, stay on 1:1, and send “why you running”. The pack is empty and the player starts outside smell range, so it stays a chat line.",
+    purpose: "Choose who speaks, which engine writes the line, and which mood colours the creature rules.",
+    tryFirst: "Leave the engine on Creature, stay on 1:1, and send “my hands”. Switch the mood and send it again. The pack is empty and the player starts outside smell range, so a chat line stays a chat line.",
     controls: [
       { name: "1:1 / All-chat / Game event", meaning: "One dino, every checked dino, or a single dino answering a game line." },
-      { name: "Line engine", meaning: "ELIZA, AIML, RiveScript, or MegaHAL. Temperature does not change these." },
+      { name: "Line engine", meaning: "Creature, ELIZA, AIML, RiveScript, or MegaHAL. Temperature salts the creature twist. The classic engines ignore it." },
       { name: "Focus dino", meaning: "Whose prompt, alignment, and context window you are editing." },
       { name: "On the channel", meaning: "All-chat only. Checked dinos answer the same post." },
       { name: "Player name", meaning: "Fills {Target}. Blank leaves the token as you. Dinobook uses this name too." },
-      { name: "Temperature and max tokens", meaning: "For the context model. Max tokens also clips the spoken line." },
+      { name: "Temperature and max tokens", meaning: "Temperature salts the creature twist. Max tokens clips the spoken line." },
       { name: "System prompt", meaning: "Edit it, then Rebuild prompt to pick up the live alignment and memory." },
       { name: "Reset chat / Export JSON", meaning: "Reset clears the transcript and summaries. Export writes a dino-chat-lab JSON file." },
       { name: "SQLite notebook", meaning: "localStorage stays the default. The checkbox copies memory, stats, and work into SQLite once, then keeps a behavior log there. Export behavior log downloads that JSON. Switching off reads localStorage again and leaves the SQLite file." },
       { name: "PG filter", meaning: "Shows what the filter swapped on a dino line, or that nothing changed." },
-      { name: "Context model", meaning: "Load a small WebLLM prebuilt in the browser. Steer and Rephrase wait until that load finishes." },
+      { name: "Species and mood", meaning: "Species picks the rule file. Mood picks Friendly, Wary, Angry, Grieving, or Bountied. Angry growls." },
     ],
   },
   transcript: {
@@ -260,7 +260,7 @@ export const PANELS: Record<string, PanelCopy> = {
     controls: [
       { name: "Trace switch", meaning: "Off skips extra engine calls. Older probes stay in the list." },
       { name: "Dino", meaning: "All dinos, or one speaker." },
-      { name: "Source", meaning: "All sources, or one badge: ELIZA, AIML, RiveScript, MegaHAL, WebLLM, Template, Fallback, Record, Alignment, or None." },
+      { name: "Source", meaning: "All sources, or one badge: Creature, ELIZA, AIML, RiveScript, MegaHAL, Template, Fallback, Record, Alignment, or None." },
       { name: "Export JSON", meaning: "Downloads the rows the filters are showing." },
       { name: "Clear log", meaning: "Wipes this tab's capture. It does not edit the transcript bubbles." },
     ],

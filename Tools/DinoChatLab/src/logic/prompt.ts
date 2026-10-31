@@ -65,7 +65,7 @@ export interface PromptMessage {
   content: string;
 }
 
-export function buildWebLlmMessages(
+export function buildContextMessages(
   systemPrompt: string,
   history: { speaker: string; role: "user" | "dino" | "system"; text: string }[],
   personaName: string,

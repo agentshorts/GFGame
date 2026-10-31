@@ -1,6 +1,6 @@
 # Dino Chat Lab
 
-A local Vue 3 workbench for talking to the game's dinos in the browser. Classic chatbot engines write the lines. A small WebLLM model can sit in front of them as a memory layer. Nothing here is wired into Unreal.
+A local Vue 3 workbench for talking to the game's dinos in the browser. Creature talk is the default voice. Classic chatbot engines stay beside it. Nothing here is wired into Unreal.
 
 ```bash
 cd Tools/DinoChatLab
@@ -14,22 +14,13 @@ Open the URL Vite prints (it serves `http://127.0.0.1:5173` by default).
 
 ## What speaks
 
-ELIZA, AIML, RiveScript, and MegaHAL produce the dino's line. They need no download. ELIZA is the default.
+Creature talk is the default. Each species (Nipper, Raptor, Sailback, Rex, Hornback) has a rule file under `src/data/creature/`. The mood (Friendly, Wary, Angry, Grieving, Bountied) picks the set. Lines echo the player's words, reflect pronouns (`my` becomes `your`), ask odd questions, mispronounce a word, and add a noise. An angry dino growls. Dinobook event barks use the same rules. It needs no download.
 
-WebLLM (`@mlc-ai/web-llm`) is the context layer, not the default voice. Each dino keeps a window (default **4096** estimated tokens, clamped from 128 to 8192). All-chat has its own budget, still per dino. The meter on the slate panel is the focused dino's window. The estimate is four characters to a token. When a model actually runs, its own tokens/sec and runtime stats are shown too. `buildWebLlmMessages` sends only the turns that fit, and leaves room for the reply.
+ELIZA, AIML, RiveScript, and MegaHAL stay in the line engine list. They need no download. ELIZA is the classic script.
 
-Until a model is loaded, the steer and rephrase checkboxes do nothing and the classic line is what you hear. That path is the one the tests cover.
+Each dino keeps a window (default **4096** estimated tokens, clamped from 128 to 8192). All-chat has its own budget, still per dino. The meter on the slate panel is the focused dino's window. The estimate is four characters to a token. `buildContextMessages` keeps only the turns that fit, and leaves room for the reply.
 
-## WebGPU
-
-The context model needs WebGPU:
-
-- A current Chromium, Edge, or Firefox build with WebGPU enabled.
-- `navigator.gpu.requestAdapter()` has to return an adapter. The lab prints the result.
-- The dev server and the preview server send `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, which WebLLM uses for `SharedArrayBuffer`.
-- The first load downloads a small prebuilt (Qwen2.5 0.5B Instruct is the default, plus Qwen2.5 1.5B, Llama 3.2 1B and 3B, SmolLM2 135M / 360M / 1.7B, and Phi-3.5-mini). Weights stay in the browser cache. Do not commit them.
-
-If WebGPU is missing, use ELIZA, AIML, RiveScript, or MegaHAL. They are the line engines either way.
+The dev server and the preview server send `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`.
 
 ## Packages
 
@@ -40,10 +31,10 @@ If WebGPU is missing, use ELIZA, AIML, RiveScript, or MegaHAL. They are the line
 | RiveScript | `rivescript` | Trigger and reply script, streamed from a string. |
 | Extra chatter | `megahal` | There is no Colby PARRY chatbot on npm. The `parry` package is an unrelated validator, so it is not used. |
 | Filter | `obscenity` | PG pass on outputs, with a toggle that shows the spans. |
-| Context model | `@mlc-ai/web-llm` | Worker + `CreateWebWorkerMLCEngine`, same shape as RoundTable, on current package versions. |
 | ELIZA's stream | `rxjs` 6 | `eliza-core` imports RxJS 6. One hoisted copy is pinned so a second copy is not nested. |
+| Creature rules | JSON in `src/data/creature/` | One file per species. Mood picks the set. Writers can add patterns without code. |
 
-The WebLLM loading pattern (worker, progress callback, `chat.completions.create`, prebuilt model list) is borrowed from Captain's public project [RoundTable](https://gitlab.com/atomicbreathgodzilla/RoundTable). This lab does not copy that app, and nothing is pushed back to that GitLab repo.
+The WebLLM loading pattern (worker, progress callback, `chat.completions.create`, prebuilt model list) was borrowed from the public project [RoundTable](https://gitlab.com/atomicbreathgodzilla/RoundTable). This lab does not copy that app, and nothing is pushed back to that GitLab repo.
 
 `npm audit` reports issues in old transitive packages under RiveScript. They were left as installed. Do not run `npm audit fix --force`.
 
@@ -60,7 +51,7 @@ The first visit asks for a username. There is no password.
 
 Losing the cookie means picking a new name. The screen says so. Local play does not apply the daily cap. That cap lives in `SignupLimiter` so it still holds if persona data is split up later.
 
-`worker/` and `wrangler.jsonc` are the Worker. Do not deploy them from this repo, and do not put an account id, a route, or a credential in the config. Cloudflare Bot deploys after review. The Worker does not run a model. WebLLM still runs in the browser. Nothing here is wired into Unreal.
+`worker/` and `wrangler.jsonc` are the Worker. Do not deploy them from this repo, and do not put an account id, a route, or a credential in the config. Cloudflare Bot deploys after review. The Worker does not run a chat model. Nothing here is wired into Unreal.
 
 Build the static lab with `npm run build` before a future deploy. `run_worker_first` sends `/api/*` to the Worker and leaves the rest as assets from `dist/`.
 
@@ -80,7 +71,7 @@ The chat demo starts with an empty pack and the player 40 ft away, so "why you r
 
 ## Trace
 
-The header switch **Trace** is on by default. Each chat reply and each Dinobook post keeps a structured trace: the line from ELIZA, AIML, RiveScript, and MegaHAL (or none), the WebLLM text when a model ran, and the persona, memory, and context window that model was given. The chosen source is a colour badge. The reason lists scores, the PG filter, steer, alignment, `{Target}` fill, and fallbacks, plus a timing for each engine.
+The header switch **Trace** is on by default. Each chat reply and each Dinobook post keeps a structured trace: the line from Creature, ELIZA, AIML, RiveScript, and MegaHAL (or none), plus the persona, memory, and context window. The chosen source is a colour badge. The reason lists scores, the PG filter, steer, alignment, `{Target}` fill, and fallbacks, plus a timing for each engine.
 
 Turn Trace off to skip the extra engine calls. The **Trace log** (`#/trace`) lists chat turns, Dinobook posts, paydays, and elder picks in time order. Filter by dino or by source, then export JSON. The log is the in-memory capture for this tab. It is not a string scrape of the bubbles.
 
@@ -114,7 +105,7 @@ Every panel has a collapsible About card: what the panel is for, what to try fir
 - All-chat: checked dinos each keep their own window and answer the same post. Friends speak before strangers. A dino marked ignore stays quiet. Another round hears the latest line, and a dino does not answer the dino who just spoke unless they are rivals or interest is at least 8. A like shows up as "likes that."
 - Game event: one dino answers a line such as "player ran away". Move the player outside smell range if you want the event text, not the world intent, to steer the script.
 
-Also: temperature (context model only), max tokens, system prompt, reset, and JSON export (kind `dino-chat-lab`, version 2). Player chat text is clipped to 200 characters, matching `MaxChatChars`. Replies are filled for `{Target}`, filtered, then clipped.
+Also: temperature (creature twist only), max tokens, system prompt, reset, and JSON export (kind `dino-chat-lab`, version 2). Player chat text is clipped to 200 characters, matching `MaxChatChars`. Replies are filled for `{Target}`, filtered, then clipped.
 
 See `HANDOFF_dino-chat-lab.md` for how a later Unreal hook could use an export without running a model in the game.
 
@@ -122,7 +113,7 @@ See `HANDOFF_dino-chat-lab.md` for how a later Unreal hook could use an export w
 
 Public types live in `src/core/` (`types.ts`, `memory.ts`, `stats.ts`, `storage.ts`). Dinobook sim and the persona manager import those files. The lab stores them in `localStorage` under `dcl:*` unless the Talk panel checkbox **Keep the lab notebook in SQLite** is on. That checkbox copies the notebook once into sql.js (MIT, SQLite public domain) and runs `SQLITE_SCHEMA`, including `behavior_log`. The file sits in OPFS, or IndexedDB when OPFS is missing. There is no account and no network. The schema is still the shape a later worker would execute. This app does not deploy that worker.
 
-Rolling summaries are kept per dino (250 tokens) and per dino-player pair (150 tokens). They update every 6 turns, or when the window passes 80% of its budget. With no model loaded, the fallback keeps the newest lines. Elders (the checkbox on the slate) get a player-record block of at most 200 tokens. Everyone else gets a rep band such as `rep_wary`.
+Rolling summaries are kept per dino (250 tokens) and per dino-player pair (150 tokens). They update every 6 turns, or when the window passes 80% of its budget. The summary keeps the newest lines. Elders (the checkbox on the slate) get a player-record block of at most 200 tokens. Everyone else gets a rep band such as `rep_wary`.
 
 World-event buttons write kills, hits, mango, blocks, rentals, and bounties for the typed player name and family id. Reset chat clears transcripts and those summaries. It leaves the stat rows and the decision log. Nothing here is wired to Unreal.
 

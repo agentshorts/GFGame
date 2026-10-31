@@ -26,7 +26,7 @@ export interface ContextState {
   turns: ContextTurn[];
 }
 
-/** Rough English stand-in: four characters to a token. WebLLM's own usage is shown when a model runs. */
+/** Rough English stand-in: four characters to a token. */
 
 export function createContext(budget = DEFAULT_CONTEXT_BUDGET): ContextState {
   return { budget: clampBudget(budget), summary: "", worldNote: "", turns: [] };

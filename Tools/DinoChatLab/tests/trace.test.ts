@@ -66,7 +66,7 @@ describe("chat trace", () => {
         { source: "aiml", text: null, ms: 2, note: "none" },
         { source: "rivescript", text: "Dive.", ms: 4 },
         { source: "megahal", text: "Screech running", ms: 11 },
-        { source: "webllm", text: null, ms: 0, note: "model not loaded" },
+        { source: "creature", text: null, ms: 0, note: "no creature event" },
       ],
       chosenSource: "eliza",
       finalText: shown.text,

@@ -6,7 +6,7 @@ import type { TraceEvent } from "../logic/traceTypes";
 let engines: ReturnType<typeof createEngines> | null = null;
 
 function classicEngines() {
-  engines ??= createEngines(() => null);
+  engines ??= createEngines();
   return engines;
 }
 

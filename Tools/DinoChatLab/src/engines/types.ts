@@ -1,6 +1,6 @@
+import type { CreatureEvent, CreatureMood, CreatureSpecies } from "../data/creature/types";
 import type { EngineId, Persona, ReplyStats } from "../logic/types";
 import type { ChatMode } from "../logic/types";
-import type { PromptMessage } from "../logic/prompt";
 
 export interface EngineRequest {
   persona: Persona;
@@ -11,8 +11,14 @@ export interface EngineRequest {
   temperature: number;
   maxTokens: number;
   peerNames: string[];
-  /** Per-dino context window. WebLLM trims history to this, leaving maxTokens for the reply. */
+  /** Per-dino context window. History is trimmed to this, leaving maxTokens for the reply. */
   contextBudget?: number;
+  /** Creature talk only. The classic engines ignore it. */
+  species?: CreatureSpecies;
+  mood?: CreatureMood;
+  event?: CreatureEvent;
+  playerName?: string;
+  rng?: () => number;
 }
 
 export interface EngineReply {
@@ -33,39 +39,18 @@ export interface ChatEngine {
   reset(personaId?: string): void;
 }
 
-export interface WebLlmCompletion {
-  text: string;
-  promptTokens?: number;
-  completionTokens?: number;
-  tokensPerSec?: number;
-  prefillTokensPerSec?: number;
-  runtimeStatsText?: string;
-}
-
-export interface WebLlmClient {
-  loadedModelId: string | null;
-  vramMb?: number;
-  bufferMb?: number;
-  fromCache: boolean;
-  complete(args: {
-    messages: PromptMessage[];
-    temperature: number;
-    maxTokens: number;
-  }): Promise<WebLlmCompletion>;
-}
-
 export const ENGINE_CHOICES: { id: EngineId; label: string; blurb: string; needsModel: boolean }[] = [
+  {
+    id: "creature",
+    label: "Creature",
+    blurb: "Gremlin talk. Mood picks the species rule set. No download.",
+    needsModel: false,
+  },
   {
     id: "eliza",
     label: "ELIZA",
     blurb: "Keyword script. Works with no download.",
     needsModel: false,
-  },
-  {
-    id: "webllm",
-    label: "WebLLM",
-    blurb: "Context layer in front of the classic engines. Needs WebGPU.",
-    needsModel: true,
   },
   {
     id: "aiml",

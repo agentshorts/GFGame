@@ -1,0 +1,1058 @@
+{
+  "schema": "creature-rules/1",
+  "species": "Hornback",
+  "voice": "hornback",
+  "moods": {
+    "Friendly": {
+      "noises": [
+        "hnf",
+        "thok"
+      ],
+      "growl": "",
+      "questions": [
+        "why your hands smell of berry?"
+      ],
+      "fallbacks": [
+        "hornback blinks. that word is new."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "why (1) smell of berry?"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hornback likes berry berry."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hornback likes berry berry."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hornback is sorry you hurt."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hornback is sorry you hurt."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hornback will help."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hornback will help."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hornback family is near."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hornback family is near."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello hello. hornback is glad."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello hello. hornback is glad."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi hi. hornback waves."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi hi. hornback waves."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hornback heard a bounty and shrugged."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hornback heard a bounty and shrugged."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Wary": {
+      "noises": [
+        "hrrk",
+        "thok"
+      ],
+      "growl": "",
+      "questions": [
+        "why you standing so close to hornback?"
+      ],
+      "fallbacks": [
+        "hornback tilts. say a smaller word."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "back. your (2) is too close."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hornback heard hands. hrrk"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry? hornback sniffs and steps back."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry? hornback sniffs and steps back."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt. hornback watches your hands."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt. hornback watches your hands."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help? hornback does not come closer."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help? hornback does not come closer."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "family stays behind hornback."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "family stays behind hornback."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello. hornback does not blink."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello. hornback does not blink."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. stay where hornback can see."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. stay where hornback can see."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "bounty smell. hornback keeps the gap."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "bounty smell. hornback keeps the gap."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Angry": {
+      "noises": [
+        "thok thok",
+        "hnf"
+      ],
+      "growl": "grrr",
+      "questions": [
+        "why you still here?"
+      ],
+      "fallbacks": [
+        "hornback snaps. say it again."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) made this one bite."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hornback heard hands. thok thok"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry will not fix this. hornback bites."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry will not fix this. hornback bites."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 12,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) made this one bite."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hornback heard hurt. thok thok"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "no help. hornback already called."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "no help. hornback already called."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "leave hornback family alone."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "leave hornback family alone."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello? hornback is not glad."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello? hornback is not glad."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. hornback shows teeth."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. hornback shows teeth."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "bounty makes hornback louder."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "bounty makes hornback louder."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Grieving": {
+      "noises": [
+        "mnn",
+        "thok"
+      ],
+      "growl": "",
+      "questions": [
+        "why you talk so loud at hornback?"
+      ],
+      "fallbacks": [
+        "hornback sighs. the word is gone."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 2,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) is quiet now."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hornback heard hands. mnn"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry is sweet. hornback is not."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry is sweet. hornback is not."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt stays. hornback remembers."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt stays. hornback remembers."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help came late for hornback."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help came late for hornback."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 12,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hornback family is gone."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hornback family is gone."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello falls quiet around hornback."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello falls quiet around hornback."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. hornback does not wave."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. hornback does not wave."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "a bounty cannot bring hornback family back."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "a bounty cannot bring hornback family back."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Bountied": {
+      "noises": [
+        "tik",
+        "thok"
+      ],
+      "growl": "",
+      "questions": [
+        "why your name on the post?"
+      ],
+      "fallbacks": [
+        "hornback taps the post. that word is not on it."
+      ],
+      "rules": [
+        {
+          "keyword": "hands",
+          "rank": 9,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "your (2) has a coin on it."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hornback heard hands. tik"
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "berry",
+          "rank": 4,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "berry does not pay the bounty on you."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "berry does not pay the bounty on you."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hurt",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hurt or not, the bounty stands. hornback knows."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hurt or not, the bounty stands. hornback knows."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "help",
+          "rank": 6,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "help will not clear hornback bounty."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "help will not clear hornback bounty."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "family",
+          "rank": 5,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hornback family read the bounty too."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hornback family read the bounty too."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hello",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hello, bounty-friend. hornback counted the coin."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hello, bounty-friend. hornback counted the coin."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "hi",
+          "rank": 3,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "hi. the post already named you. hornback saw."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "hi. the post already named you. hornback saw."
+              ]
+            }
+          ]
+        },
+        {
+          "keyword": "bounty",
+          "rank": 11,
+          "decompositions": [
+            {
+              "pattern": "see *",
+              "reassembly": [
+                "why (1)?"
+              ]
+            },
+            {
+              "pattern": "* my *",
+              "reassembly": [
+                "the bounty is posted. hornback can smell the coin."
+              ]
+            },
+            {
+              "pattern": "*",
+              "reassembly": [
+                "the bounty is posted. hornback can smell the coin."
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "events": {
+    "hurt_by_player": [
+      "{player} hurt hornback.",
+      "{player} made hornback yelp."
+    ],
+    "bounty_posted": [
+      "a bounty is posted on {player}.",
+      "{player} has a coin on the post. hornback saw."
+    ],
+    "family_lost": [
+      "{player} lost the hornback family. hornback family is gone.",
+      "{player} left hornback family quiet."
+    ],
+    "called_for_help": [
+      "hornback calls for help.",
+      "{player} made hornback call the others."
+    ],
+    "pestered": [
+      "{player} pestered hornback. why your hands smell of berry?",
+      "{player} poked hornback again."
+    ]
+  }
+}

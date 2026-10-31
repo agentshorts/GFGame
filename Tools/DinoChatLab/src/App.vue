@@ -49,20 +49,10 @@ const {
   focusDecision,
   previewSteer,
   selected,
-  webGpu,
-  modelChoices,
-  modelMissing,
-  modelId,
-  currentModel,
-  loadProgress,
-  modelError,
-  modelLoading,
-  loadModel,
-  loadedModelId,
-  fromCache,
-  lastStats,
-  steerWithModel,
-  rephraseWithModel,
+  mood,
+  species,
+  creatureMoods,
+  creatureSpecies,
   send,
   anotherRound,
   resetChat,
@@ -160,7 +150,7 @@ function onPromptInput(event: Event) {
               {{ choice.label }}
             </option>
           </select>
-          <small class="hint">{{ lineEngines.find((choice) => choice.id === engineId)?.blurb }} Temperature is for the context model. These engines ignore it.</small>
+          <small class="hint">{{ lineEngines.find((choice) => choice.id === engineId)?.blurb }} Temperature salts the creature twist. The classic engines ignore it.</small>
         </label>
         <label class="field">
           <span>Focus dino</span>
@@ -226,48 +216,20 @@ function onPromptInput(event: Event) {
           <span>Show what the PG filter changed</span>
         </label>
 
-        <h2>Context model</h2>
-        <p class="hint" :class="webGpu.ok ? 'good' : 'bad'">{{ webGpu.detail }}</p>
+        <h2>Creature talk</h2>
         <label class="field">
-          <span>Small WebLLM prebuilt</span>
-          <select v-model="modelId">
-            <option v-for="choice in modelChoices" :key="choice.modelId" :value="choice.modelId">
-              {{ choice.label }}
-            </option>
+          <span>Species</span>
+          <select v-model="species">
+            <option v-for="name in creatureSpecies" :key="name" :value="name">{{ name }}</option>
           </select>
         </label>
-        <p class="hint" v-if="currentModel">
-          {{ currentModel.modelId }}
-          <template v-if="currentModel.vramMb"> · about {{ Math.round(currentModel.vramMb) }} MB VRAM</template>
-          <template v-if="currentModel.lowResource"> · low resource</template>
-        </p>
-        <p class="hint" v-if="modelMissing.length">Missing from this WebLLM build: {{ modelMissing.join(", ") }}.</p>
-        <button type="button" :disabled="modelLoading || !modelId" @click="loadModel">
-          {{ modelLoading ? "Loading…" : "Load context model" }}
-        </button>
-        <div class="meter" style="margin-top: 0.45rem" v-if="modelLoading || loadProgress.text">
-          <div :style="{ width: `${Math.round(loadProgress.progress * 100)}%` }"></div>
-        </div>
-        <p class="hint" v-if="loadProgress.text">{{ loadProgress.text }}</p>
-        <p class="bad" v-if="modelError">{{ modelError }}</p>
-        <p class="hint" v-if="loadedModelId">
-          Loaded {{ loadedModelId }}{{ fromCache ? " from the browser cache" : "" }}.
-          Weights stay in the browser cache, not in this repo.
-        </p>
-        <p class="hint" v-if="lastStats?.tokensPerSec">
-          {{ lastStats.tokensPerSec.toFixed(1) }} tok/s
-          <template v-if="lastStats.vramMb"> · {{ Math.round(lastStats.vramMb) }} MB VRAM</template>
-          <template v-if="lastStats.runtimeStatsText"> · {{ lastStats.runtimeStatsText }}</template>
-        </p>
-        <label class="check">
-          <input v-model="steerWithModel" type="checkbox" />
-          <span>Context model steers the intent</span>
+        <label class="field">
+          <span>Mood</span>
+          <select v-model="mood">
+            <option v-for="name in creatureMoods" :key="name" :value="name">{{ name }}</option>
+          </select>
         </label>
-        <label class="check">
-          <input v-model="rephraseWithModel" type="checkbox" />
-          <span>Rephrase the classic line</span>
-        </label>
-        <p class="hint">Both wait until a model is loaded. Until then the classic engine speaks the steered line.</p>
+        <p class="hint">Mood picks the rule set for the focused dino. Angry growls. The other engines stay on the shelf above.</p>
       </section>
 
       <section class="log" aria-label="Transcript">
