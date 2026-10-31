@@ -1,21 +1,124 @@
 #include "GFFashionTypes.h"
 #include "GFDyes.h"
+#include "GFDataTables.h"
+#include "GFFashionItems.h"
+#include "GFLog.h"
 
 namespace GFFashionCatalog
 {
-	static FGFFashionPiece Piece(const TCHAR* Id, const TCHAR* Name, EGFOutfitSlot Slot, const FLinearColor& Color, std::initializer_list<const TCHAR*> Tags, bool bDyeable = true)
+	static int32 GRowCount = 0;
+
+	static void SplitBar(const FString& Text, TArray<FString>& Out)
 	{
-		FGFFashionPiece P;
-		P.Id = Id;
-		P.DisplayName = Name;
-		P.Slot = Slot;
-		P.BaseColor = Color;
-		for (const TCHAR* T : Tags)
+		Text.ParseIntoArray(Out, TEXT("|"), true);
+		for (FString& Part : Out)
 		{
-			P.Tags.Add(T);
+			Part.TrimStartAndEndInline();
 		}
-		P.bDyeable = bDyeable;
-		return P;
+		Out.RemoveAll([](const FString& Part) { return Part.IsEmpty(); });
+	}
+
+	static bool ParseColor(const FString& Text, FLinearColor& Out)
+	{
+		TArray<FString> Parts;
+		Text.ParseIntoArray(Parts, TEXT(","), true);
+		if (Parts.Num() < 3)
+		{
+			return false;
+		}
+		Out = FLinearColor(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]), 1.f);
+		return true;
+	}
+
+	static bool ParseCost(const FString& Text, TArray<FGFItemStack>& Out)
+	{
+		Out.Reset();
+		TArray<FString> Parts;
+		SplitBar(Text, Parts);
+		for (const FString& Part : Parts)
+		{
+			FString Id, Count;
+			if (!Part.Split(TEXT(":"), &Id, &Count))
+			{
+				return false;
+			}
+			Id.TrimStartAndEndInline();
+			const int32 N = FCString::Atoi(*Count);
+			if (Id.IsEmpty() || N <= 0)
+			{
+				return false;
+			}
+			Out.Add(FGFItemStack(FName(*Id), N));
+		}
+		return true;
+	}
+
+	static EGFRarity ParseRarity(FName Name)
+	{
+		if (Name == TEXT("Uncommon")) { return EGFRarity::Uncommon; }
+		if (Name == TEXT("Rare")) { return EGFRarity::Rare; }
+		return EGFRarity::Common;
+	}
+
+	static TArray<FGFFashionPiece> LoadPieces()
+	{
+		TArray<FGFFashionPiece> Out;
+		GRowCount = 0;
+		const UDataTable* Table = FGFDataTables::Get<FGFFashionPieceRow>(TEXT("DT_FashionPieces"));
+		if (!Table)
+		{
+			UE_LOG(LogGF, Error, TEXT("Fashion: DT_FashionPieces failed to load"));
+			return Out;
+		}
+		Table->ForeachRow<FGFFashionPieceRow>(TEXT("FashionCatalog"), [&](const FName& Id, const FGFFashionPieceRow& Row)
+		{
+			++GRowCount;
+			EGFOutfitSlot Slot = EGFOutfitSlot::Count;
+			if (Id.IsNone() || !FGFFashionItems::SlotFromRowName(Row.Slot, Slot))
+			{
+				UE_LOG(LogGF, Error, TEXT("Fashion: %s has no usable slot (%s)"), *Id.ToString(), *Row.Slot.ToString());
+				return;
+			}
+			FGFFashionPiece P;
+			P.Id = Id;
+			P.DisplayName = Row.DisplayName;
+			P.Slot = Slot;
+			P.SetId = Row.SetId;
+			P.Rarity = ParseRarity(Row.Rarity);
+			P.bDyeable = Row.bDyeable;
+			P.DyeChannels = Row.DyeChannels;
+			P.bStarter = Row.bStarter;
+			P.SourceLine = Row.SourceLine;
+			P.SourceContext = Row.SourceContext;
+			if (!ParseColor(Row.BaseColor, P.BaseColor))
+			{
+				P.BaseColor = FLinearColor::White;
+			}
+			TArray<FString> Tags;
+			SplitBar(Row.Tags, Tags);
+			for (const FString& Tag : Tags)
+			{
+				P.Tags.Add(FName(*Tag));
+			}
+			TArray<FString> Sources;
+			SplitBar(Row.Sources, Sources);
+			for (const FString& Source : Sources)
+			{
+				P.Sources.Add(FName(*Source));
+			}
+			if (!Row.CraftCost.IsEmpty() && !ParseCost(Row.CraftCost, P.CraftCost))
+			{
+				P.CraftCost.Reset();
+				UE_LOG(LogGF, Error, TEXT("Fashion: %s has a craft cost that did not parse (%s)"), *Id.ToString(), *Row.CraftCost);
+			}
+			if (Out.ContainsByPredicate([&Id](const FGFFashionPiece& Have) { return Have.Id == Id; }))
+			{
+				UE_LOG(LogGF, Error, TEXT("Fashion: duplicate piece %s"), *Id.ToString());
+				return;
+			}
+			Out.Add(MoveTemp(P));
+		});
+		return Out;
 	}
 
 	static FGFFashionTheme Theme(const TCHAR* Id, const TCHAR* Name, std::initializer_list<const TCHAR*> Wanted, std::initializer_list<const TCHAR*> Banned)
@@ -31,41 +134,26 @@ namespace GFFashionCatalog
 
 const TArray<FGFFashionPiece>& FGFFashionCatalog::Pieces()
 {
-	using namespace GFFashionCatalog;
-	using S = EGFOutfitSlot;
-	static const TArray<FGFFashionPiece> All = {
-		// Hair
-		Piece(TEXT("FernBraid"), TEXT("Fern Braid"), S::Hair, FLinearColor(0.30f, 0.55f, 0.25f), { TEXT("Nature"), TEXT("Cute") }),
-		Piece(TEXT("StarlightBun"), TEXT("Starlight Bun"), S::Hair, FLinearColor(0.85f, 0.80f, 1.00f), { TEXT("Sparkle"), TEXT("Elegant") }),
-		Piece(TEXT("MossMop"), TEXT("Moss Mop"), S::Hair, FLinearColor(0.40f, 0.45f, 0.20f), { TEXT("Nature"), TEXT("Cozy") }),
-		Piece(TEXT("CometTail"), TEXT("Comet Tail"), S::Hair, FLinearColor(0.95f, 0.60f, 0.20f), { TEXT("Sparkle"), TEXT("Sporty") }),
-		Piece(TEXT("DrizzleCurls"), TEXT("Drizzle Curls"), S::Hair, FLinearColor(0.35f, 0.40f, 0.60f), { TEXT("Rain"), TEXT("Cozy") }),
-		// Tops
-		Piece(TEXT("PetalBlouse"), TEXT("Petal Blouse"), S::Top, FLinearColor(1.00f, 0.65f, 0.75f), { TEXT("Floral"), TEXT("Elegant") }),
-		Piece(TEXT("ExplorerVest"), TEXT("Explorer Vest"), S::Top, FLinearColor(0.60f, 0.45f, 0.25f), { TEXT("Adventure"), TEXT("Practical") }),
-		Piece(TEXT("GlimmerCape"), TEXT("Glimmer Cape"), S::Top, FLinearColor(0.45f, 0.30f, 0.85f), { TEXT("Sparkle"), TEXT("Elegant") }),
-		Piece(TEXT("ChunkyKnit"), TEXT("Chunky Knit"), S::Top, FLinearColor(0.80f, 0.70f, 0.55f), { TEXT("Cozy"), TEXT("Rain") }),
-		Piece(TEXT("ScaleTee"), TEXT("Scale Tee"), S::Top, FLinearColor(0.30f, 0.75f, 0.45f), { TEXT("Dino"), TEXT("Sporty") }),
-		// Bottoms
-		Piece(TEXT("MeadowSkirt"), TEXT("Meadow Skirt"), S::Bottom, FLinearColor(0.95f, 0.85f, 0.45f), { TEXT("Floral"), TEXT("Cute") }),
-		Piece(TEXT("CargoShorts"), TEXT("Cargo Shorts"), S::Bottom, FLinearColor(0.55f, 0.50f, 0.35f), { TEXT("Adventure"), TEXT("Practical") }),
-		Piece(TEXT("NebulaTrousers"), TEXT("Nebula Trousers"), S::Bottom, FLinearColor(0.20f, 0.15f, 0.45f), { TEXT("Sparkle"), TEXT("Elegant") }),
-		Piece(TEXT("PuddleOveralls"), TEXT("Puddle Overalls"), S::Bottom, FLinearColor(0.30f, 0.50f, 0.80f), { TEXT("Rain"), TEXT("Cozy") }),
-		Piece(TEXT("SpikeTailSkirt"), TEXT("Spike-Tail Skirt"), S::Bottom, FLinearColor(0.35f, 0.70f, 0.40f), { TEXT("Dino"), TEXT("Cute") }),
-		// Shoes
-		Piece(TEXT("BloomSandals"), TEXT("Bloom Sandals"), S::Shoes, FLinearColor(1.00f, 0.75f, 0.80f), { TEXT("Floral"), TEXT("Cute") }),
-		Piece(TEXT("TrailBoots"), TEXT("Trail Boots"), S::Shoes, FLinearColor(0.45f, 0.30f, 0.20f), { TEXT("Adventure"), TEXT("Practical") }, false),
-		Piece(TEXT("MoonSlippers"), TEXT("Moon Slippers"), S::Shoes, FLinearColor(0.90f, 0.90f, 0.95f), { TEXT("Sparkle"), TEXT("Elegant") }),
-		Piece(TEXT("SplashBoots"), TEXT("Splash Boots"), S::Shoes, FLinearColor(1.00f, 0.85f, 0.20f), { TEXT("Rain"), TEXT("Cozy") }),
-		Piece(TEXT("ClawSneakers"), TEXT("Claw Sneakers"), S::Shoes, FLinearColor(0.25f, 0.65f, 0.40f), { TEXT("Dino"), TEXT("Sporty") }),
-		// Accessories
-		Piece(TEXT("DaisyCrown"), TEXT("Daisy Crown"), S::Accessory, FLinearColor(1.00f, 1.00f, 0.85f), { TEXT("Floral"), TEXT("Cute"), TEXT("Nature") }),
-		Piece(TEXT("FossilCompass"), TEXT("Fossil Compass"), S::Accessory, FLinearColor(0.70f, 0.60f, 0.40f), { TEXT("Adventure"), TEXT("Dino") }, false),
-		Piece(TEXT("StardustSash"), TEXT("Stardust Sash"), S::Accessory, FLinearColor(0.75f, 0.55f, 1.00f), { TEXT("Sparkle"), TEXT("Elegant") }),
-		Piece(TEXT("LeafBrolly"), TEXT("Leaf Brolly"), S::Accessory, FLinearColor(0.35f, 0.70f, 0.35f), { TEXT("Rain"), TEXT("Nature") }),
-		Piece(TEXT("EggshellPack"), TEXT("Eggshell Pack"), S::Accessory, FLinearColor(0.95f, 0.93f, 0.85f), { TEXT("Dino"), TEXT("Cute") }),
-	};
+	static const TArray<FGFFashionPiece> All = GFFashionCatalog::LoadPieces();
 	return All;
+}
+
+int32 FGFFashionCatalog::RowCount()
+{
+	Pieces();
+	return GFFashionCatalog::GRowCount;
+}
+
+const FGFFashionPiece* FGFFashionCatalog::StarterForSlot(EGFOutfitSlot Slot)
+{
+	for (const FGFFashionPiece& P : Pieces())
+	{
+		if (P.bStarter && P.Slot == Slot)
+		{
+			return &P;
+		}
+	}
+	return nullptr;
 }
 
 const FGFFashionPiece* FGFFashionCatalog::FindPiece(FName Id)

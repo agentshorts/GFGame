@@ -1,0 +1,38 @@
+# Fashion wardrobe catalog. One row is one piece. Adding a row needs no code change.
+# Slot: Head, Top, Bottom, Feet, Accessory, Tail. Sources: Starter, Runway, BeatHop, Mine, Craft. DyeChannels is unused.
+---,DisplayName,Slot,SetId,Rarity,Tags,BaseColor,bDyeable,DyeChannels,bStarter,SourceLine,Sources,SourceContext,CraftCost
+FernBraid,"Fern Braid",Head,Garden,Common,Nature|Cute,"0.30,0.55,0.25",True,0,True,"Yours from the start.",Starter,None,
+StarlightBun,"Starlight Bun",Head,NightMarket,Uncommon,Sparkle|Elegant,"0.85,0.80,1.00",True,0,False,"Win Course 1 in Beat Hop.",BeatHop,Fern,
+MossMop,"Moss Mop",Head,Explorer,Common,Nature|Cozy,"0.40,0.45,0.20",True,0,False,"Haul a satchel home in Pebble Mine.",Mine,None,
+CometTail,"Comet Tail",Head,Volcano,Uncommon,Sparkle|Sporty,"0.95,0.60,0.20",True,0,False,"Win a runway show.",Runway,None,
+DrizzleCurls,"Drizzle Curls",Head,NightMarket,Common,Rain|Cozy,"0.35,0.40,0.60",True,0,False,"Craft: 6 Clay + 1 Crystal",Craft,None,Clay:6|Crystal:1
+PetalBlouse,"Petal Blouse",Top,Garden,Common,Floral|Elegant,"1.00,0.65,0.75",True,0,True,"Yours from the start.",Starter,None,
+ExplorerVest,"Explorer Vest",Top,Explorer,Common,Adventure|Practical,"0.60,0.45,0.25",True,0,False,"Win a runway show.",Runway,None,
+GlimmerCape,"Glimmer Cape",Top,NightMarket,Rare,Sparkle|Elegant,"0.45,0.30,0.85",True,0,False,"Win a runway show.",Runway,None,
+ChunkyKnit,"Chunky Knit",Top,NightMarket,Common,Cozy|Rain,"0.80,0.70,0.55",True,0,False,"Craft: 4 Clay + 2 Coalnut",Craft,None,Clay:4|Coalnut:2
+ScaleTee,"Scale Tee",Top,Volcano,Common,Dino|Sporty,"0.30,0.75,0.45",True,0,False,"Haul a satchel home in Pebble Mine.",Mine,None,
+MeadowSkirt,"Meadow Skirt",Bottom,Garden,Common,Floral|Cute,"0.95,0.85,0.45",True,0,True,"Yours from the start.",Starter,None,
+CargoShorts,"Cargo Shorts",Bottom,Explorer,Common,Adventure|Practical,"0.55,0.50,0.35",True,0,False,"Craft: 6 Clay + 2 Coalnut",Craft,None,Clay:6|Coalnut:2
+NebulaTrousers,"Nebula Trousers",Bottom,NightMarket,Uncommon,Sparkle|Elegant,"0.20,0.15,0.45",True,0,False,"Win Course 1 in Beat Hop.",BeatHop,Fern,
+PuddleOveralls,"Puddle Overalls",Bottom,NightMarket,Common,Rain|Cozy,"0.30,0.50,0.80",True,0,False,"Haul a satchel home in Pebble Mine.",Mine,None,
+SpikeTailSkirt,"Spike-Tail Skirt",Bottom,Volcano,Common,Dino|Cute,"0.35,0.70,0.40",True,0,False,"Craft: 4 Metal + 2 Coalnut",Craft,None,Metal:4|Coalnut:2
+BloomSandals,"Bloom Sandals",Feet,Garden,Common,Floral|Cute,"1.00,0.75,0.80",True,0,True,"Yours from the start.",Starter,None,
+TrailBoots,"Trail Boots",Feet,Explorer,Common,Adventure|Practical,"0.45,0.30,0.20",False,0,False,"Haul a satchel home in Pebble Mine.",Mine,None,
+MoonSlippers,"Moon Slippers",Feet,NightMarket,Uncommon,Sparkle|Elegant,"0.90,0.90,0.95",True,0,False,"Win Course 1 in Beat Hop.",BeatHop,Fern,
+SplashBoots,"Splash Boots",Feet,NightMarket,Common,Rain|Cozy,"1.00,0.85,0.20",True,0,False,"Craft: 4 Clay + 2 Metal",Craft,None,Clay:4|Metal:2
+ClawSneakers,"Claw Sneakers",Feet,Volcano,Common,Dino|Sporty,"0.25,0.65,0.40",True,0,False,"Haul a satchel home in Pebble Mine.",Mine,None,
+DaisyCrown,"Daisy Crown",Accessory,Garden,Common,Floral|Cute|Nature,"1.00,1.00,0.85",True,0,True,"Yours from the start.",Starter,None,
+FossilCompass,"Fossil Compass",Accessory,Explorer,Uncommon,Adventure|Dino,"0.70,0.60,0.40",False,0,False,"Win a runway show.",Runway,None,
+StardustSash,"Stardust Sash",Accessory,NightMarket,Rare,Sparkle|Elegant,"0.75,0.55,1.00",True,0,False,"Win a runway show.",Runway,None,
+LeafBrolly,"Leaf Brolly",Accessory,NightMarket,Common,Rain|Nature,"0.35,0.70,0.35",True,0,False,"Haul a satchel home in Pebble Mine.",Mine,None,
+EggshellPack,"Eggshell Pack",Accessory,Volcano,Common,Dino|Cute,"0.95,0.93,0.85",True,0,False,"Win Course 1 in Beat Hop, or haul a satchel home in Pebble Mine.",BeatHop|Mine,Fern,
+VineTail,"Vine Tail",Tail,Garden,Common,Nature|Cute,"0.35,0.62,0.28",True,0,True,"Yours from the start.",Starter,None,
+PackTail,"Pack Tail",Tail,Explorer,Common,Adventure|Practical,"0.50,0.38,0.22",True,0,False,"Craft: 4 Clay + 2 Metal",Craft,None,Clay:4|Metal:2
+EmberTail,"Ember Tail",Tail,Volcano,Rare,Sparkle|Sporty,"0.90,0.35,0.12",True,0,False,"Win a runway show.",Runway,None,
+LampTail,"Lamp Tail",Tail,NightMarket,Uncommon,Sparkle|Elegant,"0.75,0.65,0.95",True,0,False,"Win Course 1 in Beat Hop.",BeatHop,Fern,
+BoneTail,"Bone Tail",Tail,FossilFormal,Rare,Dino|Elegant,"0.92,0.88,0.78",True,0,False,"Craft: 4 Coalnut + 2 Metal",Craft,None,Coalnut:4|Metal:2
+FossilBun,"Fossil Bun",Head,FossilFormal,Uncommon,Elegant|Dino,"0.85,0.78,0.62",True,0,False,"Craft: 6 Clay + 2 Crystal",Craft,None,Clay:6|Crystal:2
+FossilJacket,"Fossil Jacket",Top,FossilFormal,Rare,Elegant|Dino,"0.35,0.28,0.22",True,0,False,"Craft: 4 Metal + 2 Coalnut",Craft,None,Metal:4|Coalnut:2
+FossilTrousers,"Fossil Trousers",Bottom,FossilFormal,Uncommon,Elegant|Dino,"0.25,0.22,0.20",True,0,False,"Craft: 6 Clay + 2 Coalnut",Craft,None,Clay:6|Coalnut:2
+FossilHeels,"Fossil Heels",Feet,FossilFormal,Uncommon,Elegant|Dino,"0.55,0.45,0.32",True,0,False,"Craft: 4 Clay + 1 Crystal",Craft,None,Clay:4|Crystal:1
+FossilBrooch,"Fossil Brooch",Accessory,FossilFormal,Rare,Elegant|Dino,"0.80,0.70,0.40",True,0,False,"Craft: 2 Crystal + 2 Coalnut",Craft,None,Crystal:2|Coalnut:2

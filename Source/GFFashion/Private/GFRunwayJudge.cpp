@@ -1,6 +1,16 @@
 #include "GFRunwayJudge.h"
 #include "Math/RandomStream.h"
 
+namespace
+{
+	/** Body slots always count. An empty tail does not, so a five-piece look still scores out of five. */
+	static int32 SlotsInScore(const FGFOutfit& Outfit)
+	{
+		const int32 Body = static_cast<int32>(EGFOutfitSlot::Accessory) + 1;
+		return Outfit.GetPiece(EGFOutfitSlot::Tail) ? Body + 1 : Body;
+	}
+}
+
 const TArray<FGFRunwayJudgeProfile>& FGFRunwayJudge::DefaultPanel()
 {
 	auto Make = [](const TCHAR* Name, float Theme, float Harmony, float Complete, float Novelty)
@@ -23,9 +33,9 @@ const TArray<FGFRunwayJudgeProfile>& FGFRunwayJudge::DefaultPanel()
 
 float FGFRunwayJudge::ScoreTheme(const FGFOutfit& Outfit, const FGFFashionTheme& Theme)
 {
-	const int32 NumSlots = static_cast<int32>(EGFOutfitSlot::Count);
+	const int32 Scored = SlotsInScore(Outfit);
 	double Points = 0.0;
-	for (int32 i = 0; i < NumSlots; ++i)
+	for (int32 i = 0; i < static_cast<int32>(EGFOutfitSlot::Count); ++i)
 	{
 		const FGFFashionPiece* P = Outfit.GetPiece(static_cast<EGFOutfitSlot>(i));
 		if (!P)
@@ -40,7 +50,7 @@ float FGFRunwayJudge::ScoreTheme(const FGFOutfit& Outfit, const FGFFashionTheme&
 		}
 		Points += (Wanted > 0 ? 2.0 : 0.0) - 2.0 * Banned;
 	}
-	return static_cast<float>(FMath::Clamp(Points / (2.0 * NumSlots) * 10.0, 0.0, 10.0));
+	return static_cast<float>(FMath::Clamp(Points / (2.0 * Scored) * 10.0, 0.0, 10.0));
 }
 
 float FGFRunwayJudge::ScoreHarmony(const FGFOutfit& Outfit)
@@ -87,7 +97,33 @@ float FGFRunwayJudge::ScoreHarmony(const FGFOutfit& Outfit)
 
 float FGFRunwayJudge::ScoreCompleteness(const FGFOutfit& Outfit)
 {
-	return 10.f * Outfit.NumFilled() / static_cast<float>(EGFOutfitSlot::Count);
+	return 10.f * Outfit.NumFilled() / static_cast<float>(SlotsInScore(Outfit));
+}
+
+float FGFRunwayJudge::ScoreSet(const FGFOutfit& Outfit)
+{
+	TMap<FName, int32> Counts;
+	int32 Filled = 0;
+	for (int32 i = 0; i < static_cast<int32>(EGFOutfitSlot::Count); ++i)
+	{
+		const FGFFashionPiece* P = Outfit.GetPiece(static_cast<EGFOutfitSlot>(i));
+		if (!P || P->SetId.IsNone())
+		{
+			continue;
+		}
+		Counts.FindOrAdd(P->SetId) += 1;
+		++Filled;
+	}
+	if (Filled == 0)
+	{
+		return 0.f;
+	}
+	int32 Best = 0;
+	for (const TPair<FName, int32>& Pair : Counts)
+	{
+		Best = FMath::Max(Best, Pair.Value);
+	}
+	return 10.f * static_cast<float>(Best) / static_cast<float>(Filled);
 }
 
 float FGFRunwayJudge::ScoreNovelty(const FGFOutfit& Outfit, const TArray<FGFOutfit>& History)

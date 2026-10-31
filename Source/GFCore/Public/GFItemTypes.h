@@ -120,7 +120,7 @@ struct GFCORE_API FGFItemRow : public FTableRowBase
 
 	/**
 	 * Wearable slot when Category is Outfit. None on every other row.
-	 * The name is an EGFOutfitSlot: Hair, Top, Bottom, Shoes, Accessory.
+	 * The name is an EGFOutfitSlot: Hair, Top, Bottom, Shoes, Accessory, Tail.
 	 * Hats and masks use Hair. A full suit hangs on Top. Bags, cosmetics and other accessories use Accessory.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item")

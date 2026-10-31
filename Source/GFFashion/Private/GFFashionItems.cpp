@@ -42,13 +42,15 @@ FName FGFFashionItems::RowNameForSlot(EGFOutfitSlot Slot)
 	case EGFOutfitSlot::Bottom: return TEXT("Bottom");
 	case EGFOutfitSlot::Shoes: return TEXT("Shoes");
 	case EGFOutfitSlot::Accessory: return TEXT("Accessory");
+	case EGFOutfitSlot::Tail: return TEXT("Tail");
 	default: return NAME_None;
 	}
 }
 
 bool FGFFashionItems::SlotFromRowName(FName SlotName, EGFOutfitSlot& OutSlot)
 {
-	if (SlotName == TEXT("Hair"))
+	// Hair and Shoes are the saved DT_Items tokens. Head and Feet are the catalog words for the same slots.
+	if (SlotName == TEXT("Hair") || SlotName == TEXT("Head"))
 	{
 		OutSlot = EGFOutfitSlot::Hair;
 		return true;
@@ -63,7 +65,7 @@ bool FGFFashionItems::SlotFromRowName(FName SlotName, EGFOutfitSlot& OutSlot)
 		OutSlot = EGFOutfitSlot::Bottom;
 		return true;
 	}
-	if (SlotName == TEXT("Shoes"))
+	if (SlotName == TEXT("Shoes") || SlotName == TEXT("Feet"))
 	{
 		OutSlot = EGFOutfitSlot::Shoes;
 		return true;
@@ -71,6 +73,11 @@ bool FGFFashionItems::SlotFromRowName(FName SlotName, EGFOutfitSlot& OutSlot)
 	if (SlotName == TEXT("Accessory"))
 	{
 		OutSlot = EGFOutfitSlot::Accessory;
+		return true;
+	}
+	if (SlotName == TEXT("Tail"))
+	{
+		OutSlot = EGFOutfitSlot::Tail;
 		return true;
 	}
 	return false;
