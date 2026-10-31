@@ -58,7 +58,15 @@ There is still no Unreal wiring. The lab does not subscribe to giant events, and
 
 ## Tests
 
-`npm test` covers FillTarget, the PG filter, persona canon (CSV and `NewDinos_v1.md`), prompts, clipping, the small-model picker against the installed WebLLM list, ELIZA / AIML / RiveScript cue lines, a raw ELIZA override, MegaHAL, transcript version 2, the alignment matrix, the 4096 context budget, a mocked WebLLM client, and the memory core (per-dino budgets, summaries, quotas, the no-reply-to-reply rule, stat rows, the elder digest, and the localStorage adapter). The real model is not downloaded in CI-less local tests.
+`npm test` covers FillTarget, the PG filter, persona canon (CSV and `NewDinos_v1.md`), prompts, clipping, the small-model picker against the installed WebLLM list, ELIZA / AIML / RiveScript cue lines, a raw ELIZA override, MegaHAL, transcript version 2, the alignment matrix, the 4096 context budget, a mocked WebLLM client, the shared brain pool, and the memory core (per-dino budgets, summaries, quotas, the no-reply-to-reply rule, stat rows, the elder digest, and the localStorage adapter). The real model is not downloaded in CI-less local tests.
+
+## Shared brain pool
+
+`src/logic/brainPool.ts` is the one WebLLM queue for every dino. `useLab` asks it once, when a model is already loaded. Steer, rephrase, and summary still call the browser engine on their own. Tests pass a fake engine. They do not download weights.
+
+Each ask packs that dino only. `context.ts` (`createContext`, `remember`, `setBudget`) fits the window. `memory.ts` (`assembleTurn`) builds the prompt. The cap is 4096 estimated tokens, even if the lab knob is higher. One dino's summary, relationship note, world note, player record, and turns are not copied into another dino's prompt.
+
+The queue runs one generation at a time. Each dino has one slot, in the order the slots were opened. A newer ask from the same dino replaces that slot. If that dino is already generating, the new line waits behind dinos who are already queued. A missing model, a timeout, an empty reply, or an unload falls back to the classic engine. Timeout and unload put the reason on the trace. Unload aborts the in-flight call, settles every queued ask, and does not start those generations. `cancel` drops a dino's turn without speaking. Reset chat unloads the queue.
 
 ## Memory
 
