@@ -2,15 +2,19 @@
 // crew verbs, a haul lands in the bag, one upgrade can be bought, and the arch puts you back on the hub stand.
 
 #include "Misc/AutomationTest.h"
+#include "GFDataTables.h"
+#include "GFFashionTypes.h"
 #include "GFGameState.h"
 #include "GFHubGateDirector.h"
 #include "GFInventoryComponent.h"
+#include "GFItemTypes.h"
 #include "GFMineDirector.h"
 #include "GFMineSite.h"
 #include "GFMineTypes.h"
 #include "GFMiniGameCatalog.h"
 #include "GFMiniGameGate.h"
 #include "GFPlayerState.h"
+#include "GFWardrobe.h"
 #include "Components/BoxComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -78,6 +82,13 @@ namespace GFMinePlayableTests
 		return nullptr;
 	}
 
+	static bool IsOutfitItem(FName ItemId)
+	{
+		const UDataTable* Items = FGFDataTables::Get<FGFItemRow>(TEXT("DT_Items"));
+		const FGFItemRow* Row = Items ? Items->FindRow<FGFItemRow>(ItemId, TEXT("MineBag"), false) : nullptr;
+		return Row && Row->Category == EGFItemCategory::Outfit;
+	}
+
 	static int32 BagTotal(const AGFPlayerState* PS)
 	{
 		int32 N = 0;
@@ -87,7 +98,10 @@ namespace GFMinePlayableTests
 		}
 		for (const FGFItemStack& S : PS->Inventory->GetInventory().Items)
 		{
-			N += S.Count;
+			if (!IsOutfitItem(S.ItemId))
+			{
+				N += S.Count;
+			}
 		}
 		return N;
 	}
@@ -101,6 +115,10 @@ namespace GFMinePlayableTests
 		}
 		for (const FGFItemStack& S : PS->Inventory->GetInventory().Items)
 		{
+			if (IsOutfitItem(S.ItemId))
+			{
+				continue;
+			}
 			const bool bFromRoom = Room->Yields.ContainsByPredicate([&](const FGFRewardEntry& E) { return E.ItemId == S.ItemId; });
 			if (!bFromRoom)
 			{
@@ -108,6 +126,22 @@ namespace GFMinePlayableTests
 			}
 		}
 		return true;
+	}
+
+	static void ExpectMineWardrobeOnce(FAutomationTestBase& Test, const AGFPlayerState* PS)
+	{
+		int32 Pieces = 0;
+		for (const FGFFashionPiece& Piece : FGFFashionCatalog::Pieces())
+		{
+			if (!Piece.Sources.Contains(FGFWardrobe::ActivityMine))
+			{
+				continue;
+			}
+			++Pieces;
+			const int32 Have = PS && PS->Inventory ? PS->Inventory->GetCount(Piece.Id) : 0;
+			Test.TestEqual(*FString::Printf(TEXT("%s minted once"), *Piece.Id.ToString()), Have, 1);
+		}
+		Test.TestTrue(TEXT("A haul mints a wardrobe piece"), Pieces > 0);
 	}
 
 	static FString JoinLines(const TArray<FString>& Lines)
@@ -355,6 +389,7 @@ bool FGFMinePlayableLoopTest::RunTest(const FString&)
 	const int32 Brought = BagTotal(PS);
 	TestTrue(TEXT("Pebbles land in the bag"), Brought >= 2 && Brought <= 5);
 	TestTrue(TEXT("Only Shallows drops"), BagOnlyShallows(PS));
+	ExpectMineWardrobeOnce(*this, PS);
 	TestEqual(TEXT("No Wood in a Shallows haul"), PS->Inventory->GetCount(TEXT("Wood")), 0);
 
 	Mine->SimSpeed = 0.f;

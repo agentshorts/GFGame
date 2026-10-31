@@ -2,13 +2,17 @@
 // makes it hide, the crew digs only its own rooms, nothing reaches the player's bag until they order the haul, upgrades
 // burn materials, a returning player gets their capped offline haul, and leaving saves the crew with the clock.
 #include "GFNetTestUtils.h"
+#include "GFDataTables.h"
+#include "GFFashionTypes.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFInventoryComponent.h"
+#include "GFItemTypes.h"
 #include "GFMineDirector.h"
 #include "GFMineTypes.h"
 #include "GFModeTypes.h"
 #include "GFRewards.h"
+#include "GFWardrobe.h"
 #include "Engine/World.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameSession.h"
@@ -69,12 +73,22 @@ namespace GFNetMineTest
 		return !R ? FString(TEXT("<none>")) : (R->bOk ? FString(TEXT("Ok")) : R->Code.ToString());
 	}
 
+	bool IsOutfitItem(FName ItemId)
+	{
+		const UDataTable* Items = FGFDataTables::Get<FGFItemRow>(TEXT("DT_Items"));
+		const FGFItemRow* Row = Items ? Items->FindRow<FGFItemRow>(ItemId, TEXT("MineBag"), false) : nullptr;
+		return Row && Row->Category == EGFItemCategory::Outfit;
+	}
+
 	int32 BagTotal(const AGFPlayerState* PS)
 	{
 		int32 N = 0;
 		for (const FGFItemStack& S : PS->Inventory->GetInventory().Items)
 		{
-			N += S.Count;
+			if (!IsOutfitItem(S.ItemId))
+			{
+				N += S.Count;
+			}
 		}
 		return N;
 	}
@@ -83,6 +97,10 @@ namespace GFNetMineTest
 	{
 		for (const FGFItemStack& S : PS->Inventory->GetInventory().Items)
 		{
+			if (IsOutfitItem(S.ItemId))
+			{
+				continue;
+			}
 			bool bFound = false;
 			for (const TCHAR* R : Rooms)
 			{
@@ -95,6 +113,44 @@ namespace GFNetMineTest
 			}
 		}
 		return true;
+	}
+
+	bool MineWardrobeOnce(const AGFPlayerState* PS)
+	{
+		if (!PS || !PS->Inventory)
+		{
+			return false;
+		}
+		bool bAny = false;
+		for (const FGFFashionPiece& Piece : FGFFashionCatalog::Pieces())
+		{
+			if (!Piece.Sources.Contains(FGFWardrobe::ActivityMine))
+			{
+				continue;
+			}
+			bAny = true;
+			if (PS->Inventory->GetCount(Piece.Id) != 1)
+			{
+				return false;
+			}
+		}
+		return bAny;
+	}
+
+	void ExpectMineWardrobeOnce(FAutomationTestBase& Test, const AGFPlayerState* PS)
+	{
+		int32 Pieces = 0;
+		for (const FGFFashionPiece& Piece : FGFFashionCatalog::Pieces())
+		{
+			if (!Piece.Sources.Contains(FGFWardrobe::ActivityMine))
+			{
+				continue;
+			}
+			++Pieces;
+			const int32 Have = PS && PS->Inventory ? PS->Inventory->GetCount(Piece.Id) : 0;
+			Test.TestEqual(*FString::Printf(TEXT("%s minted once"), *Piece.Id.ToString()), Have, 1);
+		}
+		Test.TestTrue(TEXT("A haul mints a wardrobe piece"), Pieces > 0);
 	}
 
 	const FGFPebbling* ClientPebbling(const FGuid& Id)
@@ -224,12 +280,13 @@ bool FGFNetMineTest::RunTest(const FString&)
 	});
 	WaitUntil(Ctx, TEXT("the haul reaches the player's bag"), 20.f, [Run]()
 	{
-		return HaveAll(*Run, { TEXT("HaulAll") }) && BagTotal(Client(0)) >= 24;
+		return HaveAll(*Run, { TEXT("HaulAll") }) && BagTotal(Client(0)) >= 24 && MineWardrobeOnce(Client(0));
 	});
 	Do(Ctx, [this, Run]()
 	{
 		TestEqual(TEXT("Haul order"), Code(*Run, TEXT("HaulAll")), FString(TEXT("Ok")));
 		TestTrue(TEXT("Only what their rooms give"), BagOnlyFrom(Client(0), { TEXT("Shallows"), TEXT("CrystalGallery") }));
+		ExpectMineWardrobeOnce(*this, Client(0));
 		TestTrue(TEXT("Metal or Crystal came from the Gallery"),
 			Client(0)->Inventory->GetInventory().GetCount(TEXT("Metal")) + Client(0)->Inventory->GetInventory().GetCount(TEXT("Crystal")) > 0);
 		ServerDirector()->SimSpeed = 0.f; // stop online digging for the offline checks

@@ -386,7 +386,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFWardrobeRackTest, "GFGame.Fashion.Wardrobe.R
 bool FGFWardrobeRackTest::RunTest(const FString&)
 {
 	using namespace GFWardrobeTests;
-	FWorld W(TEXT("GFWardrobeRackWorld"));
+	// Qualified: a unity build also sees GFSocialTest::FWorld from `using namespace GFSocialTest`.
+	GFWardrobeTests::FWorld W(TEXT("GFWardrobeRackWorld"));
 	if (!TestNotNull(TEXT("World"), W.World))
 	{
 		return false;
