@@ -256,6 +256,9 @@ void AGFDepthsSite::BuildVisuals()
 	AddLabel(TEXT("X"), FVector(LaneX, -80.f, 160.f), 32.f);
 	AddBlock(FVector(LaneX, 40.f, 24.f), FVector(180.f, 60.f, 16.f), FLinearColor(0.55f, 0.85f, 0.55f), false);
 	AddLabel(TEXT("C"), FVector(LaneX, 40.f, 60.f), 32.f);
+	// The drink under that bridge. Paint only: the sim owns the real channel.
+	AddBlock(FVector(LaneX, 145.f, 2.f), FVector(220.f, 90.f, 12.f), FLinearColor(0.25f, 0.55f, 0.85f), false);
+	AddLabel(TEXT("Water"), FVector(LaneX, 145.f, 48.f), 28.f);
 
 	AddArch(TEXT("Start"), SpotStart, FVector(LaneX, StartY, 0.f), StartTint);
 	AddArch(TEXT("Finish"), SpotFinish, FVector(LaneX, FinishY, 0.f), FinishTint);
@@ -457,6 +460,10 @@ void AGFDepthsSite::GetPromptLines(const AGFPlayerState* PS, TArray<FString>& Ou
 	OutLines.Add(TEXT("Walk Start, then Finish, then Results. The Hub arch goes back."));
 	OutLines.Add(FString::Printf(TEXT("Start opens depth %d. Finished: %d."), NextDepth(PS), PS ? PS->Progress.DepthsReached : 0));
 	OutLines.Add(TEXT("Finish is the exit lift. It banks what the exit drops."));
+	if (FGFDepthsLevel::Get(1).Waters.Num() > 0)
+	{
+		OutLines.Add(TEXT("Water sits under the last bridge. A rented flyer can catch you or fly you over. A rented swimmer can float it."));
+	}
 	const AGFDepthsDirector* Director = AGFDepthsDirector::Get(GetWorld(), false);
 	if (PS && Director && Director->FindPlayer(PS->PlayerKey))
 	{

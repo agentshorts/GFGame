@@ -2,8 +2,9 @@
 
 // Hallow Night (the Depths, PLAN.md M7): a 2.5D side-on dungeon. Everything here is pure and deterministic:
 // the mover (X/Z only, there is no Y to drift into), shared Z/X/C platforms whose position is a function of
-// server time, the run rules (5 HP, 3 heals per section, 2 checkpoints per depth, half of unbanked loot lost
-// on death, Lift Home banks everything) and the greybox level layout.
+// server time, the run rules (5 HP, 3 heals per section, as many checkpoints as the depth lists,
+// a faint keeps unbanked loot and respawns with no life cap, leaving mid-run still drops half,
+// Lift Home banks everything) and the greybox level layout, including its water.
 #include "CoreMinimal.h"
 #include "Math/Box2D.h"
 #include "GFItemTypes.h"
@@ -129,6 +130,17 @@ struct GFDEPTHS_API FGFDepthsEnemyDef
 	UPROPERTY(BlueprintReadOnly, Category = "Depths") int32 Section = 0;
 };
 
+/** A drink in the course. Floating it grows a floor at SurfaceZ. NearBank and FarBank are standing spots. */
+struct GFDEPTHS_API FGFDepthsWater
+{
+	FName Id;
+	FBox2D Volume;
+	/** Top of the floor that appears once this area is floated. Matches the banks. */
+	float SurfaceZ = 400.f;
+	FVector2D NearBank = FVector2D::ZeroVector;
+	FVector2D FarBank = FVector2D::ZeroVector;
+};
+
 /** The greybox layout of one depth. */
 struct GFDEPTHS_API FGFDepthsLevel
 {
@@ -136,13 +148,14 @@ struct GFDEPTHS_API FGFDepthsLevel
 	TArray<FBox2D> Solids;
 	TArray<FBox2D> Hazards;
 	TArray<FGFDepthsPlatform> Platforms;
-	/** Two checkpoints per depth (each also a lift home); X on the floor. */
+	/** One per bank, including the far side of a water channel. The rules do not cap the count. */
 	TArray<FVector2D> Checkpoints;
+	TArray<FGFDepthsWater> Waters;
 	FVector2D Entrance = FVector2D::ZeroVector;
 	FVector2D Exit = FVector2D::ZeroVector;
 	TArray<FVector2D> Pickups;
 	TArray<FGFDepthsEnemyDef> Enemies;
-	/** Which section a point is in (0 = before checkpoint 1, 1, 2 = after checkpoint 2). */
+	/** Which section a point is in (0 = before the first checkpoint, then one past each checkpoint). */
 	int32 SectionAt(float X) const;
 
 	static const FGFDepthsLevel& Get(int32 Depth);
@@ -174,8 +187,8 @@ struct GFDEPTHS_API FGFDepthsMover
 {
 	static constexpr float StepSeconds = 1.f / 60.f;
 
-	/** One fixed step at server time Now (platforms are read at Now - Dt and Now so riders get carried). */
-	static void Step(const FGFDepthsMoveParams& P, const FGFDepthsLevel& L, const TArray<FGFDepthsSwitch>& Switches, double Now, const FGFDepthsInput& In, FGFDepthsBody& B, float Dt);
+	/** One fixed step at server time Now (platforms are read at Now - Dt and Now so riders get carried). ExtraSolids are floated water floors. */
+	static void Step(const FGFDepthsMoveParams& P, const FGFDepthsLevel& L, const TArray<FGFDepthsSwitch>& Switches, double Now, const FGFDepthsInput& In, FGFDepthsBody& B, float Dt, const TArray<FBox2D>* ExtraSolids = nullptr);
 	/** Knocked back away from FromX, with invulnerability. False if still invulnerable. */
 	static bool Knockback(const FGFDepthsMoveParams& P, FGFDepthsBody& B, float FromX);
 	static FBox2D BodyBox(const FGFDepthsMoveParams& P, const FVector2D& Pos);
@@ -212,10 +225,12 @@ struct GFDEPTHS_API FGFDepthsRules
 	static bool Damage(FGFDepthsRunState& S, int32 Amount);
 	/** One of the section's heals: +2 HP (not past 5). */
 	static bool Heal(FGFDepthsRunState& S);
-	/** Checkpoint Index reached: the new section gets 3 fresh heals; returns what gets banked now (and clears it). */
+	/** Checkpoint Index reached (any index past the last one; there is no cap). The new section gets 3 fresh heals; returns what gets banked now. */
 	static bool ReachCheckpoint(FGFDepthsRunState& S, int32 Index, TArray<FGFItemStack>& OutBank);
-	/** Fainted: loses floor(half) of every unbanked stack (returned), keeps the rest unbanked; full HP and heals at the checkpoint. */
-	static TArray<FGFItemStack> Die(FGFDepthsRunState& S);
+	/** In-run faint. Loot stays unbanked. HP and heals refill. There is no life cap. */
+	static void CheckpointRespawn(FGFDepthsRunState& S);
+	/** Leave mid-run. Floor of half of every unbanked stack is lost (returned). The rest stays unbanked for Lift Home. */
+	static TArray<FGFItemStack> LeaveShare(FGFDepthsRunState& S);
 	/** Lift Home: everything unbanked gets banked (returned); the run ends. */
 	static TArray<FGFItemStack> LiftHome(FGFDepthsRunState& S);
 	/** Enemy HP for a depth and party size. */
@@ -223,4 +238,24 @@ struct GFDEPTHS_API FGFDepthsRules
 	/** Rolls a drop at Depth (Kind: Pickup, Enemy, Exit). */
 	static void RollLoot(int32 Depth, FName Kind, FRandomStream& Rng, TArray<FGFItemStack>& Out);
 	static const FGFDepthsRewardRow* RewardRow(int32 Depth);
+};
+
+struct FGFHelperResolution;
+
+/** Scripted catch, float and fly once a helper call has already been accepted. */
+struct GFDEPTHS_API FGFDepthsHelp
+{
+	static const FGFDepthsWater* FindWater(const FGFDepthsLevel& L, const FString& Name);
+	static bool InWater(const FGFDepthsMoveParams& P, const FGFDepthsLevel& L, const FGFDepthsBody& B, int32* OutIndex = nullptr);
+	static void AppendFloatedFloors(const FGFDepthsLevel& L, const TArray<FName>& Floated, TArray<FBox2D>& Out);
+	static FVector2D StandOn(const FGFDepthsWater& W, float X);
+	static void Place(FGFDepthsBody& B, const FVector2D& Pos);
+	/** If Body is inside W, stand them on the floated surface. */
+	static bool LiftIfInside(const FGFDepthsMoveParams& P, const FGFDepthsWater& W, FGFDepthsBody& B);
+	/**
+	 * Catch pulls a falling body onto a bank. Float marks the area and lifts this body.
+	 * Fly carries them to a platform's far end or a water's far bank.
+	 * Checkpoint is the run's last checkpoint (INDEX_NONE = the entrance) for a catch in open air.
+	 */
+	static bool Apply(const FGFDepthsLevel& L, FGFDepthsBody& Body, int32 Checkpoint, TArray<FName>& Floated, const FGFHelperResolution& Call, FName& OutCode);
 };

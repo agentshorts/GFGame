@@ -5,10 +5,12 @@
 // bodies, runs, enemies and the shared Z/X/C switches (clients place platforms from switch state + server time).
 //
 // Verbs (FGFModeRequest.Verb):
-//   Enter     Ints = [depth]  (depth N needs N-1 finished)        Leave (counts as fainting: half the unbanked loot is lost)
+//   Enter     Ints = [depth]  (depth N needs N-1 finished)        Leave (mid-run: half the unbanked loot is lost, the rest is banked)
 //   Input     Floats = [moveX -1..1], Ints = [jumpPressed, jumpHeld, dashPressed]
 //   Switch    Names = [Z | X | C] (anyone in the run; 0.4 s cooldown per key)
 //   Heal      (3 per section, +2 HP)      Attack (1 damage to shades in front)     Revive (a downed friend in reach)
+//   Helper    Names = [dino id, tool id, optional arg]
+//             catch_player (where), float_water_area (area), fly_player_over (level). A faint keeps loot.
 //   LiftHome  (at the entrance, a reached checkpoint or the exit: banks everything) -> Stacks = banked
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -67,6 +69,8 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Depths") TArray<FGFDepthsSwitch> Switches;
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Depths") TArray<FGFDepthsEnemyView> Enemies;
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Depths") TArray<bool> PickupTaken;
+	/** Water areas a rented swimmer has floated this run. Shared, like the Z/X/C switches. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Depths") TArray<FName> FloatedAreas;
 
 	/** Server or client: where a platform is right now (switch state + replicated server time). */
 	FVector2D PlatformPosition(int32 Index) const;

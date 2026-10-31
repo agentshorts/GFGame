@@ -1,5 +1,6 @@
 #include "GFDepthsTypes.h"
 #include "GFDataTables.h"
+#include "GFHelperTools.h"
 
 namespace GFDepthsSim
 {
@@ -83,6 +84,15 @@ FGFDepthsLevel FGFDepthsLevel::MakeGreybox(int32 Depth)
 	L.Solids.Add(Box(6200.f, -200.f, 6300.f, 1500.f)); // right wall
 	L.Pickups.Add(FVector2D(5800.f, 460.f));
 	L.Exit = FVector2D(6000.f, 460.f);
+	// The drink under the C bridge. The switch still crosses in the air. Floating grows a floor.
+	FGFDepthsWater Pool;
+	Pool.Id = TEXT("NightPool");
+	Pool.Volume = Box(5000.f, -400.f, 5500.f, 220.f);
+	Pool.SurfaceZ = 400.f;
+	Pool.NearBank = FVector2D(4880.f, 460.f);
+	Pool.FarBank = FVector2D(5680.f, 460.f);
+	L.Waters.Add(Pool);
+	L.Checkpoints.Add(Pool.FarBank);
 	if (L.Depth >= 3)
 	{
 		L.Hazards.Add(Box(4550.f, 400.f, 4620.f, 430.f));
@@ -182,7 +192,7 @@ bool FGFDepthsMover::Knockback(const FGFDepthsMoveParams& P, FGFDepthsBody& B, f
 	return true;
 }
 
-void FGFDepthsMover::Step(const FGFDepthsMoveParams& P, const FGFDepthsLevel& L, const TArray<FGFDepthsSwitch>& Switches, double Now, const FGFDepthsInput& In, FGFDepthsBody& B, float Dt)
+void FGFDepthsMover::Step(const FGFDepthsMoveParams& P, const FGFDepthsLevel& L, const TArray<FGFDepthsSwitch>& Switches, double Now, const FGFDepthsInput& In, FGFDepthsBody& B, float Dt, const TArray<FBox2D>* ExtraSolids)
 {
 	using GFDepthsSim::Overlaps;
 	// Ride the platform the player stands on.
@@ -292,6 +302,14 @@ void FGFDepthsMover::Step(const FGFDepthsMoveParams& P, const FGFDepthsLevel& L,
 		Boxes.Add(FGFDepthsPlatforms::BoxAt(L.Platforms[i], Switches, Now));
 		PlatformOf.Add(i);
 	}
+	if (ExtraSolids)
+	{
+		for (const FBox2D& Extra : *ExtraSolids)
+		{
+			Boxes.Add(Extra);
+			PlatformOf.Add(INDEX_NONE);
+		}
+	}
 	constexpr float Eps = 0.01f;
 
 	B.Pos.X += B.Vel.X * Dt;
@@ -395,7 +413,7 @@ bool FGFDepthsRules::Heal(FGFDepthsRunState& S)
 
 bool FGFDepthsRules::ReachCheckpoint(FGFDepthsRunState& S, int32 Index, TArray<FGFItemStack>& OutBank)
 {
-	if (Index <= S.Checkpoint || Index < 0 || Index > 1 || S.bDowned)
+	if (Index <= S.Checkpoint || Index < 0 || S.bDowned)
 	{
 		return false;
 	}
@@ -407,7 +425,16 @@ bool FGFDepthsRules::ReachCheckpoint(FGFDepthsRunState& S, int32 Index, TArray<F
 	return true;
 }
 
-TArray<FGFItemStack> FGFDepthsRules::Die(FGFDepthsRunState& S)
+void FGFDepthsRules::CheckpointRespawn(FGFDepthsRunState& S)
+{
+	S.HP = FGFDepthsRunState::MaxHP;
+	S.Heals = FGFDepthsRunState::HealsPerSection;
+	S.bDowned = false;
+	S.DownedLeft = 0.f;
+	++S.Deaths;
+}
+
+TArray<FGFItemStack> FGFDepthsRules::LeaveShare(FGFDepthsRunState& S)
 {
 	TArray<FGFItemStack> Lost;
 	for (int32 i = S.Unbanked.Num() - 1; i >= 0; --i)
@@ -424,11 +451,6 @@ TArray<FGFItemStack> FGFDepthsRules::Die(FGFDepthsRunState& S)
 			S.Unbanked.RemoveAt(i);
 		}
 	}
-	S.HP = FGFDepthsRunState::MaxHP;
-	S.Heals = FGFDepthsRunState::HealsPerSection;
-	S.bDowned = false;
-	S.DownedLeft = 0.f;
-	++S.Deaths;
 	return Lost;
 }
 
@@ -465,4 +487,198 @@ void FGFDepthsRules::RollLoot(int32 Depth, FName Kind, FRandomStream& Rng, TArra
 	}
 	const TArray<FGFRewardEntry>& E = Kind == TEXT("Enemy") ? Row->Enemy : Kind == TEXT("Exit") ? Row->Exit : Row->Pickup;
 	FGFRewards::Roll(E, Rng, 1.f, Out);
+}
+
+// ---------------------------------------------------------------- rented help
+
+namespace
+{
+	static constexpr float CatchDropY = -20.f;
+
+	static FString LooseKey(FString Name)
+	{
+		Name.TrimStartAndEndInline();
+		Name.ToLowerInline();
+		FString Out;
+		for (const TCHAR C : Name)
+		{
+			if (C != TEXT(' ') && C != TEXT('-') && C != TEXT('_'))
+			{
+				Out.AppendChar(C);
+			}
+		}
+		return Out;
+	}
+
+	static bool WantsFarBank(const FGFHelperArgs& Args, const FGFDepthsWater& W)
+	{
+		if (!Args.bWhere)
+		{
+			return false;
+		}
+		const FString Where = LooseKey(Args.Where);
+		return Where == TEXT("far") || Where == LooseKey(W.Id.ToString()) + TEXT("far");
+	}
+}
+
+const FGFDepthsWater* FGFDepthsHelp::FindWater(const FGFDepthsLevel& L, const FString& Name)
+{
+	const FString Key = LooseKey(Name);
+	if (Key.IsEmpty())
+	{
+		return nullptr;
+	}
+	for (const FGFDepthsWater& W : L.Waters)
+	{
+		if (LooseKey(W.Id.ToString()) == Key)
+		{
+			return &W;
+		}
+	}
+	return nullptr;
+}
+
+bool FGFDepthsHelp::InWater(const FGFDepthsMoveParams& P, const FGFDepthsLevel& L, const FGFDepthsBody& B, int32* OutIndex)
+{
+	const FBox2D Me = FGFDepthsMover::BodyBox(P, B.Pos);
+	for (int32 i = 0; i < L.Waters.Num(); ++i)
+	{
+		if (GFDepthsSim::Overlaps(Me, L.Waters[i].Volume))
+		{
+			if (OutIndex)
+			{
+				*OutIndex = i;
+			}
+			return true;
+		}
+	}
+	if (OutIndex)
+	{
+		*OutIndex = INDEX_NONE;
+	}
+	return false;
+}
+
+void FGFDepthsHelp::AppendFloatedFloors(const FGFDepthsLevel& L, const TArray<FName>& Floated, TArray<FBox2D>& Out)
+{
+	for (const FGFDepthsWater& W : L.Waters)
+	{
+		if (!Floated.Contains(W.Id))
+		{
+			continue;
+		}
+		const float Top = W.SurfaceZ;
+		Out.Add(FBox2D(FVector2D(W.Volume.Min.X, Top - 20.f), FVector2D(W.Volume.Max.X, Top)));
+	}
+}
+
+FVector2D FGFDepthsHelp::StandOn(const FGFDepthsWater& W, float X)
+{
+	const float HalfW = FGFDepthsMoveParams().HalfWidth;
+	const float MinX = W.Volume.Min.X + HalfW;
+	const float MaxX = W.Volume.Max.X - HalfW;
+	const float Clamped = MinX <= MaxX ? FMath::Clamp(X, MinX, MaxX) : (W.Volume.Min.X + W.Volume.Max.X) * 0.5f;
+	return FVector2D(Clamped, W.SurfaceZ + FGFDepthsMoveParams().HalfHeight);
+}
+
+void FGFDepthsHelp::Place(FGFDepthsBody& B, const FVector2D& Pos)
+{
+	const int32 Facing = B.Facing == 0 ? 1 : B.Facing;
+	B = FGFDepthsBody();
+	B.Pos = Pos;
+	B.bGrounded = true;
+	B.Facing = Facing;
+}
+
+bool FGFDepthsHelp::LiftIfInside(const FGFDepthsMoveParams& P, const FGFDepthsWater& W, FGFDepthsBody& B)
+{
+	const FBox2D Me = FGFDepthsMover::BodyBox(P, B.Pos);
+	if (!GFDepthsSim::Overlaps(Me, W.Volume))
+	{
+		return false;
+	}
+	Place(B, StandOn(W, B.Pos.X));
+	return true;
+}
+
+bool FGFDepthsHelp::Apply(const FGFDepthsLevel& L, FGFDepthsBody& Body, int32 Checkpoint, TArray<FName>& Floated, const FGFHelperResolution& Call, FName& OutCode)
+{
+	if (!Call.bOk || Call.bDecline)
+	{
+		OutCode = TEXT("BadCall");
+		return false;
+	}
+	const FGFDepthsMoveParams Params = FGFDepthsMoveParams::ForDepth(L.Depth);
+	if (Call.ToolId == FGFHelperTools::FloatWater)
+	{
+		const FGFDepthsWater* W = FindWater(L, Call.Args.Area);
+		if (!W)
+		{
+			OutCode = TEXT("BadArea");
+			return false;
+		}
+		Floated.AddUnique(W->Id);
+		LiftIfInside(Params, *W, Body);
+		OutCode = TEXT("Ok");
+		return true;
+	}
+	if (Call.ToolId == FGFHelperTools::FlyOver)
+	{
+		const FString LevelName = Call.Args.Level.TrimStartAndEnd();
+		const FName Key(*LevelName);
+		if (FGFDepthsPlatforms::IsKey(Key))
+		{
+			const FGFDepthsPlatform* Platform = L.Platforms.FindByPredicate([&](const FGFDepthsPlatform& P) { return P.Key == Key; });
+			if (!Platform)
+			{
+				OutCode = TEXT("BadLevel");
+				return false;
+			}
+			Place(Body, Platform->B + FVector2D(0.f, Platform->HalfSize.Y + Params.HalfHeight));
+			OutCode = TEXT("Ok");
+			return true;
+		}
+		const FGFDepthsWater* W = FindWater(L, LevelName);
+		if (!W)
+		{
+			OutCode = TEXT("BadLevel");
+			return false;
+		}
+		Place(Body, W->FarBank);
+		OutCode = TEXT("Ok");
+		return true;
+	}
+	if (Call.ToolId == FGFHelperTools::CatchPlayer)
+	{
+		int32 Index = INDEX_NONE;
+		const bool bWet = InWater(Params, L, Body, &Index);
+		const bool bDropping = Body.Pos.Y < CatchDropY;
+		if (!bWet && !bDropping)
+		{
+			OutCode = TEXT("NotFalling");
+			return false;
+		}
+		const FGFDepthsWater* W = (bWet && L.Waters.IsValidIndex(Index)) ? &L.Waters[Index] : nullptr;
+		if (!W)
+		{
+			for (const FGFDepthsWater& Candidate : L.Waters)
+			{
+				if (Body.Pos.X >= Candidate.Volume.Min.X && Body.Pos.X <= Candidate.Volume.Max.X)
+				{
+					W = &Candidate;
+					break;
+				}
+			}
+		}
+		FVector2D Dest = L.Checkpoints.IsValidIndex(Checkpoint) ? L.Checkpoints[Checkpoint] : L.Entrance;
+		if (W)
+		{
+			Dest = WantsFarBank(Call.Args, *W) ? W->FarBank : W->NearBank;
+		}
+		Place(Body, Dest);
+		OutCode = TEXT("Ok");
+		return true;
+	}
+	OutCode = TEXT("UnknownTool");
+	return false;
 }
