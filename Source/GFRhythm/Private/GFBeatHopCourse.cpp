@@ -1112,6 +1112,20 @@ void AGFBeatHopCourse::EndRun(const FString& Reason)
 	OnRunEnded.Broadcast(Reason);
 }
 
+void AGFBeatHopCourse::ForfeitReturn()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	if (bRunning)
+	{
+		EndRun(TEXT("ReturnForfeit"));
+	}
+	// The results countdown would otherwise ServerTravel the whole map and take everyone home.
+	bTravelled = true;
+}
+
 void AGFBeatHopCourse::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);

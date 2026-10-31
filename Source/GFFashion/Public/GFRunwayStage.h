@@ -107,6 +107,12 @@ public:
 	EGFRunwayRequestResult HandleSetOutfit(const FString& PlayerKey, const FGFOutfit& Outfit);
 	EGFRunwayRequestResult HandleSetReady(const FString& PlayerKey, bool bReady);
 
+	/**
+	 * Server: drop a show that has not reached results, without paying it.
+	 * Idle and Results are left as they are. False when there was nothing to drop.
+	 */
+	bool AbandonShow();
+
 	/** Server: advances the show, pays out on results, retries pending rewards (Tick calls this). */
 	void Step(float DeltaSeconds);
 	/** Server: retries rewards the ledger refused. Returns how many were paid now. */

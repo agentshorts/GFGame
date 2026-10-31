@@ -1,5 +1,6 @@
 #include "GFPlayerController.h"
 #include "GFDino.h"
+#include "GFReturnToHub.h"
 #include "GFSocialDirector.h"
 #include "GFSocialComponent.h"
 #include "GFGameState.h"
@@ -20,6 +21,7 @@
 #include "TimerManager.h"
 
 AGFPlayerController::AGFPlayerController()
+	: ReturnKey(DefaultReturnKey())
 {
 	Painter = CreateDefaultSubobject<UVoxelFinishPainterComponent>(TEXT("Painter"));
 	Painter->MaxPaintsPerSecond = 10.f;
@@ -69,6 +71,7 @@ void AGFPlayerController::EnsureHudInput()
 		CloseChatAction = Make(TEXT("IA_GFCloseChat"));
 		ShardhopAction = Make(TEXT("IA_GFShardhop"));
 		VillainAction = Make(TEXT("IA_GFVillain"));
+		ReturnAction = Make(TEXT("IA_GFReturn"));
 		const FKey PathKeys[] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five };
 		PathActions.Reset();
 		for (int32 Slot = 0; Slot < 5; ++Slot)
@@ -82,6 +85,7 @@ void AGFPlayerController::EnsureHudInput()
 		HudMapping->MapKey(CloseChatAction, EKeys::Escape);
 		HudMapping->MapKey(ShardhopAction, EKeys::F);
 		HudMapping->MapKey(VillainAction, EKeys::G);
+		HudMapping->MapKey(ReturnAction, GetReturnKey());
 		for (int32 Slot = 0; Slot < PathActions.Num() && Slot < UE_ARRAY_COUNT(PathKeys); ++Slot)
 		{
 			HudMapping->MapKey(PathActions[Slot], PathKeys[Slot]);
@@ -105,6 +109,7 @@ void AGFPlayerController::EnsureHudInput()
 			EIC->BindAction(CloseChatAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleCloseChatKey);
 			EIC->BindAction(ShardhopAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleShardhopKey);
 			EIC->BindAction(VillainAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleVillainKey);
+			EIC->BindAction(ReturnAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleReturnKey);
 			if (PathActions.Num() == 5)
 			{
 				EIC->BindAction(PathActions[0], ETriggerEvent::Started, this, &AGFPlayerController::HandlePath1);
@@ -170,11 +175,132 @@ void AGFPlayerController::HandleCloseChatKey()
 		{
 			HUD->CloseChat();
 		}
+		else if (HUD->IsAimSettingsOpen())
+		{
+			HUD->CloseAimSettings();
+		}
 		else
 		{
-			HUD->ToggleAimSettings();
+			HUD->TogglePauseMenu();
 		}
 	}
+}
+
+void AGFPlayerController::HandleReturnKey()
+{
+	if (const AGFHUD* HUD = Cast<AGFHUD>(GetHUD()); HUD && HUD->IsChatOpen())
+	{
+		return;
+	}
+	RequestReturnToHub(bReturnConfirmOpen);
+}
+
+void AGFPlayerController::SetReturnKey(FKey Key)
+{
+	ReturnKey = Key.IsValid() ? Key : DefaultReturnKey();
+	if (HudMapping && ReturnAction)
+	{
+		HudMapping->UnmapAllKeysFromAction(ReturnAction);
+		HudMapping->MapKey(ReturnAction, ReturnKey);
+	}
+}
+
+void AGFPlayerController::RequestReturnToHub(bool bConfirmed)
+{
+	SubmitReturn(bConfirmed, false);
+}
+
+void AGFPlayerController::RequestReturnFromMenu(bool bConfirmed)
+{
+	SubmitReturn(bConfirmed, true);
+}
+
+void AGFPlayerController::SubmitReturn(bool bConfirmed, bool bFromMenu)
+{
+	if (!GetPawn())
+	{
+		return;
+	}
+	if (HasAuthority())
+	{
+		ServerRequestReturnToHub_Implementation(bConfirmed, bFromMenu);
+	}
+	else
+	{
+		ServerRequestReturnToHub(bConfirmed, bFromMenu);
+	}
+}
+
+void AGFPlayerController::ServerRequestReturnToHub_Implementation(bool bConfirmed, bool bFromMenu)
+{
+	if (!GetPawn())
+	{
+		return;
+	}
+	const FGFReturnResult Result = bFromMenu
+		? FGFReturnToHub::FromMenu(GetWorld(), GetPawn(), bConfirmed)
+		: FGFReturnToHub::FromKey(GetWorld(), GetPawn(), bConfirmed);
+	if (Result.bNeedsConfirm)
+	{
+		ShowReturnConfirm(Result.Prompt);
+		return;
+	}
+	if (Result.bMoved)
+	{
+		bReturnConfirmOpen = false;
+		ReturnPrompt.Reset();
+		if (IsLocalController())
+		{
+			if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
+			{
+				HUD->ClosePauseMenu();
+			}
+		}
+		else
+		{
+			ClientReturnFinished();
+		}
+	}
+}
+
+void AGFPlayerController::ClientReturnFinished_Implementation()
+{
+	bReturnConfirmOpen = false;
+	ReturnPrompt.Reset();
+	if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
+	{
+		HUD->ClosePauseMenu();
+	}
+}
+
+void AGFPlayerController::ShowReturnConfirm(const FString& Prompt)
+{
+	bReturnConfirmOpen = true;
+	ReturnPrompt = Prompt;
+	if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
+	{
+		HUD->OpenPauseMenu();
+	}
+	if (!IsLocalController())
+	{
+		ClientPromptReturnConfirm(Prompt);
+	}
+}
+
+void AGFPlayerController::ClientPromptReturnConfirm_Implementation(const FString& Prompt)
+{
+	bReturnConfirmOpen = true;
+	ReturnPrompt = Prompt;
+	if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
+	{
+		HUD->OpenPauseMenu();
+	}
+}
+
+void AGFPlayerController::CancelReturnConfirm()
+{
+	bReturnConfirmOpen = false;
+	ReturnPrompt.Reset();
 }
 
 void AGFPlayerController::HandleShardhopKey()

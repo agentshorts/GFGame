@@ -1,4 +1,5 @@
 #include "GFHUD.h"
+#include "GFPlayerController.h"
 #include "GFCrosshairPanel.h"
 #include "Aim/GFAimSim.h"
 #include "GFBeatHopCourse.h"
@@ -253,6 +254,7 @@ void AGFHUD::DrawHUD()
 	DrawHotbar();
 	DrawHint();
 	DrawPathsAndVillains();
+	DrawPauseMenu();
 }
 
 void AGFHUD::DrawCrosshair()
@@ -320,6 +322,103 @@ void AGFHUD::DrawAimOverlay()
 				DrawLine(Mark.X, Mark.Y, Mark.X2, Mark.Y2, Mark.Color, Mark.Thickness);
 			}
 		}
+	}
+}
+
+const TCHAR* AGFHUD::PauseEntryLabel(int32 Index)
+{
+	switch (Index)
+	{
+	case 0: return TEXT("Return to hub");
+	case 1: return TEXT("Settings");
+	default: return TEXT("Close");
+	}
+}
+
+FString AGFHUD::GetPauseEntry(int32 Index) const
+{
+	if (const AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController()))
+	{
+		if (PC->IsReturnConfirmOpen())
+		{
+			if (Index == 0)
+			{
+				return TEXT("Confirm");
+			}
+			if (Index == 1)
+			{
+				return TEXT("Cancel");
+			}
+			return FString();
+		}
+	}
+	return PauseEntryLabel(Index);
+}
+
+void AGFHUD::OpenPauseMenu()
+{
+	bPauseMenuOpen = true;
+}
+
+void AGFHUD::ClosePauseMenu()
+{
+	bPauseMenuOpen = false;
+}
+
+void AGFHUD::TogglePauseMenu()
+{
+	bPauseMenuOpen = !bPauseMenuOpen;
+}
+
+void AGFHUD::ActivatePauseEntry(int32 Index)
+{
+	AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController());
+	if (PC && PC->IsReturnConfirmOpen())
+	{
+		if (Index == 0)
+		{
+			PC->RequestReturnFromMenu(true);
+		}
+		else
+		{
+			PC->CancelReturnConfirm();
+			ClosePauseMenu();
+		}
+		return;
+	}
+	if (Index == 0)
+	{
+		if (PC)
+		{
+			PC->RequestReturnFromMenu(false);
+		}
+		return;
+	}
+	if (Index == 1)
+	{
+		ClosePauseMenu();
+		ToggleAimSettings();
+		return;
+	}
+	ClosePauseMenu();
+}
+
+void AGFHUD::DrawPauseMenu()
+{
+	if (!bPauseMenuOpen || !Canvas)
+	{
+		return;
+	}
+	UFont* Font = HudFont();
+	const AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController());
+	const bool bConfirm = PC && PC->IsReturnConfirmOpen();
+	const FString Title = bConfirm && PC ? PC->GetReturnConfirmPrompt() : FString(TEXT("Paused"));
+	DrawRect(FLinearColor(0.05f, 0.08f, 0.12f, 0.88f), 24.f, 24.f, 420.f, bConfirm ? 148.f : 132.f);
+	DrawText(Title, FLinearColor(0.93f, 0.96f, 1.f), 40.f, 36.f, Font, 1.f, false);
+	const int32 Count = bConfirm ? 2 : 3;
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		DrawText(GetPauseEntry(Index), FLinearColor(0.98f, 0.86f, 0.45f), 40.f, 68.f + Index * 28.f, Font, 1.f, false);
 	}
 }
 

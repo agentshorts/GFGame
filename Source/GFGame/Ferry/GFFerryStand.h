@@ -9,6 +9,7 @@
 #include "GFFerryStand.generated.h"
 
 class AGFFerryDirector;
+class AGFReturnGate;
 class APawn;
 class AGFPlayerState;
 class UBoxComponent;
@@ -29,6 +30,8 @@ struct GFGAME_API FGFFerryStandLayout
 	static constexpr float DestPitch = 140.f;
 
 	static FVector PassLocal() { return FVector(0.f, Ring, 100.f); }
+	/** Free walk home. Off the fare pads, still inside the board disc, and off the drop line. */
+	static FVector HomeLocal() { return FVector(160.f, 300.f, 0.f); }
 	static FVector DestLocal(int32 Index)
 	{
 		return FVector(0.f, -Ring - static_cast<float>(Index) * DestPitch, 100.f);
@@ -78,6 +81,7 @@ public:
 
 	UBoxComponent* GetFlyTrigger(FName ToStop) const;
 	UBoxComponent* GetPassTrigger() const;
+	AGFReturnGate* GetReturnGate() const { return ReturnGate.Get(); }
 
 	void GetPromptLines(TArray<FString>& OutLines) const;
 
@@ -111,6 +115,9 @@ private:
 
 	UPROPERTY()
 	TArray<TObjectPtr<UBoxComponent>> Triggers;
+
+	UPROPERTY()
+	TObjectPtr<AGFReturnGate> ReturnGate;
 
 	TArray<FName> TriggerDests;
 	bool bVisualsBuilt = false;

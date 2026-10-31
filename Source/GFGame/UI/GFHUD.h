@@ -35,6 +35,15 @@ public:
 	void ToggleControlsHint();
 	void DrawPathsAndVillains();
 	bool IsAimSettingsOpen() const { return bAimSettingsOpen; }
+
+	bool IsPauseMenuOpen() const { return bPauseMenuOpen; }
+	void OpenPauseMenu();
+	void ClosePauseMenu();
+	void TogglePauseMenu();
+	/** 0 Return to hub, 1 Settings, 2 Close. While a confirm is up: 0 Confirm, 1 Cancel. */
+	void ActivatePauseEntry(int32 Index);
+	static const TCHAR* PauseEntryLabel(int32 Index);
+	FString GetPauseEntry(int32 Index) const;
 	void ToggleAimSettings();
 	void CloseAimSettings();
 
@@ -77,6 +86,7 @@ private:
 	void DrawDepthsSession();
 	/** Ferry stand: fare, destinations and the lifetime pass while the local pawn is at a stop. */
 	void DrawFerryStand();
+	void DrawPauseMenu();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);
@@ -107,6 +117,7 @@ private:
 	TArray<FGFHUDToast> Toasts;
 	TSharedPtr<SWidget> AimSettingsRoot;
 	bool bAimSettingsOpen = false;
+	bool bPauseMenuOpen = false;
 	int32 AppliedNotices = 0;
 	int32 AppliedResults = 0;
 };

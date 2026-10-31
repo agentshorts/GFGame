@@ -8,6 +8,7 @@
 #include "GFRunwayStage.h"
 #include "GFMiniGameCatalog.h"
 #include "GFMiniGameGate.h"
+#include "GFReturnToHub.h"
 #include "GFTerritorySubsystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -126,6 +127,27 @@ namespace
 		}
 		return Spawned;
 	}
+
+	AGFReturnGate* EnsureReturn(UWorld* World, FName ModeId, const FVector& At, const FVector& Rime, bool bMapTravel)
+	{
+		if (AGFReturnGate* Existing = AGFReturnGate::Find(World, ModeId))
+		{
+			Existing->Configure(ModeId, Rime, bMapTravel);
+			Existing->SetActorLocation(At);
+			Existing->ApplyVisuals();
+			return Existing;
+		}
+		const FTransform Xform(FRotator::ZeroRotator, At);
+		AGFReturnGate* Gate = World->SpawnActorDeferred<AGFReturnGate>(AGFReturnGate::StaticClass(), Xform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (!Gate)
+		{
+			return nullptr;
+		}
+		Gate->Configure(ModeId, Rime, bMapTravel);
+		Gate->FinishSpawning(Xform);
+		Gate->ApplyVisuals();
+		return Gate;
+	}
 }
 
 void AGFHubGateDirector::Place(const FString& WorldPackage, const FVector& InRimeCenter)
@@ -166,6 +188,7 @@ void AGFHubGateDirector::Place(const FString& WorldPackage, const FVector& InRim
 				{
 					Depths->EnsurePlayableSite();
 				}
+				EnsureReturn(World, Entry.Id, AGFReturnGate::PadLocation(Entry, InRimeCenter), InRimeCenter, false);
 			}
 		}
 		else if (Entry.HasMap() && FGFMiniGameCatalog::WorldIs(WorldPackage, Entry.Map))
@@ -182,6 +205,7 @@ void AGFHubGateDirector::Place(const FString& WorldPackage, const FVector& InRim
 			{
 				Stage->EnsurePlayableSite();
 			}
+			EnsureReturn(World, Entry.Id, AGFReturnGate::MapLocation(), InRimeCenter, true);
 		}
 	}
 }
