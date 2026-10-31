@@ -6,6 +6,9 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+
+class USceneComponent;
+
 #include "GFFerryRiderComponent.generated.h"
 
 UCLASS(ClassGroup = (GF), meta = (BlueprintSpawnableComponent))
@@ -17,6 +20,15 @@ public:
 	UGFFerryRiderComponent();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
+	/**
+	 * Puts the pawn's feet on the basket floor and matches the basket's rotation.
+	 * The actor root is the capsule centre, so the seat point is lifted by the capsule half-height.
+	 * Safe to call again: an already-seated pawn is only moved when it has drifted.
+	 */
+	static void SeatOnBasket(APawn* Rider, USceneComponent* Basket);
 
 	UFUNCTION(Server, Reliable)
 	void ServerRequestTrip(FName FromStop, FGuid RequestId);
@@ -45,9 +57,13 @@ public:
 	/** Server: clear the flight flag and restore damage. */
 	void EndFlightProtection();
 
-	/** Server: remember Player.Emote_Sit and play it when the pawn has a mesh. */
+	/**
+	 * Server: play Player.Emote_Sit, and turn movement and collision off.
+	 * SeatAnim replicates, so clients apply the same lock.
+	 */
 	void BeginSeat();
 
+	/** Server: drop the sit emote and give movement and collision back. */
 	void EndSeat();
 
 	void SetLastCode(FName Code) { LastCode = Code; }
@@ -57,6 +73,10 @@ public:
 
 private:
 	void ApplySeatPose();
+	void ApplySeatLock();
+
+	bool bRestoreCollision = false;
+	bool bRestoreMovement = false;
 
 	UPROPERTY(Replicated)
 	bool bInFlight = false;

@@ -18,8 +18,10 @@
 #include "GFProtectedActor.h"
 #include "GFDataTables.h"
 #include "GFTerritorySubsystem.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/Engine.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "Engine/World.h"
@@ -410,14 +412,72 @@ bool FGFFerryNoAttackTest::RunTest(const FString&)
 	TestEqual(TEXT("Takeoff anim"), Transit->AnimKey, FGFFerryArt::TakeoffAnim());
 	TestTrue(TEXT("Transit still on the perch at frame 0"), Transit->GetActorLocation().Equals(Perch, 1.f));
 	TestTrue(TEXT("Rider parent is the craft"), Pawn->GetAttachParentActor() == Transit);
-	TestTrue(TEXT("Rider sits at the seat"), Pawn->GetRootComponent() && Pawn->GetRootComponent()->GetRelativeLocation().Equals(FGFFerryArt::SeatLocal(), 1.f));
 	TestEqual(TEXT("Seat emote"), Pawn->FerryRider->GetSeatAnim(), FGFFerryArt::SeatAnim());
+
+	// Capsule bottom on the seat (socket or SeatLocal), and the body upright with the basket. A centre-on-the-seat offset fails this.
+	auto FeetOnBasket = [this, Pawn](const TCHAR* Phase)
+	{
+		USceneComponent* Root = Pawn->GetRootComponent();
+		USceneComponent* Basket = Root ? Root->GetAttachParent() : nullptr;
+		UCapsuleComponent* Capsule = Pawn->GetCapsuleComponent();
+		if (!TestNotNull(*FString::Printf(TEXT("%s basket"), Phase), Basket)
+			|| !TestNotNull(*FString::Printf(TEXT("%s capsule"), Phase), Capsule))
+		{
+			return;
+		}
+		FVector FloorLocal = FGFFerryArt::SeatLocal();
+		if (Basket->DoesSocketExist(FGFFerryArt::SeatSocket()))
+		{
+			FloorLocal = Basket->GetSocketTransform(FGFFerryArt::SeatSocket(), RTS_Component).GetLocation();
+		}
+		const FVector FloorWorld = Basket->GetComponentTransform().TransformPosition(FloorLocal);
+		const FVector Bottom = Pawn->GetActorLocation() - Pawn->GetActorUpVector() * Capsule->GetScaledCapsuleHalfHeight();
+		const float Gap = FVector::Dist(Bottom, FloorWorld);
+		TestTrue(*FString::Printf(TEXT("%s: capsule bottom on the basket floor (%.1f cm)"), Phase, Gap), Gap <= 3.f);
+		const float Up = FVector::DotProduct(Pawn->GetActorUpVector().GetSafeNormal(), Basket->GetUpVector().GetSafeNormal());
+		TestTrue(*FString::Printf(TEXT("%s: rider upright on the basket (%.3f)"), Phase, Up), Up > 0.95f);
+	};
+
+	UCharacterMovementComponent* Move = Pawn->GetCharacterMovement();
+	TestNotNull(TEXT("Rider movement"), Move);
+	FeetOnBasket(TEXT("Takeoff"));
+	TestFalse(TEXT("No collision in the basket"), Pawn->GetActorEnableCollision());
+	TestTrue(TEXT("Movement off in the basket"), Move && Move->MovementMode == MOVE_None);
 
 	Director->Tick(2.f);
 	TestEqual(TEXT("Carry anim"), Transit->AnimKey, FGFFerryArt::CarryAnim());
 	TestTrue(TEXT("Still flying during the carry"), Pawn->FerryRider->IsInFlight());
+	FeetOnBasket(TEXT("Carry"));
 
-	Director->Tick(Director->Tuning.FlightSeconds);
+	float Elapsed = 2.05f;
+	const float Duration = Director->Tuning.FlightSeconds;
+	while (Elapsed + 0.5f < Duration)
+	{
+		Director->Tick(0.5f);
+		Elapsed += 0.5f;
+		FeetOnBasket(*FString::Printf(TEXT("Flight %.2fs"), Elapsed));
+	}
+
+	// A client can replicate the attach and still apply the old centre-on-the-floor offset. The seat tick puts the feet back.
+	USceneComponent* Seat = Pawn->GetRootComponent() ? Pawn->GetRootComponent()->GetAttachParent() : nullptr;
+	Pawn->SetActorRelativeLocation(FGFFerryArt::SeatLocal());
+	Pawn->SetActorRelativeRotation(FRotator(35.f, 20.f, 15.f));
+	Pawn->SetActorEnableCollision(true);
+	if (Move)
+	{
+		Move->SetMovementMode(MOVE_Walking);
+	}
+	if (Seat && Pawn->GetRootComponent() && Pawn->GetRootComponent()->GetAttachParent() != Seat)
+	{
+		Pawn->AttachToComponent(Seat, FAttachmentTransformRules::KeepWorldTransform);
+	}
+	Pawn->FerryRider->OnRep_SeatAnim();
+	Pawn->FerryRider->TickComponent(0.016f, LEVELTICK_All, nullptr);
+	FeetOnBasket(TEXT("Client correction"));
+	TestFalse(TEXT("Client collision stays off"), Pawn->GetActorEnableCollision());
+	TestTrue(TEXT("Client movement stays off"), Move && Move->MovementMode == MOVE_None);
+
+	Director->Tick(Duration);
 	TestFalse(TEXT("Flight ended"), Pawn->FerryRider->IsInFlight());
 	TestFalse(TEXT("Protection tag cleared"), FGFProtectedActor::Is(Pawn));
 	TestTrue(TEXT("Damage restored"), Pawn->CanBeDamaged());
@@ -432,6 +492,11 @@ bool FGFFerryNoAttackTest::RunTest(const FString&)
 	}
 	const FVector Drop = FGFFerryRules::DropPoint(Home->Location, Far->Location, Home->Location, Director->Tuning.BoardRadius);
 	TestTrue(TEXT("Rider set down past the far stop"), FVector::Dist(Pawn->GetActorLocation(), Drop) < 5.f);
+	TestNull(TEXT("Landed detached"), Pawn->GetAttachParentActor());
+	const FRotator Landed = Pawn->GetActorRotation();
+	TestTrue(TEXT("Landed standing"), FMath::Abs(FRotator::NormalizeAxis(Landed.Pitch)) < 1.f && FMath::Abs(FRotator::NormalizeAxis(Landed.Roll)) < 1.f);
+	TestTrue(TEXT("Collision restored on the ground"), Pawn->GetActorEnableCollision());
+	TestTrue(TEXT("Walking after the drop"), Move && Move->MovementMode == MOVE_Walking);
 	return true;
 }
 

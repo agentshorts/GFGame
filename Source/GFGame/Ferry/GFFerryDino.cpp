@@ -9,6 +9,7 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
+#include "Net/UnrealNetwork.h"
 
 namespace GFFerryDinoPrivate
 {
@@ -113,10 +114,40 @@ void AGFFerryDino::SetAnim(FName Key)
 	Bird->PlayAnimation(Clip, Row && Row->bLoop);
 }
 
+void AGFFerryDino::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AGFFerryDino, Basket);
+}
+
+void AGFFerryDino::OnRep_Basket()
+{
+	PrepareBasket(Basket);
+}
+
+void AGFFerryDino::PrepareBasket(UStaticMeshComponent* Comp)
+{
+	if (!Comp)
+	{
+		return;
+	}
+	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Comp->SetCanEverAffectNavigation(false);
+	Comp->SetMobility(EComponentMobility::Movable);
+	if (!Comp->GetStaticMesh())
+	{
+		if (UStaticMesh* Mesh = LoadStaticQuiet(GFFerryDinoPrivate::BasketPath))
+		{
+			Comp->SetStaticMesh(Mesh);
+		}
+	}
+}
+
 UStaticMeshComponent* AGFFerryDino::SpawnBasket()
 {
 	if (Basket)
 	{
+		PrepareBasket(Basket);
 		return Basket;
 	}
 	Basket = NewObject<UStaticMeshComponent>(this, TEXT("Basket"));
@@ -124,13 +155,9 @@ UStaticMeshComponent* AGFFerryDino::SpawnBasket()
 	{
 		return nullptr;
 	}
-	Basket->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	Basket->SetCanEverAffectNavigation(false);
-	Basket->SetMobility(EComponentMobility::Movable);
-	if (UStaticMesh* Mesh = LoadStaticQuiet(GFFerryDinoPrivate::BasketPath))
-	{
-		Basket->SetStaticMesh(Mesh);
-	}
+	// SetIsReplicated is enough. AddReplicatedSubObject checks bReplicateUsingRegisteredSubObjectList, which stays false.
+	Basket->SetIsReplicated(true);
+	PrepareBasket(Basket);
 	Basket->RegisterComponent();
 	AddInstanceComponent(Basket);
 	return Basket;
