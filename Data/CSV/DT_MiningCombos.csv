@@ -1,8 +1,9 @@
-# Named so the table exists. bImplemented stays false until marks and combos are played.
+# Shatterfrost is the one combo this slice plays: Spark on a locked cell skips the contraction.
+# The other five stay data-only until marks are wired through.
 ---,Elements,Result,bImplemented
 Slagburst,Magma,Burst,False
 LightningRoot,"Spark+Root",Chain,False
-Shatterfrost,Frost,Shatter,False
+Shatterfrost,Frost,Shatter,True
 SteamBlast,"Magma+Frost",Steam,False
 Wildfire,"Magma+Root",Wildfire,False
 Frostbloom,"Frost+Root",Bloom,False

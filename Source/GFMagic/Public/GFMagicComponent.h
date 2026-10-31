@@ -8,6 +8,7 @@
 #include "GFItemTypes.h"
 #include "GFMagicTypes.h"
 #include "GFMagicRules.h"
+#include "GFMagicShapes.h"
 #include "GameplayEffect.h"
 #include "GFMagicComponent.generated.h"
 
@@ -25,6 +26,12 @@ struct FMagicDeferredCast
 	bool bSoilChain = false;
 	int32 ExtraDrop = 0;
 	bool bJackpot = false;
+	bool bImpulse = false;
+	float ImpulsePower = 0.f;
+	int32 ConductiveCap = 0;
+	float SmeltChance = 0.f;
+	bool bRooted = false;
+	TMap<FIntVector, float> CellScale;
 	TArray<FString> Contributors;
 };
 
@@ -93,15 +100,25 @@ public:
 	bool AuthorityOvercharge();
 	FName AuthorityBuy(FName UpgradeId);
 
-	/** Server step: crystal regen, claw recharge, overcharge, haul flush. */
+	/** Server step: crystal regen, claw recharge, overcharge, haul flush, heavy swings. */
 	void TickMagic(float Dt);
 	float FieldRate() const;
 	float FieldRange() const;
+	float FieldCostPerSecond() const;
+
+	/** Same path the gf.Magic.* console commands use. */
+	bool ExecuteConsole(const FString& Line);
+
+	TArray<FMagicSwing>& Swings() { return SwingQueue; }
+	void NoteBreak(double Now);
+	float BreakChainScale() const;
 
 	/** Bag first. Whatever does not fit waits in the haul and flushes when there is room. */
 	void ReceiveDrop(FName ItemId, int32 Count, const FVector& From);
 
 	void SyncMarker(const FVector& At);
+	/** Authority only. A dry crystal stops the channel on the next step. */
+	void SpendCharge(float Amount);
 	TArray<FMagicDeferredCast>& Deferred() { return Pending; }
 
 	/** 0 means the bag is treated as full (tests). A large cap never walls a player. */
@@ -112,6 +129,8 @@ private:
 	void GrantAbilities();
 	void PushAttributes();
 	void ApplyUpgradeEffect(FName UpgradeId);
+	bool QueueSwing(bool bHeavy);
+	double MagicNow() const;
 	int32 BagTotal() const;
 	bool IsAuthority() const;
 
@@ -170,6 +189,14 @@ private:
 	TArray<TObjectPtr<UGameplayEffect>> UpgradeEffects;
 
 	TArray<FMagicDeferredCast> Pending;
+	TArray<FMagicSwing> SwingQueue;
+	FMagicRhythm Rhythm;
+	FName MeleeChain;
+	bool bMeleeHeavySent = false;
+	float RootHeld = 0.f;
+	float CastIdle = 1.f;
+	int32 ChainCount = 0;
+	double LastBreakTime = -1000.0;
 	TWeakObjectPtr<APawn> AvatarPawn;
 	TWeakObjectPtr<AGFMagicFieldMarker> Marker;
 	FVector ManualOrigin = FVector::ZeroVector;

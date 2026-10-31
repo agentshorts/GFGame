@@ -10,6 +10,7 @@
 #include "GFMagicActors.h"
 #include "GFMagicComponent.h"
 #include "GFMagicPlayerState.h"
+#include "GFMagicShapes.h"
 #include "GFMagicTables.h"
 #include "GFVoxelWorld.h"
 
@@ -164,13 +165,16 @@ bool FGFMagicWorldFieldTest::RunTest(const FString&)
 	PS->Magic->SetFieldHeld(false);
 
 	PS->FactionId = TEXT("Cinderwrights");
+	PS->Magic->TickMagic(0.1f);
+	TestEqual(TEXT("Cinderwrights take magma"), PS->Magic->GetElement(), EGFMagicElement::Magma);
+	TestEqual(TEXT("Magma spray reaches 10 m"), PS->Magic->FieldRange(), 1000.f);
 	PS->ChosenPath = EGFPath::Delver;
 	PS->Inventory->AddItem(TEXT("SpellPage"), 1);
 	PS->Inventory->AddItem(TEXT("Crystal"), 1);
-	TestEqual(TEXT("Lava Lance sells"), PS->Magic->AuthorityBuy(TEXT("LavaLance")), FName(TEXT("Ok")));
+	TestEqual(TEXT("Sticky Magma sells"), PS->Magic->AuthorityBuy(TEXT("StickyMagma")), FName(TEXT("Ok")));
 	TestEqual(TEXT("The page is gone"), PS->Inventory->GetCount(TEXT("SpellPage")), 0);
 	TestEqual(TEXT("The crystal is gone"), PS->Inventory->GetCount(TEXT("Crystal")), 0);
-	TestEqual(TEXT("Reach grew by 2 m"), PS->Magic->FieldRange(), 1000.f);
+	TestTrue(TEXT("Sticky Magma sticks"), PS->Magic->Modifiers().bSticky);
 	TestTrue(TEXT("Overcharge spends 50"), PS->Magic->AuthorityOvercharge());
 	TestTrue(TEXT("The field is overcharged"), PS->Magic->IsOvercharged());
 	PS->Magic->TickMagic(8.f);
@@ -274,6 +278,122 @@ bool FGFMagicWorldClawTest::RunTest(const FString&)
 		++Claws;
 	}
 	TestTrue(TEXT("The summon showed itself"), Claws >= 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMagicWorldShapesTest, "GFGame.MagicMining.WorldShapes", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFMagicWorldShapesTest::RunTest(const FString&)
+{
+	using namespace GFMagicWorldTest;
+	FWorld Harness;
+	if (!Harness.Create(*this, TEXT("GFMagicShapes")))
+	{
+		return false;
+	}
+
+	auto Center = [&Harness](const FIntVector& Cell)
+	{
+		return Harness.Voxel->CellToWorld(Cell) + FVector(0.f, 0.f, 50.f);
+	};
+
+	Harness.Voxel->ServerApplyEdit(FIntVector(3, 0, 2), TEXT("Dirt"));
+	Harness.Voxel->ServerApplyEdit(FIntVector(4, 0, 2), TEXT("Dirt"));
+	Harness.Voxel->ServerApplyEdit(FIntVector(5, 0, 2), TEXT("Dirt"));
+	Harness.Voxel->ServerApplyEdit(FIntVector(3, 2, 2), TEXT("Dirt"));
+	AGFMagicPlayerState* Cone = Harness.SpawnDigger(TEXT("Cone"), Center(FIntVector(0, 0, 2)));
+	if (!TestNotNull(TEXT("Cone caster"), Cone))
+	{
+		return false;
+	}
+	Cone->Magic->SetAim(Center(FIntVector(0, 0, 2)), Center(FIntVector(0, 0, 2)) + FVector(600.f, 0.f, 0.f));
+	Cone->Magic->SetFieldHeld(true);
+	Harness.Magic->Advance(0.6f);
+	TestTrue(TEXT("The cone clears the first solid"), Harness.Voxel->GetBlock(FIntVector(3, 0, 2)).IsNone());
+	TestTrue(TEXT("Penetration clears the cell behind it"), Harness.Voxel->GetBlock(FIntVector(4, 0, 2)).IsNone());
+	TestEqual(TEXT("The cell past penetration stays"), Harness.Voxel->GetBlock(FIntVector(5, 0, 2)), FName(TEXT("Dirt")));
+	TestEqual(TEXT("A cell outside the cone stays"), Harness.Voxel->GetBlock(FIntVector(3, 2, 2)), FName(TEXT("Dirt")));
+	Cone->Magic->SetFieldHeld(false);
+
+	const FVector Feet = Harness.Voxel->CellToWorld(FIntVector(20, 2, 2));
+	const FVector SwingAim = Feet + FVector(250.f, 0.f, 0.f);
+	AGFMagicPlayerState* Maul = Harness.SpawnDigger(TEXT("Maul"), Feet);
+	if (!TestNotNull(TEXT("Maul"), Maul))
+	{
+		return false;
+	}
+	Maul->FactionId = TEXT("Verdant");
+	TestTrue(TEXT("Verdant takes the club"), Maul->Magic->AuthorityToggle());
+	const FIntVector HitFeet = Harness.Voxel->WorldToCell(Feet + FVector(50.f, 0.f, 0.f));
+	const TArray<FIntVector> Swing = FGFMagicShapes::MeleeCells(HitFeet, FVector::ForwardVector, 3, 2, 1);
+	if (!TestTrue(TEXT("The swing has a cell"), Swing.Num() > 0))
+	{
+		return false;
+	}
+	Harness.Voxel->ServerApplyEdit(Swing[0], TEXT("Dirt"));
+	Harness.Voxel->ServerApplyEdit(HitFeet, TEXT("Dirt"));
+	Maul->Magic->SetAim(Feet, SwingAim);
+	Maul->Magic->SetFieldHeld(true);
+	Harness.Magic->Advance(0.2f);
+	Maul->Magic->SetFieldHeld(false);
+	Harness.Magic->Advance(0.1f);
+	TestTrue(TEXT("The swing breaks the cell in front"), Harness.Voxel->GetBlock(Swing[0]).IsNone());
+	if (!Swing.Contains(HitFeet))
+	{
+		TestEqual(TEXT("The feet cell was not in the swing"), Harness.Voxel->GetBlock(HitFeet), FName(TEXT("Dirt")));
+	}
+
+	for (int32 Z = 1; Z <= 3; ++Z)
+	{
+		Harness.Voxel->ServerApplyEdit(FIntVector(10, 0, Z), TEXT("Dirt"));
+	}
+	Harness.Voxel->ServerApplyEdit(FIntVector(12, 0, 3), TEXT("Dirt"));
+	const FVector SprayAt = Center(FIntVector(10, 0, 4));
+	AGFMagicPlayerState* Spray = Harness.SpawnDigger(TEXT("Spray"), SprayAt);
+	if (!TestNotNull(TEXT("Spray"), Spray))
+	{
+		return false;
+	}
+	Spray->FactionId = TEXT("Cinderwrights");
+	TestTrue(TEXT("Cinderwrights take magma"), Spray->Magic->AuthorityToggle());
+	TestEqual(TEXT("The spray is magma"), Spray->Magic->GetElement(), EGFMagicElement::Magma);
+	Spray->Magic->SetAim(SprayAt, SprayAt + FVector(0.f, 0.f, -400.f));
+	Spray->Magic->SetFieldHeld(true);
+	Harness.Magic->Advance(2.8f);
+	TestTrue(TEXT("The top of the stack dissolved"), Harness.Voxel->GetBlock(FIntVector(10, 0, 3)).IsNone());
+	TestTrue(TEXT("The puddle dissolved the cell under it"), Harness.Voxel->GetBlock(FIntVector(10, 0, 2)).IsNone());
+	TestTrue(TEXT("The puddle kept sinking"), Harness.Voxel->GetBlock(FIntVector(10, 0, 1)).IsNone());
+	TestEqual(TEXT("A cell off the stream stays"), Harness.Voxel->GetBlock(FIntVector(12, 0, 3)), FName(TEXT("Dirt")));
+	TestNotEqual(TEXT("The spray never writes lava"), Harness.Voxel->GetBlock(FIntVector(10, 0, 2)), FName(TEXT("Lava")));
+	Spray->Magic->SetFieldHeld(false);
+
+	for (int32 Step = 0; Step < 7; ++Step)
+	{
+		Harness.Voxel->ServerApplyEdit(FIntVector(30 + Step, 2, 2), TEXT("Ice"));
+	}
+	Harness.Voxel->ServerApplyEdit(FIntVector(40, 2, 2), TEXT("Lava"));
+	const FVector FrostAt = Harness.Voxel->CellToWorld(FIntVector(30, 2, 2));
+	AGFMagicPlayerState* Frost = Harness.SpawnDigger(TEXT("Frost"), FrostAt);
+	if (!TestNotNull(TEXT("Frost"), Frost))
+	{
+		return false;
+	}
+	Frost->FactionId = TEXT("Rime");
+	TestTrue(TEXT("Rime takes frost"), Frost->Magic->AuthorityToggle());
+	TestEqual(TEXT("Rime takes frostbind"), Frost->Magic->GetElement(), EGFMagicElement::Frost);
+	const FVector LavaAt = Harness.Voxel->CellToWorld(FIntVector(40, 2, 2));
+	Frost->Magic->SetManualOrigin(LavaAt);
+	Frost->Magic->SetAim(LavaAt, LavaAt);
+	Frost->Magic->SetFieldHeld(true);
+	const int32 DirtBefore = Frost->Inventory->GetCount(TEXT("Dirt"));
+	Harness.Magic->Advance(0.2f);
+	TestEqual(TEXT("The beam quenches lava at once"), Harness.Voxel->GetBlock(FIntVector(40, 2, 2)), FName(TEXT("Basalt")));
+	TestEqual(TEXT("The quench still pays nothing"), Frost->Inventory->GetCount(TEXT("Dirt")), DirtBefore);
+	Frost->Magic->SetManualOrigin(FrostAt);
+	Frost->Magic->SetAim(FrostAt, FrostAt);
+	Harness.Magic->Advance(7.f);
+	TestTrue(TEXT("The aimed ice shattered"), Harness.Voxel->GetBlock(FIntVector(30, 2, 2)).IsNone());
+	TestTrue(TEXT("The chain reached four cells out"), Harness.Voxel->GetBlock(FIntVector(34, 2, 2)).IsNone());
+	TestEqual(TEXT("The cell past the generation cap stays"), Harness.Voxel->GetBlock(FIntVector(36, 2, 2)), FName(TEXT("Ice")));
 	return true;
 }
 

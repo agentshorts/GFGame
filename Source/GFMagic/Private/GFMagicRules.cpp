@@ -35,6 +35,30 @@ float FGFMagicRules::IntegrityOf(float Hardness)
 	return FMath::Max(0.f, Hardness) * 100.f;
 }
 
+bool FGFMagicRules::SmeltProcs(const FIntVector& Cell, float Chance)
+{
+	if (Chance <= 0.f)
+	{
+		return false;
+	}
+	if (Chance >= 1.f)
+	{
+		return true;
+	}
+	const uint32 Hash = HashCombine(GetTypeHash(Cell.X), HashCombine(GetTypeHash(Cell.Y), GetTypeHash(Cell.Z)));
+	return (Hash % 1000u) < static_cast<uint32>(Chance * 1000.f);
+}
+
+float FGFMagicRules::ChainScale(int32 Count, int32 Peak, float Bonus)
+{
+	if (Count <= 1 || Peak <= 0 || Bonus <= 0.f)
+	{
+		return 1.f;
+	}
+	const float T = FMath::Clamp(static_cast<float>(Count) / static_cast<float>(Peak), 0.f, 1.f);
+	return 1.f + Bonus * T;
+}
+
 float FGFMagicRules::Multiplier(const FGFBlockAffinityRow& Affinity, EGFMagicElement Element)
 {
 	switch (Element)
@@ -193,6 +217,7 @@ FMagicHitOutput FGFMagicRules::Apply(TMap<FIntVector, FMagicWound>& Wounds, cons
 	}
 	TSet<FIntVector> Instant;
 	int32 Budget = FMath::Max(0, Request.Budget);
+	int32 ConductiveLeft = Request.ConductiveCap;
 	int32 Index = 0;
 	auto Consider = [&](const FIntVector& Next, bool bInstant)
 	{
@@ -238,6 +263,10 @@ FMagicHitOutput FGFMagicRules::Apply(TMap<FIntVector, FMagicWound>& Wounds, cons
 		{
 			continue;
 		}
+		if (Request.bFlat && Affinity.bClawcallImmune)
+		{
+			continue;
+		}
 		const float Mult = Multiplier(Affinity, Request.Element);
 		if (Mult <= 0.f)
 		{
@@ -260,7 +289,12 @@ FMagicHitOutput FGFMagicRules::Apply(TMap<FIntVector, FMagicWound>& Wounds, cons
 		{
 			AddUnique(Wound.Contributors, Who);
 		}
-		float Damage = Request.bFlat ? Request.FlatIntegrity : (Request.IntegrityPerSecond * Mult * Request.Rate * Request.Dt);
+		const float Scale = Request.CellScale.Contains(Cell) ? Request.CellScale.FindChecked(Cell) : 1.f;
+		float Damage = Request.bFlat ? Request.FlatIntegrity : (Request.IntegrityPerSecond * Mult * Request.Rate * Request.Dt * Scale);
+		if (Request.bImpulse && !Request.bFlat)
+		{
+			Damage = Request.ImpulsePower * Mult * Request.Rate * Scale;
+		}
 		if (Instant.Contains(Cell))
 		{
 			Damage = FMath::Max(Damage, Wound.Remaining);
@@ -273,9 +307,18 @@ FMagicHitOutput FGFMagicRules::Apply(TMap<FIntVector, FMagicWound>& Wounds, cons
 			Orthogonal(Cell, Neighbours);
 			for (const FIntVector& Next : Neighbours)
 			{
+				if (Request.ConductiveCap > 0 && ConductiveLeft <= 0)
+				{
+					break;
+				}
 				if (View.BlockAt(Next) == BlockId)
 				{
+					const int32 Before = Queue.Num();
 					Consider(Next, false);
+					if (Queue.Num() > Before)
+					{
+						--ConductiveLeft;
+					}
 				}
 			}
 		}
@@ -319,7 +362,12 @@ FMagicHitOutput FGFMagicRules::Apply(TMap<FIntVector, FMagicWound>& Wounds, cons
 				Drop = Affinity.MagmaDrop;
 			}
 			Break.DropItem = Drop;
-			Break.DropCount = 1 + FMath::Max(0, Request.ExtraDrop) + ((Request.bJackpot && Affinity.bOre) ? 1 : 0);
+			int32 Count = 1 + FMath::Max(0, Request.ExtraDrop) + ((Request.bJackpot && Affinity.bOre) ? 1 : 0);
+			if (Request.Element == EGFMagicElement::Magma && !Affinity.MagmaDrop.IsNone() && SmeltProcs(Cell, Request.SmeltChance))
+			{
+				++Count;
+			}
+			Break.DropCount = Count;
 		}
 		Out.Breaks.Add(Break);
 		// Contributors were copied onto the break. The wound reference is dead after this.
@@ -397,6 +445,30 @@ FGFMagicModifiers FGFMagicRules::ModifiersFor(const TArray<FName>& Owned)
 		else if (Row->Effect == TEXT("Jackpot"))
 		{
 			Mods.bJackpot = true;
+		}
+		else if (Row->Effect == TEXT("SmeltBonus"))
+		{
+			Mods.SmeltChance = FMath::Max(Mods.SmeltChance, Row->Magnitude);
+		}
+		else if (Row->Effect == TEXT("Sticky"))
+		{
+			Mods.bSticky = true;
+		}
+		else if (Row->Effect == TEXT("BarkAxe"))
+		{
+			Mods.MeleeForm = TEXT("BarkAxe");
+		}
+		else if (Row->Effect == TEXT("Stonebreaker"))
+		{
+			Mods.MeleeForm = TEXT("Stonebreaker");
+		}
+		else if (Row->Effect == TEXT("FrostBonus"))
+		{
+			Mods.FrostBonus += FMath::RoundToInt(Row->Magnitude);
+		}
+		else if (Row->Effect == TEXT("QuenchRadius"))
+		{
+			Mods.QuenchRadius = FMath::Max(Mods.QuenchRadius, FMath::RoundToInt(Row->Magnitude));
 		}
 	}
 	return Mods;

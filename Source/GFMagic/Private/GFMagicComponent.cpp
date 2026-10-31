@@ -134,7 +134,7 @@ int32 UGFMagicComponent::BagTotal() const
 
 float UGFMagicComponent::FieldRate() const
 {
-	float Rate = Modifiers().IntegrityRate;
+	float Rate = Modifiers().IntegrityRate * BreakChainScale();
 	if (bOvercharge)
 	{
 		if (const FGFMiningSpellRow* Row = FGFMagicCatalog::Spell(TEXT("Overcharge")))
@@ -143,6 +143,45 @@ float UGFMagicComponent::FieldRate() const
 		}
 	}
 	return Rate;
+}
+
+float UGFMagicComponent::FieldCostPerSecond() const
+{
+	if (!bFieldHeld)
+	{
+		return 0.f;
+	}
+	const FGFMiningSpellRow* Row = FGFMagicCatalog::FieldSpell(Element);
+	return Row ? FMath::Max(0.f, Row->CostPerSecond) : 0.f;
+}
+
+double UGFMagicComponent::MagicNow() const
+{
+	const UWorld* World = GetWorld();
+	return World ? World->GetTimeSeconds() : 0.0;
+}
+
+float UGFMagicComponent::BreakChainScale() const
+{
+	const FGFMiningSpellRow* Crystal = FGFMagicCatalog::Spell(TEXT("Crystal"));
+	const int32 Peak = Crystal && Crystal->ChainPeak > 0 ? Crystal->ChainPeak : 20;
+	const float Bonus = Crystal && Crystal->ChainBonus > 0.f ? Crystal->ChainBonus : 0.5f;
+	return FGFMagicRules::ChainScale(ChainCount, Peak, Bonus);
+}
+
+void UGFMagicComponent::NoteBreak(double Now)
+{
+	const FGFMiningSpellRow* Crystal = FGFMagicCatalog::Spell(TEXT("Crystal"));
+	const float Window = Crystal && Crystal->ChainWindow > 0.f ? Crystal->ChainWindow : 1.5f;
+	if (Now - LastBreakTime <= static_cast<double>(Window))
+	{
+		++ChainCount;
+	}
+	else
+	{
+		ChainCount = 1;
+	}
+	LastBreakTime = Now;
 }
 
 float UGFMagicComponent::FieldRange() const
@@ -317,6 +356,22 @@ void UGFMagicComponent::AuthoritySetField(bool bHeld)
 	{
 		ServerSetFieldHeld(bHeld);
 		return;
+	}
+	if (!bHeld && bFieldHeld)
+	{
+		const FGFMiningSpellRow* Active = FGFMagicCatalog::FieldSpell(Element);
+		if (Active && Active->Shape == TEXT("Melee") && !bMeleeHeavySent)
+		{
+			QueueSwing(false);
+		}
+		bMeleeHeavySent = false;
+		RootHeld = 0.f;
+	}
+	else if (bHeld && !bFieldHeld)
+	{
+		bMeleeHeavySent = false;
+		RootHeld = 0.f;
+		MeleeChain = NAME_None;
 	}
 	bFieldHeld = bHeld;
 	if (!bHeld)
@@ -529,8 +584,37 @@ void UGFMagicComponent::TickMagic(float Dt)
 			}
 		}
 	}
-	const float MaxCharge = FGFMagicCatalog::ChargeMax();
-	CrystalCharge = FMath::Min(MaxCharge, CrystalCharge + FGFMagicCatalog::ChargeRegen() * Dt);
+	const FGFMiningSpellRow* Crystal = FGFMagicCatalog::Spell(TEXT("Crystal"));
+	const float Delay = Crystal && Crystal->RegenDelay > 0.f ? Crystal->RegenDelay : 0.5f;
+	const float Window = Crystal && Crystal->ChainWindow > 0.f ? Crystal->ChainWindow : 1.5f;
+	if (ChainCount > 0 && MagicNow() - LastBreakTime > static_cast<double>(Window))
+	{
+		ChainCount = 0;
+	}
+	if (bFieldHeld && FieldCostPerSecond() > 0.f)
+	{
+		CastIdle = 0.f;
+	}
+	else
+	{
+		CastIdle += Dt;
+		if (CastIdle >= Delay)
+		{
+			const float MaxCharge = FGFMagicCatalog::ChargeMax();
+			CrystalCharge = FMath::Min(MaxCharge, CrystalCharge + FGFMagicCatalog::ChargeRegen() * Dt);
+		}
+	}
+	const FGFMiningSpellRow* Active = bFieldHeld ? FGFMagicCatalog::FieldSpell(Element) : nullptr;
+	if (bFieldHeld && Active && Active->Shape == TEXT("Melee"))
+	{
+		RootHeld += Dt;
+		const float Hold = Active->HeavyHoldSeconds > 0.f ? Active->HeavyHoldSeconds : 0.5f;
+		if (!bMeleeHeavySent && RootHeld + KINDA_SMALL_NUMBER >= Hold)
+		{
+			bMeleeHeavySent = true;
+			QueueSwing(true);
+		}
+	}
 	const FGFMiningSpellRow* Claw = FGFMagicCatalog::Spell(TEXT("Clawcall"));
 	const int32 MaxCharges = Claw ? Claw->MaxCharges : 2;
 	const float Recharge = Claw ? Claw->RechargeSeconds : 6.f;
@@ -665,10 +749,164 @@ void UGFMagicComponent::SyncMarker(const FVector& At)
 	if (Live)
 	{
 		Live->SetActorLocation(At);
-		Live->SetElement(Element);
+		const FGFMiningSpellRow* Spell = FGFMagicCatalog::FieldSpell(Element);
+		FVector Dir = (AimPoint - CastOrigin()).GetSafeNormal();
+		if (Dir.IsNearlyZero())
+		{
+			Dir = FVector(0.f, 0.f, -1.f);
+		}
+		float Half = Spell ? Spell->ConeHalfAngle : 15.f;
+		if (bOvercharge)
+		{
+			if (const FGFMiningSpellRow* Over = FGFMagicCatalog::Spell(TEXT("Overcharge")))
+			{
+				Half += FMath::Max(0.f, Over->OverchargeHalfAngle);
+			}
+		}
+		const float Intensity = (Spell && Spell->Shape == TEXT("Cone")) ? Spell->LightIntensity : 0.f;
+		Live->SetBeam(Element, Dir, Half, FieldRange(), Intensity);
 	}
+}
+
+void UGFMagicComponent::SpendCharge(float Amount)
+{
+	if (!IsAuthority() || Amount <= 0.f)
+	{
+		return;
+	}
+	CrystalCharge = FMath::Max(0.f, CrystalCharge - Amount);
+	PushAttributes();
 }
 
 void UGFMagicComponent::OnRep_Haul()
 {
+}
+
+bool UGFMagicComponent::QueueSwing(bool bHeavy)
+{
+	const FGFMagicModifiers Mods = Modifiers();
+	const FName Form = Mods.MeleeForm.IsNone() ? FName(TEXT("Rootmaul")) : Mods.MeleeForm;
+	const FName MoveId = FGFMagicShapes::NextMove(Form, MeleeChain, bHeavy);
+	const FGFRootmaulMoveRow* Move = FGFMagicShapes::Move(Form, MoveId);
+	if (!Move)
+	{
+		return false;
+	}
+	if (Move->ChargeCost > CrystalCharge)
+	{
+		return false;
+	}
+	if (Move->ChargeCost > 0.f)
+	{
+		CrystalCharge -= Move->ChargeCost;
+		PushAttributes();
+	}
+	MeleeChain = MoveId;
+	const FGFMiningSpellRow* Spell = FGFMagicCatalog::FieldSpell(EGFMagicElement::Root);
+	Rhythm.Window = Spell && Spell->RhythmWindow > 0.f ? Spell->RhythmWindow : 0.15f;
+	Rhythm.Step = Spell && Spell->RhythmStep > 0.f ? Spell->RhythmStep : 0.25f;
+	Rhythm.MaxBonus = Spell && Spell->RhythmMax > 0.f ? Spell->RhythmMax : 0.75f;
+	FVector Aim = (AimPoint - CastOrigin()).GetSafeNormal();
+	if (Aim.IsNearlyZero())
+	{
+		Aim = FVector::ForwardVector;
+	}
+	FMagicSwing Swing;
+	Swing.MoveId = MoveId;
+	Swing.Width = Move->Width;
+	Swing.Height = Move->Height;
+	Swing.Depth = Move->Depth;
+	Swing.Power = Move->Power;
+	Swing.ChargeCost = Move->ChargeCost;
+	Swing.LungeCm = Move->LungeCm;
+	Swing.bPitch = Move->bPitch;
+	Swing.bRooted = Move->bRooted;
+	Swing.Rhythm = Rhythm.Note(MagicNow(), true);
+	Swing.AimDir = Aim;
+	Swing.Forward = Aim;
+	if (const APawn* Pawn = AvatarPawn.Get())
+	{
+		if (!Move->bPitch)
+		{
+			const FVector Facing = Pawn->GetActorForwardVector();
+			if (!Facing.IsNearlyZero())
+			{
+				Swing.Forward = Facing;
+			}
+		}
+	}
+	SwingQueue.Add(Swing);
+	return true;
+}
+
+bool UGFMagicComponent::ExecuteConsole(const FString& Line)
+{
+	TArray<FString> Parts;
+	Line.ParseIntoArrayWS(Parts);
+	if (Parts.Num() == 0)
+	{
+		return false;
+	}
+	FString Name = Parts[0];
+	const FString Prefix = TEXT("gf.Magic.");
+	if (Name.StartsWith(Prefix))
+	{
+		Name = Name.RightChop(Prefix.Len());
+	}
+	if (Name == TEXT("Field"))
+	{
+		if (Parts.Num() > 1 && (Parts[1] == TEXT("0") || Parts[1].Equals(TEXT("off"), ESearchCase::IgnoreCase)))
+		{
+			AuthoritySetField(false);
+			return true;
+		}
+		if (Parts.Num() > 1 && Parts[1].Equals(TEXT("Spark"), ESearchCase::IgnoreCase))
+		{
+			Element = EGFMagicElement::Spark;
+		}
+		else if (Parts.Num() > 1)
+		{
+			EGFMagicElement Want = EGFMagicElement::Spark;
+			if (Parts[1].Equals(TEXT("Magma"), ESearchCase::IgnoreCase))
+			{
+				Want = EGFMagicElement::Magma;
+			}
+			else if (Parts[1].Equals(TEXT("Root"), ESearchCase::IgnoreCase))
+			{
+				Want = EGFMagicElement::Root;
+			}
+			else if (Parts[1].Equals(TEXT("Frost"), ESearchCase::IgnoreCase))
+			{
+				Want = EGFMagicElement::Frost;
+			}
+			if (Want != EGFMagicElement::Spark)
+			{
+				const AGFPlayerState* PS = Cast<AGFPlayerState>(GetOwner());
+				if (PS && FGFMagicRules::FactionElement(PS->FactionId) == Want)
+				{
+					Element = Want;
+				}
+			}
+		}
+		AuthoritySetField(true);
+		return true;
+	}
+	if (Name == TEXT("Claw"))
+	{
+		return AuthorityClaw();
+	}
+	if (Name == TEXT("Toggle"))
+	{
+		return AuthorityToggle();
+	}
+	if (Name == TEXT("Overcharge"))
+	{
+		return AuthorityOvercharge();
+	}
+	if (Name == TEXT("Buy") && Parts.Num() > 1)
+	{
+		AuthorityBuy(FName(*Parts[1]));
+		return true;
+	}
+	return false;
 }

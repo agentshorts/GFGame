@@ -2,6 +2,8 @@
 
 #include "Misc/AutomationTest.h"
 #include "GFDataTables.h"
+#include "GFMagicComponent.h"
+#include "GFMagicPlayerState.h"
 #include "GFGameState.h"
 #include "GFInventoryComponent.h"
 #include "GFMiningRange.h"
@@ -607,5 +609,75 @@ GF_RANGE_ROW_TEST(Ore_CoalnutSeam)
 GF_RANGE_ROW_TEST(Ore_CrystalVein)
 
 #undef GF_RANGE_ROW_TEST
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMiningMagicDemoTest, "GFGame.MiningRange.MagicDemo", GFMiningRangeTest::Flags)
+bool FGFMiningMagicDemoTest::RunTest(const FString&)
+{
+	using namespace GFMiningRangeTest;
+	FGFMiningRangeLayout Layout;
+	if (!TestTrue(TEXT("Rows load"), Layout.LoadProject()))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Twenty one rows"), Layout.Rows.Num(), 21);
+	int32 Demos = 0;
+	for (const FGFMiningRow& Row : Layout.Rows)
+	{
+		Demos += Row.DemoCommands.IsEmpty() ? 0 : 1;
+	}
+	TestEqual(TEXT("Every row has a demo"), Demos, Layout.Rows.Num());
+	const int32 Spark = Layout.RowIndexOf(TEXT("Cinderwrights_SparkStation"));
+	const int32 Rake = Layout.RowIndexOf(TEXT("Rime_RakeLane"));
+	const int32 Ore = Layout.RowIndexOf(TEXT("Ore_OreMetal"));
+	const int32 Vein = Layout.RowIndexOf(TEXT("Ore_CrystalVein"));
+	const int32 Log = Layout.RowIndexOf(TEXT("Verdant_Log"));
+	if (!TestTrue(TEXT("Demo rows exist"), Spark != INDEX_NONE && Rake != INDEX_NONE && Ore != INDEX_NONE && Vein != INDEX_NONE && Log != INDEX_NONE))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Spark station says Sparkcone"), Layout.Rows[Spark].Line2, FString(TEXT("Sparkcone 8 m")));
+	TestEqual(TEXT("Spark station forces the cone"), Layout.Rows[Spark].DemoCommands, FString(TEXT("gf.Magic.Field Spark")));
+	TestEqual(TEXT("Rake lane calls the claw"), Layout.Rows[Rake].DemoCommands, FString(TEXT("gf.Magic.Claw")));
+	TestEqual(TEXT("Ore row buys Smelter Plus"), Layout.Rows[Ore].DemoCommands, FString(TEXT("gf.Magic.Buy SmelterPlus")));
+	TestTrue(TEXT("Crystal vein overcharges"), Layout.Rows[Vein].DemoCommands.Contains(TEXT("gf.Magic.Overcharge")));
+	TestTrue(TEXT("Verdant toggles then holds the field"), Layout.Rows[Log].DemoCommands.Contains(TEXT("gf.Magic.Toggle")) && Layout.Rows[Log].DemoCommands.Contains(TEXT("gf.Magic.Field")));
+
+	FFallbackGuard Guard;
+	FRangeWorld W(TEXT("GFMiningMagicDemo"));
+	if (!TestNotNull(TEXT("World"), W.World))
+	{
+		return false;
+	}
+	AddGameState(W.World);
+	AGFMiningRange* Range = W.World->SpawnActor<AGFMiningRange>();
+	if (!TestNotNull(TEXT("Range"), Range))
+	{
+		return false;
+	}
+	TestEqual(TEXT("One trigger per row"), Range->DemoTriggerCount(), Range->GetLayout().Rows.Num());
+
+	AGFMagicPlayerState* PS = W.World->SpawnActor<AGFMagicPlayerState>();
+	if (!TestNotNull(TEXT("Caster"), PS) || !TestNotNull(TEXT("Magic"), PS->Magic) || !TestNotNull(TEXT("Bag"), PS->Inventory))
+	{
+		return false;
+	}
+	PS->PlayerKey = TEXT("Demo");
+	PS->FactionId = TEXT("Cinderwrights");
+	PS->Inventory->AddItem(TEXT("SpellPage"), 1);
+	PS->Inventory->AddItem(TEXT("Crystal"), 1);
+	Range->RunRowDemo(PS, TEXT("Cinderwrights_SparkStation"));
+	TestTrue(TEXT("The spark station holds the field"), PS->Magic->IsFieldHeld());
+	TestEqual(TEXT("The spark station forces Spark"), PS->Magic->GetElement(), EGFMagicElement::Spark);
+	Range->ReleaseRowDemo(PS, TEXT("Cinderwrights_SparkStation"));
+	TestFalse(TEXT("Stepping off releases the field"), PS->Magic->IsFieldHeld());
+	Range->RunRowDemo(PS, TEXT("Ore_OreMetal"));
+	TestTrue(TEXT("The ore sign bought Smelter Plus"), PS->Magic->GetOwnedUpgrades().Contains(FName(TEXT("SmelterPlus"))));
+	const int32 Charges = PS->Magic->GetClawCharges();
+	Range->RunRowDemo(PS, TEXT("Rime_RakeLane"));
+	TestEqual(TEXT("The rake lane spent a claw charge"), PS->Magic->GetClawCharges(), Charges - 1);
+	Range->RunRowDemo(PS, TEXT("Ore_CrystalVein"));
+	TestTrue(TEXT("The vein sign overcharges"), PS->Magic->IsOvercharged());
+	return true;
+}
 
 #endif

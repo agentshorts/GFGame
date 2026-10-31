@@ -8,6 +8,7 @@
 #include "GFMagicActors.generated.h"
 
 class UStaticMeshComponent;
+class USpotLightComponent;
 
 UCLASS()
 class GFMAGIC_API AGFMagicDropRibbon : public AActor
@@ -45,7 +46,7 @@ private:
 	static constexpr float LifeSeconds = 0.45f;
 };
 
-/** A small sphere at the field, so a hold reads before Niagara lands. */
+/** Placeholder beam. Sparkcone is an engine cone plus a spot light. Niagara replaces this later. */
 UCLASS()
 class GFMAGIC_API AGFMagicFieldMarker : public AActor
 {
@@ -57,18 +58,33 @@ public:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	void SetElement(EGFMagicElement InElement);
+	void SetBeam(EGFMagicElement InElement, const FVector& Dir, float HalfAngleDeg, float RangeCm, float Intensity);
 
-	UPROPERTY(ReplicatedUsing = OnRep_Element)
+	UPROPERTY(ReplicatedUsing = OnRep_Beam)
 	EGFMagicElement Element = EGFMagicElement::Spark;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Beam)
+	FVector BeamDir = FVector(0.f, 0.f, -1.f);
+
+	UPROPERTY(ReplicatedUsing = OnRep_Beam)
+	float BeamHalfAngle = 15.f;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Beam)
+	float BeamRangeCm = 800.f;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Beam)
+	float BeamIntensity = 0.f;
 
 private:
 	UFUNCTION()
-	void OnRep_Element();
+	void OnRep_Beam();
 	void ApplyMesh();
 
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	UPROPERTY()
+	TObjectPtr<USpotLightComponent> Light;
 };
 
 /** The summon, sweeping the tunnel it just cut. */

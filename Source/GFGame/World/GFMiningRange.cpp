@@ -1,5 +1,6 @@
 #include "GFMiningRange.h"
 
+#include "GFMagicComponent.h"
 #include "GFMiningRangePortal.h"
 #include "GFDataTables.h"
 #include "GFGameMode.h"
@@ -622,7 +623,25 @@ void AGFMiningRange::BuildVisuals()
 		Own(Sign);
 		++SignsBuilt;
 		const FString Line = Row.Sign1 + (Row.Sign2.IsEmpty() ? FString() : TEXT("\n") + Row.Sign2) + (Row.Sign3.IsEmpty() ? FString() : TEXT("\n") + Row.Sign3);
-		TextOn(Sign, Line, FVector(6.f, 0.f, 0.f));
+		const FString DemoLine = Row.DemoCommands.IsEmpty() ? FString() : TEXT("\n") + Row.DemoCommands.Replace(TEXT("|"), TEXT("  "));
+		TextOn(Sign, Line + DemoLine, FVector(6.f, 0.f, 0.f));
+		UBoxComponent* Demo = NewObject<UBoxComponent>(this);
+		if (Demo)
+		{
+			Demo->SetupAttachment(Sign);
+			Demo->SetRelativeLocation(FVector(80.f, 0.f, 0.f));
+			Demo->SetBoxExtent(FVector(160.f, 120.f, 180.f));
+			Demo->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			Demo->SetCollisionResponseToAllChannels(ECR_Ignore);
+			Demo->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+			Demo->SetGenerateOverlapEvents(true);
+			Demo->OnComponentBeginOverlap.AddDynamic(this, &AGFMiningRange::OnDemoBegin);
+			Demo->OnComponentEndOverlap.AddDynamic(this, &AGFMiningRange::OnDemoEnd);
+			Demo->RegisterComponent();
+			Own(Demo);
+			DemoByTrigger.Add(Demo, Row.Id);
+			++DemoTriggers;
+		}
 		if (!bArtDressing && !Row.StandInMesh.IsEmpty() && Voxel.IsValid() && !Voxel->FindBlockRow(Row.Block))
 		{
 			if (UStaticMesh* Ore = LoadObject<UStaticMesh>(nullptr, *Row.StandInMesh))
@@ -761,6 +780,80 @@ void AGFMiningRange::OnResetOverlap(UPrimitiveComponent* Overlapped, AActor* Oth
 	if (HasAuthority() && Cast<APawn>(Other) && Lever == ELever::Rest)
 	{
 		StartPull();
+	}
+}
+
+void AGFMiningRange::RunRowDemo(AGFPlayerState* By, const FString& RowId)
+{
+	if (!By || GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	UGFMagicComponent* Magic = By->FindComponentByClass<UGFMagicComponent>();
+	if (!Magic)
+	{
+		return;
+	}
+	const int32 Index = Layout.RowIndexOf(RowId);
+	if (Index == INDEX_NONE)
+	{
+		return;
+	}
+	TArray<FString> Parts;
+	Layout.Rows[Index].DemoCommands.ParseIntoArray(Parts, TEXT("|"), true);
+	for (FString Command : Parts)
+	{
+		Command.TrimStartAndEndInline();
+		Magic->ExecuteConsole(Command);
+	}
+}
+
+void AGFMiningRange::ReleaseRowDemo(AGFPlayerState* By, const FString& RowId)
+{
+	if (!By || GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	const int32 Index = Layout.RowIndexOf(RowId);
+	if (Index == INDEX_NONE || !Layout.Rows[Index].DemoCommands.Contains(TEXT("gf.Magic.Field")))
+	{
+		return;
+	}
+	if (UGFMagicComponent* Magic = By->FindComponentByClass<UGFMagicComponent>())
+	{
+		Magic->ExecuteConsole(TEXT("gf.Magic.Field 0"));
+	}
+}
+
+void AGFMiningRange::OnDemoBegin(UPrimitiveComponent* Overlapped, AActor* Other, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& Sweep)
+{
+	(void)OtherComp; (void)OtherBodyIndex; (void)bFromSweep; (void)Sweep;
+	if (GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	const FString* RowId = DemoByTrigger.Find(Cast<UBoxComponent>(Overlapped));
+	APawn* Pawn = Cast<APawn>(Other);
+	AGFPlayerState* PS = Pawn ? Cast<AGFPlayerState>(Pawn->GetPlayerState()) : nullptr;
+	if (RowId && PS)
+	{
+		RunRowDemo(PS, *RowId);
+	}
+}
+
+void AGFMiningRange::OnDemoEnd(UPrimitiveComponent* Overlapped, AActor* Other, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
+{
+	(void)OtherComp; (void)OtherBodyIndex;
+	if (GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	const FString* RowId = DemoByTrigger.Find(Cast<UBoxComponent>(Overlapped));
+	APawn* Pawn = Cast<APawn>(Other);
+	AGFPlayerState* PS = Pawn ? Cast<AGFPlayerState>(Pawn->GetPlayerState()) : nullptr;
+	if (RowId && PS)
+	{
+		ReleaseRowDemo(PS, *RowId);
 	}
 }
 
