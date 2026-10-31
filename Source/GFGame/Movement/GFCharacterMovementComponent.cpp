@@ -9,6 +9,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "CollisionQueryParams.h"
+#include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Net/UnrealNetwork.h"
@@ -82,6 +83,8 @@ namespace GFCharacterMovementDetail
 class FSavedMove_GFCharacter : public FSavedMove_Character
 {
 public:
+	typedef FSavedMove_Character Super;
+
 	bool bSavedSprint = false;
 	bool bSavedDash = false;
 	bool bSavedSwing = false;

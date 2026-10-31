@@ -97,9 +97,9 @@ void AGFCharacter::PostInitializeComponents()
 		Move->ApplyBaseRunSpeed();
 		Move->ApplyJumpTuning();
 	}
-	else if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	else if (UCharacterMovementComponent* BaseMove = GetCharacterMovement())
 	{
-		Move->MaxStepHeight = PlayerMaxStepHeight;
+		BaseMove->MaxStepHeight = PlayerMaxStepHeight;
 	}
 }
 
