@@ -201,3 +201,114 @@ export interface RunResult {
   /** Unchanged, except payday, which returns the cards after the shift. */
   wages: WageCard[];
 }
+
+/**
+ * Family knobs. Each one is a decision default and can be overridden per call.
+ * Living members at or above `gankAt` gank. Under that, the family barters or posts a bounty.
+ * A mated family lays one spawn per `spawnEveryMinutes`, and stops at `familyCap` living members.
+ * The elder gives dead skin after `skinAsks` asks. `revengeHits` hits start payback.
+ */
+export const GANK_FAMILY_SIZE = 5;
+export const SPAWN_EVERY_MINUTES = 30;
+export const FAMILY_CAP = 8;
+export const SKIN_ASKS = 5;
+export const REVENGE_HITS = 1;
+
+export interface FamilyRules {
+  gankAt: number;
+  spawnEveryMinutes: number;
+  familyCap: number;
+  skinAsks: number;
+  revengeHits: number;
+}
+
+export const DEFAULT_FAMILY_RULES: FamilyRules = {
+  gankAt: GANK_FAMILY_SIZE,
+  spawnEveryMinutes: SPAWN_EVERY_MINUTES,
+  familyCap: FAMILY_CAP,
+  skinAsks: SKIN_ASKS,
+  revengeHits: REVENGE_HITS,
+};
+
+export const KIN_SEXES = ["female", "male"] as const;
+
+export type KinSex = (typeof KIN_SEXES)[number];
+
+/** One dino in a family book. Age is caller-owned. This lab does not run a birthday clock. */
+export interface LineageMember {
+  id: string;
+  name: string;
+  familyId: string;
+  sex: KinSex;
+  /** Higher is older. The heir is the highest age, then the id that sorts first. */
+  age: number;
+  alive: boolean;
+  /** Living bond only. Cleared when either mate dies. Pairing itself is the caller's job. */
+  mateId: string | null;
+  /** Up to two parents. Kept after those parents die. */
+  parentIds: string[];
+  /** In-game minute of birth. */
+  bornAtMinute: number;
+}
+
+export interface LineageFamily {
+  familyId: string;
+  name: string;
+  /**
+   * Sitting elder. May still name a dead dino until `successionEvent` moves the seat.
+   * Null when the seat is empty.
+   */
+  elderId: string | null;
+}
+
+/** Lineage state `simulate.ts` can keep and pass back in. */
+export interface FamilyBook {
+  families: LineageFamily[];
+  dinos: LineageMember[];
+  /**
+   * Last in-game minute this family spawned.
+   * A missing key has never spawned, so the first egg is due at `spawnEveryMinutes`.
+   */
+  lastSpawnMinute: Record<string, number>;
+}
+
+export type FamilyPayback = "gank" | "barter" | "bounty";
+
+/** What the family does after a kill or a skin hit. Member ids are the living ones. */
+export interface KillResponse {
+  kind: FamilyPayback;
+  familyId: string;
+  size: number;
+  memberIds: string[];
+}
+
+/** How many times this player has asked the elder for dead skin, and how many hits landed. */
+export interface SkinPester {
+  asks: number;
+  hits: number;
+}
+
+/**
+ * Big Grumble hunts the player who killed an elder.
+ * That player cannot tame him until one of the two is dead.
+ */
+export interface GrumbleHuntOrder {
+  grumbleId: string;
+  playerKey: string;
+  untameable: true;
+}
+
+/** Posted later by `simulate.ts`. The line is already inside the Dinobook token cap. */
+export interface SuccessionEvent {
+  kind: "elder-succession";
+  atMinute: number;
+  familyId: string;
+  familyName: string;
+  slainId: string;
+  slainName: string;
+  heirId: string | null;
+  heirName: string | null;
+  line: string;
+  tokens: number;
+  hunt: GrumbleHuntOrder | null;
+}
