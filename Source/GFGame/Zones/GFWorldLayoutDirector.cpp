@@ -4,6 +4,7 @@
 #include "GFHubDressing.h"
 #include "GFLog.h"
 #include "GFOverworldGround.h"
+#include "GFGrumbleDigSite.h"
 #include "GFRegionGate.h"
 #include "GFShardstone.h"
 #include "GFZoneCatalog.h"
@@ -78,7 +79,7 @@ void AGFWorldLayoutDirector::BeginPlay()
 		SpawnProp(World, At + FVector(0.f, 0.f, 6000.f), EGFPlaceholderShape::Sphere, Slot.Color, FVector(5.f, 5.f, 5.f), 0.f, false, true, 0.f);
 
 		const FVector TowardHub = -At.GetSafeNormal2D();
-		const FVector ArchAt = At + FVector(TowardHub.X, TowardHub.Y, 0.f) * 1000.f;
+		const FVector ArchAt = At + FVector(TowardHub.X, TowardHub.Y, 0.f) * FGFZoneConstants::PorchArchInsetCm;
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		Params.bDeferConstruction = true;
@@ -142,6 +143,24 @@ void AGFWorldLayoutDirector::BeginPlay()
 		SpawnProp(World, Point.Location, Shape, Color, Scale, 0.f, true, false, 25000.f);
 	}
 
+	EnsureGrumbleDigSite();
+
 	UE_LOG(LogGF, Log, TEXT("Zones: hub layout spawned %d points of interest, %d stones, %d porches."),
 		Points.Num(), Catalog.Stones.Num(), FGFZoneLayout::Regions().Num());
+}
+
+void AGFWorldLayoutDirector::EnsureGrumbleDigSite()
+{
+	UWorld* World = GetWorld();
+	if (!HasAuthority() || !World || World->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	const FGFRegionSlot* Slot = FGFZoneLayout::FindByGate(TEXT("GrumbleDig"));
+	if (!Slot || !Slot->bEnabled)
+	{
+		return;
+	}
+	const FVector At = FGFZoneLayout::BearingPoint(Slot->BearingDeg, FGFZoneConstants::PorchRingCm);
+	AGFGrumbleDigSite::Ensure(World, At);
 }

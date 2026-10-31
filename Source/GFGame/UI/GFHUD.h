@@ -64,6 +64,8 @@ private:
 	void DrawRunwaySession();
 	/** Arena greybox: bout prompts while the local pawn is on the arena pad. */
 	void DrawArenaSession();
+	/** Grumble Dig greybox: start, dig, results, while the local pawn is on the porch site. */
+	void DrawGrumbleSession();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);

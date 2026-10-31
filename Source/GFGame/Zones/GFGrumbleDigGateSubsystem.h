@@ -4,7 +4,7 @@
 #include "GFMiniGameGateSubsystem.h"
 #include "GFGrumbleDigGateSubsystem.generated.h"
 
-/** Porch gate for Grumble Dig. The dig planner has no map of its own yet. */
+/** Porch gate for Grumble Dig. The map name stays L_GrumbleDig. While that package is missing, the arch drops you on AGFGrumbleDigSite. */
 UCLASS()
 class GFGAME_API UGFGrumbleDigGateSubsystem : public UGFMiniGameGateSubsystem
 {
