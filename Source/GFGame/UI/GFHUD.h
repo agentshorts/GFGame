@@ -60,6 +60,8 @@ private:
 	void DrawBeatHopSession();
 	/** Pebble Mine (#216): verb prompts while the local pawn is on the mine pad. */
 	void DrawMineSession();
+	/** Hallow Night: start, finish, results and hub prompts while the local pawn is on the Depths pad. */
+	void DrawDepthsSession();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);

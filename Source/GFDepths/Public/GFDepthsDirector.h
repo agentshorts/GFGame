@@ -83,6 +83,15 @@ public:
 	/** Tests only: hurt a player as a shade would (knockback and invulnerability apply). */
 	void HitForTests(const FString& Key, int32 Amount);
 
+	/** Spawns the playable lane and the start / finish / results / hub spots on this pad. Safe to call again. */
+	void EnsurePlayableSite();
+	/**
+	 * Puts a runner on the exit lift and steps the sim so the exit drop can roll.
+	 * The greybox finish arch uses this. The 2.5D course itself is unchanged.
+	 * True when that runner has reached the exit (including when they were already there).
+	 */
+	bool ArriveAtExit(const FString& Key);
+
 	static constexpr float LiftReach = 150.f;
 	static constexpr float AttackReach = 140.f;
 	static constexpr float AttackCooldown = 0.35f;

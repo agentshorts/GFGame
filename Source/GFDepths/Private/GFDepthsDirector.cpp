@@ -1,4 +1,5 @@
 #include "GFDepthsDirector.h"
+#include "GFDepthsSite.h"
 #include "GFMiniGameCatalog.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
@@ -80,7 +81,35 @@ void AGFDepthsDirector::BeginPlay()
 		{
 			G->RegisterModeHandler(this);
 		}
+		EnsurePlayableSite();
 	}
+}
+
+void AGFDepthsDirector::EnsurePlayableSite()
+{
+	UWorld* World = GetWorld();
+	if (!HasAuthority() || !World || World->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	if (AGFGameState* G = GS())
+	{
+		G->RegisterModeHandler(this);
+	}
+	AGFDepthsSite* Site = AGFDepthsSite::Get(World);
+	if (!Site)
+	{
+		FActorSpawnParameters Params;
+		Params.Owner = this;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Site = World->SpawnActor<AGFDepthsSite>(AGFDepthsSite::StaticClass(), FTransform(GetActorLocation()), Params);
+	}
+	if (!Site)
+	{
+		return;
+	}
+	Site->AttachToActor(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+	Site->BuildIfNeeded();
 }
 
 void AGFDepthsDirector::EndPlay(const EEndPlayReason::Type Reason)
@@ -270,6 +299,42 @@ void AGFDepthsDirector::HitForTests(const FString& Key, int32 Amount)
 			Hurt(*P, Amount);
 		}
 	}
+}
+
+bool AGFDepthsDirector::ArriveAtExit(const FString& Key)
+{
+	if (!HasAuthority() || Depth == 0)
+	{
+		return false;
+	}
+	FGFDepthsPlayerView* P = Edit(Key);
+	if (!P || P->Run.bDowned)
+	{
+		return false;
+	}
+	if (P->Run.bReachedExit)
+	{
+		return true;
+	}
+	if (FPlayerInput* In = Inputs.Find(Key))
+	{
+		*In = FPlayerInput();
+	}
+	// One step is enough when the exit floor holds them. A second covers a snap that
+	// landed just outside the exit radius on the first try.
+	for (int32 Attempt = 0; Attempt < 2 && !P->Run.bReachedExit; ++Attempt)
+	{
+		P->Body = FGFDepthsBody();
+		P->Body.Pos = Level().Exit;
+		P->Body.bGrounded = true;
+		SimStep(FGFDepthsMover::StepSeconds, ServerTime());
+		P = Edit(Key);
+		if (!P)
+		{
+			return false;
+		}
+	}
+	return P->Run.bReachedExit;
 }
 
 FGFModeResult AGFDepthsDirector::HandleModeRequest(AGFPlayerState* By, const FGFModeRequest& R)

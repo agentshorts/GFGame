@@ -1,5 +1,6 @@
 #include "GFHUD.h"
 #include "GFBeatHopCourse.h"
+#include "GFDepthsSite.h"
 #include "GFMineSite.h"
 #include "GFZoneCatalog.h"
 #include "GFZoneLayout.h"
@@ -169,6 +170,7 @@ void AGFHUD::DrawHUD()
 	DrawBeatHopPops();
 	DrawBeatHopSession();
 	DrawMineSession();
+	DrawDepthsSession();
 	DrawCrosshair();
 	DrawCompass();
 	DrawStaminaArc();
@@ -905,6 +907,56 @@ void AGFHUD::DrawBeatHopSession()
 	Lines.Emplace(TEXT("Step on a tile to pick a song or difficulty, then run through the gate ahead."), Soft);
 	Lines.Emplace(TEXT("You run on your own: Space to hop on the beat, A / D to switch lanes."), Soft);
 	Panel(Lines, Canvas->ClipX * 0.5f, 12.f * Scale);
+}
+
+void AGFHUD::DrawDepthsSession()
+{
+	UWorld* World = GetWorld();
+	if (!World || !Canvas)
+	{
+		return;
+	}
+	const AGFDepthsSite* Site = AGFDepthsSite::Get(World);
+	const APawn* Pawn = GetOwningPawn();
+	if (!Site || !Site->IsPlayerNear(Pawn))
+	{
+		return;
+	}
+	const AGFPlayerState* PS = nullptr;
+	if (const APlayerController* PC = GetOwningPlayerController())
+	{
+		PS = PC->GetPlayerState<AGFPlayerState>();
+	}
+	TArray<FString> Prompt;
+	Site->GetPromptLines(PS, Prompt);
+	if (Prompt.Num() == 0)
+	{
+		return;
+	}
+	UFont* Font = HudFont();
+	const float Scale = FMath::Clamp(Canvas->ClipY / 720.f, 1.f, 3.f);
+	const float LineH = 16.f * Scale;
+	float W = 0.f;
+	for (const FString& Line : Prompt)
+	{
+		float TW = 0.f, TH = 0.f;
+		GetTextSize(Line, TW, TH, Font, Scale);
+		W = FMath::Max(W, TW);
+	}
+	const float Pad = 10.f * Scale;
+	const float H = Prompt.Num() * LineH + Pad * 2.f;
+	const float X = Canvas->ClipX * 0.5f - W * 0.5f - Pad;
+	const float Top = 12.f * Scale;
+	DrawRect(FLinearColor(0.08f, 0.05f, 0.14f, 0.78f), X, Top, W + Pad * 2.f, H);
+	const FLinearColor Gold(0.86f, 0.72f, 1.f);
+	const FLinearColor Soft(0.90f, 0.86f, 0.96f);
+	float Y = Top + Pad;
+	for (int32 i = 0; i < Prompt.Num(); ++i)
+	{
+		const FLinearColor Tint = (i == 0) ? Gold : Soft;
+		DrawText(Prompt[i], Tint, X + Pad, Y, Font, Scale, false);
+		Y += LineH;
+	}
 }
 
 void AGFHUD::DrawMineSession()

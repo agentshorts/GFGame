@@ -2,6 +2,7 @@
 
 #include "GFBeatHopCourse.h"
 #include "GFLog.h"
+#include "GFDepthsDirector.h"
 #include "GFMineDirector.h"
 #include "GFMiniGameCatalog.h"
 #include "GFMiniGameGate.h"
@@ -152,6 +153,11 @@ void AGFHubGateDirector::Place(const FString& WorldPackage, const FVector& InRim
 				if (AGFMineDirector* Mine = Cast<AGFMineDirector>(Director))
 				{
 					Mine->EnsurePlayableSite();
+				}
+				// Hallow Night: start, finish, results and the hub arch on the Depths pad. No new map.
+				if (AGFDepthsDirector* Depths = Cast<AGFDepthsDirector>(Director))
+				{
+					Depths->EnsurePlayableSite();
 				}
 			}
 		}
