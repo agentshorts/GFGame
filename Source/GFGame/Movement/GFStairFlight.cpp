@@ -106,7 +106,14 @@ void AGFStairFlight::Rebuild()
 
 	auto AddFloor = [this](const TCHAR* Name, const FVector& Center, const FVector& Half) -> UBoxComponent*
 	{
-		UBoxComponent* Box = NewObject<UBoxComponent>(this, Name);
+		const FName BoxName(Name);
+		UBoxComponent* Box = NewObject<UBoxComponent>(this, BoxName);
+		// Same name on server and client. A runtime box is not net-addressable until this is set,
+		// so the pawn's movement base logs "BoxComponent StairPad NOT Supported" and the client move has no floor.
+		if (Box && Box->GetFName() == BoxName)
+		{
+			Box->SetNetAddressable();
+		}
 		Box->SetupAttachment(RootComponent);
 		Box->SetBoxExtent(Half);
 		Box->SetRelativeLocation(Center);
