@@ -1,5 +1,5 @@
 import type { DinoWork, StatKind } from "../core/types";
-import { clampRep, REP_BAND_THRESHOLDS, repBand as coreRepBand } from "../core/types";
+import { clampRep, DEFAULT_REP_DELTAS, REP_BAND_THRESHOLDS, repBand as coreRepBand } from "../core/types";
 import type { DinobookEventId, FamilyBrief, RepBand, WageCard } from "./types";
 import { LAB_TREE, type FamilyTree } from "./tree";
 import { clampShiftPay, finishWage, LAB_CREW_IDS, seedWageCards, wageFromUnknown, withMateRanks } from "./wages";
@@ -76,9 +76,9 @@ export function seedBrief(familyId: string): FamilyBrief {
 
 const DELTA: Record<DinobookEventId, Partial<FamilyBrief>> = {
   "player-joined": {},
-  attacked: { kills: 1, hitsDealt: 1, rep: -8 },
-  "refused-mango": { mangoRefused: 1, rep: -2 },
-  "rental-downed": { rentalsDowned: 1, rep: -6 },
+  attacked: { kills: 1, hitsDealt: 1, rep: DEFAULT_REP_DELTAS.kill },
+  "refused-mango": { mangoRefused: 1, rep: DEFAULT_REP_DELTAS.mango_refused },
+  "rental-downed": { rentalsDowned: 1, rep: DEFAULT_REP_DELTAS.rental_downed },
   "summon-big-grumble": {},
   payday: {},
 };
@@ -277,6 +277,7 @@ const LEDGER_KIND: Partial<Record<DinobookEventId, StatKind>> = {
 interface StorageMethods {
   getStats?: (playerKey: string) => unknown;
   bumpStats?: (event: unknown, deltas?: unknown) => unknown;
+  getKnobs?: () => unknown;
   getMemory?: (dinoId: string) => unknown;
   putMemory?: (memory: unknown) => void;
   getWork?: (dinoId: string) => unknown;
@@ -296,6 +297,7 @@ function methodBag(value: unknown): StorageMethods | null {
   const bag: StorageMethods = {};
   const getStats = bindFn<NonNullable<StorageMethods["getStats"]>>(row, "getStats");
   const bumpStats = bindFn<NonNullable<StorageMethods["bumpStats"]>>(row, "bumpStats");
+  const getKnobs = bindFn<NonNullable<StorageMethods["getKnobs"]>>(row, "getKnobs");
   const getMemory = bindFn<NonNullable<StorageMethods["getMemory"]>>(row, "getMemory");
   const putMemory = bindFn<NonNullable<StorageMethods["putMemory"]>>(row, "putMemory");
   const getWork = bindFn<NonNullable<StorageMethods["getWork"]>>(row, "getWork");
@@ -303,6 +305,7 @@ function methodBag(value: unknown): StorageMethods | null {
   const creditWages = bindFn<NonNullable<StorageMethods["creditWages"]>>(row, "creditWages");
   if (getStats) bag.getStats = getStats;
   if (bumpStats) bag.bumpStats = bumpStats;
+  if (getKnobs) bag.getKnobs = getKnobs;
   if (getMemory) bag.getMemory = getMemory;
   if (putMemory) bag.putMemory = putMemory;
   if (getWork) bag.getWork = getWork;
@@ -397,6 +400,27 @@ function bump(bound: StorageMethods, playerKey: string, familyId: string, kind: 
   }, { [kind]: delta });
 }
 
+/** One event's rep. Knob overrides win. Otherwise the shared `DEFAULT_REP_DELTAS` table. */
+function eventRepDelta(bound: StorageMethods, kind: StatKind): number {
+  const fallback = DEFAULT_REP_DELTAS[kind];
+  if (typeof bound.getKnobs !== "function") return fallback;
+  const raw = bound.getKnobs();
+  if (!raw || typeof raw !== "object" || !("repDeltas" in raw)) return fallback;
+  const deltas = (raw as { repDeltas?: unknown }).repDeltas;
+  if (!deltas || typeof deltas !== "object") return fallback;
+  const value = (deltas as Partial<Record<StatKind, number>>)[kind];
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return value;
+}
+
+function employerOf(raw: unknown): string {
+  if (!raw || typeof raw !== "object") return "";
+  const row = raw as { employerId?: unknown; factoryId?: unknown };
+  if (typeof row.employerId === "string" && row.employerId.trim().length > 0) return row.employerId.trim();
+  if (typeof row.factoryId === "string") return row.factoryId.trim();
+  return "";
+}
+
 /**
  * Bind a storage instance, or a module that can build one.
  * A bag with no storage methods returns null.
@@ -414,8 +438,7 @@ export function portFromCore(modules: CoreModuleBag, _tree: FamilyTree = LAB_TRE
     apply(playerKey, familyId, event) {
       const kind = LEDGER_KIND[event];
       if (!kind) return;
-      const delta = event === "attacked" ? -8 : event === "refused-mango" ? -2 : -6;
-      bump(bound, playerKey.trim() || "local", familyId, kind, 1, delta);
+      bump(bound, playerKey.trim() || "local", familyId, kind, 1, eventRepDelta(bound, kind));
     },
     setBrief() {
       // Absolute edits are not a core method. The seed button and event bumps are.
@@ -454,8 +477,15 @@ export function portFromCore(modules: CoreModuleBag, _tree: FamilyTree = LAB_TRE
       const key = playerKey.trim() || "local";
       if (typeof bound.putWork === "function" && typeof bound.getWork === "function") {
         for (const card of seedWageCards()) {
-          if (bound.getWork(card.dinoId)) continue;
-          bound.putWork(workRecord(card));
+          const existing = bound.getWork(card.dinoId);
+          // An edited job stays. A credit with no employer is filled in, earnings untouched.
+          if (existing && employerOf(existing).length > 0) continue;
+          const kept = existing ? cardFromWork(existing, card.dinoId) : null;
+          bound.putWork(workRecord({
+            ...card,
+            lifetimeEarnings: kept?.lifetimeEarnings ?? card.lifetimeEarnings,
+            mineralsFound: kept?.mineralsFound ?? card.mineralsFound,
+          }));
         }
       }
       const have = new Set(coreBriefs(bound, key).map((row) => row.familyId));
@@ -463,6 +493,8 @@ export function portFromCore(modules: CoreModuleBag, _tree: FamilyTree = LAB_TRE
         bump(bound, key, "swamp", "kill", 1, -50);
         bump(bound, key, "swamp", "mango_refused", 1, 0);
       }
+      // Rep +4 has to ride a counter. hit_taken's own delta is 0, so the brief stays a rep seed
+      // plus the one hit this bump is forced to count.
       if (!have.has("sickle")) bump(bound, key, "sickle", "hit_taken", 1, 4);
       if (!have.has("roost")) bump(bound, key, "roost", "mango_given", 2, 18);
     },
@@ -492,21 +524,18 @@ interface GlobModule {
 }
 
 /**
- * Vite only bundles `src/core/*.ts` when those files exist. An empty glob means
- * the memory branch has not landed in this tree.
+ * Bind `src/core`. Those files ship in this tree, so there is no empty-glob branch.
+ * The local port remains only when the loaded modules expose no storage methods.
  */
 export async function loadCorePort(tree: FamilyTree = LAB_TREE): Promise<DinobookCorePort> {
-  const local = createLocalCore(tree);
   const loaders = import.meta.glob("../core/*.ts") as Record<string, () => Promise<GlobModule>>;
-  const keys = Object.keys(loaders);
-  if (keys.length === 0) return local;
   const bag: CoreModuleBag = {};
-  for (const key of keys) {
+  for (const key of Object.keys(loaders)) {
     const loaded = await loaders[key]!();
     if (key.endsWith("/stats.ts")) bag.stats = loaded;
     else if (key.endsWith("/memory.ts")) bag.memory = loaded;
     else if (key.endsWith("/storage.ts")) bag.storage = loaded;
     else if (key.endsWith("/types.ts")) bag.types = loaded;
   }
-  return portFromCore(bag, tree) ?? local;
+  return portFromCore(bag, tree) ?? createLocalCore(tree);
 }
