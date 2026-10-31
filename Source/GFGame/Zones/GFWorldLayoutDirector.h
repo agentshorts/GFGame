@@ -17,6 +17,12 @@ public:
 
 	virtual void BeginPlay() override;
 
+	/**
+	 * One greybox trench on the Grumble Dig porch. Safe to call again.
+	 * L_GrumbleDig stays a missing package; this does not open a level.
+	 */
+	void EnsureGrumbleDigSite();
+
 private:
 	bool bLaidOut = false;
 };

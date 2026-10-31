@@ -21,6 +21,8 @@ namespace FGFZoneConstants
 	constexpr float FringeOuterCm = 17000.f;
 	constexpr float PorchRingCm = 90000.f;
 	constexpr float PorchRadiusCm = 12000.f;
+	/** Hub-ward offset from a porch centre to its arch (cm). The Grumble Dig lobby stays clear of this box. */
+	constexpr float PorchArchInsetCm = 1000.f;
 	constexpr float SafeCoreRadiusCm = 3000.f;
 	constexpr float DeepInnerCm = 105000.f;
 	constexpr float RimRadiusCm = 120000.f;

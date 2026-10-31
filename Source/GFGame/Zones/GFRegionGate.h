@@ -1,6 +1,7 @@
 #pragma once
 
 // Porch arch. Overlap on the server plans the trip. A missing map tells the player and stays put.
+// Grumble Dig is the exception while its map package is missing: the arch drops the pawn on the in-world site.
 // Hub shortcut gates are a different path and never set a pending Shardstone.
 
 #include "CoreMinimal.h"
@@ -10,6 +11,7 @@
 
 class UBoxComponent;
 class UStaticMeshComponent;
+class APawn;
 struct FGFRegionSlot;
 
 UCLASS()
@@ -24,6 +26,12 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	void Setup(const FGFRegionSlot& Slot);
+
+	/**
+	 * In-world Grumble Dig entry. False unless this is the enabled Grumble Dig arch and L_GrumbleDig
+	 * is not a package yet. Does not open a level and does not set a pending stone.
+	 */
+	bool EnterGrumbleDig(APawn* Pawn);
 
 protected:
 	void ApplyVisual();

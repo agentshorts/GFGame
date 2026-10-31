@@ -62,6 +62,8 @@ private:
 	void DrawMineSession();
 	/** Fashion runway: theme, look, start, finish and the score, while the local pawn is on the site. */
 	void DrawRunwaySession();
+	/** Grumble Dig greybox: start, dig, results, while the local pawn is on the porch site. */
+	void DrawGrumbleSession();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);

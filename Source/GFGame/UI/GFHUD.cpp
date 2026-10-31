@@ -1,5 +1,6 @@
 #include "GFHUD.h"
 #include "GFBeatHopCourse.h"
+#include "GFGrumbleDigSite.h"
 #include "GFMineSite.h"
 #include "GFRunwaySite.h"
 #include "GFZoneCatalog.h"
@@ -171,6 +172,7 @@ void AGFHUD::DrawHUD()
 	DrawBeatHopSession();
 	DrawMineSession();
 	DrawRunwaySession();
+	DrawGrumbleSession();
 	DrawCrosshair();
 	DrawCompass();
 	DrawStaminaArc();
@@ -1000,6 +1002,51 @@ void AGFHUD::DrawRunwaySession()
 	DrawRect(FLinearColor(0.18f, 0.08f, 0.12f, 0.72f), X, Top, W + Pad * 2.f, H);
 	const FLinearColor Gold(1.f, 0.82f, 0.55f);
 	const FLinearColor Soft(0.95f, 0.88f, 0.90f);
+	float Y = Top + Pad;
+	for (int32 i = 0; i < Prompt.Num(); ++i)
+	{
+		const FLinearColor Tint = (i == 0) ? Gold : Soft;
+		DrawText(Prompt[i], Tint, X + Pad, Y, Font, Scale, false);
+		Y += LineH;
+	}
+}
+
+void AGFHUD::DrawGrumbleSession()
+{
+	UWorld* World = GetWorld();
+	if (!World || !Canvas)
+	{
+		return;
+	}
+	const AGFGrumbleDigSite* Site = AGFGrumbleDigSite::Get(World);
+	const APawn* Pawn = GetOwningPawn();
+	if (!Site || !Site->IsPlayerNear(Pawn))
+	{
+		return;
+	}
+	TArray<FString> Prompt;
+	Site->GetPromptLines(Prompt);
+	if (Prompt.Num() == 0)
+	{
+		return;
+	}
+	UFont* Font = HudFont();
+	const float Scale = FMath::Clamp(Canvas->ClipY / 720.f, 1.f, 3.f);
+	const float LineH = 16.f * Scale;
+	float W = 0.f;
+	for (const FString& Line : Prompt)
+	{
+		float TW = 0.f, TH = 0.f;
+		GetTextSize(Line, TW, TH, Font, Scale);
+		W = FMath::Max(W, TW);
+	}
+	const float Pad = 10.f * Scale;
+	const float H = Prompt.Num() * LineH + Pad * 2.f;
+	const float X = Canvas->ClipX * 0.5f - W * 0.5f - Pad;
+	const float Top = 12.f * Scale;
+	DrawRect(FLinearColor(0.08f, 0.05f, 0.03f, 0.72f), X, Top, W + Pad * 2.f, H);
+	const FLinearColor Gold(1.f, 0.82f, 0.25f);
+	const FLinearColor Soft(0.9f, 0.86f, 0.78f);
 	float Y = Top + Pad;
 	for (int32 i = 0; i < Prompt.Num(); ++i)
 	{

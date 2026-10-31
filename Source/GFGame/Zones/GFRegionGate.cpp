@@ -1,6 +1,7 @@
 #include "GFRegionGate.h"
 
 #include "GFCharacter.h"
+#include "GFGrumbleDigSite.h"
 #include "GFMiniGameGateSubsystem.h"
 #include "GFPlayerState.h"
 #include "GFShardTravelSubsystem.h"
@@ -129,6 +130,11 @@ void AGFRegionGate::OnGateOverlap(UPrimitiveComponent* Overlapped, AActor* Other
 	const FGFRegionTravelPlan Plan = FGFZoneLayout::PlanTravel(*Slot, bPackage);
 	if (!Plan.bTravel)
 	{
+		if (EnterGrumbleDig(Character))
+		{
+			LastUseSeconds.Add(Key, Now);
+			return;
+		}
 		if (!Plan.Message.IsEmpty())
 		{
 			LastUseSeconds.Add(Key, Now);
@@ -154,4 +160,30 @@ void AGFRegionGate::OnGateOverlap(UPrimitiveComponent* Overlapped, AActor* Other
 		const FString Why = Gate && !Gate->LastEnterMessage.IsEmpty() ? Gate->LastEnterMessage : FString(GFZoneCopy::UnderConstruction());
 		PS->NotifyLand(Why);
 	}
+}
+
+bool AGFRegionGate::EnterGrumbleDig(APawn* Pawn)
+{
+	if (!HasAuthority() || !Pawn || !bGateEnabled || GateId != FName(TEXT("GrumbleDig")))
+	{
+		return false;
+	}
+	UWorld* World = GetWorld();
+	if (!World || World->GetNetMode() == NM_Client)
+	{
+		return false;
+	}
+	if (UClass* Class = FGFZoneLayout::FindGateClass(GateId))
+	{
+		if (const UGFMiniGameGateSubsystem* CDO = Cast<UGFMiniGameGateSubsystem>(Class->GetDefaultObject()))
+		{
+			const FName Map = CDO->GetMapName();
+			if (!Map.IsNone() && FPackageName::DoesPackageExist(Map.ToString()))
+			{
+				return false;
+			}
+		}
+	}
+	AGFGrumbleDigSite* Site = AGFGrumbleDigSite::Get(World);
+	return Site && Site->ReceiveFromGate(Pawn);
 }
