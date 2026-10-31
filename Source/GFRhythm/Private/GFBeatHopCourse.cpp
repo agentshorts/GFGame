@@ -8,6 +8,7 @@
 #include "GFAnimMap.h"
 #include "GFSimpleAnimComponent.h"
 #include "Animation/AnimSequenceBase.h"
+#include "Components/AudioComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "GFMiniGameCatalog.h"
@@ -19,6 +20,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Sound/SoundBase.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/Character.h"
@@ -246,6 +248,7 @@ bool AGFBeatHopCourse::StartRun(FName SongId, EGFBeatDifficulty Difficulty, EGFB
 bool AGFBeatHopCourse::StartRunForPlayers(FName SongId, EGFBeatDifficulty Difficulty, EGFBeatHopMode Mode, bool bCozy, int32 NumPlayers, FString& OutReason)
 {
 	OutReason.Reset();
+	FallbackReason.Reset();
 	if (!HasAuthority())
 	{
 		OutReason = TEXT("Only the host can start a run.");
@@ -305,6 +308,18 @@ bool AGFBeatHopCourse::StartRunForPlayers(FName SongId, EGFBeatDifficulty Diffic
 		{
 			if (Clock->GetBeatSource() != EGFBeatSource::Live && !Clock->StartLive())
 			{
+				if (bFallbackWhenNoMusic)
+				{
+					// No music source: the fallback song has its own audio and beat map.
+					const FName Song = FGFBeatHopMusic::PickSong(EGFBeatHopMode::Live, NAME_None, false, false);
+					if (!StartRunForPlayers(Song, Difficulty, EGFBeatHopMode::Songs, bCozy, NumPlayers, OutReason))
+					{
+						return false;
+					}
+					FallbackReason = TEXT("No output device to listen to, so Beat Hop plays its own song.");
+					UE_LOG(LogGF, Log, TEXT("Beat Hop: %s"), *FallbackReason);
+					return true;
+				}
 				OutReason = TEXT("Couldn't listen to an output device. Check that something can play sound, then try again.");
 				return false;
 			}
@@ -989,6 +1004,19 @@ void AGFBeatHopCourse::UpdateRun()
 		{
 			EndRun(TEXT("Live audio stopped: no output device to listen to."));
 		}
+		else if (bFallbackWhenNoMusic && LiveSilenceFallbackSeconds > 0.f && NumBricks() == 0 && Now - LiveStartClock >= LiveSilenceFallbackSeconds)
+		{
+			// Nothing to follow yet: no audio at all (loopback sends nothing while nothing plays) or only silence.
+			const FGFBeatTracker& Tracker = Clock->GetTracker();
+			const bool bNoAudio = Tracker.GetAnalysedUntil() <= 0.0;
+			if (!Tracker.IsLocked() && !FGFBeatHopMusic::PickSong(EGFBeatHopMode::Live, NAME_None, !bNoAudio, bNoAudio || Tracker.IsSilent()).IsNone())
+			{
+				SwitchToFallbackSong(bNoAudio
+					? TEXT("No sound is coming from the output device, so Beat Hop plays its own song.")
+					: TEXT("Only silence is playing, so Beat Hop plays its own song."));
+				return; // the run clock changed; judge from the next tick
+			}
+		}
 	}
 	if (bRunning && HasAuthority())
 	{
@@ -1027,6 +1055,7 @@ void AGFBeatHopCourse::FinishRun()
 	}
 	SweepMisses(TNumericLimits<double>::Max() / 4.0);
 	bRunning = false;
+	StopMusic();
 
 	const int32 TotalNotes = NumBricks();
 	UGFBeatHopGateSubsystem* Gate = nullptr;
@@ -1087,6 +1116,7 @@ void AGFBeatHopCourse::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	UpdateRun();
+	UpdateMusic();
 	if (HasAuthority())
 	{
 		TickHazards(DeltaSeconds);
@@ -1122,6 +1152,7 @@ void AGFBeatHopCourse::Tick(float DeltaSeconds)
 
 void AGFBeatHopCourse::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	StopMusic();
 	if (HasAuthority())
 	{
 		RetryPendingGrants();
@@ -2461,9 +2492,9 @@ void AGFBeatHopCourse::BeginSession()
 		// Up in the sky: clear of the voxel terrain, the map's own spawn and the gate sign on the ground.
 		SetActorLocationAndRotation(FVector(0.0, 0.0, SessionHeightCm), FRotator::ZeroRotator);
 		const TArray<FName> Ids = FGFBuiltInSongs::SongIds();
-		if ((SelectedSong.IsNone() || !Ids.Contains(SelectedSong)) && Ids.Num() > 0)
+		if (SelectedSong.IsNone() || !Ids.Contains(SelectedSong))
 		{
-			SelectedSong = Ids[0];
+			SelectedSong = FGFBeatHopMusic::DefaultSong(bDemoDefaultsToFallback);
 		}
 		SelectedDifficulty = EGFBeatDifficulty::Easy;
 		if (!FGFBeatHopCourses::Find(SelectedCourseId))
@@ -2826,6 +2857,88 @@ void AGFBeatHopCourse::OnFinishTriggerOverlap(UPrimitiveComponent* OverlappedCom
 	}
 }
 
+void AGFBeatHopCourse::UpdateMusic()
+{
+	const FString Path = bRunning && RunMode == EGFBeatHopMode::Songs ? FGFBeatHopMusic::SoundPathFor(RunSongId) : FString();
+	if (Path.IsEmpty())
+	{
+		StopMusic();
+		return;
+	}
+	if (MusicRunStart == RunStartServerTime)
+	{
+		return; // this run's song already started (each run plays it once, from its own clock)
+	}
+	const double T = GetRunTime();
+	if (T < 0.0)
+	{
+		return; // before the run clock's zero: the song starts on time
+	}
+	StopMusic();
+	MusicRunStart = RunStartServerTime;
+	USoundBase* Sound = LoadObject<USoundBase>(nullptr, *Path, nullptr, LOAD_NoWarn);
+	if (!Sound)
+	{
+		UE_LOG(LogGF, Warning, TEXT("Beat Hop: song audio %s is missing; the run follows its beat map without it"), *Path);
+		return;
+	}
+	MusicSongId = RunSongId;
+	if (T < Sound->GetDuration())
+	{
+		// Null without an audio device (dedicated server, -nosound): the beat map still runs the course.
+		Music = UGameplayStatics::CreateSound2D(this, Sound, 1.f, 1.f, 0.f, nullptr, false, false);
+		if (Music)
+		{
+			Music->Play(static_cast<float>(T));
+		}
+	}
+}
+
+void AGFBeatHopCourse::StopMusic()
+{
+	if (Music)
+	{
+		Music->Stop();
+		Music = nullptr;
+	}
+	MusicSongId = NAME_None;
+	MusicRunStart = -1.0;
+}
+
+void AGFBeatHopCourse::SwitchToFallbackSong(const FString& Why)
+{
+	if (!HasAuthority() || !bRunning || RunMode != EGFBeatHopMode::Live)
+	{
+		return;
+	}
+	if (UGFBeatClockSubsystem* Clock = GetWorld() ? GetWorld()->GetSubsystem<UGFBeatClockSubsystem>() : nullptr)
+	{
+		Clock->StopClock();
+	}
+	// The live run never got going (no bricks, nothing judged), so it has no results or rewards.
+	bRunning = false;
+	FString Reason;
+	if (!StartRunForPlayers(FGFBeatHopMusic::FallbackSongId(), RunDifficulty, EGFBeatHopMode::Songs, bRunCozy, CurrentPlayerCount(), Reason))
+	{
+		UE_LOG(LogGF, Warning, TEXT("Beat Hop: the fallback song could not start: %s"), *Reason);
+		EndReason = Why;
+		OnRunEnded.Broadcast(Why);
+		return;
+	}
+	// Bricks sit at (run time x speed) along X, so the song clock starts where the runner is, like a gate start.
+	APawn* Runner = nullptr;
+	ForEachPlayerPawn([&Runner](APawn* Pawn)
+	{
+		Runner = Runner ? Runner : Pawn;
+	});
+	if (Runner)
+	{
+		RunStartServerTime -= RunTimeAtLocalX(GetActorTransform().InverseTransformPosition(Runner->GetActorLocation()).X);
+	}
+	FallbackReason = Why;
+	UE_LOG(LogGF, Log, TEXT("Beat Hop: %s"), *Why);
+}
+
 double AGFBeatHopCourse::RunTimeAtLocalX(double LocalX) const
 {
 	const double Speed = FMath::Max(1.0, static_cast<double>(Beatmap.RefSpeedCms));
@@ -2862,8 +2975,7 @@ bool AGFBeatHopCourse::TryStartFromGate(APawn* Pawn, FString& OutReason)
 	FName Song = SelectedSong;
 	if (Song.IsNone())
 	{
-		const TArray<FName> Ids = FGFBuiltInSongs::SongIds();
-		Song = Ids.Num() > 0 ? Ids[0] : NAME_None;
+		Song = FGFBeatHopMusic::DefaultSong(bDemoDefaultsToFallback);
 	}
 	if (!StartRun(Song, SelectedDifficulty, EGFBeatHopMode::Songs, false, OutReason))
 	{

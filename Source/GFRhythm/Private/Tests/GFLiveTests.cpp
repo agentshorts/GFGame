@@ -10,6 +10,10 @@
 #include "GFLiveAudio.h"
 #include "GFBeatClockSubsystem.h"
 #include "GFBeatHopCourse.h"
+#include "GFBuiltInSongs.h"
+#include "GFBeatmap.h"
+#include "Misc/Paths.h"
+#include "Sound/SoundBase.h"
 #include "Async/Async.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -713,14 +717,17 @@ bool FGFLiveDeviceLossTest::RunTest(const FString&)
 	Audio->ReadyDelay = 0.05f;
 	GFLiveTests::UseFake(Clock, Audio);
 
-	// The device never opens: StartLive says so (and doesn't hang), and the course refuses with a reason.
+	// The device never opens: StartLive says so (and doesn't hang), and with the fallback song off the course refuses
+	// with a reason (GFGame.Live.FallbackSong covers the default: play the fallback song instead).
 	Audio->FailStarts = 1;
 	TestFalse(TEXT("StartLive reports a device that won't open"), Clock->StartLive());
 	TestTrue(TEXT("Status is Failed"), Clock->GetLiveStatus() == EGFLiveStatus::Failed);
 	Audio->FailStarts = 1;
 	FString Why;
+	Course->bFallbackWhenNoMusic = false;
 	TestFalse(TEXT("Live run refused without a device"), Course->StartRunForPlayers(NAME_None, EGFBeatDifficulty::Normal, EGFBeatHopMode::Live, false, 1, Why));
 	TestFalse(TEXT("Refusal has a reason"), Why.IsEmpty());
+	Course->bFallbackWhenNoMusic = true;
 
 	// The device is pulled mid-run: the clock reopens the default and keeps listening.
 	TestTrue(TEXT("StartLive"), Clock->StartLive());
@@ -746,6 +753,110 @@ bool FGFLiveDeviceLossTest::RunTest(const FString&)
 	TestFalse(TEXT("Run ended"), Course->IsRunning());
 	TestTrue(*FString::Printf(TEXT("Reason says audio stopped (%s)"), *Course->GetEndReason()), Course->GetEndReason().Contains(TEXT("audio")));
 	Audio->FailStarts = 0;
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFLiveFallbackSongTest, "GFGame.Live.FallbackSong", GFLiveTests::Flags)
+bool FGFLiveFallbackSongTest::RunTest(const FString&)
+{
+	// The start-flow rule: no music source, or only silence, plays the fallback song; demos open on it.
+	const FName Fallback = FGFBeatHopMusic::FallbackSongId();
+	const TArray<FName> Ids = FGFBuiltInSongs::SongIds();
+	if (!TestTrue(TEXT("Fallback is a built-in song"), Ids.Contains(Fallback)) || !TestTrue(TEXT("Other songs"), Ids.Num() > 1))
+	{
+		return false;
+	}
+	const FName Other = Ids[0];
+	TestTrue(TEXT("No music source: fallback"), FGFBeatHopMusic::PickSong(EGFBeatHopMode::Live, NAME_None, false, false) == Fallback);
+	TestTrue(TEXT("Silent music: fallback"), FGFBeatHopMusic::PickSong(EGFBeatHopMode::Live, NAME_None, true, true) == Fallback);
+	TestTrue(TEXT("Music playing: stays live"), FGFBeatHopMusic::PickSong(EGFBeatHopMode::Live, NAME_None, true, false).IsNone());
+	TestTrue(TEXT("Songs mode with nothing chosen: fallback"), FGFBeatHopMusic::PickSong(EGFBeatHopMode::Songs, NAME_None, false, false) == Fallback);
+	TestTrue(TEXT("Songs mode keeps the chosen song"), FGFBeatHopMusic::PickSong(EGFBeatHopMode::Songs, Other, false, false) == Other);
+	TestTrue(TEXT("Demos open on the fallback"), FGFBeatHopMusic::DefaultSong(true) == Fallback);
+	TestTrue(TEXT("Not a demo: the first song"), FGFBeatHopMusic::DefaultSong(false) == Other);
+	TestTrue(TEXT("Greybox songs have no audio"), FGFBeatHopMusic::SoundPathFor(Other).IsEmpty());
+
+	// The song's audio is imported, and its beat map loads: the files in Content/Charts match the embedded charts.
+	USoundBase* Sound = LoadObject<USoundBase>(nullptr, *FGFBeatHopMusic::SoundPathFor(Fallback), nullptr, LOAD_NoWarn);
+	if (TestNotNull(TEXT("Fallback SoundWave"), Sound))
+	{
+		TestTrue(*FString::Printf(TEXT("Fallback is 31.3 s (got %.2f)"), Sound->GetDuration()), FMath::Abs(Sound->GetDuration() - 31.29f) < 0.1f);
+	}
+	for (EGFBeatDifficulty D : { EGFBeatDifficulty::Easy, EGFBeatDifficulty::Normal, EGFBeatDifficulty::Hard })
+	{
+		const FString Name = FString::Printf(TEXT("BeatHopFallback_%s.json"), FGFBeatmapIO::DifficultyToString(D));
+		FGFBeatmap FromFile;
+		FString Error;
+		if (!TestTrue(*(Name + TEXT(" loads ") + Error), FGFBeatmapIO::LoadFile(FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Charts"), Name), FromFile, Error)))
+		{
+			continue;
+		}
+		for (const FString& P : FGFBeatmapIO::Validate(FromFile))
+		{
+			AddError(Name + TEXT(": ") + P);
+		}
+		TestTrue(*(Name + TEXT(" song id")), FromFile.SongId == Fallback);
+		TestEqual(*(Name + TEXT(" BPM")), FromFile.Bpm, 130.f);
+		TestEqual(*(Name + TEXT(" offset")), FromFile.OffsetMs, 15.f);
+		TestTrue(*(Name + TEXT(" has notes")), FromFile.CountJudgedNotes() >= 16);
+		const FGFBeatmap* Embedded = FGFBuiltInSongs::Find(Fallback, D);
+		if (TestNotNull(*(Name + TEXT(" is embedded")), Embedded))
+		{
+			TestEqual(*(Name + TEXT(" same notes as embedded")), Embedded->Notes.Num(), FromFile.Notes.Num());
+			bool bSame = Embedded->Bpm == FromFile.Bpm && Embedded->OffsetMs == FromFile.OffsetMs && Embedded->Lanes == FromFile.Lanes;
+			for (int32 i = 0; bSame && i < FMath::Min(Embedded->Notes.Num(), FromFile.Notes.Num()); ++i)
+			{
+				bSame = Embedded->Notes[i].Beat == FromFile.Notes[i].Beat && Embedded->Notes[i].Lane == FromFile.Notes[i].Lane && Embedded->Notes[i].Type == FromFile.Notes[i].Type;
+			}
+			TestTrue(*(Name + TEXT(" matches the embedded chart")), bSame);
+		}
+		if (Sound && FromFile.Notes.Num() > 0)
+		{
+			TestTrue(*(Name + TEXT(" ends inside the song")), FromFile.BeatToSeconds(FromFile.Notes.Last().Beat) < Sound->GetDuration());
+		}
+	}
+
+	GFLiveTests::FTestWorld TW;
+	UGFBeatClockSubsystem* Clock = TW.World ? TW.World->GetSubsystem<UGFBeatClockSubsystem>() : nullptr;
+	AGFBeatHopCourse* Course = TW.World ? TW.World->SpawnActor<AGFBeatHopCourse>() : nullptr;
+	if (!TestNotNull(TEXT("Beat clock"), Clock) || !TestNotNull(TEXT("Course"), Course))
+	{
+		return false;
+	}
+	TSharedRef<GFLiveTests::FFakeAudio> Audio = MakeShared<GFLiveTests::FFakeAudio>();
+	Audio->ReadyDelay = 0.05f;
+	GFLiveTests::UseFake(Clock, Audio);
+
+	// No music source (the output device won't open): the live start plays the fallback song instead of refusing.
+	Audio->FailStarts = 1;
+	FString Why;
+	TestTrue(TEXT("Live start with no device still starts"), Course->StartRunForPlayers(NAME_None, EGFBeatDifficulty::Normal, EGFBeatHopMode::Live, false, 1, Why));
+	TestTrue(TEXT("Running"), Course->IsRunning());
+	TestTrue(TEXT("Plays the song, not live"), Course->GetRunMode() == EGFBeatHopMode::Songs);
+	TestTrue(TEXT("The fallback song was picked"), Course->GetRunSongId() == Fallback);
+	TestFalse(TEXT("Says why"), Course->GetFallbackReason().IsEmpty());
+	TestEqual(TEXT("Its beat map is loaded"), Course->GetBeatmap().Bpm, 130.f);
+	TestTrue(TEXT("Bricks from the beat map"), Course->NumBricks() > 0);
+	TestTrue(TEXT("Clock isn't live"), Clock->GetBeatSource() != EGFBeatSource::Live);
+	Course->SetDebugRunTime(1.0);
+	Course->Tick(0.01f);
+	TestTrue(TEXT("Song audio starts with the run"), Course->GetMusicSongId() == Fallback);
+	Course->SetDebugRunTime(-1.0);
+	Course->EndRun(TEXT("test"));
+	Course->Tick(0.01f);
+	TestTrue(TEXT("Song audio stops with the run"), Course->GetMusicSongId().IsNone());
+
+	// The device opens but only silence plays: after LiveSilenceFallbackSeconds the live run becomes the fallback song.
+	Audio->Clip.SetNumZeroed(GFLiveTests::SampleRate);
+	Course->LiveSilenceFallbackSeconds = 2.f;
+	TestTrue(TEXT("Live run starts"), Course->StartRunForPlayers(NAME_None, EGFBeatDifficulty::Normal, EGFBeatHopMode::Live, false, 1, Why));
+	TestTrue(TEXT("Live while listening"), Course->GetRunMode() == EGFBeatHopMode::Live && Course->GetFallbackReason().IsEmpty());
+	TestTrue(TEXT("Silence switches to the fallback song"), GFLiveTests::RunFor(6.0, Clock, Course, [Course]() { return Course->GetRunMode() == EGFBeatHopMode::Songs; }));
+	TestTrue(TEXT("Still running"), Course->IsRunning());
+	TestTrue(TEXT("Fallback song"), Course->GetRunSongId() == Fallback);
+	TestFalse(*FString::Printf(TEXT("Says why (%s)"), *Course->GetFallbackReason()), Course->GetFallbackReason().IsEmpty());
+	TestTrue(TEXT("Live clock stopped"), Clock->GetBeatSource() != EGFBeatSource::Live);
+	Course->EndRun(TEXT("test"));
 	return true;
 }
 

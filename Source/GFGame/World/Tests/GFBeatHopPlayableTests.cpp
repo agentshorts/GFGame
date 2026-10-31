@@ -168,11 +168,11 @@ bool FGFBeatHopGateStartsRunTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	TestEqual(TEXT("Default song is the first one"), Course->GetSelectedSong(), Ids[0]);
+	TestEqual(TEXT("Sessions open on the fallback song (the demo default)"), Course->GetSelectedSong(), FGFBeatHopMusic::FallbackSongId());
 	TestTrue(TEXT("Default difficulty is Easy"), Course->GetSelectedDifficulty() == EGFBeatDifficulty::Easy);
 	TestFalse(TEXT("Unknown song refused"), Course->SelectSong(TEXT("NoSuchSong")));
 
-	const FName Pick = Ids.Last();
+	const FName Pick = Ids[0]; // not the default
 	TestTrue(TEXT("Pick a song"), Course->SelectSong(Pick));
 	TestTrue(TEXT("Pick Normal"), Course->SelectDifficulty(EGFBeatDifficulty::Normal));
 	TestEqual(TEXT("Selected song"), Course->GetSelectedSong(), Pick);
@@ -246,7 +246,7 @@ bool FGFBeatHopFullRunTest::RunTest(const FString&)
 	Course->SetLedgerOverride(&Ledger, &Accounts);
 	Course->SetDebugServerTime(1000.0);
 
-	// The default song on Easy, scripted: hop dead on every brick, then cross the finish gate.
+	// The default song (the fallback track) on Easy, scripted: hop dead on every brick, then cross the finish gate.
 	FString Why;
 	ACharacter* Runner = SpawnRunner(W.World, Course->GetStartTrigger() ? Course->GetStartTrigger()->GetComponentLocation() : Course->GetLobbySpawn());
 	if (!TestTrue(TEXT("Run starts from the gate"), Course->TryStartFromGate(Runner, Why)))

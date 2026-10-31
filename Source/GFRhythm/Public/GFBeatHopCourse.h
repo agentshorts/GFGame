@@ -20,6 +20,7 @@ class UStaticMesh;
 class UMaterialInterface;
 class UTexture2D;
 class UTextRenderComponent;
+class UAudioComponent;
 class ACharacter;
 class APawn;
 
@@ -357,6 +358,12 @@ public:
 	/** Why the last run ended early (empty if it ran to the end). */
 	const FString& GetEndReason() const { return EndReason; }
 
+	/** Why this run plays the fallback song instead of live music (empty otherwise). */
+	const FString& GetFallbackReason() const { return FallbackReason; }
+
+	/** The song whose audio this run started (NAME_None for metronome-only songs, live runs and the countdown). */
+	FName GetMusicSongId() const { return MusicSongId; }
+
 	/** Server: judge a landing on a brick at time Now (run timeline, s). Normally called from Tick when a character lands. */
 	EGFJudgement HandleLanding(const FString& PlayerKey, int32 BrickIndex, double Now);
 
@@ -441,6 +448,7 @@ public:
 	bool SelectDifficulty(EGFBeatDifficulty Difficulty);
 	FName GetSelectedSong() const { return SelectedSong; }
 	FName GetRunSongId() const { return RunSongId; }
+	EGFBeatHopMode GetRunMode() const { return RunMode; }
 	EGFBeatDifficulty GetRunDifficulty() const { return RunDifficulty; }
 	EGFBeatDifficulty GetSelectedDifficulty() const { return SelectedDifficulty; }
 	/** Song id of each lobby song tile, in tile order. */
@@ -595,6 +603,18 @@ public:
 	/** Live mode: a brick is removed this long after its judging window has passed (and everyone's misses are counted). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Rhythm")
 	float LiveBrickKeepSeconds = 2.f;
+
+	/** Play to my music: with no output device, or only silence coming in, the run plays the fallback song instead. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Rhythm")
+	bool bFallbackWhenNoMusic = true;
+
+	/** Live mode: this long (s) of silence or no audio, with no beat lock and no bricks yet, switches to the fallback song. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Rhythm")
+	float LiveSilenceFallbackSeconds = 4.f;
+
+	/** Sessions open on the fallback song (demos: it is the built-in song with real audio). Off = the first song listed. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Rhythm")
+	bool bDemoDefaultsToFallback = true;
 
 	/** Brick footprint (cm) and thickness. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Rhythm")
@@ -792,6 +812,12 @@ private:
 	void OnSessionRunFinished();
 	void TravelToHub();
 	void ForEachPlayerPawn(TFunctionRef<void(APawn*)> Fn) const;
+
+	/** Every machine: starts the run song's audio at the run clock (once per run) and stops it when the run ends. */
+	void UpdateMusic();
+	void StopMusic();
+	/** Server: a live run that hears no music becomes a fallback-song run, timed from where the runner is. */
+	void SwitchToFallbackSong(const FString& Why);
 	UTextRenderComponent* AddLobbyText(const FString& Text, const FVector& Relative, float Size, const FColor& Color);
 
 	UFUNCTION()
@@ -828,6 +854,10 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UStaticMesh> CubeMesh;
+
+	/** The run's song audio (2D). Null for metronome-only songs or without an audio device. */
+	UPROPERTY(Transient)
+	TObjectPtr<UAudioComponent> Music;
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInterface> BaseMaterial;
@@ -881,6 +911,10 @@ private:
 	int32 DebugPlayerCount = -1;
 	FGuid RunId;
 	FString EndReason;
+	FString FallbackReason;
+	FName MusicSongId;
+	/** RunStartServerTime of the run the music was started for (each run starts its song once). */
+	double MusicRunStart = -1.0;
 	TArray<FGFBeatHopPendingGrant> PendingGrants;
 	float RetryTimer = 0.f;
 	FGFTransferLedger* LedgerOverride = nullptr;
