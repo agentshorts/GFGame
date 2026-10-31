@@ -11,6 +11,9 @@
 //   SlowTime   (team-shared charge; pressing again ends it)   Command  Ints = [unit, ability 0..2, target unit]
 //   Possess    Ints = [unit]   Cycle   Release  Input  Floats = [x, y], Ints = [attack 0/1, ability or -1]
 //   HostWagersOff Ints = [0/1] (host only)
+//   Snack      Ids = [companion], Names = [food]     Loadout  Names = up to 4 spell ids
+//   SideBet    Stacks = spectator stake, Ints = [side 0/1]
+//   Spell      Names = [spell], Ints = [target unit, alt 0/1]   AcceptGhost  Ints = [unit]
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GFArenaTypes.h"
@@ -72,6 +75,26 @@ struct GFARENA_API FGFArenaEntry
 	/** The stake and counter-bet as they were at the fight (for receipts). */
 	UPROPERTY(BlueprintReadOnly, Category = "Arena") TArray<FGFItemStack> LastStake;
 	UPROPERTY(BlueprintReadOnly, Category = "Arena") TArray<FGFItemStack> LastCounter;
+	/** Companions that already ate a favourite this match. One snack each. */
+	UPROPERTY(BlueprintReadOnly, Category = "Arena") TArray<FGuid> FedIds;
+	/** Spell pages this player brought. The side keeps the first four unique names. */
+	UPROPERTY(BlueprintReadOnly, Category = "Arena") TArray<FName> Loadout;
+	/** Lines the book can show after the bout. */
+	UPROPERTY(BlueprintReadOnly, Category = "Arena") TArray<FString> Posts;
+	/** Purse credited to each placed companion, from this bout's reward roll. */
+	UPROPERTY(BlueprintReadOnly, Category = "Arena") int32 PurseCredited = 0;
+	/** Elder cut recorded for a rental. The items stay with the player. */
+	UPROPERTY(BlueprintReadOnly, Category = "Arena") int32 ElderCut = 0;
+};
+
+/** A spectator stake held until the bout pays it or sends it home. */
+struct FGFArenaSideEscrow
+{
+	FString Key;
+	int32 Side = 0;
+	TArray<FGFItemStack> Stake;
+	FGuid EscrowId;
+	bool bOpen = false;
 };
 
 UCLASS()
@@ -128,6 +151,12 @@ public:
 	/** Server: ends the fight now as a draw (map exit, host quits): stakes go home. */
 	void AbortFight();
 
+	/** Family rep used by rentals. Missing families read as 0. */
+	void SetFamilyRep(FName Family, int32 Rep);
+	int32 GetFamilyRep(FName Family) const;
+	/** How many times a rental from this family has quit. Each quit raises the next price one step. */
+	int32 GetRentalPriceStep(FName Family) const;
+
 	/** Spawns the greybox bout spots on this pad. Safe to call again. Does not open a map. */
 	void EnsurePlayableSite();
 
@@ -145,16 +174,35 @@ private:
 	FGFArenaSim Sim;
 	FGFSlowTime Slow;
 	TArray<FGFArenaCommand> Queued;
+	TArray<FGFArenaCommand> Ghosts;
 	double LastRealTime = 0.0;
 	int32 MatchCounter = 0;
+	/** Family -> rep. Arena bookkeeping. It does not write a diner or a factory. */
+	TMap<FName, int32> RepBook;
+	/** Family -> quit steps. The next rental from that family costs one step more. */
+	TMap<FName, int32> RentalPriceSteps;
+	/** Player key -> sim seconds spent steering, flushed onto progress when the bout ends. */
+	TMap<FString, float> ControlSeconds;
+	/** Player key -> real times of free reward rolls, for the hourly cap. */
+	TMap<FString, TArray<double>> RollStamps;
+	/** Sorted "A|B" -> real times of bouts where both of them staked. */
+	TMap<FString, TArray<double>> PairWagerTimes;
+	TArray<FGFArenaSideEscrow> SideEscrow;
 
 	AGFGameState* GS() const;
 	FGFArenaEntry& EntryFor(const FString& Key);
 	FGFModeResult DoPlace(AGFPlayerState* By, const TArray<FGuid>& Ids, const TArray<int32>& Spots);
 	FGFModeResult DoWager(AGFPlayerState* By, const TArray<FGFItemStack>& Stake, bool bReroll);
+	FGFModeResult DoSnack(AGFPlayerState* By, const FGuid& CompanionId, FName Food);
+	FGFModeResult DoLoadout(AGFPlayerState* By, const TArray<FName>& Spells);
+	FGFModeResult DoSideBet(AGFPlayerState* By, const TArray<FGFItemStack>& Stake, int32 Side);
+	FGFModeResult DoSpell(const FString& Key, FName SpellId, int32 TargetId, bool bAlt);
+	FGFModeResult DoAcceptGhost(const FString& Key, int32 UnitId);
 	FGFModeResult DoFight(AGFPlayerState* By);
 	void FinishFight();
 	void SettleWager(FGFArenaEntry& E, bool bWon, bool bLost);
+	void RefundSide(FGFArenaSideEscrow& Bet, FName Reason);
+	void SettleSideBets();
 	void EndSlowTime(double Now);
 	void SetWorldDilation(float D);
 	void RefreshViews();

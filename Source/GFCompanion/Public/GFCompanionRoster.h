@@ -17,6 +17,14 @@ struct GFCOMPANION_API FGFCompanionEntry
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Companion") bool bInParty = true;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Companion") int32 Level = 1;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Companion") int32 XP = 0;
+	/** Elders watch. They do not take a spot on the sand. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Companion") bool bElder = false;
+	/** Rented for this bout. At 0 HP it quits instead of fainting. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Companion") bool bRental = false;
+	/** Family id for rep. None means no family band applies. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Companion") FName Family;
+	/** Factory wages and arena purse share this number. First pick still follows stats and HP. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, SaveGame, Category = "Companion") int32 LifetimeEarnings = 0;
 };
 
 /** Roster helpers shared by the game-instance roster and the networked player state. */
