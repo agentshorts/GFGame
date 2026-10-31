@@ -1,7 +1,7 @@
 // Hallow Night over the network (PLAN.md M7 Net.Depths): depths unlock in order, the server runs the 2.5D
 // mover from client input and every machine sees the bodies, Z/X/C platforms are shared (anyone works them,
 // one cooldown, same position on every machine from server time), a downed friend can be revived, fainting
-// loses half the unbanked loot, checkpoints and Lift Home bank into the player's bag, finishing a depth opens the next,
+// keeps the unbanked loot, checkpoints and Lift Home bank into the player's bag, finishing a depth opens the next,
 // and a drop mid-run keeps the faint share.
 #include "GFNetTestUtils.h"
 #include "GFGameState.h"
@@ -232,15 +232,15 @@ bool FGFNetDepthsTest::RunTest(const FString&)
 	Do(Ctx, [this, Run]()
 	{
 		const FGFDepthsPlayerView* P = ClientView(0, Run->C1);
-		TestEqual(TEXT("Fainting loses half: Moonstone 5 -> 3"), FGFRewards::CountOf(P->Run.Unbanked, TEXT("Moonstone")), 3);
-		TestEqual(TEXT("Stone 3 -> 2"), FGFRewards::CountOf(P->Run.Unbanked, TEXT("Stone")), 2);
+		TestEqual(TEXT("Fainting keeps Moonstone 5"), FGFRewards::CountOf(P->Run.Unbanked, TEXT("Moonstone")), 5);
+		TestEqual(TEXT("Fainting keeps Stone 3"), FGFRewards::CountOf(P->Run.Unbanked, TEXT("Stone")), 3);
 		TestTrue(TEXT("Full HP and heals again"), P->Run.HP == 5 && P->Run.Heals == 3);
 		TestEqual(TEXT("Nothing reached the player's bag yet"), Client(0)->Inventory->GetInventory().Items.Num(), 0);
 		ServerDirector()->TeleportForTests(Run->C1, FGFDepthsLevel::Get(1).Checkpoints[0]);
 	});
 	WaitUntil(Ctx, TEXT("checkpoint banks into the player's bag"), 10.f, [Run]()
 	{
-		return Client(0)->Inventory->GetCount(TEXT("Moonstone")) == 3 && Client(0)->Inventory->GetCount(TEXT("Stone")) == 2;
+		return Client(0)->Inventory->GetCount(TEXT("Moonstone")) == 5 && Client(0)->Inventory->GetCount(TEXT("Stone")) == 3;
 	});
 	Do(Ctx, [this, Run]()
 	{

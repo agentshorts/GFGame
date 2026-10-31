@@ -1,5 +1,6 @@
 #include "GFDepthsDirector.h"
 #include "GFDepthsSite.h"
+#include "GFHelperTools.h"
 #include "GFMiniGameCatalog.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
@@ -21,6 +22,7 @@ namespace GFDepthsVerbs
 	static const FName Attack(TEXT("Attack"));
 	static const FName Revive(TEXT("Revive"));
 	static const FName LiftHome(TEXT("LiftHome"));
+	static const FName Helper(TEXT("Helper"));
 }
 
 AGFDepthsDirector::AGFDepthsDirector()
@@ -70,6 +72,7 @@ void AGFDepthsDirector::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(AGFDepthsDirector, Switches);
 	DOREPLIFETIME(AGFDepthsDirector, Enemies);
 	DOREPLIFETIME(AGFDepthsDirector, PickupTaken);
+	DOREPLIFETIME(AGFDepthsDirector, FloatedAreas);
 }
 
 void AGFDepthsDirector::BeginPlay()
@@ -116,7 +119,7 @@ void AGFDepthsDirector::EndPlay(const EEndPlayReason::Type Reason)
 {
 	if (HasAuthority())
 	{
-		// Map closing: everyone still inside keeps what a faint would leave them, banked.
+		// Map closing: everyone still inside keeps a leave share, banked. A faint in the run keeps it all.
 		TArray<FString> Keys;
 		for (const FGFDepthsPlayerView& P : Players)
 		{
@@ -180,6 +183,7 @@ void AGFDepthsDirector::StartRun(int32 InDepth)
 		E.Pos = FVector2D(D.X1, D.Z);
 	}
 	PickupTaken.Init(false, L.Pickups.Num());
+	FloatedAreas.Reset();
 	Rng.Initialize(ForcedSeed != 0 ? ForcedSeed : FMath::Rand());
 	Accum = 0.f;
 }
@@ -221,7 +225,7 @@ void AGFDepthsDirector::Respawn(FGFDepthsPlayerView& P)
 
 void AGFDepthsDirector::Faint(FGFDepthsPlayerView& P)
 {
-	FGFDepthsRules::Die(P.Run); // the lost half simply vanishes (it was never in their bag)
+	FGFDepthsRules::CheckpointRespawn(P.Run);
 	Respawn(P);
 }
 
@@ -266,8 +270,8 @@ void AGFDepthsDirector::RemovePlayer(const FString& Key)
 {
 	if (FGFDepthsPlayerView* P = Edit(Key))
 	{
-		// Leaving mid-run counts as fainting: half the unbanked loot is lost, the rest comes home.
-		FGFDepthsRules::Die(P->Run);
+		// Leaving mid-run keeps a share: half the unbanked loot is lost, the rest comes home.
+		FGFDepthsRules::LeaveShare(P->Run);
 		Bank(*P, FGFDepthsRules::LiftHome(P->Run), TEXT("DepthsLeave"));
 	}
 	Players.RemoveAll([&](const FGFDepthsPlayerView& P) { return P.PlayerKey == Key; });
@@ -278,6 +282,7 @@ void AGFDepthsDirector::RemovePlayer(const FString& Key)
 		Enemies.Reset();
 		Switches.Reset();
 		PickupTaken.Reset();
+		FloatedAreas.Reset();
 	}
 }
 
@@ -461,6 +466,69 @@ FGFModeResult AGFDepthsDirector::HandleModeRequest(AGFPlayerState* By, const FGF
 		}
 		return FGFModeResult::Fail(TEXT("NoOneDown"));
 	}
+	if (R.Verb == Helper)
+	{
+		const FString DinoId = R.Name(0).IsNone() ? FString() : R.Name(0).ToString();
+		const FName ToolId = R.Name(1);
+		FGFHelperArgs Args;
+		if (!R.Name(2).IsNone())
+		{
+			const FString Value = R.Name(2).ToString();
+			if (ToolId == FGFHelperTools::FloatWater)
+			{
+				Args.Area = Value;
+				Args.bArea = true;
+			}
+			else if (ToolId == FGFHelperTools::FlyOver)
+			{
+				Args.Level = Value;
+				Args.bLevel = true;
+			}
+			else
+			{
+				Args.Where = Value;
+				Args.bWhere = true;
+			}
+		}
+		const FGFHelperResolution Resolved = FGFHelperTools::Resolve(FGFHelperTools::BearerFor(DinoId), ToolId, Args);
+		if (Resolved.bDecline)
+		{
+			return FGFModeResult::Ok();
+		}
+		if (!Resolved.bOk)
+		{
+			FName Why = TEXT("BadArgs");
+			if (Resolved.Fail == EGFHelperFail::UnknownTool)
+			{
+				Why = TEXT("UnknownTool");
+			}
+			else if (Resolved.Fail == EGFHelperFail::NotOffered)
+			{
+				Why = TEXT("NotOffered");
+			}
+			return FGFModeResult::Fail(Why);
+		}
+		FName Code;
+		if (!FGFDepthsHelp::Apply(Level(), P->Body, P->Run.Checkpoint, FloatedAreas, Resolved, Code))
+		{
+			return FGFModeResult::Fail(Code);
+		}
+		if (Resolved.ToolId == FGFHelperTools::FloatWater)
+		{
+			if (const FGFDepthsWater* W = FGFDepthsHelp::FindWater(Level(), Resolved.Args.Area))
+			{
+				const FGFDepthsMoveParams Params = FGFDepthsMoveParams::ForDepth(Depth);
+				for (FGFDepthsPlayerView& Other : Players)
+				{
+					if (Other.PlayerKey != P->PlayerKey)
+					{
+						FGFDepthsHelp::LiftIfInside(Params, *W, Other.Body);
+					}
+				}
+			}
+		}
+		return FGFModeResult::Ok();
+	}
 	if (R.Verb == LiftHome)
 	{
 		if (P->Run.bDowned)
@@ -556,7 +624,9 @@ void AGFDepthsDirector::SimStep(float Dt, double Now)
 		Frame.bDashPressed = In.bDashLatch;
 		In.bJumpLatch = false;
 		In.bDashLatch = false;
-		FGFDepthsMover::Step(Params, L, Switches, Now, Frame, P.Body, Dt);
+		TArray<FBox2D> Floors;
+		FGFDepthsHelp::AppendFloatedFloors(L, FloatedAreas, Floors);
+		FGFDepthsMover::Step(Params, L, Switches, Now, Frame, P.Body, Dt, Floors.Num() > 0 ? &Floors : nullptr);
 
 		// Fell into the dark: 1 damage, back at the checkpoint.
 		if (P.Body.Pos.Y < -1200.f)

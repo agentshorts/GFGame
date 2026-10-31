@@ -18,7 +18,7 @@ Phase 2 (greybox mini-games, each a server-side mode director driven by `FGFMode
 | Mode | Module | What works | Tests |
 |---|---|---|---|
 | Dino Arena | GFArena | Staked bouts between tamed dinos, seeded fight sim, payouts through the ledger | GFGame.Arena.*, GFGame.Net.Arena |
-| Hallow Night | GFDepths | 2.5D platform runs by depth, shared Z/X/C platforms, run rules, tier-4 loot, leave keeps a share | GFGame.Depths.*, GFGame.Net.Depths |
+| Hallow Night | GFDepths | 2.5D platform runs by depth, shared Z/X/C platforms, run rules, tier-4 loot, leave keeps a share, faint keeps loot, water channel with rented catch / float / fly | GFGame.Depths.*, GFGame.Net.Depths |
 | Pebble Mine | GFMine | Pebbling crew (unlocked by first tame), room-only digging, haul on order, upgrades incl. Auto-Haul, capped offline gathering | GFGame.Mine.*, GFGame.Net.Mine |
 | Overtime lab | GFLab | Timed junk-pile shifts (one pile at a time, overtime pays 1.5x after 90 s, lockdown at 135 s keeps 75 %, extract keeps all, dropping out keeps 75 %); Lab Bench junk-to-gear recipes (Lab Coat, Safety Goggles, Burrow Lantern); Lab Treat (every dino accepts it, 1.5x bond); Calming Mist (settles a hostile dino for 10 s, blocks pack calls) | GFGame.Lab.*, GFGame.Net.Lab |
 
