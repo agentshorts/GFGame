@@ -1,0 +1,29 @@
+Beat Hop courses (sprint 3)
+
+Where: hub gate into Beat Hop (L_Beat). On the start pad, the MAP row sits between DIFFICULTY and COURSE.
+Free Hop is the old chart. The three new courses are open from the start.
+
+Warm-Up Wobble (Easy, Pebble Parade, 96 BPM)
+Teaches one thing at a time: hops, lane changes, a dash gate, then a 1.2 m mantle ledge.
+The ledge is beside the lane. Jump the pad across the gap onto the landing hop.
+Wide bricks, a checkpoint every 8 beats, and the catch floor under the pit.
+Walk through the start gate. The pictogram board has no words. The name is the label above it.
+
+Wall-Run Waltz (Normal, Fern Hop, 120 BPM)
+Adds wall-run panels, grapple posts, swivel poles and crumble bricks.
+Two-move combos: wall run into a dash gate, then later wall, dash and grapple.
+Shown as Normal. The run is judged so swivel poles can clear.
+
+Raptor Rush (Hard, Moonlit Moss, 140 BPM)
+Everything above, plus beat walls on even beats and a 2.0 m ledge beside the lane.
+The pad and the landing hop are the way across until mantling exists.
+Tighter windows, a checkpoint every 32 beats, narrower bricks.
+
+Song tiles: a song outside that course's BPM range is refused, with a line on the pad, and the pick stays.
+Difficulty tiles stay put while one of these three is selected. Free Hop still uses them.
+Each course has a hub return gate at the start and another after the finish. Home and the pause menu still work. Leaving mid-run asks first.
+
+A finish at grade B or better pays materials once. Par is a score to show off, not a lock.
+Best scores stay on this machine.
+
+Dev builds only: gf.BeatHop.Course 1, gf.BeatHop.Course 2, gf.BeatHop.Course 3, and gf.BeatHop.Section <n> (1-based).

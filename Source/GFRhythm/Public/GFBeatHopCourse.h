@@ -9,6 +9,7 @@
 #include "GFEconomy.h"
 #include "GFBeatHopCourses.h"
 #include "GFBeatHopNinja.h"
+#include "GFBeatHopMaps.h"
 #include "GFBeatHopCourse.generated.h"
 
 class UStaticMeshComponent;
@@ -131,6 +132,18 @@ struct GFRHYTHM_API FGFBeatHopResultRow
 	/** True when this run crossed the finish. A song that runs out first is not a pass (#114). */
 	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
 	bool bPassed = false;
+
+	/** Hand-shaped course name. Empty on Free Hop, which keeps the Fern / Rime / Cinder title. */
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
+	FString MapTitle;
+
+	/** Score to show off. Zero on Free Hop. */
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
+	int32 ParScore = 0;
+
+	/** Best score this player has on this course, on this machine. */
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
+	int32 BestScore = 0;
 };
 
 /**
@@ -478,6 +491,29 @@ public:
 	FName GetRunCourseId() const { return RunCourseId; }
 	int32 NumCourseTiles() const { return CourseTiles.Num(); }
 
+	/** Server: Free Hop, or a hand-shaped course (#278). False if unknown or mid-run. */
+	bool SelectMap(FName MapId);
+	FName GetSelectedMapId() const { return SelectedMapId; }
+	FName GetRunMapId() const { return RunMapId; }
+	int32 NumMapTiles() const { return MapTiles.Num(); }
+	float GetRunLayoutBpm() const { return RunLayoutBpm; }
+	/** "Walk through the start gate." while a hand-shaped course is selected. Empty on Free Hop. */
+	FString GetArrivalPrompt() const;
+	bool HasCourseSign() const { return bHasCourseSign; }
+	int32 GetCourseSignNumber() const { return CourseSignNumber; }
+	int32 GetCourseSignPips() const { return CourseSignPips; }
+	int32 GetCourseSignMoveMarks() const { return CourseSignMoveMarks; }
+	int32 NumSectionSigns() const { return SectionSignCount; }
+	const FString& GetCourseSignName() const { return CourseSignName; }
+	const FString& GetSongRefuseReason() const { return SongRefuseReason; }
+	/**
+	 * Server, mid-run: judge every brick and obstacle on time for this player.
+	 * bFinish crosses the finish after that. A second player needs bFinish false so both are on the board first.
+	 */
+	bool ScriptClearCourse(const FString& PlayerKey, bool bFinish = true);
+	/** Dev builds: 1-based section. Starts the paired song when a run is not already going. */
+	FString DevJumpToSection(int32 SectionOneBased);
+
 	/**
 	 * Server: burn GlowDust and hire a Ripwing for this player. The same player can't hire twice.
 	 * The dino catches NotifyFall until its catches run out.
@@ -683,6 +719,14 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_RunSpec)
 	FName RunCourseId;
 
+	/** Hand-shaped course for this run. None on Free Hop, which keeps the song chart. */
+	UPROPERTY(ReplicatedUsing = OnRep_RunSpec)
+	FName RunMapId;
+
+	/** BPM the hand-shaped layout was spaced at. Zero on Free Hop. */
+	UPROPERTY(ReplicatedUsing = OnRep_RunSpec)
+	float RunLayoutBpm = 0.f;
+
 	UPROPERTY(ReplicatedUsing = OnRep_RunSpec)
 	EGFBeatDifficulty RunDifficulty = EGFBeatDifficulty::Normal;
 
@@ -761,6 +805,10 @@ protected:
 
 	UPROPERTY(ReplicatedUsing = OnRep_Session)
 	FName SelectedCourseId;
+
+	/** Free Hop, or a hand-shaped course id. The map row on the start pad. */
+	UPROPERTY(ReplicatedUsing = OnRep_Session)
+	FName SelectedMapId;
 
 	UPROPERTY(Replicated)
 	TArray<FGFBeatHopResultRow> Results;
@@ -845,6 +893,9 @@ private:
 	void BuildLobby();
 	void UpdateLobbyLook();
 	void RebuildPreview();
+	void ClearAuthoredLayout();
+	void ApplyAuthoredMap(const FGFBeatHopMapDef& Map, float Bpm);
+	void BuildMapSigns(double HalfWidth);
 	void ApplyRunMovement(ACharacter* Character);
 	void RestoreRunMovement();
 	void RespawnCharacter(ACharacter* Character);
@@ -989,6 +1040,9 @@ private:
 	TArray<TObjectPtr<UBoxComponent>> CourseTiles;
 
 	UPROPERTY()
+	TArray<TObjectPtr<UBoxComponent>> MapTiles;
+
+	UPROPERTY()
 	TArray<TObjectPtr<UBoxComponent>> RescueTiles;
 
 	UPROPERTY()
@@ -999,6 +1053,9 @@ private:
 
 	UPROPERTY()
 	TArray<TObjectPtr<UMaterialInstanceDynamic>> CourseTileMaterials;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> MapTileMaterials;
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> RescueTileMaterial;
@@ -1013,6 +1070,7 @@ private:
 
 	TArray<FName> SongTileIds;
 	TArray<FName> CourseTileIds;
+	TArray<FName> MapTileIds;
 
 	/** Greybox spheres. The course builds them; the art dinos are not required for the rules. */
 	UPROPERTY()
@@ -1059,6 +1117,24 @@ private:
 
 	FGFBeatHopTraversalProfile NinjaProfile;
 	TArray<FGFBeatHopObstacleInstance> NinjaObstacles;
+	/** Copy restored after BeginNinjaOptIn, which clears the live chart. */
+	TArray<FGFBeatHopObstacleInstance> StoredObstacles;
+	float AuthoredBrickWidthScale = 1.f;
+	/** Negative: use CheckpointEveryBeats. Zero or more: the course file's spacing. */
+	int32 AuthoredCheckpointEvery = -1;
+	/** Lane-centred ninja meshes. Off for the station chart, on for a hand-shaped course. */
+	bool bAlignNinjaToLanes = false;
+	/** Mantle and ledge meshes sit beside the lane so the pad hop stays open. */
+	bool bMantleLaneClear = false;
+	FString SongRefuseReason;
+	FString CourseSignName;
+	int32 CourseSignNumber = 0;
+	int32 CourseSignPips = 0;
+	int32 CourseSignMoveMarks = 0;
+	int32 SectionSignCount = 0;
+	bool bHasCourseSign = false;
+	int32 QueuedDevSection = 0;
+	float PendingLayoutBpm = 0.f;
 	TArray<TObjectPtr<UStaticMeshComponent>> NinjaMeshes;
 	TMap<TWeakObjectPtr<ACharacter>, double> BrakeUntil;
 

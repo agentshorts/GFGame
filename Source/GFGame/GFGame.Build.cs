@@ -22,5 +22,6 @@ public class GFGame : ModuleRules
 		// Loose copies of Data/CSV next to the staged project. FGFDataTables::CsvPath reads ProjectDir/Data/CSV.
 		RuntimeDependencies.Add("$(ProjectDir)/Data/CSV/...", StagedFileType.NonUFS);
 		RuntimeDependencies.Add("$(ProjectDir)/Data/MiningRange/...", StagedFileType.NonUFS);
+		RuntimeDependencies.Add("$(ProjectDir)/Data/BeatHop/...", StagedFileType.NonUFS);
 	}
 }

@@ -2,6 +2,7 @@
 
 #include "GFArenaDirector.h"
 #include "GFBeatHopCourse.h"
+#include "GFBeatHopMapGates.h"
 #include "GFLog.h"
 #include "GFDepthsDirector.h"
 #include "GFMineDirector.h"
@@ -196,9 +197,10 @@ void AGFHubGateDirector::Place(const FString& WorldPackage, const FVector& InRim
 			EnsureGate(World, Entry, EGFMiniGameGateRole::Marker, FVector(-500.f, 0.f, 0.f), FRotator::ZeroRotator, InRimeCenter);
 			AActor* Placed = EnsureClass(World, Entry.PlacedClass, FVector::ZeroVector, false);
 			// Beat Hop (#212): the course runs as a session on its own map: lobby, start gate, results, back to the hub.
-			if (AGFBeatHopCourse* Course = Cast<AGFBeatHopCourse>(Placed))
+			AGFBeatHopCourse* BeatCourse = Cast<AGFBeatHopCourse>(Placed);
+			if (BeatCourse)
 			{
-				Course->BeginSession();
+				BeatCourse->BeginSession();
 			}
 			// Fashion: greybox show on the runway stage this map already places. A new map would break the gate tests.
 			if (AGFRunwayStage* Stage = Cast<AGFRunwayStage>(Placed))
@@ -206,6 +208,11 @@ void AGFHubGateDirector::Place(const FString& WorldPackage, const FVector& InRim
 				Stage->EnsurePlayableSite();
 			}
 			EnsureReturn(World, Entry.Id, AGFReturnGate::MapLocation(), InRimeCenter, true);
+			// After the canonical gate exists, so Find still returns that gate (#266). The course pair is tagged.
+			if (BeatCourse)
+			{
+				GFBeatHopMapGates::Refresh(BeatCourse);
+			}
 		}
 	}
 }
