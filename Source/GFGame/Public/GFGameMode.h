@@ -43,6 +43,14 @@ public:
 	FName StarterFaction;
 
 	/**
+	 * Playtest Game.ini key. Off here, so a normal character still has to tame once.
+	 * When on, the game state marks bHasTamed as the character is accepted.
+	 * The mine does not grant that tame. Room yields stay as they are.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "GF|Playtest")
+	bool bAutoGrantTestKit = false;
+
+	/**
 	 * Always-on server actors spawned with the game state (by class path, so this module needn't depend on theirs).
 	 * Default: the social director (safe-zone powers, jail, kick / ban, emotes) and the block paint volume (AGFPaintVolume).
 	 */

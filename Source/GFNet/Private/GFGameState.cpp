@@ -7,6 +7,9 @@
 #include "GFDataTables.h"
 #include "GFLog.h"
 #include "EngineUtils.h"
+#include "Misc/CoreGlobals.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -80,6 +83,79 @@ TArray<FGFItemStack> AGFGameState::StarterKit()
 		S.Count = 64;
 	}
 	return Kit;
+}
+
+bool AGFGameState::TestKitEnabledInIniText(const FString& Text)
+{
+	TArray<FString> Lines;
+	Text.ParseIntoArrayLines(Lines, false);
+	for (FString Line : Lines)
+	{
+		Line.TrimStartAndEndInline();
+		if (Line.IsEmpty() || Line.StartsWith(TEXT(";")) || Line.StartsWith(TEXT("#")) || Line.StartsWith(TEXT("[")))
+		{
+			continue;
+		}
+		int32 Eq = INDEX_NONE;
+		if (!Line.FindChar(TEXT('='), Eq))
+		{
+			continue;
+		}
+		FString Key = Line.Left(Eq);
+		FString Value = Line.Mid(Eq + 1);
+		Key.TrimStartAndEndInline();
+		Value.TrimStartAndEndInline();
+		int32 Semi = INDEX_NONE;
+		if (Value.FindChar(TEXT(';'), Semi))
+		{
+			Value = Value.Left(Semi);
+			Value.TrimStartAndEndInline();
+		}
+		if (Key.Equals(TEXT("bAutoGrantTestKit"), ESearchCase::IgnoreCase) && FCString::ToBool(*Value))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+namespace
+{
+	bool FileEnablesTestKit(const FString& Path)
+	{
+		if (Path.IsEmpty())
+		{
+			return false;
+		}
+		FString Text;
+		if (!FFileHelper::LoadFileToString(Text, *Path))
+		{
+			return false;
+		}
+		return AGFGameState::TestKitEnabledInIniText(Text);
+	}
+}
+
+void AGFGameState::ApplyTestKitTame(AGFPlayerState* PS)
+{
+	if (!PS || PS->Progress.bHasTamed)
+	{
+		return;
+	}
+	if (!bAutoGrantTestKit)
+	{
+		const AGFGameState* Defaults = GetDefault<AGFGameState>();
+		const bool bFromDefaults = Defaults && Defaults != this && Defaults->bAutoGrantTestKit;
+		bAutoGrantTestKit = bFromDefaults
+			|| FileEnablesTestKit(FString(GGameIni))
+			|| FileEnablesTestKit(FPaths::Combine(FPaths::ProjectConfigDir(), TEXT("DefaultGame.ini")))
+			|| FileEnablesTestKit(FPaths::Combine(FPaths::ProjectConfigDir(), TEXT("Game.ini")));
+	}
+	if (!bAutoGrantTestKit)
+	{
+		return;
+	}
+	PS->Progress.bHasTamed = true;
 }
 
 // ---------------- Economy ----------------

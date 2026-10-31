@@ -76,6 +76,10 @@ void AGFGameMode::InitGameState()
 	if (AGFGameState* GS = GetGameState<AGFGameState>())
 	{
 		GS->StarterFaction = StarterFaction;
+		if (bAutoGrantTestKit)
+		{
+			GS->bAutoGrantTestKit = true;
+		}
 	}
 	for (const FSoftClassPath& Path : StartupDirectorClasses)
 	{

@@ -14,6 +14,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Net/UnrealNetwork.h"
 
@@ -62,6 +63,10 @@ namespace
 		}
 		return TEXT("?");
 	}
+
+	const TCHAR* UntamedCrewLine = TEXT("Crew: shy until your first tame. Capture stays locked.");
+	const TCHAR* UntamedValleyLine = TEXT("Tame a dino in the Valley first. The Valley gate is on the hub, then come back.");
+	const TCHAR* UntamedCapturePrompt = TEXT("Capture: Locked. Tame a dino in the Valley first (hub gate), then come back.");
 }
 
 AGFMineSite::AGFMineSite()
@@ -107,6 +112,15 @@ void AGFMineSite::Tick(float DeltaSeconds)
 	if (HasAuthority())
 	{
 		PollSpots();
+	}
+	// Clients build their own meshes. The local crew's unlocks have to catch up after replication.
+	if (const AGFPlayerState* PS = LocalCrewPlayer())
+	{
+		const uint32 Key = CrewTintKey(PS->Progress.Crew);
+		if (!bRoomTintKeyValid || Key != RoomTintKey)
+		{
+			SyncRoomTints(PS->Progress.Crew);
+		}
 	}
 }
 
@@ -178,11 +192,32 @@ void AGFMineSite::BuildIfNeeded()
 	}
 }
 
-void AGFMineSite::AddBlock(const FVector& LocalCenter, const FVector& SizeCm, const FLinearColor& Color, bool bBlock)
+void AGFMineSite::ApplyMeshTint(UStaticMeshComponent* Mesh, const FLinearColor& Color) const
+{
+	if (!Mesh)
+	{
+		return;
+	}
+	if (UMaterialInstanceDynamic* Tint = Cast<UMaterialInstanceDynamic>(Mesh->GetMaterial(0)))
+	{
+		Tint->SetVectorParameterValue(ColorParam, Color);
+		return;
+	}
+	if (BaseMaterial)
+	{
+		if (UMaterialInstanceDynamic* Tint = UMaterialInstanceDynamic::Create(BaseMaterial, Mesh))
+		{
+			Tint->SetVectorParameterValue(ColorParam, Color);
+			Mesh->SetMaterial(0, Tint);
+		}
+	}
+}
+
+UStaticMeshComponent* AGFMineSite::AddBlock(const FVector& LocalCenter, const FVector& SizeCm, const FLinearColor& Color, bool bBlock)
 {
 	if (!CubeMesh)
 	{
-		return;
+		return nullptr;
 	}
 	UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(this);
 	Mesh->SetupAttachment(Root);
@@ -199,18 +234,12 @@ void AGFMineSite::AddBlock(const FVector& LocalCenter, const FVector& SizeCm, co
 	{
 		Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	}
-	if (BaseMaterial)
-	{
-		if (UMaterialInstanceDynamic* Tint = UMaterialInstanceDynamic::Create(BaseMaterial, Mesh))
-		{
-			Tint->SetVectorParameterValue(ColorParam, Color);
-			Mesh->SetMaterial(0, Tint);
-		}
-	}
+	ApplyMeshTint(Mesh, Color);
 	Mesh->RegisterComponent();
+	return Mesh;
 }
 
-void AGFMineSite::AddLabel(const FString& Text, const FVector& Local)
+UTextRenderComponent* AGFMineSite::AddLabel(const FString& Text, const FVector& Local)
 {
 	UTextRenderComponent* Label = NewObject<UTextRenderComponent>(this);
 	Label->SetupAttachment(Root);
@@ -232,6 +261,7 @@ void AGFMineSite::AddLabel(const FString& Text, const FVector& Local)
 	Label->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Label->SetCanEverAffectNavigation(false);
 	Label->RegisterComponent();
+	return Label;
 }
 
 UBoxComponent* AGFMineSite::AddTrigger(FName Verb, FName Room, const FVector& Local, const FVector& Extent)
@@ -255,15 +285,30 @@ UBoxComponent* AGFMineSite::AddTrigger(FName Verb, FName Room, const FVector& Lo
 void AGFMineSite::AddRoom(FName RoomId, const FString& Title, const FVector& Center, const FLinearColor& Color)
 {
 	RoomIds.Add(RoomId);
-	const bool bOpen = FGFMineRules::RoomOpen(FGFMineCrew(), RoomId);
-	const FLinearColor Tint = bOpen ? Color : Color * 0.45f;
+	RoomTitles.Add(Title);
+	RoomOpenColors.Add(Color);
+	RoomShownColors.Add(Color);
+	const int32 MeshStart = RoomMeshParts.Num();
 	// Floor is paint. The pad slab under the whole site is what holds you up.
-	AddBlock(Center + FVector(0.f, 0.f, 2.f), FVector(360.f, 360.f, 4.f), Tint, false);
-	AddBlock(Center + FVector(180.f, 0.f, 125.f), FVector(20.f, 400.f, 250.f), Tint, true);
-	AddBlock(Center + FVector(0.f, 190.f, 125.f), FVector(360.f, 20.f, 250.f), Tint, true);
-	AddBlock(Center + FVector(0.f, -190.f, 125.f), FVector(360.f, 20.f, 250.f), Tint, true);
-	const FString Note = bOpen ? Title : FString::Printf(TEXT("%s (locked)"), *Title);
-	AddLabel(FString::Printf(TEXT("Assign\n%s"), *Note), Center + FVector(0.f, 0.f, 220.f));
+	// Tint is corrected in SyncRoomTints once every room exists. Build starts from an empty crew.
+	const FVector Sizes[] = {
+		FVector(360.f, 360.f, 4.f), FVector(20.f, 400.f, 250.f), FVector(360.f, 20.f, 250.f), FVector(360.f, 20.f, 250.f)
+	};
+	const FVector Offsets[] = {
+		FVector(0.f, 0.f, 2.f), FVector(180.f, 0.f, 125.f), FVector(0.f, 190.f, 125.f), FVector(0.f, -190.f, 125.f)
+	};
+	const bool Blocks[] = { false, true, true, true };
+	for (int32 Piece = 0; Piece < 4; ++Piece)
+	{
+		if (UStaticMeshComponent* Mesh = AddBlock(Center + Offsets[Piece], Sizes[Piece], Color, Blocks[Piece]))
+		{
+			RoomMeshParts.Add(Mesh);
+		}
+	}
+	RoomMeshStarts.Add(MeshStart);
+	RoomMeshCounts.Add(RoomMeshParts.Num() - MeshStart);
+	RoomLabels.Add(AddLabel(Title, Center + FVector(0.f, 0.f, 220.f)));
+	RoomSignText.Add(Title);
 	AddTrigger(VerbAssign, RoomId, Center + FVector(0.f, 0.f, 120.f), FVector(140.f, 140.f, 120.f));
 }
 
@@ -314,9 +359,129 @@ void AGFMineSite::BuildVisuals()
 	AddTrigger(VerbReturn, NAME_None, FVector(-1100.f, 0.f, 120.f), FVector(140.f, 140.f, 120.f));
 
 	AddLabel(TEXT("Pebble Mine"), FVector(400.f, 0.f, 280.f));
+	// Build has no player yet. Locked rooms stay dim until a crew with the unlock is synced.
+	SyncRoomTints(FGFMineCrew());
 }
 
-AGFPlayerState* AGFMineSite::PlayerOf(APawn* Pawn) const
+uint32 AGFMineSite::CrewTintKey(const FGFMineCrew& Crew)
+{
+	uint32 H = HashCombine(GetTypeHash(Crew.Pebblings.Num()), GetTypeHash(Crew.UpgradeIds.Num()));
+	for (int32 i = 0; i < Crew.UpgradeIds.Num(); ++i)
+	{
+		H = HashCombine(H, GetTypeHash(Crew.UpgradeIds[i]));
+		const int32 Level = Crew.UpgradeLevels.IsValidIndex(i) ? Crew.UpgradeLevels[i] : 0;
+		H = HashCombine(H, GetTypeHash(Level));
+	}
+	for (const FGFPebbling& P : Crew.Pebblings)
+	{
+		H = HashCombine(H, GetTypeHash(P.Id));
+		H = HashCombine(H, GetTypeHash(P.Room));
+	}
+	return H;
+}
+
+void AGFMineSite::SyncRoomTints(const FGFMineCrew& Crew)
+{
+	for (int32 i = 0; i < RoomIds.Num(); ++i)
+	{
+		if (!RoomOpenColors.IsValidIndex(i) || !RoomMeshStarts.IsValidIndex(i) || !RoomMeshCounts.IsValidIndex(i))
+		{
+			continue;
+		}
+		const bool bOpen = FGFMineRules::RoomOpen(Crew, RoomIds[i]);
+		const FLinearColor Tint = bOpen ? RoomOpenColors[i] : RoomOpenColors[i] * LockedRoomBrightness;
+		RoomShownColors[i] = Tint;
+		const int32 Start = RoomMeshStarts[i];
+		const int32 Count = RoomMeshCounts[i];
+		for (int32 m = 0; m < Count; ++m)
+		{
+			if (RoomMeshParts.IsValidIndex(Start + m))
+			{
+				ApplyMeshTint(RoomMeshParts[Start + m], Tint);
+			}
+		}
+		const FString Title = RoomTitles.IsValidIndex(i) ? RoomTitles[i] : RoomIds[i].ToString();
+		const FString Note = bOpen ? Title : FString::Printf(TEXT("%s (locked)"), *Title);
+		const FString Sign = FString::Printf(TEXT("Assign\n%s"), *Note);
+		if (RoomSignText.IsValidIndex(i))
+		{
+			RoomSignText[i] = Sign;
+		}
+		if (RoomLabels.IsValidIndex(i) && RoomLabels[i])
+		{
+			RoomLabels[i]->SetText(FText::FromString(Sign));
+		}
+	}
+	RoomTintKey = CrewTintKey(Crew);
+	bRoomTintKeyValid = true;
+}
+
+FLinearColor AGFMineSite::GetRoomTint(FName RoomId) const
+{
+	const int32 i = RoomIds.IndexOfByKey(RoomId);
+	if (i == INDEX_NONE)
+	{
+		return FLinearColor::Black;
+	}
+	if (RoomMeshStarts.IsValidIndex(i) && RoomMeshCounts.IsValidIndex(i))
+	{
+		const int32 Start = RoomMeshStarts[i];
+		const int32 Count = RoomMeshCounts[i];
+		for (int32 m = 0; m < Count; ++m)
+		{
+			const UStaticMeshComponent* Mesh = RoomMeshParts.IsValidIndex(Start + m) ? RoomMeshParts[Start + m].Get() : nullptr;
+			const UMaterialInstanceDynamic* Mid = Mesh ? Cast<UMaterialInstanceDynamic>(Mesh->GetMaterial(0)) : nullptr;
+			if (!Mid)
+			{
+				continue;
+			}
+			FLinearColor Read;
+			if (Mid->GetVectorParameterValue(FHashedMaterialParameterInfo(ColorParam), Read))
+			{
+				return Read;
+			}
+		}
+	}
+	return RoomShownColors.IsValidIndex(i) ? RoomShownColors[i] : FLinearColor::Black;
+}
+
+FLinearColor AGFMineSite::GetRoomOpenColor(FName RoomId) const
+{
+	const int32 i = RoomIds.IndexOfByKey(RoomId);
+	return RoomOpenColors.IsValidIndex(i) ? RoomOpenColors[i] : FLinearColor::Black;
+}
+
+FString AGFMineSite::GetRoomSign(FName RoomId) const
+{
+	const int32 i = RoomIds.IndexOfByKey(RoomId);
+	if (i == INDEX_NONE)
+	{
+		return FString();
+	}
+	if (RoomLabels.IsValidIndex(i) && RoomLabels[i])
+	{
+		return RoomLabels[i]->GetText().ToString();
+	}
+	return RoomSignText.IsValidIndex(i) ? RoomSignText[i] : FString();
+}
+
+void AGFMineSite::NoteCrew(const APawn* Pawn)
+{
+	if (const AGFPlayerState* PS = PlayerOf(Pawn))
+	{
+		SyncRoomTints(PS->Progress.Crew);
+	}
+}
+
+const AGFPlayerState* AGFMineSite::LocalCrewPlayer() const
+{
+	const UWorld* World = GetWorld();
+	const APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	return Pawn ? Pawn->GetPlayerState<AGFPlayerState>() : nullptr;
+}
+
+AGFPlayerState* AGFMineSite::PlayerOf(const APawn* Pawn) const
 {
 	return Pawn ? Pawn->GetPlayerState<AGFPlayerState>() : nullptr;
 }
@@ -354,7 +519,14 @@ FGFModeResult AGFMineSite::TryCapture(APawn* Pawn)
 {
 	AGFPlayerState* PS = PlayerOf(Pawn);
 	const float Speed = Pawn ? Pawn->GetVelocity().Size2D() : 0.f;
-	return Send(PS, VerbCapture, NAME_None, FGuid(), Speed);
+	FGFModeResult R = Send(PS, VerbCapture, NAME_None, FGuid(), Speed);
+	// Locked is only the first-tame gate. Say where that tame is, in the mine, not as a code name.
+	if (!R.bOk && R.Code == FName(TEXT("Locked")))
+	{
+		LastPrompt = UntamedCapturePrompt;
+	}
+	NoteCrew(Pawn);
+	return R;
 }
 
 FGFModeResult AGFMineSite::TryAssign(APawn* Pawn, FName Room)
@@ -376,13 +548,17 @@ FGFModeResult AGFMineSite::TryAssign(APawn* Pawn, FName Room)
 			Id = PS->Progress.Crew.Pebblings[0].Id;
 		}
 	}
-	return Send(PS, VerbAssign, Room, Id, 0.f);
+	FGFModeResult R = Send(PS, VerbAssign, Room, Id, 0.f);
+	NoteCrew(Pawn);
+	return R;
 }
 
 FGFModeResult AGFMineSite::TryHaul(APawn* Pawn)
 {
 	// Invalid id: every pebbling with a satchel.
-	return Send(PlayerOf(Pawn), VerbHaul, NAME_None, FGuid(), 0.f);
+	FGFModeResult R = Send(PlayerOf(Pawn), VerbHaul, NAME_None, FGuid(), 0.f);
+	NoteCrew(Pawn);
+	return R;
 }
 
 FGFModeResult AGFMineSite::TryRecall(APawn* Pawn)
@@ -404,7 +580,9 @@ FGFModeResult AGFMineSite::TryRecall(APawn* Pawn)
 			Id = PS->Progress.Crew.Pebblings[0].Id;
 		}
 	}
-	return Send(PS, VerbRecall, NAME_None, Id, 0.f);
+	FGFModeResult R = Send(PS, VerbRecall, NAME_None, Id, 0.f);
+	NoteCrew(Pawn);
+	return R;
 }
 
 FName AGFMineSite::NextBuyId(const AGFPlayerState* PS) const
@@ -476,6 +654,7 @@ FGFModeResult AGFMineSite::TryBuy(APawn* Pawn)
 			LastPrompt = FString::Printf(TEXT("Buy: Ok (foreman covered the shortfall for %s)"), *Upgrade.ToString());
 		}
 	}
+	NoteCrew(Pawn);
 	return R;
 }
 
@@ -534,7 +713,8 @@ void AGFMineSite::GetPromptLines(const AGFPlayerState* PS, TArray<FString>& OutL
 	OutLines.Add(TEXT("Status reads the last offline haul. The white arch returns to the hub."));
 	if (!PS || !PS->Progress.bHasTamed)
 	{
-		OutLines.Add(TEXT("Crew: shy until your first tame."));
+		OutLines.Add(UntamedCrewLine);
+		OutLines.Add(UntamedValleyLine);
 	}
 	else if (PS->Progress.Crew.Pebblings.Num() == 0)
 	{
