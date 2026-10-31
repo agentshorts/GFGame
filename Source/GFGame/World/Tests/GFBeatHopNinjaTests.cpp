@@ -13,6 +13,7 @@
 #include "GFMovementTuning.h"
 #include "GFRhythmJudge.h"
 #include "GFStaminaSim.h"
+#include "Components/CapsuleComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -608,8 +609,16 @@ bool FGFBeatHopNinjaRespawnTest::RunTest(const FString&)
 	const FVector SafeTop = Course->GetBrickTop(1);
 	const FVector Stood = Runner->GetActorLocation();
 	const double Lift = static_cast<double>(Profile().RespawnAboveBrickCm);
+	const UCapsuleComponent* Capsule = Runner->GetCapsuleComponent();
+	const double Half = Capsule ? static_cast<double>(Capsule->GetScaledCapsuleHalfHeight()) : 0.0;
+	const UCharacterMovementComponent* Move = Runner->GetCharacterMovement();
+	const bool bWalking = Move && Move->MovementMode == MOVE_Walking;
+	// Walking snaps the capsule onto the brick after the teleport to top + RespawnAboveBrickCm.
 	TestTrue(TEXT("Stands on the safe brick"),
-		FVector::Dist2D(Stood, SafeTop) < 1.0 && FMath::Abs(Stood.Z - (SafeTop.Z + Lift)) < 1.0);
+		bWalking
+		&& FVector::Dist2D(Stood, SafeTop) < 1.0
+		&& Stood.Z >= SafeTop.Z + Half - 1.0
+		&& Stood.Z <= SafeTop.Z + Lift + 1.0);
 	const FGFRhythmScore* Score = Course->GetScore(TEXT("Solo"));
 	TestTrue(TEXT("Respawn adds no Miss"), Score && Score->Misses == 0);
 	const FGFBeatHopNinjaPress Press = MakePress(EGFBeatHopObstacle::WallRunPanel, Beat, 0.f, EGFBeatDifficulty::Normal, false);
