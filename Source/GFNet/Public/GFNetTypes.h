@@ -6,6 +6,7 @@
 #include "GFCompanionRoster.h"
 #include "GFLandTypes.h"
 #include "GFModeTypes.h"
+#include "GFCrosshairTypes.h"
 #include "GFNetTypes.generated.h"
 
 /**
@@ -31,6 +32,10 @@ struct GFNET_API FGFCharacterData
 	UPROPERTY(SaveGame) TArray<FGFPlotBlueprint> Blueprints;
 	/** Mode progress: pinned recipe, wager setting, arena formation, first tame, ... */
 	UPROPERTY(SaveGame) FGFPlayerProgress Progress;
+	/** Crosshair editor. A fresh character keeps the original white plus. */
+	UPROPERTY(SaveGame) FGFCrosshairSettings Crosshair;
+	/** Hold-to-aim, sensitivity slider, sniper scope. */
+	UPROPERTY(SaveGame) FGFAimUserSettings AimUser;
 };
 
 /** What the host remembers about someone who has visited (server only, saved with the world). */

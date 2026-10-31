@@ -27,6 +27,11 @@ enum class EGFSaveVersion : int32
 	ModeStates = 5,
 	/** Block paint (VoxelFinish palette + painted cells). Older saves load with no paint. */
 	BlockPaint = 6,
+	/**
+	 * Crosshair and aim preferences on the character record (FGFCharacterData).
+	 * World saves have nothing to convert; a missing character field loads as the default plus.
+	 */
+	Crosshair = 7,
 
 	// keep last
 	VersionPlusOne,

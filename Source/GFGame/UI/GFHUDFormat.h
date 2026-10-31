@@ -32,7 +32,7 @@ namespace GFHUD
 
 	inline const TCHAR* ControlsHint()
 	{
-		return TEXT("WASD move, Shift sprint, Ctrl dash, Q swing, E yank, Space jump, LMB dig, RMB place, wheel block, V view, Enter chat");
+		return TEXT("WASD move, Shift sprint, Ctrl dash, Q swing, E yank, Space jump, LMB dig, RMB place or aim, wheel block, Alt+wheel zoom, MMB shoulder, V view, Enter chat, Esc settings");
 	}
 }
 

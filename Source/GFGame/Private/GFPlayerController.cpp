@@ -146,6 +146,10 @@ void AGFPlayerController::HandleCloseChatKey()
 		{
 			HUD->CloseChat();
 		}
+		else
+		{
+			HUD->ToggleAimSettings();
+		}
 	}
 }
 

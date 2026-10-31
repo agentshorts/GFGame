@@ -8,7 +8,7 @@ Branch off `staging` at `fa4b4c3`. Canvas HUD only. No `.uasset`, no `.umap`, no
 
 - Centre crosshair (short white plus).
 - Bottom row of `AGFVoxelWorld::GetPlaceableBlockIds()`, the same list `AGFCharacter::CycleBlock` walks. `AGFCharacter::SelectedBlock` is the highlighted cell. The row stays centred and shrinks to the side margins when it would not fit.
-- Controls hint, the exact line `WASD move, Space jump, LMB dig, RMB place, wheel block, V view, Enter chat`. Shown until 30s, then hidden. H toggles it, and that choice sticks. H does nothing while chat is open.
+- Controls hint, the exact line `WASD move, Shift sprint, Ctrl dash, Q swing, E yank, Space jump, LMB dig, RMB place or aim, wheel block, Alt+wheel zoom, MMB shoulder, V view, Enter chat, Esc settings`. Shown until 30s, then hidden. H toggles it, and that choice sticks. H does nothing while chat is open.
 - Top-left land and state from `UGFTerritorySubsystem::GetZoneAt`, `GetHazardAt`, and `IsSafeFor` at the pawn. See #105.
 - Bottom-left, the last 8 `AGFGameState::ChatLog` lines. Each stays fully opaque for 15s from the moment this HUD first sees its `Seq`, then fades over 1.5s. The sender name uses `AGFPlayerState::ColorIndex` when `FindPlayerByKey` finds that `SenderKey`. Otherwise the name is white. A line with an empty sender name is drawn as system text.
 - `AGFPlayerState::LandNotices` and `ChatResults` toast in the upper middle for 4s, including result codes such as `Ok`.

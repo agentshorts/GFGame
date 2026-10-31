@@ -104,7 +104,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFHUDHintAndColorTest, "GFGame.HUD.HintAndColo
 bool FGFHUDHintAndColorTest::RunTest(const FString&)
 {
 	TestEqual(TEXT("Hint waits 30s"), GFHUD::HintAutoHideSeconds, 30.f);
-	TestEqual(TEXT("Hint copy"), FString(GFHUD::ControlsHint()), FString(TEXT("WASD move, Shift sprint, Ctrl dash, Q swing, E yank, Space jump, LMB dig, RMB place, wheel block, V view, Enter chat")));
+	TestEqual(TEXT("Hint copy"), FString(GFHUD::ControlsHint()), FString(TEXT("WASD move, Shift sprint, Ctrl dash, Q swing, E yank, Space jump, LMB dig, RMB place or aim, wheel block, Alt+wheel zoom, MMB shoulder, V view, Enter chat, Esc settings")));
 	TestTrue(TEXT("Shown at the start"), GFHintVisible(0.f, false, false));
 	TestTrue(TEXT("Shown just before 30s"), GFHintVisible(29.9f, false, false));
 	TestFalse(TEXT("Hidden at 30s"), GFHintVisible(30.f, false, true));

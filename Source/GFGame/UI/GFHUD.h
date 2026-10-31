@@ -10,6 +10,7 @@
 class UFont;
 class UTexture2D;
 struct FGHUDChat;
+class SWidget;
 
 struct FGFHUDToast
 {
@@ -32,6 +33,9 @@ public:
 	virtual void DrawHUD() override;
 
 	void ToggleControlsHint();
+	bool IsAimSettingsOpen() const { return bAimSettingsOpen; }
+	void ToggleAimSettings();
+	void CloseAimSettings();
 
 	bool IsChatOpen() const { return bChatOpen; }
 	void OpenChat();
@@ -46,6 +50,8 @@ public:
 
 private:
 	void DrawCrosshair();
+	void DrawAimOverlay();
+	void RemoveAimSettings();
 	void DrawCompass();
 	void DrawStaminaArc();
 	void DrawLandingMarker();
@@ -98,6 +104,8 @@ private:
 
 	TMap<int32, double> ChatSeenAt;
 	TArray<FGFHUDToast> Toasts;
+	TSharedPtr<SWidget> AimSettingsRoot;
+	bool bAimSettingsOpen = false;
 	int32 AppliedNotices = 0;
 	int32 AppliedResults = 0;
 };

@@ -1,4 +1,6 @@
 #include "GFHUD.h"
+#include "GFCrosshairPanel.h"
+#include "Aim/GFAimSim.h"
 #include "GFBeatHopCourse.h"
 #include "GFMineSite.h"
 #include "GFRunwaySite.h"
@@ -28,6 +30,7 @@
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/SOverlay.h"
+#include "Widgets/SWidget.h"
 #include "GFGrumbleDigSite.h"
 #include "GFDepthsSite.h"
 #include "GFFerryStand.h"
@@ -88,6 +91,7 @@ AGFHUD::AGFHUD()
 
 AGFHUD::~AGFHUD()
 {
+	RemoveAimSettings();
 	RemoveChatWidget();
 }
 
@@ -103,7 +107,7 @@ void AGFHUD::BeginPlay()
 
 void AGFHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (bChatOpen)
+	if (bChatOpen || bAimSettingsOpen)
 	{
 		if (APlayerController* PC = GetOwningPlayerController())
 		{
@@ -111,6 +115,7 @@ void AGFHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 			PC->bShowMouseCursor = false;
 		}
 	}
+	RemoveAimSettings();
 	RemoveChatWidget();
 	ChatBlockTicks = 2;
 	Super::EndPlay(EndPlayReason);
@@ -180,6 +185,7 @@ void AGFHUD::DrawHUD()
 	DrawDepthsSession();
 	DrawFerryStand();
 	DrawCrosshair();
+	DrawAimOverlay();
 	DrawCompass();
 	DrawStaminaArc();
 	DrawLandingMarker();
@@ -192,16 +198,131 @@ void AGFHUD::DrawHUD()
 
 void AGFHUD::DrawCrosshair()
 {
-	const float CX = Canvas->ClipX * 0.5f;
-	const float CY = Canvas->ClipY * 0.5f;
-	const FLinearColor Color(1.f, 1.f, 1.f, 0.9f);
-	const float Arm = 10.f;
-	const float Gap = 4.f;
-	const float Thick = 1.5f;
-	DrawLine(CX - Arm, CY, CX - Gap, CY, Color, Thick);
-	DrawLine(CX + Gap, CY, CX + Arm, CY, Color, Thick);
-	DrawLine(CX, CY - Arm, CX, CY - Gap, Color, Thick);
-	DrawLine(CX, CY + Gap, CX, CY + Arm, Color, Thick);
+	const AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn());
+	const FGFCrosshairSettings Settings = Character ? Character->GetCrosshairSettings() : FGFCrosshairSettings();
+	const FGFAimState IdleAim;
+	const FGFAimState& Aim = Character ? Character->GetAimState() : IdleAim;
+	if (Character && !GFShouldDrawCrosshair(Settings, Aim))
+	{
+		return;
+	}
+	const float Extra = Character
+		? GFCrosshairGap(Settings, Character->IsCrosshairSpreadActive(), false) - Settings.Gap
+		: 0.f;
+	const FGFCrosshairDraw Draw = GFBuildCrosshair(Settings, Canvas->ClipX * 0.5f, Canvas->ClipY * 0.5f, Extra);
+	for (const FGFCrosshairMark& Mark : Draw.Marks)
+	{
+		if (Mark.Kind == EGFCrosshairMarkKind::Dot)
+		{
+			DrawRect(Mark.Color, Mark.X - Mark.Radius, Mark.Y - Mark.Radius, Mark.Radius * 2.f, Mark.Radius * 2.f);
+		}
+		else
+		{
+			DrawLine(Mark.X, Mark.Y, Mark.X2, Mark.Y2, Mark.Color, Mark.Thickness);
+		}
+	}
+}
+
+void AGFHUD::DrawAimOverlay()
+{
+	const AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn());
+	if (!Character || Canvas->ClipX < 2.f || Canvas->ClipY < 2.f)
+	{
+		return;
+	}
+	const bool bScope = Character->WantsScopeOverlay();
+	const bool bFists = Character->WantsFistVignette();
+	if (!bScope && !bFists)
+	{
+		return;
+	}
+	const TArray<FGFScreenRect> Bands = bScope ? GFScopeVignette(Canvas->ClipX, Canvas->ClipY) : GFFistVignette(Canvas->ClipX, Canvas->ClipY);
+	for (const FGFScreenRect& Band : Bands)
+	{
+		DrawRect(Band.Color, Band.X, Band.Y, Band.W, Band.H);
+	}
+	if (bScope)
+	{
+		FGFCrosshairSettings Reticle;
+		Reticle.Shape = EGFCrosshairShape::Circle;
+		Reticle.Size = 16.f;
+		Reticle.Thickness = 1.5f;
+		Reticle.Opacity = 0.95f;
+		Reticle.bCenterDot = true;
+		const FGFCrosshairDraw Draw = GFBuildCrosshair(Reticle, Canvas->ClipX * 0.5f, Canvas->ClipY * 0.5f, 0.f);
+		for (const FGFCrosshairMark& Mark : Draw.Marks)
+		{
+			if (Mark.Kind == EGFCrosshairMarkKind::Dot)
+			{
+				DrawRect(Mark.Color, Mark.X - Mark.Radius, Mark.Y - Mark.Radius, Mark.Radius * 2.f, Mark.Radius * 2.f);
+			}
+			else
+			{
+				DrawLine(Mark.X, Mark.Y, Mark.X2, Mark.Y2, Mark.Color, Mark.Thickness);
+			}
+		}
+	}
+}
+
+void AGFHUD::ToggleAimSettings()
+{
+	if (bAimSettingsOpen)
+	{
+		CloseAimSettings();
+		return;
+	}
+	if (bChatOpen || !GEngine || !GEngine->GameViewport)
+	{
+		return;
+	}
+	AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn());
+	if (Character)
+	{
+		Character->SetAimPanelOpen(true);
+	}
+	AimSettingsRoot = GFMakeAimSettingsPanel(Character, [this]() { CloseAimSettings(); });
+	GEngine->GameViewport->AddViewportWidgetContent(AimSettingsRoot.ToSharedRef());
+	bAimSettingsOpen = true;
+	if (APlayerController* PC = GetOwningPlayerController())
+	{
+		// UI-only so Escape is handled by the panel and does not also toggle it from the game mapping.
+		FInputModeUIOnly Mode;
+		Mode.SetWidgetToFocus(AimSettingsRoot);
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		PC->SetInputMode(Mode);
+		PC->bShowMouseCursor = true;
+	}
+	if (FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().SetKeyboardFocus(AimSettingsRoot, EFocusCause::SetDirectly);
+	}
+}
+
+void AGFHUD::CloseAimSettings()
+{
+	if (AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn()))
+	{
+		Character->SetAimPanelOpen(false);
+	}
+	RemoveAimSettings();
+	if (APlayerController* PC = GetOwningPlayerController())
+	{
+		if (!bChatOpen)
+		{
+			PC->SetInputMode(FInputModeGameOnly());
+			PC->bShowMouseCursor = false;
+		}
+	}
+}
+
+void AGFHUD::RemoveAimSettings()
+{
+	bAimSettingsOpen = false;
+	if (AimSettingsRoot.IsValid() && GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->RemoveViewportWidgetContent(AimSettingsRoot.ToSharedRef());
+	}
+	AimSettingsRoot.Reset();
 }
 
 void AGFHUD::DrawCompass()
@@ -544,11 +665,14 @@ void AGFHUD::DrawHotbar()
 {
 	const AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn());
 	const FName Selected = Character ? Character->SelectedBlock : NAME_None;
-	TArray<FName> Ids;
-	for (TActorIterator<AGFVoxelWorld> It(GetWorld()); It; ++It)
+	TArray<FName> Ids = Character ? Character->GetHotbarIds() : TArray<FName>();
+	if (!Character)
 	{
-		Ids = It->GetPlaceableBlockIds();
-		break;
+		for (TActorIterator<AGFVoxelWorld> It(GetWorld()); It; ++It)
+		{
+			Ids = It->GetPlaceableBlockIds();
+			break;
+		}
 	}
 	const int32 SelectedIndex = Ids.IndexOfByKey(Selected);
 	const TArray<FGFHUDSlotRect> Slots = GFLayoutHotbar(Ids.Num(), SelectedIndex, Canvas->ClipX, Canvas->ClipY);

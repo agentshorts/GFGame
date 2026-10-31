@@ -25,7 +25,7 @@
 | **Texel density** | **16 px per block face = 1 px per mv**, on everything | Blocks, furniture, characters and dinos all share the same pixel size, so nothing looks higher-res than anything else. |
 | Doors and openings | A door is 1 × 2 blocks (100 × 200 cm) | The player (175 cm) and the raptor (150 cm, ≤ 75 cm wide) must fit through. |
 | Player | 175 cm tall (28 mv) | UE capsule is about radius 40 and half-height 88. |
-| Hub camera | Third person: spring arm about 450 cm, pitch about −20°, FOV 90 | Make backs readable too, because players mostly see their character's back. |
+| Hub camera | Over the shoulder: spring arm 300 cm, socket offset (0, +60, 20), pitch about −20°, FOV 90. Alt+wheel pulls back for building. | The character sits left of centre so the crosshair is clear. Backs still need to read. |
 | Team colours (arena, set by UE at runtime) | ally `#4FC3F7`, enemy `#FF6B6B` | Only through a white `TeamTint` slot. |
 | Lighting | Dynamic and Lumen in Unreal | **Don't paint directional light or AO into textures.** |
 | Camp colours | Rime `#9FD8F5` pale ice blue, Verdant `#8ED47A` leaf green, Cinderwrights `#D9542B` ember | Render swatches. Lava bridge `#FFC21A` hot gold. Deadly forest `#26402C` deep pine. |
@@ -145,7 +145,7 @@ Add one row per asset to `<repo>\handoff\license_ledger.csv` with the PLAN.md §
 
 ### 1.10 Previews
 `preview.png` (1280 × 720, Eevee or Cycles):
-- **Shot A:** the hub third-person angle (camera about 450 cm behind and above, pitch −20°, FOV 90).
+- **Shot A:** the hub third-person angle (spring arm 300 cm, socket offset to the character's right, pitch −20°, FOV 90, character left of centre).
 - **Shot B:** front three-quarter view.
 - Shot C (characters and dinos): a **scale line-up** with a 1 m block, a 1 × 2 door frame, and the 175 cm player (or a 175 cm placeholder until the player exists).
 

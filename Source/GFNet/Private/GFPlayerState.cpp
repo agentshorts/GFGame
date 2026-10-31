@@ -154,6 +154,8 @@ FGFCharacterData AGFPlayerState::BuildCharacterData() const
 	Data.Journal = Journal;
 	Data.Blueprints = Blueprints;
 	Data.Progress = Progress;
+	Data.Crosshair = StoredCrosshair;
+	Data.AimUser = StoredAimUser;
 	return Data;
 }
 
@@ -168,6 +170,10 @@ void AGFPlayerState::ApplyCharacterData(const FGFCharacterData& Data)
 	Journal = Data.Journal;
 	Blueprints = Data.Blueprints;
 	Progress = Data.Progress;
+	StoredCrosshair = Data.Crosshair;
+	StoredAimUser = Data.AimUser;
+	StoredCrosshair.Clamp();
+	StoredAimUser.Clamp();
 	if (Companions.Num() > 0)
 	{
 		Progress.bHasTamed = true; // characters from before the flag existed
@@ -516,6 +522,30 @@ void AGFPlayerState::ServerSetHeldItem_Implementation(FName ItemId)
 	// Can only hold what you have.
 	HeldItem = (ItemId.IsNone() || Inventory->GetCount(ItemId) > 0) ? ItemId : FName();
 	ForceNetUpdate();
+}
+
+void AGFPlayerState::RequestStoreAimLook(const FGFCrosshairSettings& InCrosshair, const FGFAimUserSettings& InAimUser)
+{
+	StoredCrosshair = InCrosshair;
+	StoredAimUser = InAimUser;
+	StoredCrosshair.Clamp();
+	StoredAimUser.Clamp();
+	if (HasAuthority())
+	{
+		ServerStoreAimLook_Implementation(StoredCrosshair, StoredAimUser);
+	}
+	else
+	{
+		ServerStoreAimLook(StoredCrosshair, StoredAimUser);
+	}
+}
+
+void AGFPlayerState::ServerStoreAimLook_Implementation(const FGFCrosshairSettings& InCrosshair, const FGFAimUserSettings& InAimUser)
+{
+	StoredCrosshair = InCrosshair;
+	StoredAimUser = InAimUser;
+	StoredCrosshair.Clamp();
+	StoredAimUser.Clamp();
 }
 
 // ---------------- Block edits ----------------

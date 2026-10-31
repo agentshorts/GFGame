@@ -285,8 +285,8 @@ bool FGFPaintSaveTest::RunTest(const FString&)
 
 	// Capture and write through the real serializer (SaveGameToMemory only writes SaveGame properties).
 	UGFSaveGame* Save = UGFSaveSubsystem::CaptureWorld(W.World);
-	TestEqual(TEXT("New saves are version 6"), Save->SaveVersion, static_cast<int32>(EGFSaveVersion::BlockPaint));
-	TestEqual(TEXT("BlockPaint is the latest version"), static_cast<int32>(EGFSaveVersion::Latest), static_cast<int32>(EGFSaveVersion::BlockPaint));
+	TestEqual(TEXT("New saves are version 7"), Save->SaveVersion, static_cast<int32>(EGFSaveVersion::Crosshair));
+	TestEqual(TEXT("Crosshair is the latest version"), static_cast<int32>(EGFSaveVersion::Latest), static_cast<int32>(EGFSaveVersion::Crosshair));
 	TestEqual(TEXT("Two painted cells captured"), Save->Paint.Cells.Num(), 2);
 	TArray<uint8> Bytes;
 	TestTrue(TEXT("SaveGameToMemory"), UGameplayStatics::SaveGameToMemory(Save, Bytes));
