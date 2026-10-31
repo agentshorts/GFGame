@@ -217,7 +217,7 @@ FName FGFProtectionRules::CanToggle(const FGFSocialPlayer& By, const FGFSocialPl
 	return FGFSocialCodes::Ok;
 }
 
-FName FGFProtectionRules::CanSetGuest(const FGFSocialPlayer& By, const FGFSocialPlayer& Target, const FGFFactionAccess& Access)
+FName FGFProtectionRules::CanSetGuest(const FGFSocialPlayer& By, const FGFSocialPlayer& Target, const FGFFactionAccess& Access, bool bGuest)
 {
 	if (By.Key == Target.Key)
 	{
@@ -243,9 +243,9 @@ FName FGFProtectionRules::CanSetGuest(const FGFSocialPlayer& By, const FGFSocial
 	{
 		return FGFSocialCodes::TargetIsHost;
 	}
-	if (Target.LandOwner != By.Faction)
+	if (bGuest && Target.LandOwner != By.Faction)
 	{
-		return FGFSocialCodes::NotOnYourLand; // like the toggles: the target must stand on the setter's faction land
+		return FGFSocialCodes::NotOnYourLand; // Guest only: the target must stand on the setter's faction land
 	}
 	return FGFSocialCodes::Ok;
 }

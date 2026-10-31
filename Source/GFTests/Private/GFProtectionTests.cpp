@@ -1,7 +1,7 @@
 // Faction protection (option C), pure rules: members always safe on their own land and can't be toggled,
 // the host always protected, visitors start unprotected, the leader toggles per player, the per-member grant (only the
-// leader grants it; it lets a member toggle and set guests), guests get rights plus protection, toggles and guest changes
-// need the target on the setter's land, visitors without guest status lose build / break / jail power on
+// leader grants it; it lets a member toggle and set guests), guests get rights plus protection, toggles and Guest
+// need the target on the setter's land, Unguest works from anywhere, visitors without guest status lose build / break / jail power on
 // another faction's land. Also the IGFSafeZoneQuery defaults (IsSafeFor = IsInsideSafe, OwnerAt = None) and the
 // {Dragger} line token. Faction ids here are PA / PB / PC; real ids live in DefaultGame.ini.
 #include "Misc/AutomationTest.h"
@@ -96,8 +96,8 @@ bool FGFProtectionRulesTest::RunTest(const FString&)
 	A.OnFactionChanged(Member.Key, PB);
 	TestFalse(TEXT("Changing faction drops the grant"), A.HasToggleGrant(PA, Member.Key));
 
-	// Guests: the leader, or a member the leader granted (the same grant as the toggle); the target must stand on the
-	// setter's faction land; full rights plus protection; unguest before unprotect.
+	// Guests: the leader, or a member the leader granted (the same grant as the toggle). Guest needs the target on the
+	// setter's faction land. Unguest does not. Full rights plus protection; unguest before unprotect.
 	A.FindOrAdd(PA, Visitor.Key).bProtected = false;
 	TestFalse(TEXT("Plain visitor has no rights on other land"), R::HasVisitorRights(Visitor.Key, PB, false, PA, A));
 	TestTrue(TEXT("...but full rights on their own"), R::HasVisitorRights(Visitor.Key, PB, false, PB, A));
@@ -111,12 +111,16 @@ bool FGFProtectionRulesTest::RunTest(const FString&)
 	TestEqual(TEXT("Granted member still can't grant others"), R::CanGrantToggle(Member, Member2), C::NotAllowed);
 	FGFSocialPlayer GuestAway = Visitor;
 	GuestAway.LandOwner = PC;
-	TestEqual(TEXT("Guest: target on another faction's land"), R::CanSetGuest(Leader, GuestAway, A), C::NotOnYourLand);
-	TestEqual(TEXT("...for a granted member too"), R::CanSetGuest(Member, GuestAway, A), C::NotOnYourLand);
+	TestEqual(TEXT("Guest: target on another faction's land"), R::CanSetGuest(Leader, GuestAway, A, true), C::NotOnYourLand);
+	TestEqual(TEXT("...for a granted member too"), R::CanSetGuest(Member, GuestAway, A, true), C::NotOnYourLand);
+	TestEqual(TEXT("Unguest from another faction's land"), R::CanSetGuest(Leader, GuestAway, A, false), C::Ok);
+	TestEqual(TEXT("...for a granted member too"), R::CanSetGuest(Member, GuestAway, A, false), C::Ok);
 	GuestAway.LandOwner = NAME_None;
-	TestEqual(TEXT("Guest: target on unowned land"), R::CanSetGuest(Leader, GuestAway, A), C::NotOnYourLand);
+	TestEqual(TEXT("Guest: target on unowned land"), R::CanSetGuest(Leader, GuestAway, A, true), C::NotOnYourLand);
+	TestEqual(TEXT("Unguest from unowned land"), R::CanSetGuest(Leader, GuestAway, A, false), C::Ok);
 	A.SetToggleGrant(PA, Member.Key, false);
-	TestEqual(TEXT("Revoked member can't Guest / Unguest"), R::CanSetGuest(Member, Visitor, A), C::NotAllowed);
+	TestEqual(TEXT("Revoked member can't Guest"), R::CanSetGuest(Member, Visitor, A, true), C::NotAllowed);
+	TestEqual(TEXT("Revoked member can't Unguest"), R::CanSetGuest(Member, GuestAway, A, false), C::NotAllowed);
 	A.FindOrAdd(PA, Visitor.Key).bGuest = true;
 	TestTrue(TEXT("Guest is protected"), R::IsProtectedOn(Visitor.Key, PB, false, PA, A));
 	TestTrue(TEXT("Guest has full rights"), R::HasVisitorRights(Visitor.Key, PB, false, PA, A));

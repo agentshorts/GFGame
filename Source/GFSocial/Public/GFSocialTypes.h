@@ -194,14 +194,15 @@ struct GFSOCIAL_API FGFFactionAccess
  *   - Visitors start unprotected. The leader can always toggle protection for an outsider, per player; a member can
  *     too while the leader has granted them the toggle. Only the leader grants or revokes it.
  *   - A faction guest has full rights plus protection. The leader, or a member with the grant, sets guest status.
- *   - Toggles and guest changes only reach a target standing on the setter's faction land (NotOnYourLand).
+ *   - Protect / Unprotect and Guest only reach a target standing on the setter's faction land (NotOnYourLand).
+ *   - Unguest works wherever the target is standing.
  */
 struct GFSOCIAL_API FGFProtectionRules
 {
 	/** Protect / Unprotect a target on By's land. Unprotecting a guest is refused (unguest first). */
 	static FName CanToggle(const FGFSocialPlayer& By, const FGFSocialPlayer& Target, const FGFFactionAccess& Access, bool bProtect);
-	/** Guest / Unguest a target on By's land: the leader, or a member the leader granted (same grant as the toggle). */
-	static FName CanSetGuest(const FGFSocialPlayer& By, const FGFSocialPlayer& Target, const FGFFactionAccess& Access);
+	/** Guest requires the target on By's land. Unguest (bGuest false) does not. Leader, or a member the leader granted. */
+	static FName CanSetGuest(const FGFSocialPlayer& By, const FGFSocialPlayer& Target, const FGFFactionAccess& Access, bool bGuest = true);
 	/** Grant / revoke the toggle for a member of By's faction: the leader only. */
 	static FName CanGrantToggle(const FGFSocialPlayer& By, const FGFSocialPlayer& Target);
 	/**

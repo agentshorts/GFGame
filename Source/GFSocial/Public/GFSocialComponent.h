@@ -24,7 +24,7 @@
 //   Protect, Unprotect      faction protection for an outsider on the sender's faction land (leader, or a member
 //                           the leader allowed)
 //   Guest, Unguest          faction guest status (full rights plus protection; leader, or a member the leader
-//                           allowed; target on the sender's faction land)
+//                           allowed). Guest needs the target on the sender's land. Unguest works from anywhere.
 //   GrantToggle, RevokeToggle  allow a member to Protect / Unprotect and Guest / Unguest (leader only)
 // Faction protection (FGFProtectionRules): members are always safe on their own land and the host is always
 // protected; visitors start unprotected. Safety is asked through IGFSafeZoneQuery::IsSafeFor, so this module does not
@@ -137,7 +137,7 @@ public:
 	FName ServerEmote(AGFPlayerState* By, FName EmoteId);
 	/** Protect / Unprotect Target on By's faction land. Turning it off records By as the Dragger. */
 	FName ServerSetProtected(AGFPlayerState* By, AGFPlayerState* Target, bool bProtect);
-	/** Guest / Unguest Target on By's faction land (the leader, or a member with the grant). */
+	/** Guest Target on By's faction land, or Unguest them from anywhere (the leader, or a member with the grant). */
 	FName ServerSetGuest(AGFPlayerState* By, AGFPlayerState* Target, bool bGuest);
 	/** Allow / stop a member of By's faction toggling protection and setting guests (leader only). */
 	FName ServerSetToggleGrant(AGFPlayerState* By, AGFPlayerState* Target, bool bAllowed);

@@ -222,7 +222,24 @@ void AGFFerryStand::GetPromptLines(TArray<FString>& OutLines) const
 	OutLines.Add(FString::Printf(TEXT("FERRY  %s"), *Who));
 	OutLines.Add(TEXT("The bird stays on its perch. It does not follow."));
 	const FGFFerryTuning& Fare = Tuning();
-	OutLines.Add(FString::Printf(TEXT("A trip is %d %s. A pass rides free."), Fare.FareCount, *Fare.FareItem.ToString()));
+	TArray<FName> Ids = Fare.FareItems;
+	Ids.Sort([](const FName& A, const FName& B) { return A.Compare(B) < 0; });
+	FString FareNames;
+	FName Previous = NAME_None;
+	for (const FName& Id : Ids)
+	{
+		if (Id.IsNone() || Id == Previous)
+		{
+			continue;
+		}
+		Previous = Id;
+		if (!FareNames.IsEmpty())
+		{
+			FareNames += TEXT(", ");
+		}
+		FareNames += Id.ToString();
+	}
+	OutLines.Add(FString::Printf(TEXT("A trip is %d basic blocks (%s). A pass rides free."), Fare.FareCount, *FareNames));
 	FString Pads;
 	for (const FName& Anchor : DestinationAnchors)
 	{
