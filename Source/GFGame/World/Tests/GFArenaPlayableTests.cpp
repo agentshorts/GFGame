@@ -16,6 +16,7 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Camera/CameraActor.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/WorldSettings.h"
 
@@ -139,7 +140,7 @@ bool FGFArenaSiteOnPadTest::RunTest(const FString&)
 		Joined += Line;
 		Joined += TEXT("\n");
 	}
-	const TCHAR* Words[] = { TEXT("Start"), TEXT("Finish"), TEXT("Results"), TEXT("Return") };
+	const TCHAR* Words[] = { TEXT("Start"), TEXT("Finish"), TEXT("Results"), TEXT("Return"), TEXT("Balcony") };
 	for (const TCHAR* Word : Words)
 	{
 		TestTrue(*FString::Printf(TEXT("Prompt names %s"), Word), Joined.Contains(Word));
@@ -159,6 +160,19 @@ bool FGFArenaSiteOnPadTest::RunTest(const FString&)
 	{
 		return false;
 	}
+	ACameraActor* Camera = Site->GetBalconyCamera();
+	if (!TestNotNull(TEXT("Balcony camera"), Camera))
+	{
+		return false;
+	}
+	const FVector CamWorld = Site->GetActorTransform().TransformPosition(AGFArenaSite::BalconyCameraLocal());
+	const FVector LookWorld = Site->GetActorTransform().TransformPosition(AGFArenaSite::BalconyLookLocal());
+	TestTrue(TEXT("Camera sits on the south balcony"), Camera->GetActorLocation().Equals(CamWorld, 2.f));
+	const FVector Toward = (LookWorld - Camera->GetActorLocation()).GetSafeNormal();
+	TestTrue(TEXT("Camera looks at the sand"), Camera->GetActorForwardVector().Dot(Toward) > 0.95f);
+	TestTrue(TEXT("Camera is above the pad"), Camera->GetActorLocation().Z > Site->GetActorLocation().Z + 400.f);
+	TestFalse(TEXT("No controller, so the view stays put"), Site->ApplyBalconyView(Walker));
+
 	TestFalse(TEXT("Hub stand is not on the arena pad"), Site->IsPlayerNear(Walker));
 	TestTrue(TEXT("Walking into the portal enters the arena"), Portal->EnterFrom(Walker));
 	const FVector Stand = FGFMiniGameCatalog::SimStand(*ArenaRow, FVector::ZeroVector);
