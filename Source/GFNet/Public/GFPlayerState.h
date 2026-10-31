@@ -236,6 +236,11 @@ public:
 	/** Full server-side edit: permission/reach/inventory checks, then the voxel edit and item cost/refund. */
 	bool ServerHandleEdit(const FIntVector& Cell, FName BlockId, FString* OutReason = nullptr, int32* OutChunkRevision = nullptr);
 	bool ValidateEdit(const FIntVector& Cell, FName BlockId, FString& OutReason) const;
+	/**
+	 * Spell gate. Skips reach and item cost. True when there is no game state, so a bare test world can mine.
+	 * Otherwise the same land, mode, and plot gates as a remove.
+	 */
+	bool CanMineAt(const FVector& WorldPoint, const FIntVector& Cell, FString& OutReason) const;
 	/** Item a block costs to place and gives back when removed. */
 	FName ItemForBlock(FName BlockId) const;
 

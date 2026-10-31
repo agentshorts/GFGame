@@ -1,0 +1,8 @@
+# Named so the table exists. bImplemented stays false until marks and combos are played.
+---,Elements,Result,bImplemented
+Slagburst,Magma,Burst,False
+LightningRoot,"Spark+Root",Chain,False
+Shatterfrost,Frost,Shatter,False
+SteamBlast,"Magma+Frost",Steam,False
+Wildfire,"Magma+Root",Wildfire,False
+Frostbloom,"Frost+Root",Bloom,False

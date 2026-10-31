@@ -718,6 +718,56 @@ bool AGFPlayerState::ValidateEdit(const FIntVector& Cell, FName BlockId, FString
 	return true;
 }
 
+bool AGFPlayerState::CanMineAt(const FVector& WorldPoint, const FIntVector& Cell, FString& OutReason) const
+{
+	const AGFGameState* GS = GetGFGameState();
+	if (!GS)
+	{
+		return true;
+	}
+	const AGFVoxelWorld* Voxel = GetVoxelWorld();
+	if (!Voxel)
+	{
+		OutReason = TEXT("no world");
+		return false;
+	}
+	if (!bCharacterReady)
+	{
+		OutReason = TEXT("character not loaded");
+		return false;
+	}
+	if (!Voxel->GetGrid().IsInBounds(Cell))
+	{
+		OutReason = TEXT("out of bounds");
+		return false;
+	}
+	const EGFOverworldEdit Land = GS->OverworldEditQuery.IsBound()
+		? GS->OverworldEditQuery.Execute(FactionId, WorldPoint)
+		: EGFOverworldEdit::Inactive;
+	if (Land == EGFOverworldEdit::Deny)
+	{
+		OutReason = TEXT("outside faction land");
+		return false;
+	}
+	const FName Why = GS->EditBlockReason(this, WorldPoint);
+	const bool bSharedFarm = Land == EGFOverworldEdit::Shared && Why == FName(TEXT("VisitorNoRights"));
+	if (!Why.IsNone() && !bSharedFarm)
+	{
+		OutReason = Why.ToString();
+		return false;
+	}
+	if (GS->bEnforcePlotPermissions)
+	{
+		const bool bOpenFactionGround = (Land == EGFOverworldEdit::Own || Land == EGFOverworldEdit::Shared)
+			&& GS->Land.PlotAt(Cell) == nullptr;
+		if (!bOpenFactionGround && !FGFLandRules::CanEdit(GS->Land, PlayerKey, bIsHost, Cell, false, OutReason))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 bool AGFPlayerState::ServerHandleEdit(const FIntVector& Cell, FName BlockId, FString* OutReason, int32* OutChunkRevision)
 {
 	FString Reason;
@@ -737,6 +787,10 @@ bool AGFPlayerState::ServerHandleEdit(const FIntVector& Cell, FName BlockId, FSt
 			{
 				Inventory->RemoveItem(ItemForBlock(BlockId), 1);
 			}
+		}
+		if (AGFGameState* GS = GetGFGameState())
+		{
+			GS->OnPlayerVoxelEdit.Broadcast(this, Cell, BlockId);
 		}
 	}
 	else

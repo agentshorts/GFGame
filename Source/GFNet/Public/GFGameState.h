@@ -28,6 +28,10 @@ enum class EGFOverworldEdit : uint8
 DECLARE_DELEGATE_RetVal_TwoParams(EGFOverworldEdit, FGFOverworldEditQuery, FName /*FactionId*/, const FVector& /*World*/);
 /** Server: ServerClaimFaction succeeded (FactionId None means they left). Social records jail claim order from this. */
 DECLARE_MULTICAST_DELEGATE_TwoParams(FGFOnFactionChanged, AGFPlayerState* /*Player*/, FName /*FactionId*/);
+/** A player place or remove made it into the grid. Magic treats a non-empty BlockId as spell-proof. */
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FGFOnPlayerVoxelEdit, AGFPlayerState* /*By*/, FIntVector /*Cell*/, FName /*BlockId*/);
+/** A blueprint landed. Min and Max are both inclusive. */
+DECLARE_MULTICAST_DELEGATE_TwoParams(FGFOnBlueprintStamped, FIntVector /*Min*/, FIntVector /*Max*/);
 
 /** Server only: a pack-up waiting for the guest to confirm they stored the blueprint. */
 struct FGFPendingPackUp
@@ -240,6 +244,10 @@ public:
 	TMap<FString, FName> SessionFactions;
 	/** Server only. Fired after a successful claim, including leaving (None). */
 	FGFOnFactionChanged OnFactionChanged;
+	/** Server only. A player edit landed. Magic listens so built cells stay spell-proof. */
+	FGFOnPlayerVoxelEdit OnPlayerVoxelEdit;
+	/** Server only. ApplyBlueprint wrote a region. */
+	FGFOnBlueprintStamped OnBlueprintStamped;
 
 	// ---------------- Chat ----------------
 	/** All chat, newest last (last MaxChat). */

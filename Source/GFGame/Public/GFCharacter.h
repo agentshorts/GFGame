@@ -15,13 +15,16 @@ class UGFSimpleAnimComponent;
 class UGFFerryRiderComponent;
 class AGFVoxelWorld;
 class UGFCharacterMovementComponent;
+class UGFMagicComponent;
 class USoundBase;
 struct FInputActionValue;
 
 /**
  * The player character. Third-person over the shoulder by default: spring arm 300 cm, socket (0, 60, 20),
  * pitch -20, FOV 90, camera lag 12. V toggles a plain first-person view. Right mouse places a block while a
- * block is selected, and aims otherwise. Shoulder swap is middle mouse. Q still swings the grapple.
+ * block is selected, and aims otherwise. Holding left mouse (or the right trigger) with fists or a block
+ * raises the sparkfield. A short tap still punches, or picks up a spell-proof build. Shoulder swap is middle
+ * mouse. Q still swings the grapple. C calls the claw, R swaps Spark and the faction element, T overcharges.
  * Shift sprints, Ctrl dashes, E yanks. Space can hop three times before landing. MaxWalkSpeed stays the base run.
  * Input assets are optional: if none are assigned, a default mapping is built in C++ at runtime.
  */
@@ -125,6 +128,9 @@ public:
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> GrappleSwingAction;
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> GrappleYankAction;
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> ShoulderSwapAction;
+	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> ClawAction;
+	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> ToggleElementAction;
+	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> OverchargeAction;
 
 	UFUNCTION(Server, Reliable)
 	void ServerApplyAimDamage(AActor* Target, float Damage, bool bFists);
@@ -140,6 +146,9 @@ protected:
 
 	void BuildDefaultInput();
 	AGFVoxelWorld* FindVoxelWorld() const;
+	UGFMagicComponent* FindMagic() const;
+	void SendMagicAim();
+	bool AimedCellNeedsHands() const;
 	bool TraceCameraAim(FHitResult& OutHit, FVector& OutAimPoint) const;
 	bool TraceBlock(FHitResult& OutHit) const;
 	FVector AimMuzzleLocation() const;
@@ -151,6 +160,10 @@ protected:
 	void OnPlace(const FInputActionValue& Value);
 	void OnPlaceReleased(const FInputActionValue& Value);
 	void OnRemove(const FInputActionValue& Value);
+	void OnRemoveReleased(const FInputActionValue& Value);
+	void OnClaw(const FInputActionValue& Value);
+	void OnToggleElement(const FInputActionValue& Value);
+	void OnOvercharge(const FInputActionValue& Value);
 	void OnHotbar(const FInputActionValue& Value);
 	void OnSprint(const FInputActionValue& Value);
 	void OnSprintStopped(const FInputActionValue& Value);
@@ -178,6 +191,9 @@ protected:
 	bool bFistPose = false;
 	/** True only after Fist_Scope actually replaced locomotion, so a missing clip does not pause the walk. */
 	bool bFistClipHeld = false;
+	bool bMagicHeld = false;
+	float MagicPressSeconds = 0.f;
+	float MagicAimElapsed = 0.f;
 	bool bFistScopeSoundSearched = false;
 	int32 AimProfileRevision = INDEX_NONE;
 	TWeakObjectPtr<USoundBase> FistScopeSound;

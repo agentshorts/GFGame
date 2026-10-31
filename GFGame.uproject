@@ -21,10 +21,12 @@
 		{ "Name": "GFLab", "Type": "Runtime", "LoadingPhase": "Default" },
 		{ "Name": "GFGiant", "Type": "Runtime", "LoadingPhase": "Default" },
 		{ "Name": "GFSocial", "Type": "Runtime", "LoadingPhase": "Default" },
+		{ "Name": "GFMagic", "Type": "Runtime", "LoadingPhase": "Default" },
 		{ "Name": "GFTests", "Type": "Editor", "LoadingPhase": "Default" }
 	],
 	"Plugins": [
 		{ "Name": "EnhancedInput", "Enabled": true },
+		{ "Name": "GameplayAbilities", "Enabled": true },
 		{ "Name": "StateTree", "Enabled": true },
 		{ "Name": "GameplayStateTree", "Enabled": true },
 		{ "Name": "CommonUI", "Enabled": true },
