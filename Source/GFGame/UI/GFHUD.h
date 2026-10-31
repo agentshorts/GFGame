@@ -60,7 +60,7 @@ private:
 	void DrawBeatHopSession();
 	/** Pebble Mine (#216): verb prompts while the local pawn is on the mine pad. */
 	void DrawMineSession();
-	/** Fashion runway: theme, look, start, finish and the score, while the local pawn is on the site. */
+	/** Fashion runway: step list (current step highlighted) and the score, while the local pawn is on the site. */
 	void DrawRunwaySession();
 	/** Arena greybox: bout prompts while the local pawn is on the arena pad. */
 	void DrawArenaSession();

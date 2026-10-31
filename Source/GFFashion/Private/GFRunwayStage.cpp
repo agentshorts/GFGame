@@ -55,7 +55,9 @@ void AGFRunwayStage::EnsurePlayableSite()
 		FActorSpawnParameters Params;
 		Params.Owner = this;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		Site = World->SpawnActor<AGFRunwaySite>(AGFRunwaySite::StaticClass(), FTransform(GetActorLocation()), Params);
+		// Face with the stage. A site left on world +X hides the start arch when this actor is turned.
+		const FTransform StageXf(GetActorRotation(), GetActorLocation());
+		Site = World->SpawnActor<AGFRunwaySite>(AGFRunwaySite::StaticClass(), StageXf, Params);
 	}
 	if (!Site)
 	{
@@ -63,9 +65,9 @@ void AGFRunwayStage::EnsurePlayableSite()
 	}
 	if (bNew)
 	{
-		UE_LOG(LogGF, Log, TEXT("Runway: playable site on the stage (start, finish, results, hub)"));
+		UE_LOG(LogGF, Log, TEXT("Runway: playable site on the stage (wardrobe, labelled start arch, finish, hub)"));
 	}
-	Site->SetActorLocation(GetActorLocation());
+	Site->SetActorLocationAndRotation(GetActorLocation(), GetActorRotation());
 	Site->BuildIfNeeded();
 }
 

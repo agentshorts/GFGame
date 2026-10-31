@@ -70,6 +70,27 @@ namespace GFFashionPlayableTests
 	{
 		return Box && Box->GetGenerateOverlapEvents() && Box->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Overlap;
 	}
+
+	static FString JoinLines(const TArray<FString>& Lines)
+	{
+		FString Joined;
+		for (const FString& Line : Lines)
+		{
+			Joined += Line;
+			Joined += TEXT("\n");
+		}
+		return Joined;
+	}
+
+	static int32 CountCurrentSteps(const TArray<FString>& Lines)
+	{
+		int32 N = 0;
+		for (const FString& Line : Lines)
+		{
+			N += Line.StartsWith(TEXT("> ")) ? 1 : 0;
+		}
+		return N;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFFashionSiteOnMapTest, "GFGame.Fashion.Playable.SiteOnMap", GFFashionPlayableTests::Flags)
@@ -124,6 +145,10 @@ bool FGFFashionSiteOnMapTest::RunTest(const FString&)
 	TestEqual(TEXT("Stage timers stay at the show defaults until Start"), Stage->DressingSeconds, 75.f);
 	TestEqual(TEXT("Default theme"), Site->GetSelectedTheme().ToString(), FString(TEXT("GardenParty")));
 	TestEqual(TEXT("Default look"), Site->GetSelectedLook().ToString(), FString(TEXT("Garden")));
+	TestFalse(TEXT("Suggested theme is not chosen yet"), Site->HasChosenTheme());
+	TestFalse(TEXT("Suggested look is not worn yet"), Site->HasChosenLook());
+	TestEqual(TEXT("Start arch asks for a theme"), Site->GetStartCue(), FString(TEXT("Pick a theme first")));
+	TestTrue(TEXT("Wardrobe names both starter looks"), Site->GetWearingCue().Contains(TEXT("Garden")) && Site->GetWearingCue().Contains(TEXT("Explorer")));
 
 	const FName Verbs[] = { TEXT("Start"), TEXT("Finish"), TEXT("Return") };
 	for (const FName Verb : Verbs)
@@ -143,6 +168,11 @@ bool FGFFashionSiteOnMapTest::RunTest(const FString&)
 		TestTrue(TEXT("Start is down the catwalk from the map sign"), Start->GetComponentLocation().X > -500.f);
 		TestTrue(TEXT("Finish is past Start"), Finish->GetComponentLocation().X > Start->GetComponentLocation().X);
 		TestTrue(TEXT("Hub arch is past Finish"), Return->GetComponentLocation().X > Finish->GetComponentLocation().X);
+		UBoxComponent* GardenSpot = Site->GetLookTrigger(TEXT("Garden"));
+		if (TestNotNull(TEXT("Garden spot"), GardenSpot))
+		{
+			TestTrue(TEXT("Wardrobe is before the start arch"), GardenSpot->GetComponentLocation().X < Start->GetComponentLocation().X);
+		}
 	}
 
 	TArray<FString> Lines;
@@ -158,6 +188,8 @@ bool FGFFashionSiteOnMapTest::RunTest(const FString&)
 	{
 		TestTrue(*FString::Printf(TEXT("Prompt names %s"), Word), Joined.Contains(Word));
 	}
+	TestTrue(TEXT("Prompt highlights the theme step"), Joined.Contains(TEXT("> Pick a theme.")));
+	TestTrue(TEXT("Prompt says to pick a look"), Joined.Contains(TEXT("Pick a look first")));
 
 	AGFMiniGameGate* Sign = nullptr;
 	for (TActorIterator<AGFMiniGameGate> It(W.World); It; ++It)
@@ -295,6 +327,165 @@ bool FGFFashionPlayableLoopTest::RunTest(const FString&)
 	TestEqual(TEXT("Back to the hub map"), Travelled, FGFMiniGameCatalog::HubMap().ToString());
 	TestTrue(TEXT("Hub arch again does not travel twice"), Site->TryReturn(Pawn));
 	TestEqual(TEXT("Still one travel"), TravelCount, 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFFashionDiscoverTest, "GFGame.Fashion.Playable.Discover", GFFashionPlayableTests::Flags)
+bool FGFFashionDiscoverTest::RunTest(const FString&)
+{
+	using namespace GFFashionPlayableTests;
+	FRunwayWorld W(TEXT("GFFashionDiscoverWorld"));
+	if (!TestNotNull(TEXT("World"), W.World))
+	{
+		return false;
+	}
+	AGFGameState* GS = W.World->SpawnActor<AGFGameState>();
+	if (!TestNotNull(TEXT("Game state"), GS))
+	{
+		return false;
+	}
+	W.World->SetGameState(GS);
+
+	AGFHubGateDirector* Director = W.World->SpawnActor<AGFHubGateDirector>();
+	if (!TestNotNull(TEXT("Director"), Director))
+	{
+		return false;
+	}
+	Director->Place(TEXT("/Game/Maps/L_Runway"), FVector::ZeroVector);
+
+	AGFRunwayStage* Stage = AGFRunwayStage::Find(W.World);
+	AGFRunwaySite* Site = AGFRunwaySite::Get(W.World);
+	if (!TestNotNull(TEXT("Stage"), Stage) || !TestNotNull(TEXT("Site"), Site))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AGFPlayerState* PS = W.World->SpawnActor<AGFPlayerState>(AGFPlayerState::StaticClass(), FTransform::Identity, Params);
+	const FVector Stand = Site->GetActorTransform().TransformPosition(FVector(80.f, 0.f, 140.f));
+	ACharacter* Pawn = W.World->SpawnActor<ACharacter>(ACharacter::StaticClass(), FTransform(Stand), Params);
+	if (!TestNotNull(TEXT("Player"), PS) || !TestNotNull(TEXT("Pawn"), Pawn) || !TestNotNull(TEXT("Inventory"), PS->Inventory.Get()))
+	{
+		return false;
+	}
+	PS->PlayerKey = TEXT("Fresh");
+	PS->SetPlayerId(4);
+	PS->bCharacterReady = true;
+	GS->AddPlayerState(PS);
+	Pawn->SetPlayerState(PS);
+
+	// No test kit and no crafted pieces. The wardrobe lends a catalog look.
+	TestEqual(TEXT("Bag starts empty"), PS->Inventory->GetInventory().Items.Num(), 0);
+	TestEqual(TEXT("Nothing has been granted"), PS->Inventory->GetRevision(), 0);
+	TestTrue(TEXT("Dressing end is inside the runway HUD"), Site->IsPlayerNear(Pawn));
+	Pawn->SetActorLocation(Site->GetActorLocation() + FVector(8000.f, 0.f, 140.f));
+	TestFalse(TEXT("The hint stays near the runway"), Site->IsPlayerNear(Pawn));
+	Pawn->SetActorLocation(Stand);
+
+	Site->ResultsSeconds = 10000.f;
+	Site->SetTravelOverride([](const FString&) {});
+
+	TArray<FString> IdleLines;
+	Site->GetPromptLines(PS, IdleLines);
+	const FString Idle = JoinLines(IdleLines);
+	TestEqual(TEXT("One current step at arrival"), CountCurrentSteps(IdleLines), 1);
+	TestTrue(TEXT("Arrival step is the theme"), Idle.Contains(TEXT("> Pick a theme.")));
+	TestTrue(TEXT("Arrival explains the empty closet"), Idle.Contains(TEXT("Pick a look first")));
+	TestEqual(TEXT("Arch asks for a theme"), Site->GetStartCue(), FString(TEXT("Pick a theme first")));
+
+	TestFalse(TEXT("Start before a theme"), Site->TryStart(Pawn));
+	TestTrue(TEXT("Show stays idle"), Stage->GetPhase() == EGFRunwayPhase::Idle);
+	TestTrue(TEXT("Refused start names the theme"), Site->LastPrompt.Contains(TEXT("Pick a theme first")));
+
+	if (!TestTrue(TEXT("Pick Garden Party"), Site->TrySelectTheme(Pawn, TEXT("GardenParty"))))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Theme sticks"), Site->HasChosenTheme());
+	TArray<FString> ThemedLines;
+	Site->GetPromptLines(PS, ThemedLines);
+	const FString Themed = JoinLines(ThemedLines);
+	TestNotEqual(TEXT("Prompt changes after the theme"), Themed, Idle);
+	TestEqual(TEXT("Still one current step"), CountCurrentSteps(ThemedLines), 1);
+	TestTrue(TEXT("Next step is the wardrobe"), Themed.Contains(TEXT("> Pick a look on the wardrobe.")));
+	TestFalse(TEXT("Theme is no longer the current step"), Themed.Contains(TEXT("> Pick a theme.")));
+	TestEqual(TEXT("Arch asks for a look"), Site->GetStartCue(), FString(TEXT("Pick a look first")));
+
+	TestFalse(TEXT("Start before a look"), Site->TryStart(Pawn));
+	TestTrue(TEXT("Show still idle"), Stage->GetPhase() == EGFRunwayPhase::Idle);
+	TestTrue(TEXT("Refused start names the look"), Site->LastPrompt.Contains(TEXT("Pick a look first")));
+	TestEqual(TEXT("Bag still empty"), PS->Inventory->GetInventory().Items.Num(), 0);
+
+	UBoxComponent* GardenSpot = Site->GetLookTrigger(TEXT("Garden"));
+	UBoxComponent* StartSpot = Site->GetVerbTrigger(TEXT("Start"));
+	UBoxComponent* FinishSpot = Site->GetVerbTrigger(TEXT("Finish"));
+	if (!TestNotNull(TEXT("Garden spot"), GardenSpot) || !TestNotNull(TEXT("Start spot"), StartSpot) || !TestNotNull(TEXT("Finish spot"), FinishSpot))
+	{
+		return false;
+	}
+	Pawn->SetActorLocation(GardenSpot->GetComponentLocation());
+	if (!TestTrue(TEXT("Pick Garden from the wardrobe"), Site->TrySelectLook(Pawn, TEXT("Garden"))))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Look was chosen"), Site->HasChosenLook());
+	TestTrue(TEXT("Wardrobe says Garden is on"), Site->GetWearingCue().Contains(TEXT("Wearing")) && Site->GetWearingCue().Contains(TEXT("Garden")));
+	TestTrue(TEXT("Grant lists the pieces"), Site->LastPrompt.Contains(TEXT("Granted")) && Site->LastPrompt.Contains(TEXT("Petal Blouse")));
+	TestEqual(TEXT("Wardrobe did not fill the bag"), PS->Inventory->GetInventory().Items.Num(), 0);
+	TestEqual(TEXT("Arch can start the show"), Site->GetStartCue(), FString(TEXT("Walk through to start the show")));
+
+	TArray<FString> DressedLines;
+	Site->GetPromptLines(PS, DressedLines);
+	const FString Dressed = JoinLines(DressedLines);
+	TestNotEqual(TEXT("Prompt changes after the look"), Dressed, Themed);
+	TestEqual(TEXT("One step after the look"), CountCurrentSteps(DressedLines), 1);
+	TestTrue(TEXT("Next step is the start arch"), Dressed.Contains(TEXT("> Walk through the Start arch.")));
+	TestFalse(TEXT("Look is no longer the missing step"), Dressed.Contains(TEXT("Pick a look first")));
+
+	Pawn->SetActorLocation(StartSpot->GetComponentLocation());
+	if (!TestTrue(TEXT("Walk the start arch"), Site->TryStart(Pawn)))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Dressing"), Stage->GetPhase() == EGFRunwayPhase::Dressing);
+	TestEqual(TEXT("Playable dressing is short"), Stage->DressingSeconds, AGFRunwaySite::PlayDressingSeconds);
+	const FGFRunwayContestant* Contestant = Stage->FindContestant(TEXT("Fresh"));
+	if (!TestNotNull(TEXT("Contestant"), Contestant))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Starter look is five pieces"), Contestant->Outfit.NumFilled(), 5);
+	TestEqual(TEXT("Still no kit in the bag"), PS->Inventory->GetInventory().Items.Num(), 0);
+	TestEqual(TEXT("Arch points at the finish"), Site->GetStartCue(), FString(TEXT("Show is on. Walk to Finish.")));
+
+	TArray<FString> WalkLines;
+	Site->GetPromptLines(PS, WalkLines);
+	const FString Walk = JoinLines(WalkLines);
+	TestNotEqual(TEXT("Prompt changes once the show is on"), Walk, Dressed);
+	TestTrue(TEXT("Walk to the finish"), Walk.Contains(TEXT("> Walk to the Finish arch.")));
+
+	Pawn->SetActorLocation(FinishSpot->GetComponentLocation());
+	if (!TestTrue(TEXT("Walk the finish arch"), Site->TryFinish(Pawn)))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Results"), Stage->GetPhase() == EGFRunwayPhase::Results);
+	const FGFRunwayContestant* Scored = Stage->FindContestant(TEXT("Fresh"));
+	if (!TestNotNull(TEXT("Scored"), Scored))
+	{
+		return false;
+	}
+	TestEqual(TEXT("On-theme"), Scored->Score.Theme, 10.f);
+	TestTrue(TEXT("A lent look still earns a purse"), Scored->Rewards.Num() > 0);
+	TestEqual(TEXT("Purse paid once"), Stage->GetPendingRewards().Num(), 0);
+
+	TArray<FString> ResultLines;
+	Site->GetPromptLines(PS, ResultLines);
+	const FString Results = JoinLines(ResultLines);
+	TestNotEqual(TEXT("Prompt changes at the scores"), Results, Walk);
+	TestTrue(TEXT("Results name the player"), Results.Contains(TEXT("Fresh")));
+	TestTrue(TEXT("Results name the Hub"), Results.Contains(TEXT("Hub")));
 	return true;
 }
 

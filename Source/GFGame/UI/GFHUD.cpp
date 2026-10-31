@@ -1038,11 +1038,14 @@ void AGFHUD::DrawRunwaySession()
 	const float Top = 12.f * Scale;
 	DrawRect(FLinearColor(0.18f, 0.08f, 0.12f, 0.72f), X, Top, W + Pad * 2.f, H);
 	const FLinearColor Gold(1.f, 0.82f, 0.55f);
+	const FLinearColor Step(1.f, 0.97f, 0.86f);
 	const FLinearColor Soft(0.95f, 0.88f, 0.90f);
 	float Y = Top + Pad;
 	for (int32 i = 0; i < Prompt.Num(); ++i)
 	{
-		const FLinearColor Tint = (i == 0) ? Gold : Soft;
+		// "> " is the step to do next. The empty-closet line stays bright until a look is chosen.
+		const bool bCurrent = Prompt[i].StartsWith(TEXT(">")) || Prompt[i].Contains(TEXT("Pick a look first"));
+		const FLinearColor Tint = (i == 0) ? Gold : (bCurrent ? Step : Soft);
 		DrawText(Prompt[i], Tint, X + Pad, Y, Font, Scale, false);
 		Y += LineH;
 	}

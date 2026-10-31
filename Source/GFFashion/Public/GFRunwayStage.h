@@ -91,8 +91,10 @@ public:
 	static AGFRunwayStage* Find(const UWorld* World);
 
 	/**
-	 * Spawns the greybox runway (theme, look, start, finish, hub) on this stage.
-	 * The hub director calls this when the world is L_Runway. Safe to call again.
+	 * Spawns the greybox runway on this stage: theme spots, the wardrobe rack, and the
+	 * start, finish and hub arches. The site faces with this stage, so the start arch
+	 * sits down the catwalk from the dressing end. The hub director calls this when the
+	 * world is L_Runway. Safe to call again.
 	 */
 	void EnsurePlayableSite();
 
