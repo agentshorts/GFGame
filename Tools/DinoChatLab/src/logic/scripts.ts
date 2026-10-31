@@ -98,11 +98,11 @@ export function riveSource(persona: Persona): string {
   return raw && raw.length > 0 ? raw : compileRiveScript(persona);
 }
 
-/** RiveScript treats {word} as a tag. The game token is restored after the reply. */
+/** RiveScript treats {word} as a tag. The game tokens are restored after the reply. */
 export function shieldTargetToken(script: string): string {
-  return script.replaceAll("{Target}", "TARGETTOKEN");
+  return script.replaceAll("{Target}", "TARGETTOKEN").replaceAll("{Dragger}", "DRAGGERTOKEN");
 }
 
 export function restoreTargetToken(text: string): string {
-  return text.replaceAll("TARGETTOKEN", "{Target}");
+  return text.replaceAll("TARGETTOKEN", "{Target}").replaceAll("DRAGGERTOKEN", "{Dragger}");
 }

@@ -8,6 +8,7 @@ import { createRiveScriptEngine } from "../src/engines/rivescriptEngine";
 import { createWebLlmEngine } from "../src/engines/webllmEngine";
 import type { EngineRequest } from "../src/engines/types";
 import { parsePersona } from "../src/logic/persona";
+import { fillTarget } from "../src/logic/fillTarget";
 import { presentReply } from "../src/logic/present";
 import type { Persona } from "../src/logic/types";
 
@@ -43,6 +44,17 @@ describe("classic engines", () => {
         expect(reply.text, `${engine.id} ${utterance}`).toBe(expected);
       }
     }
+  });
+
+  it("hands {Dragger} back so the line can name who set the target up", async () => {
+    const custom: Persona = {
+      ...grumble,
+      id: "dragger-rive",
+      cues: [{ keywords: ["handoff"], replies: ["Thanks, {Dragger}."] }],
+    };
+    const reply = await createRiveScriptEngine().reply(request(custom, "handoff"));
+    expect(reply.text).toBe("Thanks, {Dragger}.");
+    expect(fillTarget(reply.text, "Pip", "Rex")).toBe("Thanks, Rex.");
   });
 
   it("lets Tusksaw beg in the lab sentence", async () => {

@@ -50,6 +50,11 @@ function otherNames(input: DecisionInput): string[] {
   return held(input.inventory).filter((stack) => !ids.has(stack.id)).map((stack) => stack.name);
 }
 
+/** The material the speech hint names: a smelled want, otherwise some other carried good. */
+export function hintItem(input: DecisionInput): string {
+  return wantedNames(input)[0] ?? otherNames(input)[0] ?? "";
+}
+
 export function speechHint(intent: Intent, itemName: string): string {
   const item = itemName.trim();
   switch (intent) {

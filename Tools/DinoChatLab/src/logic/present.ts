@@ -35,11 +35,13 @@ export interface PresentedReply {
 
 export function presentReply(engineText: string, options: {
   playerName: string;
+  draggerName?: string;
   maxReplyLength: number;
   maxTokens: number;
 }): PresentedReply {
   const raw = engineText.trim();
-  const filled = fillTarget(raw, options.playerName);
+  const dragger = options.draggerName ?? "";
+  const filled = fillTarget(raw, options.playerName, dragger);
   const filtered = filterOutput(filled);
   const budget = replyCharBudget(options.maxReplyLength, options.maxTokens);
   const text = clipText(filtered.text, budget);
@@ -51,7 +53,7 @@ export function presentReply(engineText: string, options: {
     filtered: filtered.filtered,
     replacements: filtered.replacements,
     decisions: [
-      fillTargetDecision(raw, filled, options.playerName),
+      fillTargetDecision(raw, filled, options.playerName, dragger),
       filterDecision(filtered),
       {
         stage: "present",

@@ -13,7 +13,6 @@ import {
   DINOBOOK_EVENTS,
   LAB_TREE,
   LAB_FACTORIES,
-  loadCorePort,
   runDinobookEvent,
   seedWageCards,
   type AllChatLine,
@@ -24,6 +23,7 @@ import {
   type Skip,
   type WageCard,
 } from "./index";
+import { bindPort, unboundPort } from "./portGate";
 
 const personas = loadBundledPersonas();
 const roster = personas.map((persona) => ({
@@ -33,7 +33,9 @@ const roster = personas.map((persona) => ({
   color: persona.color,
 }));
 
-const core = ref<DinobookCorePort>(createLocalCore());
+const binding = unboundPort();
+const core = ref<DinobookCorePort | null>(null);
+const portReady = ref(false);
 const playerName = defineModel<string>("playerName", { default: "" });
 const { enabled: tracesOn, byId: traceById } = useTrace();
 const familyId = ref(LAB_TREE.families[0]?.familyId ?? "swamp");
@@ -81,10 +83,17 @@ function familyName(id: string | null): string {
   return LAB_TREE.families.find((family) => family.familyId === id)?.name ?? id;
 }
 
+function boundCore(): DinobookCorePort | null {
+  if (!portReady.value) return null;
+  return core.value;
+}
+
 function syncBriefs() {
-  briefs.value = core.value.briefs(playerName.value);
+  const bound = boundCore();
+  if (!bound) return;
+  briefs.value = bound.briefs(playerName.value);
   const shifts = shiftPay.value;
-  wages.value = core.value.wages(playerName.value).map((card) => {
+  wages.value = bound.wages(playerName.value).map((card) => {
     const saved = shifts[card.dinoId];
     return saved === undefined ? card : { ...card, shiftPay: saved };
   });
@@ -92,12 +101,20 @@ function syncBriefs() {
 
 watch(playerName, () => syncBriefs());
 
-const ledgerLocked = computed(() => core.value.source === "src/core");
+const ledgerLocked = computed(() => !portReady.value || core.value?.source === "src/core");
+const coreNote = computed(() => {
+  const bound = boundCore();
+  if (!bound) return "";
+  return bound.source === "src/core"
+    ? "The core is the only record. Seed lab crew writes the demo. Payday uses creditWages. Lifetime only goes up."
+    : "No src/core in this build.";
+});
 
 function setNumber(brief: FamilyBrief, field: keyof FamilyBrief, raw: string) {
-  if (ledgerLocked.value) return;
+  const bound = boundCore();
+  if (!bound || bound.source === "src/core") return;
   const value = Number(raw);
-  core.value.setBrief(playerName.value, { ...brief, [field]: Number.isFinite(value) ? value : 0 });
+  bound.setBrief(playerName.value, { ...brief, [field]: Number.isFinite(value) ? value : 0 });
   syncBriefs();
 }
 
@@ -111,7 +128,9 @@ function setShift(card: WageCard, raw: string) {
 }
 
 function setFactory(card: WageCard, factoryId: string) {
-  core.value.setWage(playerName.value, {
+  const bound = boundCore();
+  if (!bound) return;
+  bound.setWage(playerName.value, {
     ...card,
     factoryId,
     shiftPay: shiftPay.value[card.dinoId] ?? card.shiftPay,
@@ -120,7 +139,9 @@ function setFactory(card: WageCard, factoryId: string) {
 }
 
 function setEmployment(card: WageCard, raw: string) {
-  core.value.setWage(playerName.value, {
+  const bound = boundCore();
+  if (!bound) return;
+  bound.setWage(playerName.value, {
     ...card,
     employment: raw === "rented" ? "rented" : "tamed",
     shiftPay: shiftPay.value[card.dinoId] ?? card.shiftPay,
@@ -129,7 +150,9 @@ function setEmployment(card: WageCard, raw: string) {
 }
 
 function seedCrew() {
-  core.value.seedLabCrew(playerName.value);
+  const bound = boundCore();
+  if (!bound) return;
+  bound.seedLabCrew(playerName.value);
   const next = { ...shiftPay.value };
   for (const card of seedWageCards()) next[card.dinoId] = card.shiftPay;
   shiftPay.value = next;
@@ -141,11 +164,12 @@ function dinoName(id: string): string {
 }
 
 async function run(event: DinobookEventId) {
-  if (posting.value) return;
+  const bound = boundCore();
+  if (posting.value || !bound) return;
   posting.value = true;
   try {
   if (event !== "summon-big-grumble" && event !== "payday") {
-    core.value.apply(playerName.value, familyId.value, event);
+    bound.apply(playerName.value, familyId.value, event);
     syncBriefs();
   }
   const earlierPosts = runs.value.flatMap((row) => row.posts);
@@ -187,12 +211,12 @@ async function run(event: DinobookEventId) {
     skipped: result.skipped,
   }];
   for (const [dinoId, line] of Object.entries(result.memory)) {
-    core.value.remember(dinoId, line);
+    bound.remember(dinoId, line);
   }
   if (event === "payday") {
-    creditPayday(core.value, playerName.value, wages.value);
+    creditPayday(bound, playerName.value, wages.value);
     for (const post of result.posts) {
-      if (post.role === "mineral-find") core.value.noteMineral(playerName.value, post.authorId);
+      if (post.role === "mineral-find") bound.noteMineral(playerName.value, post.authorId);
     }
     syncBriefs();
   }
@@ -213,8 +237,10 @@ function resetFeed() {
 }
 
 function resetStats() {
+  const bound = boundCore();
+  if (!bound) return;
   shiftPay.value = {};
-  if (core.value.source === "local") core.value = createLocalCore();
+  if (bound.source === "local") core.value = createLocalCore();
   syncBriefs();
 }
 
@@ -234,7 +260,9 @@ function linkLabel(post: DinobookPost): string {
 }
 
 onMounted(async () => {
-  core.value = await loadCorePort();
+  const port = await bindPort(binding);
+  core.value = port;
+  portReady.value = true;
   syncBriefs();
 });
 
@@ -271,7 +299,7 @@ const lastSummary = computed(() => runs.value.at(-1)?.summary ?? "");
             v-for="event in DINOBOOK_EVENTS"
             :key="event.id"
             type="button"
-            :disabled="posting"
+            :disabled="posting || !portReady"
             @click="run(event.id)"
           >
             {{ event.label }}
@@ -318,7 +346,7 @@ const lastSummary = computed(() => runs.value.at(-1)?.summary ?? "");
 
         <h3>Wages</h3>
         <p class="hint">Payday calls creditWages for the shift. Lifetime is the core total and only goes up. Mate rank is the crew place from mateRank: 1 is first pick. A blank factory means they are looking. Rented and tamed both count.</p>
-        <button type="button" @click="seedCrew">Seed lab crew</button>
+        <button type="button" :disabled="!portReady" @click="seedCrew">Seed lab crew</button>
         <p class="hint" v-if="wages.length === 0">No payroll in the core yet.</p>
         <div v-for="card in wages" :key="card.dinoId" class="stat-card">
           <p class="who">{{ dinoName(card.dinoId) }} · mate rank {{ card.mateRank }}</p>
@@ -357,9 +385,9 @@ const lastSummary = computed(() => runs.value.at(-1)?.summary ?? "");
         </div>
         <div class="row">
           <button type="button" @click="resetFeed">Clear feed</button>
-          <button type="button" @click="resetStats">Reset stats</button>
+          <button type="button" :disabled="!portReady" @click="resetStats">Reset stats</button>
         </div>
-        <p class="hint">Rep bands come from REP_BAND_THRESHOLDS: friendly at 20, wary at -8, hostile at -40. {{ core.source === "src/core" ? "The core is the only record. Seed lab crew writes the demo. Payday uses creditWages. Lifetime only goes up." : "No src/core in this build." }}</p>
+        <p class="hint">Rep bands come from REP_BAND_THRESHOLDS: friendly at 20, wary at -8, hostile at -40. {{ coreNote }}</p>
       </div>
 
       <div class="book-feed">

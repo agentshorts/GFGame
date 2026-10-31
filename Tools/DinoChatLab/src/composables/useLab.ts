@@ -5,7 +5,7 @@ import { ENGINE_CHOICES } from "../engines/types";
 import type { WebLlmCompletion } from "../engines/types";
 import { createBrowserWebLlm, detectWebGpu, modelChoice } from "../engines/webllmBrowser";
 import type { LoadProgress } from "../engines/webllmBrowser";
-import { alignmentDecision, decide, DEFAULT_SMELL_FT, type Decision, type DecisionInput } from "../logic/alignment";
+import { alignmentDecision, decide, DEFAULT_SMELL_FT, hintItem, type Decision, type DecisionInput } from "../logic/alignment";
 import { contextBlob, type ContextState } from "../logic/context";
 import {
   applyAffinity,
@@ -42,6 +42,7 @@ import {
   type StatKind,
   type InterestThresholds,
 } from "../core/types";
+import { revokeObjectUrlLater } from "../logic/download";
 import { clampChatText, presentReply } from "../logic/present";
 import { buildSystemPrompt, buildWebLlmMessages } from "../logic/prompt";
 import {
@@ -58,6 +59,7 @@ import {
   describeWorld,
   parseModelSteer,
   pickSteer,
+  reconcileSteeredDecision,
   steerDecision,
 } from "../logic/steer";
 import {
@@ -130,7 +132,8 @@ export function useLab() {
   const loadedModelId = ref<string | null>(null);
   const fromCache = ref(false);
   const lastStats = ref<ReplyStats | null>(null);
-  const steerWithModel = ref(true);
+  /** Off until the lab opts in. A loaded model is slow, and it can disagree with the rule intent. */
+  const steerWithModel = ref(false);
   const rephraseWithModel = ref(false);
 
   const lineEngines = ENGINE_CHOICES.filter((choice) => !choice.needsModel);
@@ -631,7 +634,13 @@ export function useLab() {
     }
     const steered = await maybeSteer(persona, decision, window, rel.summary);
     window = steered.window;
-    const finalDecision = { ...decision, intent: steered.intent };
+    const finalDecision = reconcileSteeredDecision(
+      decision,
+      steered.intent,
+      steered.note,
+      hintItem(worldInput),
+    );
+    metadata.intent = finalDecision.intent;
     const steer = pickSteer({
       mode: mode.value,
       speaker: heard.speaker,
@@ -849,9 +858,9 @@ export function useLab() {
       engine: engineId.value,
       mode: mode.value,
       stats,
-      intent: steered.intent,
-      reasons: [plan.reason, ...decision.reasons],
-      speechHint: decision.speechHint,
+      intent: finalDecision.intent,
+      reasons: [plan.reason, ...finalDecision.reasons],
+      speechHint: finalDecision.speechHint,
       steer: asking
         ? "Elder quotes the player record."
         : [steer.reason, steered.note].filter((part) => part.length > 0).join(" "),
@@ -978,7 +987,7 @@ export function useLab() {
     link.href = url;
     link.download = "dino-chat-lab-transcript.json";
     link.click();
-    URL.revokeObjectURL(url);
+    revokeObjectUrlLater(url);
   }
 
   async function loadModel() {
