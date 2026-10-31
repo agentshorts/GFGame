@@ -350,6 +350,7 @@ bool UGFMagicComponent::AuthorityClaw()
 	const float Cost = Spell ? Spell->ChargeCost : 20.f;
 	if (ClawCharges <= 0 || CrystalCharge < Cost)
 	{
+		UE_LOG(LogGF, Verbose, TEXT("Magic: claw refused, charges %d crystal %.1f cost %.1f"), ClawCharges, CrystalCharge, Cost);
 		return false;
 	}
 	--ClawCharges;
@@ -366,6 +367,14 @@ bool UGFMagicComponent::AuthorityClaw()
 		{
 			Sub->CastClaw(this);
 		}
+		else
+		{
+			UE_LOG(LogGF, Verbose, TEXT("Magic: claw has no integrity subsystem"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogGF, Verbose, TEXT("Magic: claw has no world"));
 	}
 	if (AActor* Owner = GetOwner())
 	{

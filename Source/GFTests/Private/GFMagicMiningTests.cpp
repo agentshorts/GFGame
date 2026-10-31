@@ -157,13 +157,22 @@ bool FGFMagicFactionFieldTest::RunTest(const FString&)
 	TestEqual(TEXT("Raptor"), FGFMagicRules::ClawForm(TEXT("Rime")), FName(TEXT("Raptor")));
 
 	FGrid Grid;
-	Grid.Blocks.Add(FIntVector(0, 0, 0), TEXT("Stone"));
+	Grid.Blocks.Add(FIntVector(0, 0, 0), TEXT("OreMetal"));
 	TMap<FIntVector, FMagicWound> Wounds;
-	const FMagicHitOutput Smelt = FGFMagicRules::Apply(Wounds, Hit({ FIntVector(0, 0, 0) }, EGFMagicElement::Magma, 1.f), Grid.View());
-	if (TestTrue(TEXT("Magma breaks stone in one long tick"), Broke(Smelt, FIntVector(0, 0, 0))))
+	// Hardness 2.5 is 250 integrity. Magma is 2x, so two seconds of the field clears it.
+	const FMagicHitOutput Smelt = FGFMagicRules::Apply(Wounds, Hit({ FIntVector(0, 0, 0) }, EGFMagicElement::Magma, 2.f), Grid.View());
+	if (TestTrue(TEXT("Magma breaks metal ore in one long tick"), Broke(Smelt, FIntVector(0, 0, 0))))
 	{
 		TestEqual(TEXT("The drop is metal, not stone"), Smelt.Breaks[0].DropItem, FName(TEXT("Metal")));
 		TestEqual(TEXT("One drop"), Smelt.Breaks[0].DropCount, 1);
+	}
+	FGrid Plain;
+	Plain.Blocks.Add(FIntVector(1, 0, 0), TEXT("Stone"));
+	TMap<FIntVector, FMagicWound> PlainWounds;
+	const FMagicHitOutput StoneHit = FGFMagicRules::Apply(PlainWounds, Hit({ FIntVector(1, 0, 0) }, EGFMagicElement::Magma, 1.f), Plain.View());
+	if (TestTrue(TEXT("Magma still breaks plain stone"), Broke(StoneHit, FIntVector(1, 0, 0))))
+	{
+		TestEqual(TEXT("Plain stone stays stone"), StoneHit.Breaks[0].DropItem, FName(TEXT("Stone")));
 	}
 
 	FGrid Tree;

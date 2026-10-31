@@ -396,7 +396,12 @@ void UGFBlockIntegritySubsystem::ApplyCast(UGFMagicComponent* Caster, FMagicDefe
 			return false;
 		}
 		FString Why;
-		return !PS->CanMineAt(Voxel->CellToWorld(Cell), Cell, Why);
+		const bool bBlocked = !PS->CanMineAt(Voxel->CellToWorld(Cell), Cell, Why);
+		if (bBlocked)
+		{
+			UE_LOG(LogGF, Verbose, TEXT("Magic: %s cannot mine %s (%s)"), *PS->PlayerKey, *Cell.ToString(), *Why);
+		}
+		return bBlocked;
 	};
 	View.Hardness = [](FName Id) { return FGFMagicCatalog::BlockHardness(Id); };
 	View.DropOf = [](FName Id) { return FGFMagicCatalog::BlockDrop(Id); };
@@ -464,8 +469,19 @@ void UGFBlockIntegritySubsystem::Commit(AGFVoxelWorld* Voxel, const FMagicHitOut
 void UGFBlockIntegritySubsystem::CastClaw(UGFMagicComponent* Caster)
 {
 	AGFVoxelWorld* Voxel = FindVoxel();
-	if (!Caster || !Voxel || !Caster->GetOwner() || !Caster->GetOwner()->HasAuthority())
+	if (!Caster)
 	{
+		UE_LOG(LogGF, Verbose, TEXT("Magic: claw cast skipped, no caster"));
+		return;
+	}
+	if (!Voxel)
+	{
+		UE_LOG(LogGF, Verbose, TEXT("Magic: claw cast skipped, no voxel"));
+		return;
+	}
+	if (!Caster->GetOwner() || !Caster->GetOwner()->HasAuthority())
+	{
+		UE_LOG(LogGF, Verbose, TEXT("Magic: claw cast skipped, no authority"));
 		return;
 	}
 	const FGFMiningSpellRow* Spell = FGFMagicCatalog::Spell(TEXT("Clawcall"));
@@ -485,6 +501,8 @@ void UGFBlockIntegritySubsystem::CastClaw(UGFMagicComponent* Caster)
 		return Voxel->GetBlock(Cell);
 	});
 	TArray<FIntVector> Cells = FGFMagicRules::ClawTunnel(Start, Dir, Length, Width, Height);
+	UE_LOG(LogGF, Verbose, TEXT("Magic: claw from %s toward %s starts at %s (%d cells, dir %s)"),
+		*Origin.ToString(), *Aim.ToString(), *Start.ToString(), Cells.Num(), *Dir.ToString());
 	const APawn* Pawn = nullptr;
 	if (const APlayerState* PS = Cast<APlayerState>(Caster->GetOwner()))
 	{

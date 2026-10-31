@@ -322,6 +322,8 @@ FMagicHitOutput FGFMagicRules::Apply(TMap<FIntVector, FMagicWound>& Wounds, cons
 			Break.DropCount = 1 + FMath::Max(0, Request.ExtraDrop) + ((Request.bJackpot && Affinity.bOre) ? 1 : 0);
 		}
 		Out.Breaks.Add(Break);
+		// Contributors were copied onto the break. The wound reference is dead after this.
+		Wounds.Remove(Cell);
 
 		if (Request.Element == EGFMagicElement::Root && Affinity.bTree && View.BlockAt)
 		{

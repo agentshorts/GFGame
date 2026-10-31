@@ -9,6 +9,8 @@
 #include "GFVoxelWorld.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -26,6 +28,26 @@ namespace GFNetMagicTest
 			++Count;
 		}
 		return Count;
+	}
+
+	// CellToWorld sits on the bottom face of a cell. Gravity and a client move drop the capsule off that plane, and the claw tunnel then starts a layer below the aimed line.
+	static void HoldStill(APawn* Pawn)
+	{
+		if (!Pawn)
+		{
+			return;
+		}
+		if (ACharacter* Character = Cast<ACharacter>(Pawn))
+		{
+			if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+			{
+				Move->StopMovementImmediately();
+				Move->Velocity = FVector::ZeroVector;
+				Move->GravityScale = 0.f;
+				Move->DisableMovement();
+				Move->SetComponentTickEnabled(false);
+			}
+		}
 	}
 }
 
@@ -70,7 +92,10 @@ bool FGFNetMagicMiningTest::RunTest(const FString&)
 		APawn* Pawn = OnServer->GetPawn();
 		if (TestNotNull(TEXT("Pawn"), Pawn))
 		{
+			HoldStill(Pawn);
+			HoldStill(Mine->GetPawn());
 			Pawn->SetActorLocation(Grid->CellToWorld(Dirt), false, nullptr, ETeleportType::TeleportPhysics);
+			HoldStill(Pawn);
 		}
 		*DirtBefore = OnServer->Inventory->GetCount(TEXT("Dirt"));
 		if (UGFMagicComponent* Magic = Mine->FindComponentByClass<UGFMagicComponent>())
@@ -149,8 +174,12 @@ bool FGFNetMagicMiningTest::RunTest(const FString&)
 		{
 			Grid->ServerApplyEdit(FIntVector(20 + Step, 8, 12), TEXT("Dirt"));
 		}
-		OnServer->GetPawn()->SetActorLocation(Grid->CellToWorld(FIntVector(19, 8, 12)), false, nullptr, ETeleportType::TeleportPhysics);
-		Magic->SetAim(Grid->CellToWorld(FIntVector(19, 8, 12)), Grid->CellToWorld(FIntVector(25, 8, 12)));
+		const FVector At = Grid->CellToWorld(FIntVector(19, 8, 12));
+		HoldStill(OnServer->GetPawn());
+		HoldStill(Mine->GetPawn());
+		OnServer->GetPawn()->SetActorLocation(At, false, nullptr, ETeleportType::TeleportPhysics);
+		HoldStill(OnServer->GetPawn());
+		Magic->SetAim(At, Grid->CellToWorld(FIntVector(25, 8, 12)));
 	});
 	WaitUntil(Ctx, TEXT("the claw aim arrived with the line still standing"), 5.f, [Key]()
 	{
@@ -174,14 +203,26 @@ bool FGFNetMagicMiningTest::RunTest(const FString&)
 		}
 		return true;
 	});
-	Do(Ctx, []()
+	Do(Ctx, [Key]()
 	{
-		if (AGFPlayerState* Mine = LocalPlayerState(ClientWorlds()[0]))
+		AGFPlayerState* OnServer = PlayerStateByKey(ServerWorld(), *Key);
+		AGFPlayerState* Mine = LocalPlayerState(ClientWorlds()[0]);
+		AGFVoxelWorld* Grid = Voxel(ServerWorld());
+		if (!OnServer || !Mine || !Grid)
 		{
-			if (UGFMagicComponent* Magic = Mine->FindComponentByClass<UGFMagicComponent>())
-			{
-				Magic->RequestClaw();
-			}
+			return;
+		}
+		const FVector At = Grid->CellToWorld(FIntVector(19, 8, 12));
+		HoldStill(OnServer->GetPawn());
+		HoldStill(Mine->GetPawn());
+		if (APawn* Pawn = OnServer->GetPawn())
+		{
+			Pawn->SetActorLocation(At, false, nullptr, ETeleportType::TeleportPhysics);
+			HoldStill(Pawn);
+		}
+		if (UGFMagicComponent* Magic = Mine->FindComponentByClass<UGFMagicComponent>())
+		{
+			Magic->RequestClaw();
 		}
 	});
 	WaitUntil(Ctx, TEXT("the claw cleared the line and the owner saw it"), 8.f, [Key, SawClawRibbon]()
