@@ -1,0 +1,4 @@
+---,ContainSeconds,Weight,Effect,SearchTimeScale,EatInterval,Loot
+RoguePrinterSwarm,4.0,2,JamSearch,1.5,0.0,"((ItemId=""AnomalyShard"",Min=1,Max=1,Chance=0.25),(ItemId=""CircuitInk"",Min=1,Max=1,Chance=0.50),(ItemId=""ScrapWire"",Min=2,Max=3,Chance=0.80))"
+ChairEatingFloor,5.0,2,EatUnbanked,1.0,15.0,"((ItemId=""AnomalyShard"",Min=1,Max=1,Chance=0.25),(ItemId=""PolymerGel"",Min=1,Max=1,Chance=0.45),(ItemId=""BentPipe"",Min=1,Max=2,Chance=0.70))"
+FlickeringServerRoom,4.0,1,HidePile,1.0,0.0,"((ItemId=""AnomalyShard"",Min=1,Max=1,Chance=0.35),(ItemId=""CircuitInk"",Min=1,Max=1,Chance=0.40),(ItemId=""CrackedLens"",Min=1,Max=2,Chance=0.55))"

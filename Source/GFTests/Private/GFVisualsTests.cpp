@@ -8,6 +8,7 @@
 #include "GFCharacter.h"
 #include "GFDino.h"
 #include "GFGiantDino.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/DataTable.h"

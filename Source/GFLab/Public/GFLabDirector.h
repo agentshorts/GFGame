@@ -4,9 +4,11 @@
 // Verbs:
 //   Enter                       start a shift (one per player; friends run their own at the same time)
 //   Search   Ints = [pile]      search a junk pile (takes its SearchSeconds; one at a time)
+//   Contain  Ints = [anomaly]   contain a live anomaly (takes its ContainSeconds; not while searching)
 //   Extract                     walk out before lockdown with everything -> Stacks = what came home
 //   Craft    Names = [recipe]   Lab Bench recipe from DT_Recipes (Station LabBench) -> Stacks = [output]
-// Lockdown (end of overtime) and leaving/dropping mid-shift bank 75 %.
+// Lockdown (end of overtime) and leaving/dropping mid-shift bank 75 %. Anomaly drops sit in Unbanked, so they
+// follow the same rule. Live anomalies get a tinted engine cube (no art, no damage).
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GFLabTypes.h"
@@ -54,5 +56,15 @@ private:
 	AGFGameState* GS() const;
 	TArray<FGFItemStack> EndRun(const FString& Key, EGFLabEnd How);
 	FGFModeResult Craft(AGFPlayerState* By, FName RecipeId);
+	void SyncAnomalyMarkers(const FGFLabRun& Run);
+	void DestroyAnomalyMarkers(const FString& Key);
 	static FName CodeOf(EGFLabOrder O);
+
+	struct FAnomalyMarkerRef
+	{
+		FString Key;
+		int32 Index = INDEX_NONE;
+		TWeakObjectPtr<AActor> Actor;
+	};
+	TArray<FAnomalyMarkerRef> AnomalyMarkers;
 };

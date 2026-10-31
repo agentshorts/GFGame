@@ -1,4 +1,5 @@
 #include "GFLabDirector.h"
+#include "GFLabAnomalyMarker.h"
 #include "GFMiniGameCatalog.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
@@ -77,6 +78,14 @@ void AGFLabDirector::EndPlay(const EEndPlayReason::Type Reason)
 		{
 			G->UnregisterModeHandler(this);
 		}
+		for (const FAnomalyMarkerRef& M : AnomalyMarkers)
+		{
+			if (AActor* Actor = M.Actor.Get())
+			{
+				Actor->Destroy();
+			}
+		}
+		AnomalyMarkers.Reset();
 	}
 	Super::EndPlay(Reason);
 }
@@ -98,7 +107,9 @@ TArray<FGFItemStack> AGFLabDirector::EndRun(const FString& Key, EGFLabEnd How)
 	{
 		return {};
 	}
+	const FString EndedKey = Runs[i].Key;
 	const TArray<FGFItemStack> Home = FGFLabRules::Bank(Runs[i].Unbanked, How);
+	DestroyAnomalyMarkers(EndedKey);
 	Runs.RemoveAt(i);
 	if (Home.Num() > 0)
 	{
@@ -176,6 +187,12 @@ FGFModeResult AGFLabDirector::HandleModeRequest(AGFPlayerState* By, const FGFMod
 		ForceNetUpdate();
 		return O == EGFLabOrder::Ok ? FGFModeResult::Ok() : FGFModeResult::Fail(CodeOf(O));
 	}
+	if (R.Verb == TEXT("Contain"))
+	{
+		const EGFLabOrder O = FGFLabRules::BeginContain(*Run, R.Int(0));
+		ForceNetUpdate();
+		return O == EGFLabOrder::Ok ? FGFModeResult::Ok() : FGFModeResult::Fail(CodeOf(O));
+	}
 	if (R.Verb == TEXT("Extract"))
 	{
 		FGFModeResult Res = FGFModeResult::Ok();
@@ -207,9 +224,85 @@ void AGFLabDirector::Tick(float DeltaSeconds)
 		{
 			Sealed.Add(Run.Key);
 		}
+		SyncAnomalyMarkers(Run);
 	}
 	for (const FString& Key : Sealed)
 	{
 		EndRun(Key, EGFLabEnd::Lockdown);
+	}
+}
+
+void AGFLabDirector::DestroyAnomalyMarkers(const FString& Key)
+{
+	for (int32 i = AnomalyMarkers.Num() - 1; i >= 0; --i)
+	{
+		if (AnomalyMarkers[i].Key != Key)
+		{
+			continue;
+		}
+		if (AActor* Actor = AnomalyMarkers[i].Actor.Get())
+		{
+			Actor->Destroy();
+		}
+		AnomalyMarkers.RemoveAt(i);
+	}
+}
+
+void AGFLabDirector::SyncAnomalyMarkers(const FGFLabRun& Run)
+{
+	UWorld* World = GetWorld();
+	if (!World || !HasAuthority())
+	{
+		return;
+	}
+	for (int32 i = 0; i < Run.Anomalies.Num(); ++i)
+	{
+		int32 Found = INDEX_NONE;
+		for (int32 m = 0; m < AnomalyMarkers.Num(); ++m)
+		{
+			if (AnomalyMarkers[m].Key == Run.Key && AnomalyMarkers[m].Index == i)
+			{
+				Found = m;
+				break;
+			}
+		}
+		const bool bWant = Run.Anomalies[i].bActive;
+		if (!bWant)
+		{
+			if (Found != INDEX_NONE)
+			{
+				if (AActor* Actor = AnomalyMarkers[Found].Actor.Get())
+				{
+					Actor->Destroy();
+				}
+				AnomalyMarkers.RemoveAt(Found);
+			}
+			continue;
+		}
+		if (Found != INDEX_NONE && AnomalyMarkers[Found].Actor.IsValid())
+		{
+			continue;
+		}
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.Owner = this;
+		const FVector Where = GetActorLocation() + FVector(180.f + i * 140.f, 0.f, 40.f);
+		AGFLabAnomalyMarker* Marker = World->SpawnActor<AGFLabAnomalyMarker>(Where, FRotator::ZeroRotator, Params);
+		if (!Marker)
+		{
+			continue;
+		}
+		Marker->Setup(Run.Anomalies[i].Kind);
+		if (Found == INDEX_NONE)
+		{
+			FAnomalyMarkerRef& Ref = AnomalyMarkers.AddDefaulted_GetRef();
+			Ref.Key = Run.Key;
+			Ref.Index = i;
+			Ref.Actor = Marker;
+		}
+		else
+		{
+			AnomalyMarkers[Found].Actor = Marker;
+		}
 	}
 }
