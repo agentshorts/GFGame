@@ -2,7 +2,9 @@
 
 #include "GFFerryDirector.h"
 #include "GFFerryRiderComponent.h"
+#include "GFHubGateDirector.h"
 #include "GFPlayerState.h"
+#include "GFReturnToHub.h"
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -250,6 +252,7 @@ void AGFFerryStand::GetPromptLines(TArray<FString>& OutLines) const
 		Pads += Anchor.ToString();
 	}
 	OutLines.Add(Pads.IsEmpty() ? TEXT("No other safe zone from here.") : FString::Printf(TEXT("Walk a pad: %s."), *Pads));
+	OutLines.Add(TEXT("Walk the HUB pad to the spawn stand. No fare."));
 	OutLines.Add(FString::Printf(TEXT("Lifetime pass: %d %s."), Fare.PassPrice, *Fare.PassMaterialItem.ToString()));
 	if (!LastPrompt.IsEmpty())
 	{
@@ -390,6 +393,26 @@ void AGFFerryStand::BuildVisuals(const TArray<FName>& Ids, const TArray<FName>& 
 	AddBlock(PassAt + FVector(0.f, 0.f, -70.f), FVector(50.f, 50.f, 20.f), Pass, false);
 	AddLabel(TEXT("Pass"), PassAt + FVector(0.f, 0.f, 80.f));
 	AddTrigger(GFFerryStandPrivate::PassPad, PassAt);
+
+	const FVector Home = FGFFerryStandLayout::HomeLocal();
+	const FLinearColor Hub(0.93f, 0.96f, 1.f);
+	AddBlock(Home + FVector(0.f, 0.f, 10.f), FVector(80.f, 80.f, 20.f), Hub, false);
+	AddLabel(TEXT("HUB"), Home + FVector(0.f, 0.f, 160.f));
+	if (HasAuthority() && GetWorld() && !ReturnGate)
+	{
+		const AGFHubGateDirector* Layout = GetDefault<AGFHubGateDirector>();
+		const FVector Rime = Layout ? Layout->RimeAnchor(GetWorld()) : FVector::ZeroVector;
+		const FVector At = GetActorLocation() + Home;
+		const FTransform Xform(FRotator::ZeroRotator, At);
+		AGFReturnGate* Gate = GetWorld()->SpawnActorDeferred<AGFReturnGate>(AGFReturnGate::StaticClass(), Xform, this, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Gate)
+		{
+			Gate->Configure(StopId, Rime, false);
+			Gate->FinishSpawning(Xform);
+			Gate->ApplyVisuals();
+			ReturnGate = Gate;
+		}
+	}
 }
 
 bool AGFFerryStand::PawnInPad(const APawn* Pawn, const UBoxComponent* Box) const

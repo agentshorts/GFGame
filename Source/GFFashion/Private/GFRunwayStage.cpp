@@ -276,6 +276,23 @@ EGFRunwayRequestResult AGFRunwayStage::StartShowFor(FName ThemeId, const TArray<
 	return EGFRunwayRequestResult::Ok;
 }
 
+bool AGFRunwayStage::AbandonShow()
+{
+	if (!HasAuthority())
+	{
+		return false;
+	}
+	const EGFRunwayPhase Phase = Show.GetPhase();
+	if (Phase == EGFRunwayPhase::Idle || Phase == EGFRunwayPhase::Results)
+	{
+		return false;
+	}
+	Show.Reset();
+	bPaid = true;
+	SyncState();
+	return true;
+}
+
 EGFRunwayRequestResult AGFRunwayStage::HandleSetOutfit(const FString& PlayerKey, const FGFOutfit& Outfit)
 {
 	if (!HasAuthority())

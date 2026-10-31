@@ -355,6 +355,13 @@ public:
 	/** Server: ends the run early with a reason the HUD can show (rewards earned so far still pay). */
 	void EndRun(const FString& Reason);
 
+	/**
+	 * Server: a player is leaving for the hub mid-run.
+	 * Ends the run when one is going, and does not server-travel this map afterwards.
+	 * The return gate moves that player. Anyone still here can take their own gate.
+	 */
+	void ForfeitReturn();
+
 	/** Why the last run ended early (empty if it ran to the end). */
 	const FString& GetEndReason() const { return EndReason; }
 

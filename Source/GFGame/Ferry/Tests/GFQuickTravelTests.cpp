@@ -82,6 +82,9 @@ namespace GFQuickTravelTests
 		Test.TestFalse(
 			*FString::Printf(TEXT("Drop onto %s misses the pass pad"), *To.Id.ToString()),
 			FGFFerryStandLayout::ContainsHorizontal(FGFFerryStandLayout::PassLocal(), Local));
+		Test.TestFalse(
+			*FString::Printf(TEXT("Drop onto %s misses the hub pad"), *To.Id.ToString()),
+			FGFFerryStandLayout::ContainsHorizontal(FGFFerryStandLayout::HomeLocal(), Local));
 	}
 
 	struct FTripWorld
@@ -234,6 +237,7 @@ bool FGFQuickTravelLinksTest::RunTest(const FString&)
 		FGFFerryRules::CollectDestinations(Director->Stops, Director->Routes, Stand->Id, DestIds);
 		TestEqual(*FString::Printf(TEXT("%s reaches the other zones"), *Faction.Id.ToString()), DestIds.Num(), Director->Stops.Num() - 1);
 		TestTrue(*FString::Printf(TEXT("%s pass pad is in the board disc"), *Faction.Id.ToString()), FGFFerryStandLayout::InsideBoard(FGFFerryStandLayout::PassLocal(), Director->Tuning.BoardRadius));
+		TestTrue(*FString::Printf(TEXT("%s hub pad is in the board disc"), *Faction.Id.ToString()), FGFFerryStandLayout::InsideBoard(FGFFerryStandLayout::HomeLocal(), Director->Tuning.BoardRadius));
 		for (int32 Index = 0; Index < DestIds.Num(); ++Index)
 		{
 			TestTrue(

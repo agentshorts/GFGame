@@ -56,6 +56,10 @@ struct GFCORE_API FGFMiniGameCatalog
 	static constexpr float PadFloorThicknessCm = 100.f;
 	/** Shared sim portal. Its _M R takes the entry PlaceholderColor through Dye_R. */
 	static constexpr const TCHAR* SimGateObject = TEXT("/Game/Art/Gates/SM_Gate_Sim.SM_Gate_Sim");
+	/** The real Arena. This mesh is not the Crystal Clash door. */
+	static constexpr const TCHAR* ArenaGateObject = TEXT("/Game/Art/Gates/SM_Gate_Arena.SM_Gate_Arena");
+	/** Crystal Clash placeholder until a crystal arch is authored. Not SM_Gate_Arena. */
+	static constexpr const TCHAR* CrystalGateObject = TEXT("/Game/Art/Gates/SM_Gate_Crystal.SM_Gate_Crystal");
 	/** Sim pad slab, 4000 cm square, origin on the walk surface (slab Z -100..0). Dyed like the sim portal. */
 	static constexpr const TCHAR* PadObject = TEXT("/Game/Art/Gates/SM_GatePad.SM_GatePad");
 	/** Mode sign beside a hub portal, on the gate's right (actor +Y), same yaw as the gate (cm). */
