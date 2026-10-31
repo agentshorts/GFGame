@@ -1,4 +1,5 @@
 #include "GFArenaDirector.h"
+#include "GFArenaSite.h"
 #include "GFMiniGameCatalog.h"
 #include "GFWager.h"
 #include "GFEconomy.h"
@@ -99,7 +100,48 @@ void AGFArenaDirector::BeginPlay()
 		{
 			G->RegisterModeHandler(this);
 		}
+		EnsurePlayableSite();
 	}
+}
+
+void AGFArenaDirector::EnsurePlayableSite()
+{
+	UWorld* World = GetWorld();
+	if (!HasAuthority() || !World || World->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	// The pad shares the hub. Slow Time must not dilate everyone standing on Rime.
+	bApplyWorldDilation = false;
+	if (AGFGameState* G = GS())
+	{
+		G->RegisterModeHandler(this);
+	}
+	AGFArenaSite* Site = AGFArenaSite::Get(World);
+	if (!Site)
+	{
+		FActorSpawnParameters Params;
+		Params.Owner = this;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Site = World->SpawnActor<AGFArenaSite>(AGFArenaSite::StaticClass(), FTransform(GetActorLocation()), Params);
+	}
+	if (!Site)
+	{
+		return;
+	}
+	Site->AttachToActor(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+	Site->BuildIfNeeded();
+}
+
+bool AGFArenaDirector::ResolvePlayableBout()
+{
+	if (!HasAuthority() || Phase != EGFArenaPhase::Fighting)
+	{
+		return false;
+	}
+	Sim.RunToEnd(FGFArenaData::Get());
+	FinishFight();
+	return Phase == EGFArenaPhase::Finished;
 }
 
 void AGFArenaDirector::EndPlay(const EEndPlayReason::Type Reason)

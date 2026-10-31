@@ -62,6 +62,8 @@ private:
 	void DrawMineSession();
 	/** Fashion runway: theme, look, start, finish and the score, while the local pawn is on the site. */
 	void DrawRunwaySession();
+	/** Arena greybox: bout prompts while the local pawn is on the arena pad. */
+	void DrawArenaSession();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);
