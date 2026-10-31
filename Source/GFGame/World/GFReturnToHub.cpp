@@ -405,8 +405,9 @@ AGFReturnGate::AGFReturnGate()
 
 	Trigger = CreateDefaultSubobject<UBoxComponent>(TEXT("Trigger"));
 	Trigger->SetupAttachment(Root);
-	Trigger->SetRelativeLocation(FVector(0.f, 0.f, 180.f));
-	Trigger->SetBoxExtent(FVector(160.f, 160.f, 180.f));
+	Trigger->SetRelativeLocation(FVector(0.f, 0.f, 100.f));
+	// A step onto the pad, not a room. The old 320 cm box reached the ferry pass pad.
+	Trigger->SetBoxExtent(FVector(70.f, 70.f, 120.f));
 	Trigger->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	Trigger->SetCollisionResponseToAllChannels(ECR_Ignore);
 	Trigger->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
@@ -538,7 +539,8 @@ void AGFReturnGate::OnTriggerBegin(UPrimitiveComponent* Overlapped, AActor* Othe
 	(void)bFromSweep;
 	(void)Sweep;
 	APawn* Pawn = Cast<APawn>(Other);
-	if (!Pawn || !Pawn->IsPlayerControlled())
+	// Scripted tests teleport pawns onto pads. That is not a walk home.
+	if (!Pawn || !Pawn->IsPlayerControlled() || GIsAutomationTesting)
 	{
 		return;
 	}

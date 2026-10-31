@@ -30,8 +30,11 @@ struct GFGAME_API FGFFerryStandLayout
 	static constexpr float DestPitch = 140.f;
 
 	static FVector PassLocal() { return FVector(0.f, Ring, 100.f); }
-	/** Free walk home. Off the fare pads, still inside the board disc, and off the drop line. */
-	static FVector HomeLocal() { return FVector(160.f, 300.f, 0.f); }
+	/**
+	 * Free walk home. South-east of the stop, inside the board disc, and off the drop line.
+	 * The old spot (160, 300) reached the pass pad at (0, 220) and the wild exit west of Verdant.
+	 */
+	static FVector HomeLocal() { return FVector(320.f, -180.f, 0.f); }
 	static FVector DestLocal(int32 Index)
 	{
 		return FVector(0.f, -Ring - static_cast<float>(Index) * DestPitch, 100.f);
