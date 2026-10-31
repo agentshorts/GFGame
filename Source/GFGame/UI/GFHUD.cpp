@@ -752,10 +752,6 @@ void AGFHUD::DrawBeatHopPops()
 	};
 	for (const FGFBeatHopPop& P : Course->GetPops())
 	{
-		if (!MyKey.IsEmpty() && P.PlayerKey != MyKey)
-		{
-			continue;
-		}
 		const double Age = Now - P.ShownAt;
 		if (Age < 0.0 || Age > FGFBeatHopVfx::PopSeconds)
 		{
@@ -786,7 +782,9 @@ void AGFHUD::DrawBeatHopPops()
 			continue;
 		}
 		const float Rise = 10.f * Px * T;
-		const float WordY = Screen.Y - 18.f * Px - Rise;
+		// Stack other players' words so two hops on one brick don't draw on the same pixels.
+		const float Stack = static_cast<float>(GetTypeHash(P.PlayerKey) % 3) * (10.f * Px);
+		const float WordY = Screen.Y - 18.f * Px - Rise - (P.PlayerKey == MyKey ? 0.f : Stack);
 		FLinearColor Tint = FGFBeatHopVfx::Tint(P.Judgement);
 		Tint.A = Alpha;
 		DrawCell(Word, Screen.X - Word.Width() * Px * 0.5f, WordY, Tint);
@@ -892,10 +890,43 @@ void AGFHUD::DrawBeatHopSession()
 				MyKey = PS->PlayerKey;
 			}
 		}
-		const FGFRhythmScore* Score = MyKey.IsEmpty() ? nullptr : Course->GetScore(MyKey);
-		Lines.Emplace(FString::Printf(TEXT("BEAT HOP  %s (%s)"), *Title, *Diff), Gold);
-		Lines.Emplace(FString::Printf(TEXT("Score %d   Combo %d   Time %.0f / %.0f s"), Score ? Score->Score : 0, Score ? Score->Combo : 0,
-			FMath::Max(0.0, Course->GetRunTime()), Course->GetRunEndTime()), FLinearColor::White);
+		Lines.Emplace(FString::Printf(TEXT("BEAT HOP  %s (%s)    Time %.0f / %.0f s"), *Title, *Diff,
+			FMath::Max(0.0, Course->GetRunTime()), Course->GetRunEndTime()), Gold);
+		TArray<FGFBeatHopScoreRep> Board;
+		Course->GetScoreboard(Board);
+		if (Board.Num() == 0)
+		{
+			const FGFRhythmScore* Score = MyKey.IsEmpty() ? nullptr : Course->GetScore(MyKey);
+			Lines.Emplace(FString::Printf(TEXT("Score %d   Combo %d"), Score ? Score->Score : 0, Score ? Score->Combo : 0), FLinearColor::White);
+		}
+		else
+		{
+			Board.Sort([&MyKey](const FGFBeatHopScoreRep& A, const FGFBeatHopScoreRep& B)
+			{
+				if (A.PlayerKey == MyKey) { return true; }
+				if (B.PlayerKey == MyKey) { return false; }
+				return A.Score > B.Score;
+			});
+			for (const FGFBeatHopScoreRep& Row : Board)
+			{
+				FString Name = Row.PlayerKey;
+				if (const AGameStateBase* GS = World->GetGameState())
+				{
+					for (const APlayerState* PS : GS->PlayerArray)
+					{
+						const AGFPlayerState* GFPS = Cast<AGFPlayerState>(PS);
+						if (GFPS && GFPS->PlayerKey == Row.PlayerKey)
+						{
+							Name = GFPS->GetPlayerName();
+							break;
+						}
+					}
+				}
+				const FLinearColor Tint = Row.PlayerKey == MyKey ? FLinearColor::White : Soft;
+				Lines.Emplace(FString::Printf(TEXT("%s   Score %d   Combo %d   (Perfect %d / Good %d / Miss %d)"),
+					*Name, Row.Score, Row.Combo, Row.Perfects, Row.Goods, Row.Misses), Tint);
+			}
+		}
 		Panel(Lines, Canvas->ClipX * 0.5f, 12.f * Scale);
 		return;
 	}

@@ -56,6 +56,8 @@ namespace GFBeatHopCourse
 	static constexpr float CrumbleSeconds = 1.5f;
 	static constexpr float BurstSeconds = 0.6f;
 	static constexpr int32 MaxPops = 32;
+	static constexpr int32 JudgementRing = 24;
+	static constexpr double TeleportForgiveSeconds = 0.5;
 	static const FLinearColor Coral(1.f, 0.254f, 0.13f);
 	static const FLinearColor Mint(0.392f, 0.791f, 0.624f);
 	static const FLinearColor MissGrey(0.08f, 0.08f, 0.09f);
@@ -204,6 +206,13 @@ void AGFBeatHopCourse::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(AGFBeatHopCourse, bRunCozy);
 	DOREPLIFETIME(AGFBeatHopCourse, RunStartServerTime);
 	DOREPLIFETIME(AGFBeatHopCourse, bRunning);
+	DOREPLIFETIME(AGFBeatHopCourse, RunCalibrationSeconds);
+	DOREPLIFETIME(AGFBeatHopCourse, Judgements);
+	DOREPLIFETIME(AGFBeatHopCourse, ScoreReps);
+	DOREPLIFETIME(AGFBeatHopCourse, HitBricks);
+	DOREPLIFETIME(AGFBeatHopCourse, AnimReps);
+	DOREPLIFETIME(AGFBeatHopCourse, MoveReps);
+	DOREPLIFETIME(AGFBeatHopCourse, Placements);
 	DOREPLIFETIME(AGFBeatHopCourse, bSession);
 	DOREPLIFETIME(AGFBeatHopCourse, SelectedSong);
 	DOREPLIFETIME(AGFBeatHopCourse, SelectedDifficulty);
@@ -241,6 +250,18 @@ bool AGFBeatHopCourse::StartRunForPlayers(FName SongId, EGFBeatDifficulty Diffic
 	WasFalling.Reset();
 	EndReason.Reset();
 	RunId = FGuid::NewGuid(); // identifies the run; every grant's TxId is derived from it
+	Judgements.Reset();
+	ScoreReps.Reset();
+	HitBricks.Reset();
+	AnimReps.Reset();
+	AppliedJudgementSeqs.Reset();
+	RemoteScores.Reset();
+	NextJudgementSeq = 0;
+	for (FGFBeatHopMoveRep& Row : MoveReps)
+	{
+		Row.HoldBrick = INDEX_NONE;
+		Row.HoldUntilRunTime = -1.0;
+	}
 	RunMode = Mode;
 	RunDifficulty = Difficulty;
 	bRunCozy = bCozy;
@@ -281,6 +302,10 @@ bool AGFBeatHopCourse::StartRunForPlayers(FName SongId, EGFBeatDifficulty Diffic
 			return false;
 		}
 	}
+	// Snapshot the host's songs offset. Every client subtracts this same value, not its own setting.
+	RunCalibrationSeconds = RunMode == EGFBeatHopMode::Songs
+		? static_cast<double>(GetDefault<UGFRhythmSettings>()->SongsOffsetMs) / 1000.0
+		: 0.0;
 	bRunning = true;
 	return true;
 }
@@ -294,6 +319,10 @@ void AGFBeatHopCourse::OnRep_RunSpec()
 		{
 			Windows = FGFJudgeWindows::For(EGFBeatHopMode::Songs, RunDifficulty);
 			BuildFromBeatmap(*Map);
+			// Judgements or hit bricks may have arrived before the meshes existed.
+			ApplyIncomingHitBricks();
+			ApplyIncomingJudgements();
+			UpdateScreen(GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0);
 		}
 	}
 }
@@ -446,8 +475,7 @@ double AGFBeatHopCourse::GetRunTime() const
 		const UGFBeatClockSubsystem* Clock = GetWorld() ? GetWorld()->GetSubsystem<UGFBeatClockSubsystem>() : nullptr;
 		return Clock ? Clock->GetCorrectedNow() : 0.0;
 	}
-	const double OffsetMs = GetDefault<UGFRhythmSettings>()->SongsOffsetMs;
-	return GetServerWorldTime() - RunStartServerTime - OffsetMs / 1000.0;
+	return GetServerWorldTime() - RunStartServerTime - RunCalibrationSeconds;
 }
 
 double AGFBeatHopCourse::PeriodSeconds() const
@@ -519,7 +547,43 @@ float AGFBeatHopCourse::BeatPulseStrength(double BeatPhase)
 const FGFRhythmScore* AGFBeatHopCourse::GetScore(const FString& PlayerKey) const
 {
 	const FPlayerRun* Run = Runs.Find(PlayerKey);
-	return Run ? &Run->Judge.GetScore() : nullptr;
+	if (Run)
+	{
+		return &Run->Judge.GetScore();
+	}
+	return RemoteScores.Find(PlayerKey);
+}
+
+void AGFBeatHopCourse::GetScoreboard(TArray<FGFBeatHopScoreRep>& Out) const
+{
+	Out.Reset();
+	TSet<FString> Seen;
+	for (const TPair<FString, FPlayerRun>& Pair : Runs)
+	{
+		const FGFRhythmScore& S = Pair.Value.Judge.GetScore();
+		FGFBeatHopScoreRep Row;
+		Row.PlayerKey = Pair.Key;
+		Row.Score = S.Score;
+		Row.Combo = S.Combo;
+		Row.BestCombo = S.BestCombo;
+		Row.Perfects = S.Perfects;
+		Row.Goods = S.Goods;
+		Row.Misses = S.Misses;
+		Out.Add(Row);
+		Seen.Add(Pair.Key);
+	}
+	for (const FGFBeatHopScoreRep& Row : ScoreReps)
+	{
+		if (!Seen.Contains(Row.PlayerKey))
+		{
+			Out.Add(Row);
+		}
+	}
+}
+
+bool AGFBeatHopCourse::IsBrickHitByAnyone(int32 Index) const
+{
+	return IsValidBrick(Index) && GetBrick(Index).bHitByAnyone;
 }
 
 const FGFInventory* AGFBeatHopCourse::GetEarnedRewards(const FString& PlayerKey) const
@@ -601,6 +665,7 @@ AGFBeatHopCourse::FPlayerRun& AGFBeatHopCourse::RunFor(const FString& PlayerKey)
 	{
 		Run = &Runs.Add(PlayerKey);
 		Run->Judge = FGFRhythmJudge(Windows);
+		PublishScore(PlayerKey, Run->Judge.GetScore());
 	}
 	return *Run;
 }
@@ -651,16 +716,20 @@ EGFJudgement AGFBeatHopCourse::HandleLanding(const FString& PlayerKey, int32 Bri
 	}
 	const EGFJudgement J = Run.Judge.JudgeLanding(Now, B.Lane, NoteTime, B.Lane);
 	Run.Judged.Add(BrickIndex);
-	AddPop(PlayerKey, GetBrickTop(BrickIndex), J, Run.Judge.GetScore().Combo, LaneColor(B.Lane));
+	const int32 Combo = Run.Judge.GetScore().Combo;
+	RecordJudgement(PlayerKey, BrickIndex, J, Now - NoteTime, Combo);
+	AddPop(PlayerKey, GetBrickTop(BrickIndex), J, Combo, LaneColor(B.Lane));
+	PublishScore(PlayerKey, Run.Judge.GetScore());
 	if (J == EGFJudgement::Perfect)
 	{
 		Burst(GetBrickTop(BrickIndex), LaneColor(B.Lane));
 	}
 
 	int32 Earned = 0;
-	if (J == EGFJudgement::Perfect || J == EGFJudgement::Good)
+		if (J == EGFJudgement::Perfect || J == EGFJudgement::Good)
 	{
 		B.bHitByAnyone = true;
+		PublishHit(BrickIndex);
 		const TArray<FGFItemStack> Stacks = FGFBeatHopRewards::ForLanding(J, Rewards, bRunCozy);
 		for (const FGFItemStack& S : Stacks)
 		{
@@ -689,6 +758,10 @@ void AGFBeatHopCourse::SweepMisses(double Now)
 			}
 			++Run.MissSweep;
 		}
+		if (Run.MissSweep > 0)
+		{
+			PublishScore(Pair.Key, Run.Judge.GetScore());
+		}
 		while (Run.MissSweep < NumBricks())
 		{
 			const FGFBeatHopBrick& B = GetBrick(Run.MissSweep);
@@ -702,8 +775,11 @@ void AGFBeatHopCourse::SweepMisses(double Now)
 				Run.Judge.AddMiss();
 				if (Now < TNumericLimits<double>::Max() / 8.0) // not the end-of-run sweep
 				{
+					const double Offset = Now - (B.Time + B.LenSeconds);
+					RecordJudgement(Pair.Key, Run.MissSweep, EGFJudgement::Miss, Offset, 0);
 					AddPop(Pair.Key, GetBrickTop(Run.MissSweep), EGFJudgement::Miss, 0, LaneColor(B.Lane));
 				}
+				PublishScore(Pair.Key, Run.Judge.GetScore());
 			}
 			++Run.MissSweep;
 		}
@@ -986,6 +1062,14 @@ void AGFBeatHopCourse::Tick(float DeltaSeconds)
 	UpdatePulse(WorldNow);
 	UpdateScreen(WorldNow);
 	DriveAnims(WorldNow);
+	if (HasAuthority())
+	{
+		ClearTeleportForgiveness();
+	}
+	else
+	{
+		MirrorOwnerMovement();
+	}
 	Pops.RemoveAll([WorldNow](const FGFBeatHopPop& P) { return WorldNow - P.ShownAt > FGFBeatHopVfx::PopSeconds + 0.5; });
 	if (HasAuthority() && PendingGrants.Num() > 0)
 	{
@@ -1032,6 +1116,493 @@ void AGFBeatHopCourse::AddPop(const FString& PlayerKey, const FVector& WorldTop,
 	{
 		Pops.RemoveAt(0, Pops.Num() - GFBeatHopCourse::MaxPops);
 	}
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Replication (#214): judgements, scores, hit bricks, hop clips, run movement, teleports.
+
+namespace
+{
+	bool IsBrickLandingClip(FName Clip)
+	{
+		using namespace GFBeatHopCourse;
+		return Clip == AnimLand || Clip == AnimLandPerfect || Clip == AnimStumble;
+	}
+}
+
+FName AGFBeatHopCourse::LandingClipFor(EGFJudgement Judgement)
+{
+	using namespace GFBeatHopCourse;
+	switch (Judgement)
+	{
+	case EGFJudgement::Perfect: return AnimLandPerfect;
+	case EGFJudgement::Good: return AnimLand;
+	case EGFJudgement::Miss: return AnimStumble;
+	default: return NAME_None;
+	}
+}
+
+FName AGFBeatHopCourse::ClipForViewer(bool bSimulatedProxy, FName LocalClip, FName ReplicatedClip)
+{
+	if (bSimulatedProxy)
+	{
+		return ReplicatedClip.IsNone() ? LocalClip : ReplicatedClip;
+	}
+	if (IsBrickLandingClip(LocalClip) && IsBrickLandingClip(ReplicatedClip))
+	{
+		return ReplicatedClip;
+	}
+	return LocalClip;
+}
+
+void AGFBeatHopCourse::AdoptSharedClock(double StartServerTime, double CalibrationSeconds)
+{
+	RunStartServerTime = StartServerTime;
+	RunCalibrationSeconds = CalibrationSeconds;
+}
+
+FString AGFBeatHopCourse::RunnerId(const ACharacter* Character) const
+{
+	if (const AGFPlayerState* PS = Character ? Character->GetPlayerState<AGFPlayerState>() : nullptr)
+	{
+		if (!PS->PlayerKey.IsEmpty())
+		{
+			return PS->PlayerKey;
+		}
+	}
+	return Character ? Character->GetName() : FString();
+}
+
+FGFBeatHopMoveRep* AGFBeatHopCourse::FindMoveRep(const FString& PlayerKey)
+{
+	return MoveReps.FindByPredicate([&PlayerKey](const FGFBeatHopMoveRep& Row) { return Row.PlayerKey == PlayerKey; });
+}
+
+const FGFBeatHopAnimRep* AGFBeatHopCourse::FindAnimRep(const FString& PlayerKey) const
+{
+	return AnimReps.FindByPredicate([&PlayerKey](const FGFBeatHopAnimRep& Row) { return Row.PlayerKey == PlayerKey; });
+}
+
+ACharacter* AGFBeatHopCourse::FindRunner(const FString& PlayerKey) const
+{
+	const UWorld* World = GetWorld();
+	const AGameStateBase* GS = World ? World->GetGameState() : nullptr;
+	if (!GS || PlayerKey.IsEmpty())
+	{
+		return nullptr;
+	}
+	for (APlayerState* PS : GS->PlayerArray)
+	{
+		const AGFPlayerState* GFPS = Cast<AGFPlayerState>(PS);
+		if (GFPS && GFPS->PlayerKey == PlayerKey)
+		{
+			return Cast<ACharacter>(PS->GetPawn());
+		}
+	}
+	return nullptr;
+}
+
+void AGFBeatHopCourse::RecordJudgement(const FString& PlayerKey, int32 BrickIndex, EGFJudgement Result, double OffsetSeconds, int32 Combo)
+{
+	if (!HasAuthority() || Result == EGFJudgement::None || PlayerKey.IsEmpty())
+	{
+		return;
+	}
+	FGFBeatHopJudgementRep Row;
+	Row.PlayerKey = PlayerKey;
+	Row.BrickIndex = BrickIndex;
+	Row.Result = Result;
+	Row.OffsetSeconds = static_cast<float>(OffsetSeconds);
+	Row.Combo = Combo;
+	if (++NextJudgementSeq == 0)
+	{
+		++NextJudgementSeq;
+	}
+	Row.Seq = NextJudgementSeq;
+	Judgements.Add(Row);
+	if (Judgements.Num() > GFBeatHopCourse::JudgementRing)
+	{
+		Judgements.RemoveAt(0, Judgements.Num() - GFBeatHopCourse::JudgementRing);
+	}
+}
+
+void AGFBeatHopCourse::PublishScore(const FString& PlayerKey, const FGFRhythmScore& Score)
+{
+	if (!HasAuthority() || PlayerKey.IsEmpty())
+	{
+		return;
+	}
+	FGFBeatHopScoreRep* Row = ScoreReps.FindByPredicate([&PlayerKey](const FGFBeatHopScoreRep& Existing) { return Existing.PlayerKey == PlayerKey; });
+	if (!Row)
+	{
+		Row = &ScoreReps.AddDefaulted_GetRef();
+		Row->PlayerKey = PlayerKey;
+	}
+	if (Row->Score == Score.Score && Row->Combo == Score.Combo && Row->BestCombo == Score.BestCombo
+		&& Row->Perfects == Score.Perfects && Row->Goods == Score.Goods && Row->Misses == Score.Misses)
+	{
+		return;
+	}
+	Row->Score = Score.Score;
+	Row->Combo = Score.Combo;
+	Row->BestCombo = Score.BestCombo;
+	Row->Perfects = Score.Perfects;
+	Row->Goods = Score.Goods;
+	Row->Misses = Score.Misses;
+}
+
+void AGFBeatHopCourse::PublishHit(int32 BrickIndex)
+{
+	if (!HasAuthority() || BrickIndex == INDEX_NONE)
+	{
+		return;
+	}
+	HitBricks.AddUnique(BrickIndex);
+}
+
+void AGFBeatHopCourse::PublishAnim(const FString& PlayerKey, FName Clip, float PlayRate, bool bOneShot)
+{
+	if (!HasAuthority() || PlayerKey.IsEmpty() || Clip.IsNone())
+	{
+		return;
+	}
+	FGFBeatHopAnimRep* Row = AnimReps.FindByPredicate([&PlayerKey](const FGFBeatHopAnimRep& Existing) { return Existing.PlayerKey == PlayerKey; });
+	if (!Row)
+	{
+		Row = &AnimReps.AddDefaulted_GetRef();
+		Row->PlayerKey = PlayerKey;
+	}
+	if (Row->Clip == Clip && FMath::IsNearlyEqual(Row->PlayRate, PlayRate, 0.05f) && Row->bOneShot == (bOneShot ? 1 : 0))
+	{
+		return;
+	}
+	Row->Clip = Clip;
+	Row->PlayRate = PlayRate;
+	Row->bOneShot = bOneShot ? 1 : 0;
+	++Row->Seq;
+}
+
+void AGFBeatHopCourse::PublishMove(ACharacter* Character, uint8 Phase)
+{
+	if (!HasAuthority() || !Character)
+	{
+		return;
+	}
+	const UCharacterMovementComponent* Move = Character->GetCharacterMovement();
+	if (!Move)
+	{
+		return;
+	}
+	const FString Id = RunnerId(Character);
+	if (Id.IsEmpty())
+	{
+		return;
+	}
+	FGFBeatHopMoveRep* Row = FindMoveRep(Id);
+	if (!Row)
+	{
+		Row = &MoveReps.AddDefaulted_GetRef();
+		Row->PlayerKey = Id;
+	}
+	const FSavedRunMove* Saved = SavedMoves.Find(Character);
+	Row->MaxWalkSpeed = Move->MaxWalkSpeed;
+	Row->GravityScale = Move->GravityScale;
+	Row->AirControl = Move->AirControl;
+	Row->SavedWalkSpeed = Saved ? Saved->MaxWalkSpeed : Move->MaxWalkSpeed;
+	Row->SavedGravityScale = Saved ? Saved->GravityScale : Move->GravityScale;
+	Row->SavedAirControl = Saved ? Saved->AirControl : Move->AirControl;
+	Row->Phase = Phase;
+}
+
+void AGFBeatHopCourse::PublishHold(ACharacter* Character, const FString& PlayerKey, int32 BrickIndex, double UntilRunTime)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	const FString Id = !PlayerKey.IsEmpty() ? PlayerKey : RunnerId(Character);
+	FGFBeatHopMoveRep* Row = FindMoveRep(Id);
+	if (!Row)
+	{
+		Row = FindMoveRep(RunnerId(Character));
+	}
+	if (!Row)
+	{
+		return;
+	}
+	Row->HoldBrick = BrickIndex;
+	Row->HoldUntilRunTime = UntilRunTime;
+}
+
+void AGFBeatHopCourse::PublishPlacement(ACharacter* Character, const FString& PlayerKey, const FVector& Velocity, bool bFalling)
+{
+	if (!HasAuthority() || !Character)
+	{
+		return;
+	}
+	FString Id = !PlayerKey.IsEmpty() ? PlayerKey : RunnerId(Character);
+	if (Id.IsEmpty())
+	{
+		return;
+	}
+	FGFBeatHopPlacementRep* Row = Placements.FindByPredicate([&Id](const FGFBeatHopPlacementRep& Existing) { return Existing.PlayerKey == Id; });
+	if (!Row)
+	{
+		Row = &Placements.AddDefaulted_GetRef();
+		Row->PlayerKey = Id;
+	}
+	Row->Location = Character->GetActorLocation();
+	Row->Yaw = Character->GetActorRotation().Yaw;
+	Row->Velocity = Velocity;
+	Row->bFalling = bFalling ? 1 : 0;
+	if (++NextPlacementSeq == 0)
+	{
+		++NextPlacementSeq;
+	}
+	Row->Seq = NextPlacementSeq;
+}
+
+void AGFBeatHopCourse::ApplyIncomingJudgements()
+{
+	for (const FGFBeatHopJudgementRep& Row : Judgements)
+	{
+		if (Row.Seq == 0 || AppliedJudgementSeqs.Contains(Row.Seq))
+		{
+			continue;
+		}
+		if (!IsValidBrick(Row.BrickIndex))
+		{
+			continue; // course not built yet; OnRep_RunSpec tries again
+		}
+		AppliedJudgementSeqs.Add(Row.Seq);
+		if (Row.Result == EGFJudgement::Perfect || Row.Result == EGFJudgement::Good)
+		{
+			Bricks[Row.BrickIndex - BrickBase].bHitByAnyone = true;
+		}
+		AddPop(Row.PlayerKey, GetBrickTop(Row.BrickIndex), Row.Result, Row.Combo, LaneColor(GetBrick(Row.BrickIndex).Lane));
+	}
+	if (AppliedJudgementSeqs.Num() > GFBeatHopCourse::JudgementRing * 2)
+	{
+		AppliedJudgementSeqs.Empty();
+		for (const FGFBeatHopJudgementRep& Row : Judgements)
+		{
+			AppliedJudgementSeqs.Add(Row.Seq);
+		}
+	}
+}
+
+void AGFBeatHopCourse::ApplyIncomingScores()
+{
+	RemoteScores.Reset();
+	for (const FGFBeatHopScoreRep& Row : ScoreReps)
+	{
+		FGFRhythmScore Score;
+		Score.Score = Row.Score;
+		Score.Combo = Row.Combo;
+		Score.BestCombo = Row.BestCombo;
+		Score.Perfects = Row.Perfects;
+		Score.Goods = Row.Goods;
+		Score.Misses = Row.Misses;
+		RemoteScores.Add(Row.PlayerKey, Score);
+	}
+}
+
+void AGFBeatHopCourse::ApplyIncomingHitBricks()
+{
+	for (const int32 Index : HitBricks)
+	{
+		if (IsValidBrick(Index))
+		{
+			Bricks[Index - BrickBase].bHitByAnyone = true;
+		}
+	}
+}
+
+void AGFBeatHopCourse::ReceiveRemoteJudgements(const TArray<FGFBeatHopJudgementRep>& In)
+{
+	Judgements = In;
+	ApplyIncomingJudgements();
+}
+
+void AGFBeatHopCourse::ReceiveRemoteScores(const TArray<FGFBeatHopScoreRep>& In)
+{
+	ScoreReps = In;
+	ApplyIncomingScores();
+}
+
+void AGFBeatHopCourse::ReceiveRemoteHitBricks(const TArray<int32>& In)
+{
+	HitBricks = In;
+	ApplyIncomingHitBricks();
+}
+
+void AGFBeatHopCourse::OnRep_Judgements()
+{
+	ApplyIncomingJudgements();
+}
+
+void AGFBeatHopCourse::OnRep_Scores()
+{
+	ApplyIncomingScores();
+}
+
+void AGFBeatHopCourse::OnRep_HitBricks()
+{
+	ApplyIncomingHitBricks();
+}
+
+void AGFBeatHopCourse::OnRep_Moves()
+{
+	MirrorOwnerMovement();
+}
+
+void AGFBeatHopCourse::OnRep_Placements()
+{
+	if (HasAuthority())
+	{
+		return;
+	}
+	for (const FGFBeatHopPlacementRep& Row : Placements)
+	{
+		uint16& Seen = AppliedPlacementSeqs.FindOrAdd(Row.PlayerKey);
+		if (Row.Seq == 0 || Row.Seq == Seen)
+		{
+			continue;
+		}
+		Seen = Row.Seq;
+		if (ACharacter* Runner = FindRunner(Row.PlayerKey))
+		{
+			ApplyPlacement(Runner, Row);
+		}
+	}
+}
+
+void AGFBeatHopCourse::ApplyMoveRep(ACharacter* Character, const FGFBeatHopMoveRep& Row)
+{
+	UCharacterMovementComponent* Move = Character ? Character->GetCharacterMovement() : nullptr;
+	if (!Move || Row.Phase == 0)
+	{
+		return;
+	}
+	Move->MaxWalkSpeed = Row.MaxWalkSpeed;
+	Move->GravityScale = Row.GravityScale;
+	Move->AirControl = Row.AirControl;
+}
+
+void AGFBeatHopCourse::ApplyPlacement(ACharacter* Character, const FGFBeatHopPlacementRep& Row)
+{
+	if (!Character)
+	{
+		return;
+	}
+	const FRotator Rot(0.f, Row.Yaw, 0.f);
+	const FVector Dest(Row.Location);
+	if (!Character->TeleportTo(Dest, Rot, false, true))
+	{
+		Character->SetActorLocationAndRotation(Dest, Rot, false, nullptr, ETeleportType::TeleportPhysics);
+	}
+	if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+	{
+		Move->StopMovementImmediately();
+		Move->Velocity = FVector(Row.Velocity);
+		Move->SetMovementMode(Row.bFalling ? MOVE_Falling : MOVE_Walking);
+		Move->bJustTeleported = true;
+	}
+}
+
+void AGFBeatHopCourse::MirrorOwnerMovement()
+{
+	if (HasAuthority())
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	const FVector Forward = GetActorForwardVector();
+	const double Now = GetRunTime();
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* PC = It->Get();
+		ACharacter* Char = PC ? Cast<ACharacter>(PC->GetPawn()) : nullptr;
+		if (!Char || !Char->IsLocallyControlled())
+		{
+			continue;
+		}
+		const FString Id = RunnerId(Char);
+		const FGFBeatHopMoveRep* Row = MoveReps.FindByPredicate([&Id](const FGFBeatHopMoveRep& Existing) { return Existing.PlayerKey == Id; });
+		if (!Row)
+		{
+			continue;
+		}
+		// Phase 2 has to apply after bRunning replicates false, or the owner keeps the chart's gravity.
+		if (Row->Phase == 2)
+		{
+			ApplyMoveRep(Char, *Row);
+			continue;
+		}
+		if (!bRunning || Row->Phase != 1)
+		{
+			continue;
+		}
+		ApplyMoveRep(Char, *Row);
+		UCharacterMovementComponent* Move = Char->GetCharacterMovement();
+		const bool bHeld = Row->HoldBrick != INDEX_NONE && Now < Row->HoldUntilRunTime;
+		if (bHeld)
+		{
+			if (Move)
+			{
+				Move->Velocity = FVector(0.0, 0.0, Move->Velocity.Z);
+			}
+			continue;
+		}
+		Char->AddMovementInput(Forward, 1.f);
+	}
+}
+
+void AGFBeatHopCourse::ClearTeleportForgiveness()
+{
+	const double Now = GetServerWorldTime();
+	for (auto It = TeleportForgiveUntil.CreateIterator(); It; ++It)
+	{
+		ACharacter* Char = It.Key().Get();
+		if (!Char || Now >= It.Value())
+		{
+			if (Char)
+			{
+				if (UCharacterMovementComponent* Move = Char->GetCharacterMovement())
+				{
+					Move->bIgnoreClientMovementErrorChecksAndCorrection = false;
+				}
+			}
+			It.RemoveCurrent();
+		}
+	}
+}
+
+void AGFBeatHopCourse::TeleportRunner(ACharacter* Character, const FString& PlayerKey, const FVector& Dest, const FRotator& Rot, const FVector& Velocity, bool bFalling)
+{
+	if (!Character)
+	{
+		return;
+	}
+	if (!Character->TeleportTo(Dest, Rot, false, true))
+	{
+		Character->SetActorLocationAndRotation(Dest, Rot, false, nullptr, ETeleportType::TeleportPhysics);
+	}
+	if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+	{
+		Move->StopMovementImmediately();
+		Move->Velocity = Velocity;
+		Move->SetMovementMode(bFalling ? MOVE_Falling : MOVE_Walking);
+		Move->bJustTeleported = true;
+		// In-flight client moves still describe the old spot. Ignore them briefly so the server doesn't yank the runner back.
+		Move->bIgnoreClientMovementErrorChecksAndCorrection = true;
+		TeleportForgiveUntil.Add(Character, GetServerWorldTime() + GFBeatHopCourse::TeleportForgiveSeconds);
+	}
+	PublishPlacement(Character, PlayerKey, Velocity, bFalling);
 }
 
 void AGFBeatHopCourse::Crumble(FGFBeatHopBrick& Brick)
@@ -1627,9 +2198,15 @@ void AGFBeatHopCourse::DriveAnims(double Now)
 		const bool bFalling = Move->IsFalling();
 		const EGFJudgement Landed = LastLanding.FindRef(Char);
 		LastLanding.Remove(Char);
+		const FString AnimId = RunnerId(Char);
+		const FGFBeatHopAnimRep* AnimRep = FindAnimRep(AnimId);
 
 		auto Set = [&](FName Key, float Rate, bool bOneShot)
 		{
+			if (HasAuthority())
+			{
+				PublishAnim(AnimId, Key, Rate, bOneShot);
+			}
 			if (!bDrawAnims)
 			{
 				H->Key = Key;
@@ -1639,6 +2216,24 @@ void AGFBeatHopCourse::DriveAnims(double Now)
 			H->Key = Key;
 			H->OneShotUntil = bOneShot ? Now + Len : 0.0;
 		};
+
+		// Remote pawns play the host's clip. Guessing from replicated movement misses Perfect vs Stumble.
+		if (!HasAuthority() && Char->GetLocalRole() == ROLE_SimulatedProxy && AnimRep && !AnimRep->Clip.IsNone())
+		{
+			const FName Want = ClipForViewer(true, H->Key, AnimRep->Clip);
+			if (Want != H->Key)
+			{
+				const float Len = bDrawAnims ? Play(Mesh, Want, AnimRep->PlayRate) : 0.f;
+				H->Key = Want;
+				H->OneShotUntil = AnimRep->bOneShot ? Now + Len : 0.0;
+			}
+			if (Simple && !H->Key.IsNone())
+			{
+				Simple->PauseFor(0.2f);
+			}
+			H->bWasFalling = bFalling;
+			continue;
+		}
 
 		if (H->bCaught)
 		{
@@ -1684,17 +2279,31 @@ void AGFBeatHopCourse::DriveAnims(double Now)
 				H->bCaught = true;
 				H->RespawnAt = FMath::Max(H->OneShotUntil, Now + 0.5);
 			}
-			else if (Landed == EGFJudgement::Perfect)
-			{
-				Set(AnimLandPerfect, 1.f, true);
-			}
-			else if (Landed == EGFJudgement::Miss)
-			{
-				Set(AnimStumble, 1.f, true);
-			}
 			else
 			{
-				Set(AnimLand, 1.f, true);
+				FName Clip = AnimLand;
+				if (Landed == EGFJudgement::Perfect)
+				{
+					Clip = AnimLandPerfect;
+				}
+				else if (Landed == EGFJudgement::Miss)
+				{
+					Clip = AnimStumble;
+				}
+				if (!HasAuthority())
+				{
+					Clip = ClipForViewer(false, Clip, AnimRep ? AnimRep->Clip : NAME_None);
+				}
+				Set(Clip, 1.f, true);
+			}
+		}
+		else if (!HasAuthority() && AnimRep && Now < H->OneShotUntil)
+		{
+			// The judgement arrived during the land: swap a generic Land for the host's Perfect or Stumble.
+			const FName Better = ClipForViewer(false, H->Key, AnimRep->Clip);
+			if (Better != H->Key)
+			{
+				Set(Better, AnimRep->PlayRate, true);
 			}
 		}
 		H->bWasFalling = bFalling;
@@ -2156,7 +2765,16 @@ bool AGFBeatHopCourse::TryStartFromGate(APawn* Pawn, FString& OutReason)
 		{
 			++Slot;
 			const double Y = ((Slot % 2) ? 1.0 : -1.0) * ((Slot + 1) / 2) * LaneWidthCm;
-			Other->TeleportTo(GetActorTransform().TransformPosition(FVector(StartLocal.X, Y, StartLocal.Z)), GetActorRotation(), false, false);
+			const FVector Dest = GetActorTransform().TransformPosition(FVector(StartLocal.X, Y, StartLocal.Z));
+			if (ACharacter* OtherChar = Cast<ACharacter>(Other))
+			{
+				const AGFPlayerState* GFPS = OtherChar->GetPlayerState<AGFPlayerState>();
+				TeleportRunner(OtherChar, GFPS ? GFPS->PlayerKey : FString(), Dest, GetActorRotation(), FVector::ZeroVector, false);
+			}
+			else
+			{
+				Other->TeleportTo(Dest, GetActorRotation(), false, false);
+			}
 		}
 		if (ACharacter* Char = Cast<ACharacter>(Other))
 		{
@@ -2211,6 +2829,7 @@ void AGFBeatHopCourse::ApplyRunMovement(ACharacter* Character)
 		Move->GravityScale = FMath::Clamp(2.f * Move->JumpZVelocity / (Gravity * static_cast<float>(Period)), 0.5f, 4.f);
 	}
 	Move->AirControl = 1.f;
+	PublishMove(Character, 1);
 }
 
 bool AGFBeatHopCourse::HasRunMovement(const ACharacter* Character) const
@@ -2229,6 +2848,7 @@ void AGFBeatHopCourse::RestoreRunMovement()
 			Move->MaxWalkSpeed = Pair.Value.MaxWalkSpeed;
 			Move->GravityScale = Pair.Value.GravityScale;
 			Move->AirControl = Pair.Value.AirControl;
+			PublishMove(Char, 2);
 		}
 	}
 	SavedMoves.Reset();
@@ -2240,7 +2860,6 @@ void AGFBeatHopCourse::RespawnCharacter(ACharacter* Character)
 	{
 		return;
 	}
-	UCharacterMovementComponent* Move = Character->GetCharacterMovement();
 	if (bSession && !bRunning)
 	{
 		PlaceInLobby(Character);
@@ -2252,11 +2871,8 @@ void AGFBeatHopCourse::RespawnCharacter(ACharacter* Character)
 		PutBackMidRun(Character, GFPS ? GFPS->PlayerKey : FString());
 		return;
 	}
-	Character->TeleportTo(GetRespawnPoint(Character), Character->GetActorRotation(), false, true);
-	if (Move)
-	{
-		Move->StopMovementImmediately();
-	}
+	const AGFPlayerState* GFPS = Character->GetPlayerState<AGFPlayerState>();
+	TeleportRunner(Character, GFPS ? GFPS->PlayerKey : FString(), GetRespawnPoint(Character), Character->GetActorRotation(), FVector::ZeroVector, false);
 }
 
 void AGFBeatHopCourse::PutBackMidRun(ACharacter* Character, const FString& PlayerKey)
@@ -2265,7 +2881,6 @@ void AGFBeatHopCourse::PutBackMidRun(ACharacter* Character, const FString& Playe
 	{
 		return;
 	}
-	UCharacterMovementComponent* Move = Character->GetCharacterMovement();
 	// Back onto the next brick the song hasn't reached yet; stand there until it does, then carry on in time.
 	const double Now = GetRunTime();
 	const double Lead = PeriodSeconds();
@@ -2276,13 +2891,11 @@ void AGFBeatHopCourse::PutBackMidRun(ACharacter* Character, const FString& Playe
 		{
 			const int32 Index = BrickBase + i;
 			const FVector Top = GetActorTransform().TransformPosition(B.Mesh->GetRelativeLocation() + FVector(0.0, 0.0, B.TopOffsetZ + 100.0));
-			Character->TeleportTo(Top, FRotator(0.0, GetActorRotation().Yaw, 0.0), false, true);
-			if (Move)
-			{
-				Move->StopMovementImmediately();
-			}
+			const FRotator Facing(0.0, GetActorRotation().Yaw, 0.0);
+			TeleportRunner(Character, PlayerKey, Top, Facing, FVector::ZeroVector, false);
 			HoldUntil.Add(Character, B.Time);
 			HoldBrick.Add(Character, Index);
+			PublishHold(Character, PlayerKey, Index, B.Time);
 			if (!PlayerKey.IsEmpty())
 			{
 				// The brick you're put back on is a free one: landing on it isn't judged and it never sweeps as a Miss.
@@ -2292,11 +2905,8 @@ void AGFBeatHopCourse::PutBackMidRun(ACharacter* Character, const FString& Playe
 		}
 	}
 	// Nothing left to hop on: straight to the finish pad.
-	Character->TeleportTo(GetActorTransform().TransformPosition(FVector(KitEndX + 250.0, 0.0, 120.0)), FRotator(0.0, GetActorRotation().Yaw, 0.0), false, true);
-	if (Move)
-	{
-		Move->StopMovementImmediately();
-	}
+	TeleportRunner(Character, PlayerKey, GetActorTransform().TransformPosition(FVector(KitEndX + 250.0, 0.0, 120.0)),
+		FRotator(0.0, GetActorRotation().Yaw, 0.0), FVector::ZeroVector, false);
 }
 
 int32 AGFBeatHopCourse::GetHoldBrick(const ACharacter* Character) const
@@ -2324,6 +2934,7 @@ void AGFBeatHopCourse::ReleaseHold(ACharacter* Character, bool bAlreadyHopping)
 	UCharacterMovementComponent* Move = Character ? Character->GetCharacterMovement() : nullptr;
 	if (!Move)
 	{
+		PublishHold(Character, RunnerId(Character), INDEX_NONE, -1.0);
 		return;
 	}
 	const FVector Hop = GetRespawnHopVelocity(Character);
@@ -2331,10 +2942,16 @@ void AGFBeatHopCourse::ReleaseHold(ACharacter* Character, bool bAlreadyHopping)
 	{
 		// They jumped on their own: keep their lift, give them the run speed they were missing.
 		Move->Velocity = FVector(Hop.X, Hop.Y, Move->Velocity.Z);
-		return;
 	}
-	Move->Velocity = Hop;
-	Move->SetMovementMode(MOVE_Falling);
+	else
+	{
+		Move->Velocity = Hop;
+		Move->SetMovementMode(MOVE_Falling);
+	}
+	const FString Id = RunnerId(Character);
+	PublishHold(Character, Id, INDEX_NONE, -1.0);
+	PublishPlacement(Character, Id, Move->Velocity, true);
+	Move->bJustTeleported = true;
 }
 
 FVector AGFBeatHopCourse::GetLobbySpawn() const
@@ -2369,16 +2986,14 @@ void AGFBeatHopCourse::PlaceInLobby(APawn* Pawn)
 		return;
 	}
 	const FRotator Facing(0.0, GetActorRotation().Yaw, 0.0);
-	if (!Pawn->TeleportTo(GetLobbySpawn(), Facing, false, false))
-	{
-		Pawn->SetActorLocationAndRotation(GetLobbySpawn(), Facing, false, nullptr, ETeleportType::TeleportPhysics);
-	}
 	if (ACharacter* Char = Cast<ACharacter>(Pawn))
 	{
-		if (UCharacterMovementComponent* Move = Char->GetCharacterMovement())
-		{
-			Move->StopMovementImmediately();
-		}
+		const AGFPlayerState* GFPS = Char->GetPlayerState<AGFPlayerState>();
+		TeleportRunner(Char, GFPS ? GFPS->PlayerKey : FString(), GetLobbySpawn(), Facing, FVector::ZeroVector, false);
+	}
+	else if (!Pawn->TeleportTo(GetLobbySpawn(), Facing, false, false))
+	{
+		Pawn->SetActorLocationAndRotation(GetLobbySpawn(), Facing, false, nullptr, ETeleportType::TeleportPhysics);
 	}
 	if (AController* C = Pawn->GetController())
 	{
@@ -2520,6 +3135,11 @@ void AGFBeatHopCourse::OnSessionRunFinished()
 	RestoreRunMovement();
 	HoldUntil.Reset();
 	HoldBrick.Reset();
+	for (FGFBeatHopMoveRep& Row : MoveReps)
+	{
+		Row.HoldBrick = INDEX_NONE;
+		Row.HoldUntilRunTime = -1.0;
+	}
 	UpdateLobbyLook();
 	for (const FGFBeatHopResultRow& Row : Results)
 	{
