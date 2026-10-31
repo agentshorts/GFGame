@@ -8,6 +8,7 @@
 #include "GFMiningRangeLayout.h"
 #include "GFMiningRangePortal.h"
 #include "GFMiniGameCatalog.h"
+#include "GFReturnToHub.h"
 #include "GFMiniGameGate.h"
 #include "GFPlayerState.h"
 #include "GFVoxelTypes.h"
@@ -390,6 +391,13 @@ bool FGFMiningClientTest::RunTest(const FString&)
 	}
 	TestFalse(TEXT("Not the host"), PS->bIsHost);
 	TestFalse(TEXT("Plot permissions are off"), GS->bEnforcePlotPermissions);
+	AGFReturnGate* Home = AGFReturnGate::Find(W.World, AGFMiningRange::ModeName);
+	if (TestNotNull(TEXT("Shared return gate"), Home))
+	{
+		TestEqual(TEXT("Signed HUB"), Home->GetSignText(), FString(TEXT("HUB")));
+		TestTrue(TEXT("Gate stands on the rows-file spot"), Home->GetActorLocation().Equals(Range->GetLayout().ReturnCm, 1.f));
+		TestTrue(TEXT("The gate travels back to the hub"), Home->IsMapTravel());
+	}
 	Range->PollGains();
 
 	const FGFMiningCell* Dirt = nullptr;
