@@ -8,6 +8,7 @@
 #include "GFMiniGameGateSubsystem.h"
 #include "GFEconomy.h"
 #include "GFBeatHopCourses.h"
+#include "GFBeatHopNinja.h"
 #include "GFBeatHopCourse.generated.h"
 
 class UStaticMeshComponent;
@@ -527,6 +528,27 @@ public:
 	/** The velocity a put-back runner leaves their brick with: run speed along the course plus a jump's lift (#221). */
 	FVector GetRespawnHopVelocity(const ACharacter* Character) const;
 
+	/** Beat length of the running chart, seconds. Stations without a song use the profile instead. */
+	double GetBeatPeriod() const { return PeriodSeconds(); }
+
+	/** True while this run has opted into the traversal kit. Off again when the run ends. */
+	bool IsNinjaOptIn() const { return bNinjaOptIn; }
+	const FGFBeatHopTraversalProfile& GetNinjaProfile() const { return NinjaProfile; }
+	void SetNinjaChart(const TArray<FGFBeatHopObstacleInstance>& Chart);
+	int32 NumNinjaObstacles() const { return NinjaObstacles.Num(); }
+	const FGFBeatHopObstacleInstance& GetNinjaObstacle(int32 Index) const { return NinjaObstacles[Index]; }
+	bool IsNinjaObstacleFallen(int32 Index, double Now) const;
+	FVector GetNinjaWorldLocation(int32 Index) const;
+	/** Judges one obstacle and feeds the run's Perfect / Good / Miss. A respawn is not a judgement. */
+	EGFJudgement JudgeNinja(const FString& PlayerKey, int32 ObstacleIndex, const FGFBeatHopNinjaPress& Press, EGFBeatHopNinjaContact Contact);
+	/** Puts the runner on the obstacle's safe brick. Does not add a Miss (#221, #277). */
+	bool RespawnBeforeObstacle(ACharacter* Character, const FString& PlayerKey, int32 ObstacleIndex);
+	void NotifyBrakeTap(ACharacter* Character);
+	bool IsNinjaBraking(const ACharacter* Character, double Now) const;
+	void TickNinjaBrake(ACharacter* Character);
+	const TArray<FGFBeatHopNinjaRep>& GetNinjaReps() const { return NinjaReps; }
+	void ReceiveRemoteNinja(const TArray<FGFBeatHopNinjaRep>& In);
+
 	/**
 	 * StartGate countdown screen cell (beat_hop_v2, T_BeatHop_Countdown layout): 0 Off, 1 Ready_A, 2 "3", 3 "2", 4 "1",
 	 * 5 GO, 6 GO flash, 7 Ready_B. Idle: Ready_A/B at 2 Hz. Run: Ready on the beat, then 3/2/1 at GO-3/-2/-1 beats,
@@ -679,6 +701,16 @@ protected:
 	/** Host's Songs offset (seconds) at the moment the run started. Clients use this, not their own setting. */
 	UPROPERTY(Replicated)
 	double RunCalibrationSeconds = 0.0;
+
+	/** Traversal kit opt-in for this run (#277). Clients use it to predict the same moves. */
+	UPROPERTY(ReplicatedUsing = OnRep_Ninja)
+	bool bNinjaOptIn = false;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Ninja)
+	TArray<FGFBeatHopNinjaRep> NinjaReps;
+
+	UFUNCTION()
+	void OnRep_Ninja();
 
 	UFUNCTION()
 	void OnRep_RunSpec();
@@ -1017,9 +1049,23 @@ private:
 	/** Client-side scores built from ScoreReps (the server reads FPlayerRun instead). */
 	TMap<FString, FGFRhythmScore> RemoteScores;
 	TSet<uint16> AppliedJudgementSeqs;
+	TSet<uint16> AppliedNinjaSeqs;
 	TMap<FString, uint16> AppliedPlacementSeqs;
 	/** Server: ignore in-flight client moves until this world time, so a teleport isn't yanked back. */
 	TMap<TWeakObjectPtr<ACharacter>, double> TeleportForgiveUntil;
 	uint16 NextJudgementSeq = 0;
 	uint16 NextPlacementSeq = 0;
+	uint16 NextNinjaSeq = 0;
+
+	FGFBeatHopTraversalProfile NinjaProfile;
+	TArray<FGFBeatHopObstacleInstance> NinjaObstacles;
+	TArray<TObjectPtr<UStaticMeshComponent>> NinjaMeshes;
+	TMap<TWeakObjectPtr<ACharacter>, double> BrakeUntil;
+
+	void BeginNinjaOptIn();
+	void EndNinjaOptIn();
+	void ApplyNinjaLocomotion(ACharacter* Character, const FVector& Forward);
+	void PutBackOnBrick(ACharacter* Character, const FString& PlayerKey, int32 Index);
+	void PublishNinjaRep(const FString& PlayerKey, int32 Index, const FGFBeatHopNinjaPress& Press, const FGFBeatHopNinjaVerdict& Verdict);
+	void ApplyIncomingNinja();
 };

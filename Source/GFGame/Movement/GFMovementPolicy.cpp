@@ -107,8 +107,12 @@ bool GFMovementPolicy::IsMiniGameWorld(const UWorld* World)
 	return Package && IsMiniGameMapName(Package->GetName());
 }
 
-bool GFMovementPolicy::IsStaminaEnabled(const FString& MapOrPackage, bool bModeOptedIn, bool bOptInValue)
+bool GFMovementPolicy::IsStaminaEnabled(const FString& MapOrPackage, bool bModeOptedIn, bool bOptInValue, bool bBeatHopRun)
 {
+	if (bBeatHopRun)
+	{
+		return true;
+	}
 	if (bModeOptedIn)
 	{
 		return bOptInValue;

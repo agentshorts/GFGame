@@ -107,6 +107,8 @@ public:
 	EGFJudgement JudgeLanding(double LandingTime, int32 LandingLane, double NoteTime, int32 NoteLane);
 	/** A note went by without a landing (or the player fell). */
 	void AddMiss();
+	/** Records a judgement the obstacle rules already classified (buffer, coyote, mantle Good). */
+	void ApplyJudgement(EGFJudgement Judgement);
 
 	const FGFRhythmScore& GetScore() const { return Score; }
 	const FGFJudgeWindows& GetWindows() const { return Windows; }

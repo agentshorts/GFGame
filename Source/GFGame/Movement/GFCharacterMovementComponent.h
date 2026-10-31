@@ -9,6 +9,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GFBeatHopNinja.h"
 #include "GFStaminaSim.h"
 #include "GFCharacterMovementComponent.generated.h"
 
@@ -74,6 +75,21 @@ public:
 
 	/** Ballistic ground point. False when the marker should stay hidden or the trace misses. */
 	bool GetLandingMarker(FVector& OutPoint) const;
+
+	/** Looks for a Beat Hop run that opted into the traversal kit (#277). */
+	void RefreshBeatHop();
+
+	/**
+	 * Drops presses the running difficulty does not allow.
+	 * Dash gates stay a dash (ground and air) on every difficulty that includes them.
+	 * No-op outside a run, so the hub kit is unchanged.
+	 */
+	void ApplyBeatHopMoveMask(FGFStaminaCommand& Command) const;
+
+	bool IsBeatHopRun() const { return bBeatHopRun; }
+
+	/** Extra spring-arm length while a Beat Hop wall run or grapple is playing. Zero otherwise. */
+	float GetBeatHopCameraPullback() const;
 
 	const UGFMovementTuning& GetTuning() const;
 
@@ -164,6 +180,10 @@ private:
 	FVector PendingImpactNormal = FVector::UpVector;
 	bool bLocalInsideKindle = false;
 	bool bStaminaEnabled = true;
+	bool bBeatHopRun = false;
+	FGFBeatHopTraversalProfile BeatHopProfile;
+	float BeatHopRefSpeed = 0.f;
+	EGFBeatDifficulty BeatHopDifficulty = EGFBeatDifficulty::Easy;
 	bool bGotAuthoritativeStamina = false;
 	float ProxyFlipTimeLeft = 0.f;
 	FRotator MeshRestRotation = FRotator::ZeroRotator;

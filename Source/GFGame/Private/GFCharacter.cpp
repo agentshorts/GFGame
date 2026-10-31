@@ -148,6 +148,13 @@ void AGFCharacter::Tick(float DeltaSeconds)
 	ApplyAimView();
 	UpdateCameraFade();
 	UpdateFistPose();
+	if (SpringArm && !bFirstPerson)
+	{
+		if (const UGFCharacterMovementComponent* Move = GetGFMovement())
+		{
+			SpringArm->TargetArmLength = ArmZoom + Move->GetBeatHopCameraPullback();
+		}
+	}
 }
 
 void AGFCharacter::PossessedBy(AController* NewController)

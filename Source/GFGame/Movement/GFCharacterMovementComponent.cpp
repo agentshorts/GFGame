@@ -1,4 +1,5 @@
 #include "GFCharacterMovementComponent.h"
+#include "GFBeatHopCourse.h"
 #include "GFKindleRing.h"
 #include "GFMovementPolicy.h"
 #include "GFMovementTuning.h"
@@ -330,12 +331,78 @@ void UGFCharacterMovementComponent::RefreshStaminaGate()
 	bool bOpted = false;
 	bool bValue = false;
 	GFCharacterMovementDetail::GFMovementReadOptIn(GetWorld(), bOpted, bValue);
-	const bool bNow = GFMovementPolicy::IsStaminaEnabled(GFCharacterMovementDetail::GFMovementMapLabelForPolicy(GetWorld()), bOpted, bValue);
+	const bool bNow = GFMovementPolicy::IsStaminaEnabled(
+		GFCharacterMovementDetail::GFMovementMapLabelForPolicy(GetWorld()), bOpted, bValue, bBeatHopRun);
 	const uint8 Gate = bNow ? static_cast<uint8>(1) : static_cast<uint8>(2);
 	if (bStaminaEnabled != bNow || ReplicatedStaminaGate != Gate)
 	{
 		bStaminaEnabled = bNow;
 		ReplicatedStaminaGate = Gate;
+	}
+}
+
+void UGFCharacterMovementComponent::RefreshBeatHop()
+{
+	bBeatHopRun = false;
+	BeatHopRefSpeed = 0.f;
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	for (TActorIterator<AGFBeatHopCourse> It(World); It; ++It)
+	{
+		const AGFBeatHopCourse* Course = *It;
+		if (!Course || !Course->IsNinjaOptIn())
+		{
+			continue;
+		}
+		bBeatHopRun = true;
+		BeatHopProfile = Course->GetNinjaProfile();
+		BeatHopRefSpeed = Course->GetBeatmap().RefSpeedCms;
+		BeatHopDifficulty = Course->GetRunDifficulty();
+		break;
+	}
+}
+
+float UGFCharacterMovementComponent::GetBeatHopCameraPullback() const
+{
+	if (!bBeatHopRun)
+	{
+		return 0.f;
+	}
+	return GFBeatHopNinja::CameraPullbackCm(IsWallRunning(), IsSwinging() || IsYanking(), BeatHopProfile);
+}
+
+void UGFCharacterMovementComponent::ApplyBeatHopMoveMask(FGFStaminaCommand& Command) const
+{
+	if (!bBeatHopRun)
+	{
+		return;
+	}
+	if (!GFBeatHopNinja::Allows(BeatHopDifficulty, EGFBeatHopKitMove::WallRun, BeatHopProfile))
+	{
+		Command.Contact.bWallContact = false;
+	}
+	if (!GFBeatHopNinja::Allows(BeatHopDifficulty, EGFBeatHopKitMove::Grapple, BeatHopProfile))
+	{
+		Command.bGrappleSwingHeld = false;
+		Command.bGrappleYankPressed = false;
+		Command.Contact.bGrappleHit = false;
+	}
+	if (!GFBeatHopNinja::Allows(BeatHopDifficulty, EGFBeatHopKitMove::Swivel, BeatHopProfile))
+	{
+		Command.Contact.bSwivelContact = false;
+	}
+	if (!GFBeatHopNinja::Allows(BeatHopDifficulty, EGFBeatHopKitMove::DashGrip, BeatHopProfile))
+	{
+		Command.Contact.bDashImpact = false;
+	}
+	const bool bDash = GFBeatHopNinja::Allows(BeatHopDifficulty, EGFBeatHopKitMove::DashGate, BeatHopProfile)
+		|| GFBeatHopNinja::Allows(BeatHopDifficulty, EGFBeatHopKitMove::AirDash, BeatHopProfile);
+	if (!bDash)
+	{
+		Command.bDashPressed = false;
 	}
 }
 
@@ -411,9 +478,18 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 		return;
 	}
 
+	RefreshBeatHop();
 	if (bAuthoritative)
 	{
 		RefreshStaminaGate();
+	}
+	else if (bBeatHopRun)
+	{
+		bStaminaEnabled = true;
+	}
+	else
+	{
+		ApplyStaminaGate();
 	}
 	RefreshKindleOverlaps();
 
@@ -472,6 +548,16 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 		Command.CameraForward = LiveCameraForward();
 	}
 	LastCameraForward = Command.CameraForward;
+	if (bBeatHopRun)
+	{
+		const UGFMovementTuning& BeatTuning = GetTuning();
+		Command.bCostsFree = BeatHopProfile.StaminaCostScale <= 0.f;
+		Command.GroundDashDurationOverride = GFBeatHopNinja::DurationForBeats(BeatHopProfile.GroundDashBeats, BeatHopRefSpeed, BeatTuning.DashSpeed);
+		Command.AirDashDurationOverride = GFBeatHopNinja::DurationForBeats(BeatHopProfile.AirDashBeats, BeatHopRefSpeed, BeatTuning.DashSpeed);
+		Command.WallKickSpeedOverride = GFBeatHopNinja::SpeedForBeats(BeatHopProfile.WallKickBeats, BeatHopRefSpeed, BeatTuning.DashDuration);
+		Command.JumpsPerAirtimeOverride = GFBeatHopNinja::JumpsFor(BeatHopDifficulty, BeatHopProfile);
+	}
+	ApplyBeatHopMoveMask(Command);
 	Sim = GFStaminaSim::Step(Sim, Command, GetTuning());
 	// Substeps share this frame's start so a rope, yank, or orbit lands on TravelLocation.
 	LocationAtStepStart = Command.PlayerLocation;
@@ -504,9 +590,12 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 	}
 	else if (Sim.bJumpAccepted)
 	{
+		const int32 JumpCap = bBeatHopRun
+			? GFBeatHopNinja::JumpsFor(BeatHopDifficulty, BeatHopProfile)
+			: GetTuning().JumpsPerAirtime;
 		CharacterOwner->bPressedJump = true;
 		CharacterOwner->JumpCurrentCount = 0;
-		CharacterOwner->JumpMaxCount = FMath::Max(GetTuning().JumpsPerAirtime, 2);
+		CharacterOwner->JumpMaxCount = FMath::Max(JumpCap, 1);
 		JumpZVelocity = Sim.JumpZSpeed;
 	}
 	else if (bJump)
@@ -518,7 +607,10 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 	JumpZVelocity = GetTuning().JumpZVelocity;
 	if (CharacterOwner && bStaminaEnabled)
 	{
-		CharacterOwner->JumpMaxCount = FMath::Max(GetTuning().JumpsPerAirtime, 0);
+		const int32 JumpCap = bBeatHopRun
+			? GFBeatHopNinja::JumpsFor(BeatHopDifficulty, BeatHopProfile)
+			: GetTuning().JumpsPerAirtime;
+		CharacterOwner->JumpMaxCount = FMath::Max(JumpCap, 0);
 	}
 }
 
@@ -789,6 +881,10 @@ namespace GFCharacterMovementLanding
 
 bool UGFCharacterMovementComponent::GetLandingMarker(FVector& OutPoint) const
 {
+	if (bBeatHopRun && !GFBeatHopNinja::Allows(BeatHopDifficulty, EGFBeatHopKitMove::LandingMarker, BeatHopProfile))
+	{
+		return false;
+	}
 	if (!CharacterOwner || !GFTraversalSim::ShouldShowLandingMarker(Sim, IsMovingOnGround(), bStaminaEnabled))
 	{
 		return false;
