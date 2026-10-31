@@ -15,6 +15,7 @@ import {
   decide,
   DEFAULT_SMELL_FT,
   EXTORT_LINE,
+  hintItem,
   speechHint,
   type DecisionInput,
 } from "../src/logic/alignment";
@@ -27,7 +28,7 @@ import {
   setBudget,
   tokenTotal,
 } from "../src/logic/context";
-import { fillTarget } from "../src/logic/fillTarget";
+import { draggerName, fillTarget } from "../src/logic/fillTarget";
 import { filterOutput } from "../src/logic/filter";
 import { defaultModelId, listSmallModels, type PrebuiltModel } from "../src/logic/models";
 import { parsePersona } from "../src/logic/persona";
@@ -41,12 +42,14 @@ import {
   transcriptDocument,
   transcriptToJson,
 } from "../src/logic/session";
+import { restoreTargetToken, shieldTargetToken } from "../src/logic/scripts";
 import {
   buildRephraseMessages,
   buildSteerMessages,
   messageTokenEstimate,
   parseModelSteer,
   pickSteer,
+  reconcileSteeredDecision,
 } from "../src/logic/steer";
 import { ALIGNMENTS, type Alignment, type Persona } from "../src/logic/types";
 
@@ -84,6 +87,24 @@ describe("fillTarget", () => {
       .toBe("Where you going? Huh? Where you going?");
     expect(fillTarget("Hey. Hey. {Target}. Where you going?", "")).toBe("Hey. Hey. Where you going?");
     expect(fillTarget("Hey {Target}! Where you going?", "")).toBe("Hey! Where you going?");
+    expect(fillTarget("Hey {target}!", "Pip")).toBe("Hey Pip!");
+  });
+
+  it("fills {Dragger} from the revoke name, then the holder", () => {
+    expect(draggerName("Rex", "Sam")).toBe("Rex");
+    expect(draggerName("  ", "Sam")).toBe("Sam");
+    expect(draggerName("", "")).toBe("");
+    const both = "{Dragger}, you get a gold star. {Target}, you get eaten.";
+    expect(fillTarget(both, "Pip", draggerName("Rex", "Sam"))).toBe("Rex, you get a gold star. Pip, you get eaten.");
+    expect(fillTarget("Thanks! You're a real pal, {Dragger}.", "Pip", "Rex")).toBe("Thanks! You're a real pal, Rex.");
+    expect(fillTarget("{Target}, your friends don't like you much, huh?", "Pip", "Rex"))
+      .toBe("Pip, your friends don't like you much, huh?");
+    expect(fillTarget("Thanks! You're a real pal, {Dragger}.", "Pip", draggerName("", ""))).toBe("Thanks! You're a real pal.");
+    expect(fillTarget("Thank {dragger}!", "", "Rex")).toBe("Thank Rex!");
+    expect(fillTarget("Out you go, {Dragger}!", "", "")).toBe("Out you go!");
+    expect(fillTarget("{Dragger} did this", "", "")).toBe("someone did this");
+    expect(fillTarget("Left here by {Dragger}.", "", "")).toBe("Left here by someone.");
+    expect(restoreTargetToken(shieldTargetToken("Thanks, {Dragger}. Hey {Target}."))).toBe("Thanks, {Dragger}. Hey {Target}.");
   });
 });
 
@@ -168,6 +189,18 @@ describe("prompt and present", () => {
     expect(shown.text.endsWith("…")).toBe(true);
     expect(shown.text.length).toBeLessThanOrEqual(20);
     expect(shown.rawText).toBe("Where you going, Pip? Huh? Where you going?");
+  });
+
+  it("names both the dragger and the target before the clip", () => {
+    const shown = presentReply("{Dragger}, you get a gold star. {Target}, you get eaten.", {
+      playerName: "Pip",
+      draggerName: "Rex",
+      maxReplyLength: 200,
+      maxTokens: 80,
+    });
+    expect(shown.rawText).toBe("Rex, you get a gold star. Pip, you get eaten.");
+    expect(shown.decisions[0]?.reason).toContain("Rex");
+    expect(shown.decisions[0]?.reason).toContain("Pip");
   });
 });
 
@@ -321,6 +354,37 @@ describe("steer", () => {
       expect(messageTokenEstimate(steerMessages)).toBeLessThanOrEqual(budget);
       expect(messageTokenEstimate(rephraseMessages)).toBeLessThanOrEqual(budget);
     }
+  });
+
+  it("keeps the speech hint and reasons on the intent the model actually picked", () => {
+    const decision = decide(input({
+      alignment: "NE",
+      inventory: [{ id: "mango-block", name: "Mango block", count: 1 }],
+      distanceFt: 10,
+      winOdds: 0.8,
+      dinobook: false,
+    }));
+    expect(decision.intent).toBe("attack");
+    expect(decision.speechHint).toBe("I want what you're carrying.");
+    const item = hintItem(input({
+      alignment: "NE",
+      inventory: [{ id: "berry", name: "Berry", count: 1 }],
+      distanceFt: 10,
+      winOdds: 0.2,
+      dinobook: false,
+      wants: [{ id: "berry", name: "Berry" }],
+    }));
+    expect(item).toBe("Berry");
+    const overridden = reconcileSteeredDecision(decision, "beg", "Context model chose beg.", "Mango block");
+    expect(overridden.intent).toBe("beg");
+    expect(overridden.speechHint).toBe(BEG_MANGO);
+    expect(overridden.reasons.at(-1)).toBe("Context model chose beg.");
+    expect(overridden.reasons.join(" ")).not.toContain("attacks");
+    expect(overridden.reasons[0]).toContain("Alignment NE");
+    expect(reconcileSteeredDecision(decision, "attack", "Context model chose attack.")).toBe(decision);
+    const berry = reconcileSteeredDecision(decision, "beg", "", "Berry");
+    expect(berry.speechHint).toBe(speechHint("beg", "Berry"));
+    expect(berry.reasons.at(-1)).toContain("beg");
   });
 
   it("steers with the intent word and otherwise keeps the chat line", () => {

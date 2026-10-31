@@ -5,7 +5,7 @@ import { INTENTS } from "./types";
 import { contextBlob, estimateTokens, type ContextState } from "./context";
 import { engineUtterance } from "./session";
 import type { PromptMessage } from "./prompt";
-import type { Decision, DecisionInput } from "./alignment";
+import { speechHint, type Decision, type DecisionInput } from "./alignment";
 
 export const INTENT_KEYWORD: Record<Intent, string | null> = {
   attack: "attack",
@@ -83,6 +83,27 @@ export function steerDecision(steer: Steer): TraceDecision {
     chosen: steer.utterance,
     reason: steer.reason,
     detail: { source: steer.source, keyword: steer.keyword },
+  };
+}
+
+/**
+ * When the context model picks a different intent, the shown reasons and speech hint
+ * follow that intent. The world facts stay. An unchanged intent keeps the alignment lines.
+ */
+export function reconcileSteeredDecision(
+  decision: Decision,
+  intent: Intent,
+  note: string,
+  itemName = "",
+): Decision {
+  if (intent === decision.intent) return decision;
+  const item = itemName.trim() || decision.smelledWant[0] || "";
+  const because = note.trim().length > 0 ? note.trim() : `Context model chose ${intent}.`;
+  return {
+    ...decision,
+    intent,
+    reasons: [...decision.reasons.slice(0, -1), because],
+    speechHint: speechHint(intent, item),
   };
 }
 
