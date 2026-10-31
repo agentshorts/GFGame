@@ -13,6 +13,7 @@
 class UFont;
 class UMaterialInterface;
 class UStaticMesh;
+class UPointLightComponent;
 class UStaticMeshComponent;
 class UTextRenderComponent;
 class AGFPlayerState;
@@ -66,6 +67,7 @@ public:
 	/**
 	 * Locked rooms are painted at build, then again when this crew's unlocks change.
 	 * Crystal Gallery follows Tunnels. Glow Grotto follows Lanterns. An empty crew leaves those two dim.
+	 * A locked room keeps its alpha, leans toward cave stone, drops its sign to dim ink, and switches its fill light off.
 	 */
 	void SyncRoomTints(const FGFMineCrew& Crew);
 
@@ -75,6 +77,10 @@ public:
 	FLinearColor GetRoomOpenColor(FName RoomId) const;
 	/** Assign sign, including "(locked)" while the room is shut. */
 	FString GetRoomSign(FName RoomId) const;
+	/** Ink on that assign sign. Open rooms are white. Locked rooms are dim. */
+	FColor GetRoomSignColor(FName RoomId) const;
+	/** Fill light intensity. 0 while the room is locked. */
+	float GetRoomLightIntensity(FName RoomId) const;
 
 	/** Last verb result, replicated so a client HUD can show it. */
 	UPROPERTY(Replicated)
@@ -83,8 +89,17 @@ public:
 	static constexpr float NearRadiusCm = 4500.f;
 	/** Matches the no-PlayerStart hub stand (FGFPlayerStartRules::FallbackZ). */
 	static constexpr float HubStandZCm = 120.f;
-	/** Locked rooms (no unlock on the crew yet) are this fraction of their open colour. */
+	/** Locked rooms (no unlock on the crew yet) are this fraction of their open colour, then mixed toward cave stone. */
 	static constexpr float LockedRoomBrightness = 0.45f;
+	/** Fill light on an open room. Locked rooms stay at 0 so the space actually brightens. */
+	static constexpr float OpenRoomLightIntensity = 600.f;
+	/** Neighbouring rooms are farther apart than this, so one open room does not light the next. */
+	static constexpr float RoomLightRadiusCm = 420.f;
+
+	/** Locked paint. Alpha stays with the open colour so the shell does not turn into a ghost. */
+	static FLinearColor DimmedRoomColor(const FLinearColor& Open);
+	static FColor OpenSignColor();
+	static FColor LockedSignColor();
 
 protected:
 	UFUNCTION()
@@ -121,6 +136,10 @@ private:
 
 	UPROPERTY()
 	TArray<TObjectPtr<UTextRenderComponent>> RoomLabels;
+
+	/** One fill light per room, same order as RoomIds. Off while that room is locked. */
+	UPROPERTY()
+	TArray<TObjectPtr<UPointLightComponent>> RoomLights;
 
 	TArray<FString> RoomTitles;
 	TArray<FLinearColor> RoomOpenColors;

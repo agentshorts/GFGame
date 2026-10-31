@@ -1,73 +1,189 @@
----,DisplayName,Icon,Category,StackMax,Rarity,SourceTag,Tier,Value,MaterialCategory,bWagerable,bRentable,Exclusive,bAccountBound
-Wood,"NSLOCTEXT(""GFItems"", ""Wood"", ""Wood"")",None,Material,999,Common,,1,1,Building,True,True,None,False
-Stone,"NSLOCTEXT(""GFItems"", ""Stone"", ""Stone"")",None,Material,999,Common,,1,1,Building,True,True,None,False
-Clay,"NSLOCTEXT(""GFItems"", ""Clay"", ""Clay"")",None,Material,999,Common,,1,1,Building,True,True,None,False
-Dirt,"NSLOCTEXT(""GFItems"", ""Dirt"", ""Dirt"")",None,Block,999,Common,,1,1,Building,True,True,None,False
-WoodPlank,"NSLOCTEXT(""GFItems"", ""WoodPlank"", ""Wood Plank block"")",None,Block,999,Common,,1,1,Building,True,True,None,False
-Glass,"NSLOCTEXT(""GFItems"", ""Glass"", ""Glass block"")",None,Block,999,Common,,1,1,Building,True,True,None,False
-Coalnut,"NSLOCTEXT(""GFItems"", ""Coalnut"", ""Coalnut"")",None,Material,999,Common,,1,1,Building,True,True,None,False
-Fiber,"NSLOCTEXT(""GFItems"", ""Fiber"", ""Fiber"")",None,Material,999,Common,,1,1,Garden,True,True,None,False
-Flowers,"NSLOCTEXT(""GFItems"", ""Flowers"", ""Flowers"")",None,Material,999,Common,,1,1,Garden,True,True,None,False
-BerrySeed,"NSLOCTEXT(""GFItems"", ""BerrySeed"", ""Berry Seeds"")",None,Seed,999,Common,,1,1,Garden,True,True,None,False
-CottonSeed,"NSLOCTEXT(""GFItems"", ""CottonSeed"", ""Cotton Seeds"")",None,Seed,999,Common,,1,1,Garden,True,True,None,False
-SteakrootSeed,"NSLOCTEXT(""GFItems"", ""SteakrootSeed"", ""Steakroot Seeds"")",None,Seed,999,Common,,1,1,Garden,True,True,None,False
-EmberpepperSeed,"NSLOCTEXT(""GFItems"", ""EmberpepperSeed"", ""Emberpepper Seeds"")",None,Seed,999,Common,,1,1,Garden,True,True,None,False
-ThornmelonSeed,"NSLOCTEXT(""GFItems"", ""ThornmelonSeed"", ""Thornmelon Seeds"")",None,Seed,999,Common,,1,1,Garden,True,True,None,False
-Berry,"NSLOCTEXT(""GFItems"", ""Berry"", ""Berry"")",None,Treat,999,Common,,1,1,Food,True,True,None,False
-Fruit,"NSLOCTEXT(""GFItems"", ""Fruit"", ""Fruit"")",None,Treat,999,Common,,1,1,Food,True,True,None,False
-Metal,"NSLOCTEXT(""GFItems"", ""Metal"", ""Metal"")",None,Material,999,Common,,2,3,Building,True,True,None,False
-Scales,"NSLOCTEXT(""GFItems"", ""Scales"", ""Scales"")",None,Material,999,Common,,2,3,Building,True,True,None,False
-Bone,"NSLOCTEXT(""GFItems"", ""Bone"", ""Bone"")",None,Material,999,Common,,2,3,Building,True,True,None,False
-Meat,"NSLOCTEXT(""GFItems"", ""Meat"", ""Meat"")",None,Treat,999,Common,,2,3,Food,True,True,None,False
-Steakroot,"NSLOCTEXT(""GFItems"", ""Steakroot"", ""Steakroot"")",None,Treat,999,Common,,2,3,Food,True,True,None,False
-Emberpepper,"NSLOCTEXT(""GFItems"", ""Emberpepper"", ""Emberpepper"")",None,Treat,999,Common,,2,3,Food,True,True,None,False
-Fish,"NSLOCTEXT(""GFItems"", ""Fish"", ""River Fish"")",None,Treat,999,Common,,2,3,Food,True,True,None,False
-Glowgrub,"NSLOCTEXT(""GFItems"", ""Glowgrub"", ""Glowgrub"")",None,Treat,999,Common,,2,3,Food,True,True,None,False
-WildEgg,"NSLOCTEXT(""GFItems"", ""WildEgg"", ""Wild Egg"")",None,Treat,999,Common,,2,3,Food,True,True,None,False
-DinoTreat,"NSLOCTEXT(""GFItems"", ""DinoTreat"", ""Dino Treat"")",None,Treat,999,Common,,2,3,Food,True,True,None,False
-Fabric,"NSLOCTEXT(""GFItems"", ""Fabric"", ""Fabric"")",None,Block,999,Common,,2,3,Fabric,True,True,None,False
-Ribbon,"NSLOCTEXT(""GFItems"", ""Ribbon"", ""Ribbon"")",None,Material,999,Common,,2,3,Fabric,True,True,None,False
-GlowDust,"NSLOCTEXT(""GFItems"", ""GlowDust"", ""Glow Dust"")",None,Material,999,Common,,2,3,Glow,True,True,None,False
-Amber,"NSLOCTEXT(""GFItems"", ""Amber"", ""Amber"")",None,Material,999,Uncommon,,3,8,Glow,True,True,None,False
-Crystal,"NSLOCTEXT(""GFItems"", ""Crystal"", ""Crystal"")",None,Material,999,Uncommon,,3,8,Glow,True,True,None,False
-PrismShard,"NSLOCTEXT(""GFItems"", ""PrismShard"", ""Prism Shard"")",None,Material,999,Uncommon,,3,8,Glow,True,True,None,False
-Glitter,"NSLOCTEXT(""GFItems"", ""Glitter"", ""Glitter"")",None,Material,999,Uncommon,,3,8,Fabric,True,True,None,False
-RoseDye,"NSLOCTEXT(""GFItems"", ""RoseDye"", ""Rose Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None,False
-SunDye,"NSLOCTEXT(""GFItems"", ""SunDye"", ""Sun Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None,False
-FernDye,"NSLOCTEXT(""GFItems"", ""FernDye"", ""Fern Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None,False
-SkyDye,"NSLOCTEXT(""GFItems"", ""SkyDye"", ""Sky Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None,False
-PlumDye,"NSLOCTEXT(""GFItems"", ""PlumDye"", ""Plum Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None,False
-ChalkDye,"NSLOCTEXT(""GFItems"", ""ChalkDye"", ""Chalk Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None,False
-TrophyCup,"NSLOCTEXT(""GFItems"", ""TrophyCup"", ""Trophy Cup"")",None,Material,999,Uncommon,,3,8,Trophy,True,True,None,False
-SpellPage,"NSLOCTEXT(""GFItems"", ""SpellPage"", ""Spell Page"")",None,Material,999,Uncommon,,3,8,Trophy,True,True,None,False
-Thornmelon,"NSLOCTEXT(""GFItems"", ""Thornmelon"", ""Thornmelon"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False
-Fizzberry,"NSLOCTEXT(""GFItems"", ""Fizzberry"", ""Fizzberry"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False
-JerkyBites,"NSLOCTEXT(""GFItems"", ""JerkyBites"", ""Jerky Bites"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False
-FishSkewer,"NSLOCTEXT(""GFItems"", ""FishSkewer"", ""Fish Skewer"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False
-GrubJelly,"NSLOCTEXT(""GFItems"", ""GrubJelly"", ""Grub Jelly"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False
-SmokedHaunch,"NSLOCTEXT(""GFItems"", ""SmokedHaunch"", ""Smoked Haunch"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False
-PetitCake,"NSLOCTEXT(""GFItems"", ""PetitCake"", ""Petit Cake"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False
-Fossil,"NSLOCTEXT(""GFItems"", ""Fossil"", ""Fossil"")",None,Material,999,Rare,,4,20,Rare,True,True,None,False
-GoldenCarp,"NSLOCTEXT(""GFItems"", ""GoldenCarp"", ""Golden Carp"")",None,Treat,999,Rare,,4,20,Rare,True,True,None,False
-RareBloom,"NSLOCTEXT(""GFItems"", ""RareBloom"", ""Rare Bloom"")",None,Material,999,Rare,,4,20,Rare,True,True,None,False
-GoldNote,"NSLOCTEXT(""GFItems"", ""GoldNote"", ""Gold Note"")",None,Material,999,Rare,,4,20,Rare,True,True,None,False
-EmberRoast,"NSLOCTEXT(""GFItems"", ""EmberRoast"", ""Ember Roast"")",None,Treat,999,Rare,,4,20,Food,True,True,None,False
-Moonstone,"NSLOCTEXT(""GFItems"", ""Moonstone"", ""Moonstone"")",None,Material,999,Rare,,4,25,Rare,True,False,HallowNight,False
-Starglass,"NSLOCTEXT(""GFItems"", ""Starglass"", ""Starglass"")",None,Material,999,Rare,,4,25,Rare,True,False,HallowNight,False
-Gloomsilk,"NSLOCTEXT(""GFItems"", ""Gloomsilk"", ""Gloomsilk"")",None,Material,999,Rare,,4,25,Rare,True,False,HallowNight,False
-EmberCore,"NSLOCTEXT(""GFItems"", ""EmberCore"", ""Ember Core"")",None,Material,999,Rare,,4,25,Rare,True,False,HallowNight,False
-PolymerGel,"NSLOCTEXT(""GFItems"", ""PolymerGel"", ""Polymer Gel"")",None,Material,999,Uncommon,,3,10,Rare,True,False,Lab,False
-BioCulture,"NSLOCTEXT(""GFItems"", ""BioCulture"", ""Bio-Culture"")",None,Material,999,Uncommon,,3,10,Rare,True,False,Lab,False
-CircuitInk,"NSLOCTEXT(""GFItems"", ""CircuitInk"", ""Circuit Ink"")",None,Material,999,Uncommon,,3,10,Rare,True,False,Lab,False
-AnomalyShard,"NSLOCTEXT(""GFItems"", ""AnomalyShard"", ""Anomaly Shard"")",None,Material,999,Rare,,4,20,Rare,True,False,Lab,False
-Chair,"NSLOCTEXT(""GFItems"", ""Chair"", ""Chair"")",None,Furniture,99,Common,,0,0,None,False,False,None,False
-ScrapWire,"NSLOCTEXT(""GFItems"", ""ScrapWire"", ""Scrap Wire"")",None,Material,999,Common,,1,1,Building,True,True,None,False
-BentPipe,"NSLOCTEXT(""GFItems"", ""BentPipe"", ""Bent Pipe"")",None,Material,999,Common,,1,1,Building,True,True,None,False
-CrackedLens,"NSLOCTEXT(""GFItems"", ""CrackedLens"", ""Cracked Lens"")",None,Material,999,Common,,2,3,Glow,True,True,None,False
-LabTreat,"NSLOCTEXT(""GFItems"", ""LabTreat"", ""Lab Treat"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False
-CalmingMist,"NSLOCTEXT(""GFItems"", ""CalmingMist"", ""Calming Mist"")",None,Tool,99,Uncommon,,0,0,None,False,False,None,False
-LabCoat,"NSLOCTEXT(""GFItems"", ""LabCoat"", ""Lab Coat"")",None,Outfit,1,Uncommon,,0,0,None,False,False,None,False
-SafetyGoggles,"NSLOCTEXT(""GFItems"", ""SafetyGoggles"", ""Safety Goggles"")",None,Outfit,1,Common,,0,0,None,False,False,None,False
-BurrowLantern,"NSLOCTEXT(""GFItems"", ""BurrowLantern"", ""Burrow Lantern"")",None,Furniture,99,Uncommon,,0,0,None,False,False,None,False
-BigGrumbleTame,"NSLOCTEXT(""GFItems"", ""BigGrumbleTame"", ""Grumble Tamestone"")",None,Material,99,Rare,,4,20,Rare,False,False,None,False
-FerryPass,"NSLOCTEXT(""GFItems"", ""FerryPass"", ""Ferry Pass"")",None,Material,1,Rare,,4,20,Rare,False,False,None,True
+---,DisplayName,Icon,Category,StackMax,Rarity,SourceTag,Tier,Value,MaterialCategory,bWagerable,bRentable,Exclusive,bAccountBound,OutfitSlot
+Wood,"NSLOCTEXT(""GFItems"", ""Wood"", ""Wood"")",None,Material,999,Common,,1,1,Building,True,True,None,False,None
+Stone,"NSLOCTEXT(""GFItems"", ""Stone"", ""Stone"")",None,Material,999,Common,,1,1,Building,True,True,None,False,None
+Clay,"NSLOCTEXT(""GFItems"", ""Clay"", ""Clay"")",None,Material,999,Common,,1,1,Building,True,True,None,False,None
+Dirt,"NSLOCTEXT(""GFItems"", ""Dirt"", ""Dirt"")",None,Block,999,Common,,1,1,Building,True,True,None,False,None
+WoodPlank,"NSLOCTEXT(""GFItems"", ""WoodPlank"", ""Wood Plank block"")",None,Block,999,Common,,1,1,Building,True,True,None,False,None
+Glass,"NSLOCTEXT(""GFItems"", ""Glass"", ""Glass block"")",None,Block,999,Common,,1,1,Building,True,True,None,False,None
+Coalnut,"NSLOCTEXT(""GFItems"", ""Coalnut"", ""Coalnut"")",None,Material,999,Common,,1,1,Building,True,True,None,False,None
+Fiber,"NSLOCTEXT(""GFItems"", ""Fiber"", ""Fiber"")",None,Material,999,Common,,1,1,Garden,True,True,None,False,None
+Flowers,"NSLOCTEXT(""GFItems"", ""Flowers"", ""Flowers"")",None,Material,999,Common,,1,1,Garden,True,True,None,False,None
+BerrySeed,"NSLOCTEXT(""GFItems"", ""BerrySeed"", ""Berry Seeds"")",None,Seed,999,Common,,1,1,Garden,True,True,None,False,None
+CottonSeed,"NSLOCTEXT(""GFItems"", ""CottonSeed"", ""Cotton Seeds"")",None,Seed,999,Common,,1,1,Garden,True,True,None,False,None
+SteakrootSeed,"NSLOCTEXT(""GFItems"", ""SteakrootSeed"", ""Steakroot Seeds"")",None,Seed,999,Common,,1,1,Garden,True,True,None,False,None
+EmberpepperSeed,"NSLOCTEXT(""GFItems"", ""EmberpepperSeed"", ""Emberpepper Seeds"")",None,Seed,999,Common,,1,1,Garden,True,True,None,False,None
+ThornmelonSeed,"NSLOCTEXT(""GFItems"", ""ThornmelonSeed"", ""Thornmelon Seeds"")",None,Seed,999,Common,,1,1,Garden,True,True,None,False,None
+Berry,"NSLOCTEXT(""GFItems"", ""Berry"", ""Berry"")",None,Treat,999,Common,,1,1,Food,True,True,None,False,None
+Fruit,"NSLOCTEXT(""GFItems"", ""Fruit"", ""Fruit"")",None,Treat,999,Common,,1,1,Food,True,True,None,False,None
+Metal,"NSLOCTEXT(""GFItems"", ""Metal"", ""Metal"")",None,Material,999,Common,,2,3,Building,True,True,None,False,None
+Scales,"NSLOCTEXT(""GFItems"", ""Scales"", ""Scales"")",None,Material,999,Common,,2,3,Building,True,True,None,False,None
+Bone,"NSLOCTEXT(""GFItems"", ""Bone"", ""Bone"")",None,Material,999,Common,,2,3,Building,True,True,None,False,None
+Meat,"NSLOCTEXT(""GFItems"", ""Meat"", ""Meat"")",None,Treat,999,Common,,2,3,Food,True,True,None,False,None
+Steakroot,"NSLOCTEXT(""GFItems"", ""Steakroot"", ""Steakroot"")",None,Treat,999,Common,,2,3,Food,True,True,None,False,None
+Emberpepper,"NSLOCTEXT(""GFItems"", ""Emberpepper"", ""Emberpepper"")",None,Treat,999,Common,,2,3,Food,True,True,None,False,None
+Fish,"NSLOCTEXT(""GFItems"", ""Fish"", ""River Fish"")",None,Treat,999,Common,,2,3,Food,True,True,None,False,None
+Glowgrub,"NSLOCTEXT(""GFItems"", ""Glowgrub"", ""Glowgrub"")",None,Treat,999,Common,,2,3,Food,True,True,None,False,None
+WildEgg,"NSLOCTEXT(""GFItems"", ""WildEgg"", ""Wild Egg"")",None,Treat,999,Common,,2,3,Food,True,True,None,False,None
+DinoTreat,"NSLOCTEXT(""GFItems"", ""DinoTreat"", ""Dino Treat"")",None,Treat,999,Common,,2,3,Food,True,True,None,False,None
+Fabric,"NSLOCTEXT(""GFItems"", ""Fabric"", ""Fabric"")",None,Block,999,Common,,2,3,Fabric,True,True,None,False,None
+Ribbon,"NSLOCTEXT(""GFItems"", ""Ribbon"", ""Ribbon"")",None,Material,999,Common,,2,3,Fabric,True,True,None,False,None
+GlowDust,"NSLOCTEXT(""GFItems"", ""GlowDust"", ""Glow Dust"")",None,Material,999,Common,,2,3,Glow,True,True,None,False,None
+Amber,"NSLOCTEXT(""GFItems"", ""Amber"", ""Amber"")",None,Material,999,Uncommon,,3,8,Glow,True,True,None,False,None
+Crystal,"NSLOCTEXT(""GFItems"", ""Crystal"", ""Crystal"")",None,Material,999,Uncommon,,3,8,Glow,True,True,None,False,None
+PrismShard,"NSLOCTEXT(""GFItems"", ""PrismShard"", ""Prism Shard"")",None,Material,999,Uncommon,,3,8,Glow,True,True,None,False,None
+Glitter,"NSLOCTEXT(""GFItems"", ""Glitter"", ""Glitter"")",None,Material,999,Uncommon,,3,8,Fabric,True,True,None,False,None
+RoseDye,"NSLOCTEXT(""GFItems"", ""RoseDye"", ""Rose Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None,False,None
+SunDye,"NSLOCTEXT(""GFItems"", ""SunDye"", ""Sun Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None,False,None
+FernDye,"NSLOCTEXT(""GFItems"", ""FernDye"", ""Fern Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None,False,None
+SkyDye,"NSLOCTEXT(""GFItems"", ""SkyDye"", ""Sky Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None,False,None
+PlumDye,"NSLOCTEXT(""GFItems"", ""PlumDye"", ""Plum Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None,False,None
+ChalkDye,"NSLOCTEXT(""GFItems"", ""ChalkDye"", ""Chalk Dye"")",None,Material,999,Common,,2,3,Garden,True,True,None,False,None
+TrophyCup,"NSLOCTEXT(""GFItems"", ""TrophyCup"", ""Trophy Cup"")",None,Material,999,Uncommon,,3,8,Trophy,True,True,None,False,None
+SpellPage,"NSLOCTEXT(""GFItems"", ""SpellPage"", ""Spell Page"")",None,Material,999,Uncommon,,3,8,Trophy,True,True,None,False,None
+Thornmelon,"NSLOCTEXT(""GFItems"", ""Thornmelon"", ""Thornmelon"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False,None
+Fizzberry,"NSLOCTEXT(""GFItems"", ""Fizzberry"", ""Fizzberry"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False,None
+JerkyBites,"NSLOCTEXT(""GFItems"", ""JerkyBites"", ""Jerky Bites"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False,None
+FishSkewer,"NSLOCTEXT(""GFItems"", ""FishSkewer"", ""Fish Skewer"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False,None
+GrubJelly,"NSLOCTEXT(""GFItems"", ""GrubJelly"", ""Grub Jelly"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False,None
+SmokedHaunch,"NSLOCTEXT(""GFItems"", ""SmokedHaunch"", ""Smoked Haunch"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False,None
+PetitCake,"NSLOCTEXT(""GFItems"", ""PetitCake"", ""Petit Cake"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False,None
+Fossil,"NSLOCTEXT(""GFItems"", ""Fossil"", ""Fossil"")",None,Material,999,Rare,,4,20,Rare,True,True,None,False,None
+GoldenCarp,"NSLOCTEXT(""GFItems"", ""GoldenCarp"", ""Golden Carp"")",None,Treat,999,Rare,,4,20,Rare,True,True,None,False,None
+RareBloom,"NSLOCTEXT(""GFItems"", ""RareBloom"", ""Rare Bloom"")",None,Material,999,Rare,,4,20,Rare,True,True,None,False,None
+GoldNote,"NSLOCTEXT(""GFItems"", ""GoldNote"", ""Gold Note"")",None,Material,999,Rare,,4,20,Rare,True,True,None,False,None
+EmberRoast,"NSLOCTEXT(""GFItems"", ""EmberRoast"", ""Ember Roast"")",None,Treat,999,Rare,,4,20,Food,True,True,None,False,None
+Moonstone,"NSLOCTEXT(""GFItems"", ""Moonstone"", ""Moonstone"")",None,Material,999,Rare,,4,25,Rare,True,False,HallowNight,False,None
+Starglass,"NSLOCTEXT(""GFItems"", ""Starglass"", ""Starglass"")",None,Material,999,Rare,,4,25,Rare,True,False,HallowNight,False,None
+Gloomsilk,"NSLOCTEXT(""GFItems"", ""Gloomsilk"", ""Gloomsilk"")",None,Material,999,Rare,,4,25,Rare,True,False,HallowNight,False,None
+EmberCore,"NSLOCTEXT(""GFItems"", ""EmberCore"", ""Ember Core"")",None,Material,999,Rare,,4,25,Rare,True,False,HallowNight,False,None
+PolymerGel,"NSLOCTEXT(""GFItems"", ""PolymerGel"", ""Polymer Gel"")",None,Material,999,Uncommon,,3,10,Rare,True,False,Lab,False,None
+BioCulture,"NSLOCTEXT(""GFItems"", ""BioCulture"", ""Bio-Culture"")",None,Material,999,Uncommon,,3,10,Rare,True,False,Lab,False,None
+CircuitInk,"NSLOCTEXT(""GFItems"", ""CircuitInk"", ""Circuit Ink"")",None,Material,999,Uncommon,,3,10,Rare,True,False,Lab,False,None
+AnomalyShard,"NSLOCTEXT(""GFItems"", ""AnomalyShard"", ""Anomaly Shard"")",None,Material,999,Rare,,4,20,Rare,True,False,Lab,False,None
+Chair,"NSLOCTEXT(""GFItems"", ""Chair"", ""Chair"")",None,Furniture,99,Common,,0,0,None,False,False,None,False,None
+ScrapWire,"NSLOCTEXT(""GFItems"", ""ScrapWire"", ""Scrap Wire"")",None,Material,999,Common,,1,1,Building,True,True,None,False,None
+BentPipe,"NSLOCTEXT(""GFItems"", ""BentPipe"", ""Bent Pipe"")",None,Material,999,Common,,1,1,Building,True,True,None,False,None
+CrackedLens,"NSLOCTEXT(""GFItems"", ""CrackedLens"", ""Cracked Lens"")",None,Material,999,Common,,2,3,Glow,True,True,None,False,None
+LabTreat,"NSLOCTEXT(""GFItems"", ""LabTreat"", ""Lab Treat"")",None,Treat,999,Uncommon,,3,8,Food,True,True,None,False,None
+CalmingMist,"NSLOCTEXT(""GFItems"", ""CalmingMist"", ""Calming Mist"")",None,Tool,99,Uncommon,,0,0,None,False,False,None,False,None
+LabCoat,"NSLOCTEXT(""GFItems"", ""LabCoat"", ""Lab Coat"")",None,Outfit,1,Uncommon,,0,0,None,False,False,None,False,Top
+SafetyGoggles,"NSLOCTEXT(""GFItems"", ""SafetyGoggles"", ""Safety Goggles"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+BurrowLantern,"NSLOCTEXT(""GFItems"", ""BurrowLantern"", ""Burrow Lantern"")",None,Furniture,99,Uncommon,,0,0,None,False,False,None,False,None
+BigGrumbleTame,"NSLOCTEXT(""GFItems"", ""BigGrumbleTame"", ""Grumble Tamestone"")",None,Material,99,Rare,,4,20,Rare,False,False,None,False,None
+FerryPass,"NSLOCTEXT(""GFItems"", ""FerryPass"", ""Ferry Pass"")",None,Material,1,Rare,,4,20,Rare,False,False,None,True,None
+dirtachi_01,"NSLOCTEXT(""GFItems"", ""dirtachi_01"", ""Double-D Mud Loafers"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+dirtachi_02,"NSLOCTEXT(""GFItems"", ""dirtachi_02"", ""Dirtachi Mud-Print Purse"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+dirtachi_03,"NSLOCTEXT(""GFItems"", ""dirtachi_03"", ""Bee-in-the-Bog Cardigan"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+predada_01,"NSLOCTEXT(""GFItems"", ""predada_01"", ""Nylon Hunter Backpack"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+predada_02,"NSLOCTEXT(""GFItems"", ""predada_02"", ""Apex Pointed Boots"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+predada_03,"NSLOCTEXT(""GFItems"", ""predada_03"", ""Triangle-Tooth Visor"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Hair
+lavatonne_01,"NSLOCTEXT(""GFItems"", ""lavatonne_01"", ""Magma Duffle Tote"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+lavatonne_02,"NSLOCTEXT(""GFItems"", ""lavatonne_02"", ""Lava Steamer Trunk"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+lavatonne_03,"NSLOCTEXT(""GFItems"", ""lavatonne_03"", ""Ember Print Scarf"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+shardnel_01,"NSLOCTEXT(""GFItems"", ""shardnel_01"", ""Quilted Shard Flap Bag"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+shardnel_02,"NSLOCTEXT(""GFItems"", ""shardnel_02"", ""Frost Shard Perfume"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+shardnel_03,"NSLOCTEXT(""GFItems"", ""shardnel_03"", ""Tweed Rime Jacket"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+shardnel_04,"NSLOCTEXT(""GFItems"", ""shardnel_04"", ""Pearl-Tooth Necklace"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+versaurus_01,"NSLOCTEXT(""GFItems"", ""versaurus_01"", ""Gold Scale Silk Shirt"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+versaurus_02,"NSLOCTEXT(""GFItems"", ""versaurus_02"", ""Baroque Scale Leggings"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Bottom
+versaurus_03,"NSLOCTEXT(""GFItems"", ""versaurus_03"", ""Gold Tail Cuff"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+bonenciaga_01,"NSLOCTEXT(""GFItems"", ""bonenciaga_01"", ""Triple-Bone Chunky Sneakers"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+bonenciaga_02,"NSLOCTEXT(""GFItems"", ""bonenciaga_02"", ""Trash Pouch Clutch"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+bonenciaga_03,"NSLOCTEXT(""GFItems"", ""bonenciaga_03"", ""Oversized Hoodie of Doom"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+dinor_01,"NSLOCTEXT(""GFItems"", ""dinor_01"", ""Saddle-Back Bag"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+dinor_02,"NSLOCTEXT(""GFItems"", ""dinor_02"", ""Bar Jacket (Spined)"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+dinor_03,"NSLOCTEXT(""GFItems"", ""dinor_03"", ""Rouge Dinor Lip Glow"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+hermozoic_01,"NSLOCTEXT(""GFItems"", ""hermozoic_01"", ""Birkinosaur Bag"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+hermozoic_02,"NSLOCTEXT(""GFItems"", ""hermozoic_02"", ""Kelly Fossil Bag"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+hermozoic_03,"NSLOCTEXT(""GFItems"", ""hermozoic_03"", ""Herbivore Buckle Belt"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+burrowberry_01,"NSLOCTEXT(""GFItems"", ""burrowberry_01"", ""Check Trench Coat"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+burrowberry_02,"NSLOCTEXT(""GFItems"", ""burrowberry_02"", ""Plaid Burrow Scarf"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+burrowberry_03,"NSLOCTEXT(""GFItems"", ""burrowberry_03"", ""Bog Wellies"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+suprex_01,"NSLOCTEXT(""GFItems"", ""suprex_01"", ""Red Block Tee (Tiny Arms Fit)"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+suprex_02,"NSLOCTEXT(""GFItems"", ""suprex_02"", ""Drop-Day Beanie"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Hair
+suprex_03,"NSLOCTEXT(""GFItems"", ""suprex_03"", ""Brick (Literally a Brick) Keychain"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+spike_01,"NSLOCTEXT(""GFItems"", ""spike_01"", ""Air Stegos"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+spike_02,"NSLOCTEXT(""GFItems"", ""spike_02"", ""Tail-Stripe Track Pants"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Bottom
+spike_03,"NSLOCTEXT(""GFItems"", ""spike_03"", ""Spike Sweatband"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+raptidas_01,"NSLOCTEXT(""GFItems"", ""raptidas_01"", ""Three-Claw Track Suit"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+raptidas_02,"NSLOCTEXT(""GFItems"", ""raptidas_02"", ""Court Claw Sneakers"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+raptidas_03,"NSLOCTEXT(""GFItems"", ""raptidas_03"", ""Raptor Slides"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+offrime_01,"NSLOCTEXT(""GFItems"", ""offrime_01"", ""\""PARKA\"" Parka"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+offrime_02,"NSLOCTEXT(""GFItems"", ""offrime_02"", ""Industrial Zip-Tie Tag"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+offrime_03,"NSLOCTEXT(""GFItems"", ""offrime_03"", ""Arrow-Ice Hoodie"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+fangdi_01,"NSLOCTEXT(""GFItems"", ""fangdi_01"", ""Fang Shoulder Bag"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+fangdi_02,"NSLOCTEXT(""GFItems"", ""fangdi_02"", ""Open-Jaw Purse"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+fangdi_03,"NSLOCTEXT(""GFItems"", ""fangdi_03"", ""Ember Slides"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+gnawvenchy_01,"NSLOCTEXT(""GFItems"", ""gnawvenchy_01"", ""Gnaw Tote Bag"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+gnawvenchy_02,"NSLOCTEXT(""GFItems"", ""gnawvenchy_02"", ""Bite-Mark Hoodie"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+gnawvenchy_03,"NSLOCTEXT(""GFItems"", ""gnawvenchy_03"", ""Frostbitten Lip Balm"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+volcantino_01,"NSLOCTEXT(""GFItems"", ""volcantino_01"", ""Studded Magma Pumps"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+volcantino_02,"NSLOCTEXT(""GFItems"", ""volcantino_02"", ""Volcano Red Gown"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+volcantino_03,"NSLOCTEXT(""GFItems"", ""volcantino_03"", ""Stud Clutch"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+monrimer_01,"NSLOCTEXT(""GFItems"", ""monrimer_01"", ""Maya Mega-Puffer"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+monrimer_02,"NSLOCTEXT(""GFItems"", ""monrimer_02"", ""Snowpuff Moon Boots"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+monrimer_03,"NSLOCTEXT(""GFItems"", ""monrimer_03"", ""Puffer Earmuff Hood"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Hair
+pterogoose_01,"NSLOCTEXT(""GFItems"", ""pterogoose_01"", ""Expedition Wing Parka"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+pterogoose_02,"NSLOCTEXT(""GFItems"", ""pterogoose_02"", ""Fur-Ruff Trapper Hat"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Hair
+pangaeagonia_01,"NSLOCTEXT(""GFItems"", ""pangaeagonia_01"", ""Swamp Fleece Jacket"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+pangaeagonia_02,"NSLOCTEXT(""GFItems"", ""pangaeagonia_02"", ""Swamp Trunks"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Bottom
+pangaeagonia_03,"NSLOCTEXT(""GFItems"", ""pangaeagonia_03"", ""Snap-Jaw Fleece Pullover"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+northfang_01,"NSLOCTEXT(""GFItems"", ""northfang_01"", ""Fang Puffer Jacket"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+northfang_02,"NSLOCTEXT(""GFItems"", ""northfang_02"", ""Summit Ice Pants"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Bottom
+northfang_03,"NSLOCTEXT(""GFItems"", ""northfang_03"", ""Base-Camp Duffel"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+leafis_01,"NSLOCTEXT(""GFItems"", ""leafis_01"", ""Straight Vine Jeans"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Bottom
+leafis_02,"NSLOCTEXT(""GFItems"", ""leafis_02"", ""Trucker Leaf Jacket"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+rexban_01,"NSLOCTEXT(""GFItems"", ""rexban_01"", ""Way-Fang Sunglasses"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+rexban_02,"NSLOCTEXT(""GFItems"", ""rexban_02"", ""Aviator Ptero Shades"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+clawcs_01,"NSLOCTEXT(""GFItems"", ""clawcs_01"", ""Classic Claw Clog"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+clawcs_02,"NSLOCTEXT(""GFItems"", ""clawcs_02"", ""Clog Tooth Charms"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+conversaur_01,"NSLOCTEXT(""GFItems"", ""conversaur_01"", ""Chuck Raptor High-Tops"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+conversaur_02,"NSLOCTEXT(""GFItems"", ""conversaur_02"", ""Star-Claw Platform"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+tarpitland_01,"NSLOCTEXT(""GFItems"", ""tarpitland_01"", ""Six-Inch Tar Boot"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+tarpitland_02,"NSLOCTEXT(""GFItems"", ""tarpitland_02"", ""Work Vest of Questionable Safety"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+drraptens_01,"NSLOCTEXT(""GFItems"", ""drraptens_01"", ""Eight-Eye Stomp Boots"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+drraptens_02,"NSLOCTEXT(""GFItems"", ""drraptens_02"", ""Stitched Stomp Mary Janes"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+mykelclaws_01,"NSLOCTEXT(""GFItems"", ""mykelclaws_01"", ""Jet-Set Claw Tote"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+mykelclaws_02,"NSLOCTEXT(""GFItems"", ""mykelclaws_02"", ""Gold Claw Watch"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+sephossil_01,"NSLOCTEXT(""GFItems"", ""sephossil_01"", ""Amber Highlighter Palette"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+sephossil_02,"NSLOCTEXT(""GFItems"", ""sephossil_02"", ""Fossil Clay Face Mask"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+sephossil_03,"NSLOCTEXT(""GFItems"", ""sephossil_03"", ""Glitter Scale Nail Set"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+mawcosmetics_01,"NSLOCTEXT(""GFItems"", ""mawcosmetics_01"", ""Ruby Roar Lipstick"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+mawcosmetics_02,"NSLOCTEXT(""GFItems"", ""mawcosmetics_02"", ""Smoky Ash Eyeshadow"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+glossaur_01,"NSLOCTEXT(""GFItems"", ""glossaur_01"", ""Boy-Brow Moss Gel"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+glossaur_02,"NSLOCTEXT(""GFItems"", ""glossaur_02"", ""Balm Dot-Saur"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+glossaur_03,"NSLOCTEXT(""GFItems"", ""glossaur_03"", ""Pink Pouch Bag"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+lululava_01,"NSLOCTEXT(""GFItems"", ""lululava_01"", ""Magma Yoga Leggings"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Bottom
+lululava_02,"NSLOCTEXT(""GFItems"", ""lululava_02"", ""Ember Run Jacket"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+lululava_03,"NSLOCTEXT(""GFItems"", ""lululava_03"", ""Belt Bag (Heat-Proof)"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+calvinclaine_01,"NSLOCTEXT(""GFItems"", ""calvinclaine_01"", ""Logo Waistband Briefs"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Bottom
+calvinclaine_02,"NSLOCTEXT(""GFItems"", ""calvinclaine_02"", ""Obsessed-with-Rocks Cologne"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+tommyhillfanger_01,"NSLOCTEXT(""GFItems"", ""tommyhillfanger_01"", ""Colorblock Fang Polo"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+tommyhillfanger_02,"NSLOCTEXT(""GFItems"", ""tommyhillfanger_02"", ""Regatta Chinos"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Bottom
+ralphroarin_01,"NSLOCTEXT(""GFItems"", ""ralphroarin_01"", ""Polo Raptor Shirt"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+ralphroarin_02,"NSLOCTEXT(""GFItems"", ""ralphroarin_02"", ""Cable-Knit Hide Sweater"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+ralphroarin_03,"NSLOCTEXT(""GFItems"", ""ralphroarin_03"", ""Big Raptor Cap"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Hair
+armorni_01,"NSLOCTEXT(""GFItems"", ""armorni_01"", ""Ice-Plate Suit"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+armorni_02,"NSLOCTEXT(""GFItems"", ""armorni_02"", ""Frost Cologne"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+shardovski_01,"NSLOCTEXT(""GFItems"", ""shardovski_01"", ""Crystal Swan-Ptero Brooch"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+shardovski_02,"NSLOCTEXT(""GFItems"", ""shardovski_02"", ""Rhinestone Cape"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+shardovski_03,"NSLOCTEXT(""GFItems"", ""shardovski_03"", ""Sparkle Tiara"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Hair
+tiffanodon_01,"NSLOCTEXT(""GFItems"", ""tiffanodon_01"", ""Return-to-Den Tag Necklace"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+tiffanodon_02,"NSLOCTEXT(""GFItems"", ""tiffanodon_02"", ""Fossil Engagement Ring"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+carnitier_01,"NSLOCTEXT(""GFItems"", ""carnitier_01"", ""Love Shackle Bracelet"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+carnitier_02,"NSLOCTEXT(""GFItems"", ""carnitier_02"", ""Panther-Rex Ring"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+roarlex_01,"NSLOCTEXT(""GFItems"", ""roarlex_01"", ""Swamp Dive Watch"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+roarlex_02,"NSLOCTEXT(""GFItems"", ""roarlex_02"", ""Extinction Calendar Watch"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+bathingrex_01,"NSLOCTEXT(""GFItems"", ""bathingrex_01"", ""Shark-Jaw Full-Zip Hoodie"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+bathingrex_02,"NSLOCTEXT(""GFItems"", ""bathingrex_02"", ""Star-Stomp Sneakers"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Shoes
+hidemoss_01,"NSLOCTEXT(""GFItems"", ""hidemoss_01"", ""Basic Moss Tee"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+hidemoss_02,"NSLOCTEXT(""GFItems"", ""hidemoss_02"", ""Hide Mom Jeans"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Bottom
+abercrumble_01,"NSLOCTEXT(""GFItems"", ""abercrumble_01"", ""Grumble Moose Hoodie"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+abercrumble_02,"NSLOCTEXT(""GFItems"", ""abercrumble_02"", ""Fierce-ish Cologne"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+abercrumble_03,"NSLOCTEXT(""GFItems"", ""abercrumble_03"", ""Distressed (Clawed) Jeans"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Bottom
+hottarpit_01,"NSLOCTEXT(""GFItems"", ""hottarpit_01"", ""Band Tee (The Extinctions)"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+hottarpit_02,"NSLOCTEXT(""GFItems"", ""hottarpit_02"", ""Chain-Tail Wallet"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+hottarpit_03,"NSLOCTEXT(""GFItems"", ""hottarpit_03"", ""Spiked Collar Choker"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+velociraptorias_01,"NSLOCTEXT(""GFItems"", ""velociraptorias_01"", ""Ptero Angel Wings"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory
+velociraptorias_02,"NSLOCTEXT(""GFItems"", ""velociraptorias_02"", ""Bombshell Scale Robe"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Top
+velociraptorias_03,"NSLOCTEXT(""GFItems"", ""velociraptorias_03"", ""Body Mist: Sweet Swamp"")",None,Outfit,1,Common,,0,0,None,False,False,None,False,Accessory

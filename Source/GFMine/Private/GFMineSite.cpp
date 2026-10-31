@@ -7,6 +7,7 @@
 #include "GFMiniGameCatalog.h"
 #include "GFPlayerState.h"
 #include "Components/BoxComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Font.h"
@@ -309,7 +310,38 @@ void AGFMineSite::AddRoom(FName RoomId, const FString& Title, const FVector& Cen
 	RoomMeshCounts.Add(RoomMeshParts.Num() - MeshStart);
 	RoomLabels.Add(AddLabel(Title, Center + FVector(0.f, 0.f, 220.f)));
 	RoomSignText.Add(Title);
+	UPointLightComponent* Light = NewObject<UPointLightComponent>(this);
+	Light->SetupAttachment(Root);
+	Light->SetMobility(EComponentMobility::Movable);
+	Light->SetRelativeLocation(Center + FVector(0.f, 0.f, 160.f));
+	Light->SetIntensity(0.f);
+	Light->SetAttenuationRadius(RoomLightRadiusCm);
+	Light->SetLightColor(Color);
+	Light->SetCastShadows(false);
+	Light->SetVisibility(false);
+	Light->RegisterComponent();
+	RoomLights.Add(Light);
 	AddTrigger(VerbAssign, RoomId, Center + FVector(0.f, 0.f, 120.f), FVector(140.f, 140.f, 120.f));
+}
+
+FLinearColor AGFMineSite::DimmedRoomColor(const FLinearColor& Open)
+{
+	const FLinearColor Scaled(Open.R * LockedRoomBrightness, Open.G * LockedRoomBrightness, Open.B * LockedRoomBrightness, Open.A);
+	// A flat scale reads as a darker open room. A step toward cave stone reads as shut.
+	const FLinearColor Cave(0.24f, 0.23f, 0.22f, Open.A);
+	FLinearColor Mixed = FMath::Lerp(Scaled, Cave, 0.28f);
+	Mixed.A = Open.A;
+	return Mixed;
+}
+
+FColor AGFMineSite::OpenSignColor()
+{
+	return FColor::White;
+}
+
+FColor AGFMineSite::LockedSignColor()
+{
+	return FColor(118, 112, 102);
 }
 
 void AGFMineSite::BuildVisuals()
@@ -389,7 +421,7 @@ void AGFMineSite::SyncRoomTints(const FGFMineCrew& Crew)
 			continue;
 		}
 		const bool bOpen = FGFMineRules::RoomOpen(Crew, RoomIds[i]);
-		const FLinearColor Tint = bOpen ? RoomOpenColors[i] : RoomOpenColors[i] * LockedRoomBrightness;
+		const FLinearColor Tint = bOpen ? RoomOpenColors[i] : DimmedRoomColor(RoomOpenColors[i]);
 		RoomShownColors[i] = Tint;
 		const int32 Start = RoomMeshStarts[i];
 		const int32 Count = RoomMeshCounts[i];
@@ -410,6 +442,13 @@ void AGFMineSite::SyncRoomTints(const FGFMineCrew& Crew)
 		if (RoomLabels.IsValidIndex(i) && RoomLabels[i])
 		{
 			RoomLabels[i]->SetText(FText::FromString(Sign));
+			RoomLabels[i]->SetTextRenderColor(bOpen ? OpenSignColor() : LockedSignColor());
+		}
+		if (RoomLights.IsValidIndex(i) && RoomLights[i])
+		{
+			RoomLights[i]->SetLightColor(RoomOpenColors[i]);
+			RoomLights[i]->SetIntensity(bOpen ? OpenRoomLightIntensity : 0.f);
+			RoomLights[i]->SetVisibility(bOpen);
 		}
 	}
 	RoomTintKey = CrewTintKey(Crew);
@@ -463,6 +502,23 @@ FString AGFMineSite::GetRoomSign(FName RoomId) const
 		return RoomLabels[i]->Text.ToString();
 	}
 	return RoomSignText.IsValidIndex(i) ? RoomSignText[i] : FString();
+}
+
+FColor AGFMineSite::GetRoomSignColor(FName RoomId) const
+{
+	const int32 i = RoomIds.IndexOfByKey(RoomId);
+	if (RoomLabels.IsValidIndex(i) && RoomLabels[i])
+	{
+		return RoomLabels[i]->TextRenderColor;
+	}
+	return FColor::Black;
+}
+
+float AGFMineSite::GetRoomLightIntensity(FName RoomId) const
+{
+	const int32 i = RoomIds.IndexOfByKey(RoomId);
+	const UPointLightComponent* Light = RoomLights.IsValidIndex(i) ? RoomLights[i].Get() : nullptr;
+	return Light ? Light->Intensity : 0.f;
 }
 
 void AGFMineSite::NoteCrew(const APawn* Pawn)

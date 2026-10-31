@@ -408,26 +408,45 @@ bool FGFMineRoomTintTest::RunTest(const FString&)
 	const FLinearColor ShallowsOpen = Site->GetRoomOpenColor(TEXT("Shallows"));
 	const FLinearColor GalleryOpen = Site->GetRoomOpenColor(TEXT("CrystalGallery"));
 	const FLinearColor GrottoOpen = Site->GetRoomOpenColor(TEXT("GlowGrotto"));
+	const FLinearColor GalleryDim = AGFMineSite::DimmedRoomColor(GalleryOpen);
+	const FLinearColor GrottoDim = AGFMineSite::DimmedRoomColor(GrottoOpen);
+	auto Luma = [](const FLinearColor& C)
+	{
+		return (0.2126f * C.R) + (0.7152f * C.G) + (0.0722f * C.B);
+	};
+	const FLinearColor GalleryFlat(GalleryOpen.R * AGFMineSite::LockedRoomBrightness, GalleryOpen.G * AGFMineSite::LockedRoomBrightness, GalleryOpen.B * AGFMineSite::LockedRoomBrightness, GalleryOpen.A);
+	TestTrue(TEXT("Dim keeps the open alpha"), FMath::IsNearlyEqual(GalleryDim.A, GalleryOpen.A, 0.001f));
+	TestTrue(TEXT("Dim is darker than the open room"), Luma(GalleryDim) < Luma(GalleryOpen) - 0.05f);
+	TestFalse(TEXT("Dim leans off a flat scale toward cave stone"), GalleryDim.Equals(GalleryFlat, 0.01f));
 	TestTrue(TEXT("Shallows is open at build"), SameTint(Site->GetRoomTint(TEXT("Shallows")), ShallowsOpen));
-	TestTrue(TEXT("Crystal Gallery starts dim"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryOpen * AGFMineSite::LockedRoomBrightness));
-	TestTrue(TEXT("Glow Grotto starts dim"), SameTint(Site->GetRoomTint(TEXT("GlowGrotto")), GrottoOpen * AGFMineSite::LockedRoomBrightness));
+	TestTrue(TEXT("Crystal Gallery starts dim"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryDim));
+	TestTrue(TEXT("Glow Grotto starts dim"), SameTint(Site->GetRoomTint(TEXT("GlowGrotto")), GrottoDim));
 	TestTrue(TEXT("Gallery sign starts locked"), Site->GetRoomSign(TEXT("CrystalGallery")).Contains(TEXT("(locked)")));
 	TestTrue(TEXT("Grotto sign starts locked"), Site->GetRoomSign(TEXT("GlowGrotto")).Contains(TEXT("(locked)")));
 	TestFalse(TEXT("Shallows sign is not locked"), Site->GetRoomSign(TEXT("Shallows")).Contains(TEXT("(locked)")));
+	TestTrue(TEXT("Locked gallery sign is dim ink"), Site->GetRoomSignColor(TEXT("CrystalGallery")) == AGFMineSite::LockedSignColor());
+	TestTrue(TEXT("Open shallows sign stays white"), Site->GetRoomSignColor(TEXT("Shallows")) == AGFMineSite::OpenSignColor());
+	TestTrue(TEXT("Locked gallery light is off"), FMath::IsNearlyEqual(Site->GetRoomLightIntensity(TEXT("CrystalGallery")), 0.f, 0.01f));
+	TestTrue(TEXT("Open shallows light is on"), FMath::IsNearlyEqual(Site->GetRoomLightIntensity(TEXT("Shallows")), AGFMineSite::OpenRoomLightIntensity, 0.01f));
 
 	FGFMineCrew WalkIn;
 	FGFMineRules::AddPebbling(WalkIn);
 	Site->SyncRoomTints(WalkIn);
-	TestTrue(TEXT("A crew with no Tunnels leaves the gallery dim"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryOpen * AGFMineSite::LockedRoomBrightness));
+	TestTrue(TEXT("A crew with no Tunnels leaves the gallery dim"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryDim));
 	WalkIn.SetLevel(GFMineUpgrades::Tunnels, 1);
 	Site->SyncRoomTints(WalkIn);
 	TestTrue(TEXT("Tunnels lights the Crystal Gallery"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryOpen));
-	TestTrue(TEXT("Glow Grotto stays dim without Lanterns"), SameTint(Site->GetRoomTint(TEXT("GlowGrotto")), GrottoOpen * AGFMineSite::LockedRoomBrightness));
+	TestTrue(TEXT("Glow Grotto stays dim without Lanterns"), SameTint(Site->GetRoomTint(TEXT("GlowGrotto")), GrottoDim));
 	TestFalse(TEXT("Gallery sign drops the lock"), Site->GetRoomSign(TEXT("CrystalGallery")).Contains(TEXT("(locked)")));
+	TestTrue(TEXT("Gallery sign turns white with Tunnels"), Site->GetRoomSignColor(TEXT("CrystalGallery")) == AGFMineSite::OpenSignColor());
+	TestTrue(TEXT("Gallery light turns on with Tunnels"), FMath::IsNearlyEqual(Site->GetRoomLightIntensity(TEXT("CrystalGallery")), AGFMineSite::OpenRoomLightIntensity, 0.01f));
 	TestTrue(TEXT("Grotto sign stays locked"), Site->GetRoomSign(TEXT("GlowGrotto")).Contains(TEXT("(locked)")));
+	TestTrue(TEXT("Grotto light stays off without Lanterns"), FMath::IsNearlyEqual(Site->GetRoomLightIntensity(TEXT("GlowGrotto")), 0.f, 0.01f));
 	WalkIn.SetLevel(GFMineUpgrades::Tunnels, 0);
 	Site->SyncRoomTints(WalkIn);
-	TestTrue(TEXT("Losing Tunnels dims the gallery again"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryOpen * AGFMineSite::LockedRoomBrightness));
+	TestTrue(TEXT("Losing Tunnels dims the gallery again"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryDim));
+	TestTrue(TEXT("Losing Tunnels dims the gallery sign"), Site->GetRoomSignColor(TEXT("CrystalGallery")) == AGFMineSite::LockedSignColor());
+	TestTrue(TEXT("Losing Tunnels turns the gallery light off"), FMath::IsNearlyEqual(Site->GetRoomLightIntensity(TEXT("CrystalGallery")), 0.f, 0.01f));
 
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -458,7 +477,9 @@ bool FGFMineRoomTintTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("Tunnels 1"), PS->Progress.Crew.Level(GFMineUpgrades::Tunnels), 1);
 	TestTrue(TEXT("The buy retints the Crystal Gallery"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryOpen));
-	TestTrue(TEXT("Glow Grotto is still dim after Tunnels"), SameTint(Site->GetRoomTint(TEXT("GlowGrotto")), GrottoOpen * AGFMineSite::LockedRoomBrightness));
+	TestTrue(TEXT("Glow Grotto is still dim after Tunnels"), SameTint(Site->GetRoomTint(TEXT("GlowGrotto")), GrottoDim));
+	TestTrue(TEXT("The Tunnels buy turns the gallery light on"), FMath::IsNearlyEqual(Site->GetRoomLightIntensity(TEXT("CrystalGallery")), AGFMineSite::OpenRoomLightIntensity, 0.01f));
+	TestTrue(TEXT("The Tunnels buy leaves the grotto light off"), FMath::IsNearlyEqual(Site->GetRoomLightIntensity(TEXT("GlowGrotto")), 0.f, 0.01f));
 	TestTrue(TEXT("Shallows stays bright"), SameTint(Site->GetRoomTint(TEXT("Shallows")), ShallowsOpen));
 
 	TestTrue(TEXT("Coalnut for Lanterns"), PS->Inventory->AddItem(TEXT("Coalnut"), 10));
@@ -472,6 +493,9 @@ bool FGFMineRoomTintTest::RunTest(const FString&)
 	TestTrue(TEXT("The buy retints the Glow Grotto"), SameTint(Site->GetRoomTint(TEXT("GlowGrotto")), GrottoOpen));
 	TestTrue(TEXT("Crystal Gallery stays bright"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryOpen));
 	TestFalse(TEXT("Grotto sign is unlocked"), Site->GetRoomSign(TEXT("GlowGrotto")).Contains(TEXT("(locked)")));
+	TestTrue(TEXT("Grotto sign turns white"), Site->GetRoomSignColor(TEXT("GlowGrotto")) == AGFMineSite::OpenSignColor());
+	TestTrue(TEXT("The Lanterns buy turns the grotto light on"), FMath::IsNearlyEqual(Site->GetRoomLightIntensity(TEXT("GlowGrotto")), AGFMineSite::OpenRoomLightIntensity, 0.01f));
+	TestTrue(TEXT("Gallery light stays on after Lanterns"), FMath::IsNearlyEqual(Site->GetRoomLightIntensity(TEXT("CrystalGallery")), AGFMineSite::OpenRoomLightIntensity, 0.01f));
 
 	const FGFMineRoomRow* Shallows = FGFMineData::Get().Room(TEXT("Shallows"));
 	const FGFMineRoomRow* Gallery = FGFMineData::Get().Room(TEXT("CrystalGallery"));
