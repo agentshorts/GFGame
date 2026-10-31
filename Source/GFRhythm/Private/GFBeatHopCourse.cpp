@@ -2168,6 +2168,7 @@ bool AGFBeatHopCourse::TryStartFromGate(APawn* Pawn, FString& OutReason)
 		ApplyRunMovement(Char);
 	}
 	HoldUntil.Reset();
+	HoldBrick.Reset();
 	UpdateLobbyLook();
 	UE_LOG(LogGF, Log, TEXT("Beat Hop: run started at the gate: %s (%s), clock %.2f s, song ends at %.2f s"),
 		*SongTitle(RunSongId), *DifficultyName(RunDifficulty), GetRunTime(), EndTime);
@@ -2247,29 +2248,8 @@ void AGFBeatHopCourse::RespawnCharacter(ACharacter* Character)
 	}
 	if (bSession && bRunning)
 	{
-		// Back onto the next brick the song hasn't reached yet; stand there until it does, then carry on in time.
-		const double Now = GetRunTime();
-		const double Lead = PeriodSeconds();
-		for (const FGFBeatHopBrick& B : Bricks)
-		{
-			if (B.Mesh && !B.bCrumbled && B.Time >= Now + Lead)
-			{
-				const FVector Top = GetActorTransform().TransformPosition(B.Mesh->GetRelativeLocation() + FVector(0.0, 0.0, B.TopOffsetZ + 100.0));
-				Character->TeleportTo(Top, FRotator(0.0, GetActorRotation().Yaw, 0.0), false, true);
-				if (Move)
-				{
-					Move->StopMovementImmediately();
-				}
-				HoldUntil.Add(Character, B.Time);
-				return;
-			}
-		}
-		// Nothing left to hop on: straight to the finish pad.
-		Character->TeleportTo(GetActorTransform().TransformPosition(FVector(KitEndX + 250.0, 0.0, 120.0)), FRotator(0.0, GetActorRotation().Yaw, 0.0), false, true);
-		if (Move)
-		{
-			Move->StopMovementImmediately();
-		}
+		const AGFPlayerState* GFPS = Character->GetPlayerState<AGFPlayerState>();
+		PutBackMidRun(Character, GFPS ? GFPS->PlayerKey : FString());
 		return;
 	}
 	Character->TeleportTo(GetRespawnPoint(Character), Character->GetActorRotation(), false, true);
@@ -2277,6 +2257,84 @@ void AGFBeatHopCourse::RespawnCharacter(ACharacter* Character)
 	{
 		Move->StopMovementImmediately();
 	}
+}
+
+void AGFBeatHopCourse::PutBackMidRun(ACharacter* Character, const FString& PlayerKey)
+{
+	if (!Character)
+	{
+		return;
+	}
+	UCharacterMovementComponent* Move = Character->GetCharacterMovement();
+	// Back onto the next brick the song hasn't reached yet; stand there until it does, then carry on in time.
+	const double Now = GetRunTime();
+	const double Lead = PeriodSeconds();
+	for (int32 i = 0; i < Bricks.Num(); ++i)
+	{
+		const FGFBeatHopBrick& B = Bricks[i];
+		if (B.Mesh && !B.bCrumbled && B.Time >= Now + Lead)
+		{
+			const int32 Index = BrickBase + i;
+			const FVector Top = GetActorTransform().TransformPosition(B.Mesh->GetRelativeLocation() + FVector(0.0, 0.0, B.TopOffsetZ + 100.0));
+			Character->TeleportTo(Top, FRotator(0.0, GetActorRotation().Yaw, 0.0), false, true);
+			if (Move)
+			{
+				Move->StopMovementImmediately();
+			}
+			HoldUntil.Add(Character, B.Time);
+			HoldBrick.Add(Character, Index);
+			if (!PlayerKey.IsEmpty())
+			{
+				// The brick you're put back on is a free one: landing on it isn't judged and it never sweeps as a Miss.
+				RunFor(PlayerKey).Judged.Add(Index);
+			}
+			return;
+		}
+	}
+	// Nothing left to hop on: straight to the finish pad.
+	Character->TeleportTo(GetActorTransform().TransformPosition(FVector(KitEndX + 250.0, 0.0, 120.0)), FRotator(0.0, GetActorRotation().Yaw, 0.0), false, true);
+	if (Move)
+	{
+		Move->StopMovementImmediately();
+	}
+}
+
+int32 AGFBeatHopCourse::GetHoldBrick(const ACharacter* Character) const
+{
+	const int32* Index = HoldBrick.Find(const_cast<ACharacter*>(Character));
+	return Index ? *Index : INDEX_NONE;
+}
+
+FVector AGFBeatHopCourse::GetRespawnHopVelocity(const ACharacter* Character) const
+{
+	const UCharacterMovementComponent* Move = Character ? Character->GetCharacterMovement() : nullptr;
+	if (!Move)
+	{
+		return FVector::ZeroVector;
+	}
+	// One ordinary hop lasts one beat at run speed (ApplyRunMovement tunes gravity for that), so this reaches the next brick.
+	const double Speed = FMath::Max(100.0, static_cast<double>(Move->MaxWalkSpeed));
+	return GetActorForwardVector().GetSafeNormal2D() * Speed + FVector(0.0, 0.0, Move->JumpZVelocity);
+}
+
+void AGFBeatHopCourse::ReleaseHold(ACharacter* Character, bool bAlreadyHopping)
+{
+	HoldUntil.Remove(Character);
+	HoldBrick.Remove(Character);
+	UCharacterMovementComponent* Move = Character ? Character->GetCharacterMovement() : nullptr;
+	if (!Move)
+	{
+		return;
+	}
+	const FVector Hop = GetRespawnHopVelocity(Character);
+	if (bAlreadyHopping)
+	{
+		// They jumped on their own: keep their lift, give them the run speed they were missing.
+		Move->Velocity = FVector(Hop.X, Hop.Y, Move->Velocity.Z);
+		return;
+	}
+	Move->Velocity = Hop;
+	Move->SetMovementMode(MOVE_Falling);
 }
 
 FVector AGFBeatHopCourse::GetLobbySpawn() const
@@ -2404,15 +2462,19 @@ void AGFBeatHopCourse::UpdateSession()
 			}
 			if (const double* Hold = HoldUntil.Find(Char))
 			{
-				if (Now < *Hold)
+				UCharacterMovementComponent* Move = Char->GetCharacterMovement();
+				// A hop while waiting lets them go early (#221): with zero speed they'd drop short of the next brick.
+				const bool bJumped = Move && Move->IsFalling() && Move->Velocity.Z > 1.f;
+				if (Now < *Hold && !bJumped)
 				{
-					if (UCharacterMovementComponent* Move = Char->GetCharacterMovement())
+					if (Move)
 					{
 						Move->Velocity = FVector(0.0, 0.0, Move->Velocity.Z);
 					}
 					continue;
 				}
-				HoldUntil.Remove(Char);
+				// On the beat (or on their own hop): leave the brick with a full hop's worth of speed, not from a standstill.
+				ReleaseHold(Char, bJumped);
 			}
 			Char->AddMovementInput(Forward, 1.f);
 		}
@@ -2457,6 +2519,7 @@ void AGFBeatHopCourse::OnSessionRunFinished()
 	ResultsEndServerTime = GetServerWorldTime() + FMath::Max(0.f, ResultsSeconds);
 	RestoreRunMovement();
 	HoldUntil.Reset();
+	HoldBrick.Reset();
 	UpdateLobbyLook();
 	for (const FGFBeatHopResultRow& Row : Results)
 	{
