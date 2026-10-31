@@ -90,6 +90,12 @@ public:
 	/** The first stage in World (or null). */
 	static AGFRunwayStage* Find(const UWorld* World);
 
+	/**
+	 * Spawns the greybox runway (theme, look, start, finish, hub) on this stage.
+	 * The hub director calls this when the world is L_Runway. Safe to call again.
+	 */
+	void EnsurePlayableSite();
+
 	/** Server: starts a show for everyone whose character is ready. */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "GF|Fashion")
 	EGFRunwayRequestResult StartShow(FName ThemeId);

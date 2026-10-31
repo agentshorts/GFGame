@@ -3,6 +3,7 @@
 #include "GFBeatHopCourse.h"
 #include "GFLog.h"
 #include "GFMineDirector.h"
+#include "GFRunwayStage.h"
 #include "GFMiniGameCatalog.h"
 #include "GFMiniGameGate.h"
 #include "GFTerritorySubsystem.h"
@@ -163,6 +164,11 @@ void AGFHubGateDirector::Place(const FString& WorldPackage, const FVector& InRim
 			if (AGFBeatHopCourse* Course = Cast<AGFBeatHopCourse>(Placed))
 			{
 				Course->BeginSession();
+			}
+			// Fashion: greybox show on the runway stage this map already places. A new map would break the gate tests.
+			if (AGFRunwayStage* Stage = Cast<AGFRunwayStage>(Placed))
+			{
+				Stage->EnsurePlayableSite();
 			}
 		}
 	}
