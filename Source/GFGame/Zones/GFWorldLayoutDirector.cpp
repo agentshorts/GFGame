@@ -1,6 +1,7 @@
 #include "GFWorldLayoutDirector.h"
 
 #include "GFAssetMap.h"
+#include "GFHubDressing.h"
 #include "GFLog.h"
 #include "GFOverworldGround.h"
 #include "GFRegionGate.h"
@@ -59,8 +60,16 @@ void AGFWorldLayoutDirector::BeginPlay()
 	bLaidOut = true;
 
 	const FGFZoneCatalog& Catalog = FGFZoneCatalog::Get();
-	SpawnProp(World, FVector::ZeroVector, EGFPlaceholderShape::Cube, KindleGold, FVector(2.f, 2.f, 100.f), 0.f, true, true, 0.f);
-	SpawnProp(World, FVector(0.f, 0.f, 10000.f), EGFPlaceholderShape::Sphere, KindleGold, FVector(6.f, 6.f, 6.f), 0.f, false, true, 0.f);
+	// The origin is the Rime stand. The column shares Stone.Kindle, off that sightline.
+	FVector ColumnAt = GFHubDressing::FallbackOrigin();
+	if (const FGFShardstoneRow* KindleStone = Catalog.FindStone(FName(TEXT("Stone.Kindle"))))
+	{
+		ColumnAt = GFHubDressing::ColumnOrigin(KindleStone->Location);
+	}
+	SpawnProp(World, ColumnAt, EGFPlaceholderShape::Cube, KindleGold, GFHubDressing::SpireScale(), 0.f, true, true, 0.f);
+	SpawnProp(World, ColumnAt + FVector(0.f, 0.f, GFHubDressing::CrownHeightCm()), EGFPlaceholderShape::Sphere, KindleGold, GFHubDressing::CrownScale(), 0.f, false, true, 0.f);
+	UE_LOG(LogGF, Log, TEXT("Zones: Kindle column at (%.0f, %.0f), ground radius %.0f cm."),
+		ColumnAt.X, ColumnAt.Y, GFHubDressing::ColumnRadiusCm());
 
 	for (const FGFRegionSlot& Slot : FGFZoneLayout::Regions())
 	{
