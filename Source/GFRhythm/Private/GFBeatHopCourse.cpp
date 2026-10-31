@@ -28,6 +28,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Net/UnrealNetwork.h"
 #include "Misc/SecureHash.h"
+#include "GFActivityWin.h"
 #include "GFLog.h"
 
 namespace GFBeatHopCourse
@@ -1073,6 +1074,7 @@ void AGFBeatHopCourse::FinishRun()
 		if (bLastPassed)
 		{
 			Grant(Pair.Key, Run, FGFBeatHopRewards::ForSongEnd(Score, TotalNotes, Rewards, bRunCozy), TEXT("BeatHop.SongEnd"), TEXT("SongEnd"));
+			FGFActivityWin::OnActivity().Broadcast(GetWorld(), Pair.Key, TEXT("BeatHop"), RunCourseId);
 		}
 
 		FGFMiniGameResult Result;

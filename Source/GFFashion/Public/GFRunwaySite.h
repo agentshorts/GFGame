@@ -10,13 +10,16 @@
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "GameFramework/Actor.h"
+#include "GFFashionTypes.h"
 #include "GFRunwaySite.generated.h"
 
 class UFont;
 class UMaterialInterface;
 class UStaticMesh;
 class AGFPlayerState;
+class AGFTailorStation;
 class APawn;
+class UMaterialInstanceDynamic;
 
 UCLASS()
 class GFFASHION_API AGFRunwaySite : public AActor
@@ -44,6 +47,10 @@ public:
 	UBoxComponent* GetLookTrigger(FName LookId) const;
 	int32 NumThemeSpots() const;
 	int32 NumLookSpots() const;
+	/** One trigger per catalog piece. Owned or not, the rack is the whole list. */
+	int32 NumPieceSpots() const;
+	/** The one-line source stored for a piece on the rack. Empty if that piece was not built. */
+	FString GetRackLine(FName PieceId) const;
 
 	/** Suggested ids. GetSelectedLook can be Garden before anyone has stood on the wardrobe. */
 	FName GetSelectedTheme() const { return SelectedTheme; }
@@ -59,6 +66,8 @@ public:
 	/** Server. Theme and look can be picked before the show. Start opens it. Finish scores it. */
 	bool TrySelectTheme(APawn* Pawn, FName ThemeId);
 	bool TrySelectLook(APawn* Pawn, FName LookId);
+	/** Server. Wears an owned piece. A locked piece stays off and LastPrompt is its source line. */
+	bool TryEquipPiece(APawn* Pawn, FName PieceId);
 	bool TryStart(APawn* Pawn);
 	bool TryFinish(APawn* Pawn);
 	/** Server. Opens the hub map. A travel override records the map instead (tests). */
@@ -74,6 +83,12 @@ public:
 	 * LastPrompt is the last spot result (a refused start says why).
 	 */
 	void GetPromptLines(const AGFPlayerState* PS, TArray<FString>& OutLines) const;
+
+	/**
+	 * Separate from GetPromptLines. First visit: open the rack, equip, pick a theme, walk Start.
+	 * The current step begins with "> ". The show-step list is unchanged.
+	 */
+	void GetItemHintLines(TArray<FString>& OutLines) const;
 
 	UPROPERTY(Replicated)
 	FString LastPrompt;
@@ -118,7 +133,12 @@ private:
 
 	bool bVisualsBuilt = false;
 	bool bTravelled = false;
+	/** Someone stood at the piece rack. Local. The item hint uses it. */
+	bool bRackSeen = false;
 	double ResultsShownAt = -1.0;
+
+	/** Session outfits worn from the rack. A chosen look still replaces these when a show starts. */
+	TMap<FString, FGFOutfit> Worn;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UStaticMesh> CubeMesh;
@@ -138,6 +158,20 @@ private:
 	UPROPERTY()
 	TObjectPtr<UTextRenderComponent> WearingCue;
 
+	UPROPERTY()
+	TArray<FName> RackIds;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> RackTints;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UTextRenderComponent>> RackLabels;
+
+	UPROPERTY()
+	TObjectPtr<AGFTailorStation> Tailor;
+
+	TMap<FName, FString> RackLines;
+
 	TArray<FName> TriggerVerbs;
 	TArray<FName> TriggerNames;
 	TArray<TSet<TWeakObjectPtr<APawn>>> SpotInside;
@@ -151,7 +185,12 @@ private:
 	UTextRenderComponent* AddLabel(const FString& Text, const FVector& Local, float WorldSize = 42.f);
 	UBoxComponent* AddTrigger(FName Verb, FName Name, const FVector& Local, const FVector& Extent);
 	void RefreshCues();
+	void RefreshRackTints();
+	void NoteLocalRack();
 	void PollSpots();
+	void SpawnTailor();
+	bool HasWorn(const FString& PlayerKey) const;
+	bool AnyWorn() const;
 	void SeatFarPawns();
 	void TravelToHub();
 	AGFPlayerState* PlayerOf(APawn* Pawn) const;

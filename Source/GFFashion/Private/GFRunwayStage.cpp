@@ -2,6 +2,7 @@
 #include "GFRunwaySite.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
+#include "GFWardrobe.h"
 #include "GFLog.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -440,6 +441,46 @@ void AGFRunwayStage::PayOut()
 			PendingRewards.Add(MoveTemp(P)); // same TxId on every retry
 		}
 	}
+	GrantShowPieces();
+}
+
+void AGFRunwayStage::GrantShowPieces()
+{
+	FGFTransferLedger* Ledger = nullptr;
+	IGFLedgerAccounts* Accounts = nullptr;
+	AGFGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGFGameState>() : nullptr;
+	if (LedgerOverride && AccountsOverride)
+	{
+		Ledger = LedgerOverride;
+		Accounts = AccountsOverride;
+	}
+	else if (GS && GS->HasAuthority())
+	{
+		Ledger = &GS->Ledger;
+		Accounts = &GS->Accounts();
+	}
+	if (!Ledger || !Accounts)
+	{
+		return;
+	}
+	for (const FGFRunwayContestant& C : Show.GetContestants())
+	{
+		TArray<FName> Granted;
+		FGFWardrobe::GrantForActivity(*Ledger, *Accounts, C.PlayerKey, FGFWardrobe::ActivityRunway, NAME_None, &Granted);
+		if (!GS || LedgerOverride)
+		{
+			continue;
+		}
+		AGFPlayerState* PS = GS->FindPlayerByKey(C.PlayerKey);
+		if (!PS)
+		{
+			continue;
+		}
+		for (const FName Id : Granted)
+		{
+			PS->NotifyLand(FGFWardrobe::ToastFor(Id));
+		}
+	}
 }
 
 int32 AGFRunwayStage::RetryPendingRewards()
@@ -462,6 +503,7 @@ int32 AGFRunwayStage::RetryPendingRewards()
 			PendingRewards.RemoveAt(i);
 		}
 	}
+	GrantShowPieces();
 	return Paid;
 }
 

@@ -1,7 +1,10 @@
 #include "GFRunwaySite.h"
 
 #include "GFFashionTypes.h"
+#include "GFInventoryComponent.h"
 #include "GFLog.h"
+#include "GFTailorStation.h"
+#include "GFWardrobe.h"
 #include "GFMiniGameCatalog.h"
 #include "GFPlayerState.h"
 #include "GFRunwayJudge.h"
@@ -15,6 +18,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Net/UnrealNetwork.h"
@@ -28,6 +32,7 @@ namespace
 
 	static const FName VerbTheme(TEXT("Theme"));
 	static const FName VerbLook(TEXT("Look"));
+	static const FName VerbPiece(TEXT("Piece"));
 	static const FName VerbStart(TEXT("Start"));
 	static const FName VerbFinish(TEXT("Finish"));
 	static const FName VerbReturn(TEXT("Return"));
@@ -179,8 +184,10 @@ void AGFRunwaySite::OnRep_Choices()
 void AGFRunwaySite::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	// The arch and the wardrobe sign follow the phase. Clients do not run the spots.
+	// The arch and the wardrobe sign follow the phase. Clients tint their own rack.
 	RefreshCues();
+	RefreshRackTints();
+	NoteLocalRack();
 	if (!HasAuthority())
 	{
 		return;
@@ -290,6 +297,22 @@ int32 AGFRunwaySite::NumLookSpots() const
 	return N;
 }
 
+int32 AGFRunwaySite::NumPieceSpots() const
+{
+	int32 N = 0;
+	for (const FName Verb : TriggerVerbs)
+	{
+		N += Verb == VerbPiece ? 1 : 0;
+	}
+	return N;
+}
+
+FString AGFRunwaySite::GetRackLine(FName PieceId) const
+{
+	const FString* Line = RackLines.Find(PieceId);
+	return Line ? *Line : FString();
+}
+
 void AGFRunwaySite::BuildIfNeeded()
 {
 	if (bVisualsBuilt)
@@ -300,6 +323,7 @@ void AGFRunwaySite::BuildIfNeeded()
 	BuildVisuals();
 	if (HasAuthority())
 	{
+		SpawnTailor();
 		bReady = true;
 	}
 }
@@ -424,6 +448,66 @@ void AGFRunwaySite::BuildVisuals()
 	AddTrigger(VerbLook, LookGarden, GardenAt + FVector(0.f, 0.f, 100.f), FVector(70.f, 70.f, 100.f));
 	AddTrigger(VerbLook, LookExplorer, ExplorerAt + FVector(0.f, 0.f, 100.f), FVector(70.f, 70.f, 100.f));
 
+	// Piece rack at the back of the slab, clear of the theme spots (X=250) and the two looks (X=460).
+	TArray<TArray<const FGFFashionPiece*>> Columns;
+	Columns.SetNum(static_cast<int32>(EGFOutfitSlot::Count));
+	for (const FGFFashionPiece& Piece : FGFFashionCatalog::Pieces())
+	{
+		const int32 Col = static_cast<int32>(Piece.Slot);
+		if (Columns.IsValidIndex(Col))
+		{
+			Columns[Col].Add(&Piece);
+		}
+	}
+	auto SlotTitle = [](EGFOutfitSlot Slot) -> const TCHAR*
+	{
+		switch (Slot)
+		{
+		case EGFOutfitSlot::Hair: return TEXT("Head");
+		case EGFOutfitSlot::Top: return TEXT("Top");
+		case EGFOutfitSlot::Bottom: return TEXT("Bottom");
+		case EGFOutfitSlot::Shoes: return TEXT("Feet");
+		case EGFOutfitSlot::Accessory: return TEXT("Accessory");
+		case EGFOutfitSlot::Tail: return TEXT("Tail");
+		default: return TEXT("");
+		}
+	};
+	for (int32 Col = 0; Col < Columns.Num(); ++Col)
+	{
+		const float Y = (static_cast<float>(Col) - 2.5f) * 96.f;
+		AddLabel(SlotTitle(static_cast<EGFOutfitSlot>(Col)), FVector(-96.f, Y, 78.f), 18.f);
+		for (int32 Row = 0; Row < Columns[Col].Num(); ++Row)
+		{
+			const FGFFashionPiece* Piece = Columns[Col][Row];
+			const FVector At(-72.f + static_cast<float>(Row) * 30.f, Y, 16.f);
+			const FLinearColor Locked = FGFWardrobe::RackColor(*Piece, false);
+			UMaterialInstanceDynamic* Tint = nullptr;
+			if (CubeMesh && BaseMaterial)
+			{
+				UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(this);
+				Mesh->SetupAttachment(Root);
+				Mesh->SetStaticMesh(CubeMesh);
+				Mesh->SetRelativeLocation(At);
+				Mesh->SetRelativeScale3D(FVector(0.22f, 0.22f, 0.22f));
+				Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				Mesh->SetCanEverAffectNavigation(false);
+				Tint = UMaterialInstanceDynamic::Create(BaseMaterial, Mesh);
+				if (Tint)
+				{
+					Tint->SetVectorParameterValue(ColorParam, Locked);
+					Mesh->SetMaterial(0, Tint);
+				}
+				Mesh->RegisterComponent();
+			}
+			UTextRenderComponent* Label = AddLabel(FGFWardrobe::RackLabel(*Piece, false), At + FVector(0.f, 0.f, 36.f), 12.f);
+			RackIds.Add(Piece->Id);
+			RackTints.Add(Tint);
+			RackLabels.Add(Label);
+			RackLines.Add(Piece->Id, Piece->SourceLine);
+			AddTrigger(VerbPiece, Piece->Id, At + FVector(0.f, 0.f, 64.f), FVector(14.f, 42.f, 80.f));
+		}
+	}
+
 	AddLabel(TEXT("Theme, then wardrobe, then Start"), FVector(160.f, 0.f, 230.f), 32.f);
 
 	const FVector StartAt(860.f, 0.f, 0.f);
@@ -457,6 +541,47 @@ void AGFRunwaySite::BuildVisuals()
 AGFPlayerState* AGFRunwaySite::PlayerOf(APawn* Pawn) const
 {
 	return Pawn ? Pawn->GetPlayerState<AGFPlayerState>() : nullptr;
+}
+
+void AGFRunwaySite::SpawnTailor()
+{
+	if (Tailor || !HasAuthority())
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	FActorSpawnParameters Params;
+	Params.Owner = this;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	// Beside the piece rack, on the slab, clear of the look spots at X=460.
+	const FVector WorldLoc = GetActorTransform().TransformPosition(FVector(-40.f, 420.f, 0.f));
+	Tailor = World->SpawnActor<AGFTailorStation>(AGFTailorStation::StaticClass(), FTransform(GetActorRotation(), WorldLoc), Params);
+	if (Tailor)
+	{
+		Tailor->AttachToActor(this, FAttachmentTransformRules::KeepWorldTransform);
+	}
+}
+
+bool AGFRunwaySite::HasWorn(const FString& PlayerKey) const
+{
+	const FGFOutfit* Outfit = Worn.Find(PlayerKey);
+	return Outfit && Outfit->NumFilled() > 0;
+}
+
+bool AGFRunwaySite::AnyWorn() const
+{
+	for (const TPair<FString, FGFOutfit>& Pair : Worn)
+	{
+		if (Pair.Value.NumFilled() > 0)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 bool AGFRunwaySite::ApplyLook(const FString& PlayerKey)
@@ -518,6 +643,44 @@ bool AGFRunwaySite::TrySelectLook(APawn* Pawn, FName LookId)
 	return true;
 }
 
+bool AGFRunwaySite::TryEquipPiece(APawn* Pawn, FName PieceId)
+{
+	if (!HasAuthority() || !Usable(Pawn, PlayerOf(Pawn)))
+	{
+		return false;
+	}
+	const FGFFashionPiece* Piece = FGFFashionCatalog::FindPiece(PieceId);
+	if (!Piece)
+	{
+		LastPrompt = TEXT("Piece: unknown");
+		return false;
+	}
+	bRackSeen = true;
+	AGFPlayerState* PS = PlayerOf(Pawn);
+	const bool bOwned = PS && PS->Inventory && PS->Inventory->GetCount(PieceId) > 0;
+	if (!bOwned)
+	{
+		LastPrompt = Piece->SourceLine;
+		RefreshCues();
+		return false;
+	}
+	FGFOutfit& Outfit = Worn.FindOrAdd(PS->PlayerKey);
+	if (!Outfit.Equip(PieceId))
+	{
+		LastPrompt = TEXT("Piece: refused");
+		return false;
+	}
+	AGFRunwayStage* Stage = AGFRunwayStage::Find(GetWorld());
+	if (Stage && Stage->GetPhase() == EGFRunwayPhase::Dressing)
+	{
+		Stage->HandleSetOutfit(PS->PlayerKey, Outfit);
+	}
+	LastPrompt = FString::Printf(TEXT("Equipped %s."), *Piece->DisplayName);
+	RefreshRackTints();
+	RefreshCues();
+	return true;
+}
+
 bool AGFRunwaySite::TryStart(APawn* Pawn)
 {
 	if (!HasAuthority())
@@ -549,7 +712,8 @@ bool AGFRunwaySite::TryStart(APawn* Pawn)
 		RefreshCues();
 		return false;
 	}
-	if (!bLookChosen || !IsLook(SelectedLook))
+	const bool bHasWorn = HasWorn(PS->PlayerKey);
+	if ((!bLookChosen || !IsLook(SelectedLook)) && !bHasWorn)
 	{
 		LastPrompt = TEXT("Pick a look first");
 		RefreshCues();
@@ -583,10 +747,21 @@ bool AGFRunwaySite::TryStart(APawn* Pawn)
 	}
 	bTravelled = false;
 	ResultsShownAt = -1.0;
-	const bool bDressed = ApplyLook(PS->PlayerKey);
-	LastPrompt = bDressed
-		? FString::Printf(TEXT("Start: %s in %s"), *LookTitle(SelectedLook), *ThemeTitle(SelectedTheme))
-		: TEXT("Start: show on, outfit refused");
+	bool bDressed = false;
+	if (bLookChosen && IsLook(SelectedLook))
+	{
+		bDressed = ApplyLook(PS->PlayerKey);
+		LastPrompt = bDressed
+			? FString::Printf(TEXT("Start: %s in %s"), *LookTitle(SelectedLook), *ThemeTitle(SelectedTheme))
+			: TEXT("Start: show on, outfit refused");
+	}
+	else if (const FGFOutfit* Outfit = Worn.Find(PS->PlayerKey))
+	{
+		bDressed = Stage->HandleSetOutfit(PS->PlayerKey, *Outfit) == EGFRunwayRequestResult::Ok;
+		LastPrompt = bDressed
+			? FString::Printf(TEXT("Start: wardrobe in %s"), *ThemeTitle(SelectedTheme))
+			: TEXT("Start: show on, outfit refused");
+	}
 	RefreshCues();
 	return true;
 }
@@ -724,7 +899,7 @@ FString AGFRunwaySite::GetStartCue() const
 	{
 		return TEXT("Pick a theme first");
 	}
-	if (!bLookChosen)
+	if (!bLookChosen && !AnyWorn())
 	{
 		return TEXT("Pick a look first");
 	}
@@ -827,6 +1002,75 @@ void AGFRunwaySite::GetPromptLines(const AGFPlayerState* PS, TArray<FString>& Ou
 	}
 }
 
+void AGFRunwaySite::GetItemHintLines(TArray<FString>& OutLines) const
+{
+	const AGFRunwayStage* Stage = AGFRunwayStage::Find(GetWorld());
+	const EGFRunwayPhase Phase = Stage ? Stage->GetPhase() : EGFRunwayPhase::Idle;
+	const bool bWalking = Phase != EGFRunwayPhase::Idle && Phase != EGFRunwayPhase::Results;
+	const bool bEquipped = bLookChosen || AnyWorn();
+	const int32 Step = FGFWardrobe::HintStep(bRackSeen || bEquipped, bEquipped, bThemeChosen, bWalking);
+	FGFWardrobe::HintLines(Step, OutLines);
+}
+
+void AGFRunwaySite::RefreshRackTints()
+{
+	const AGFPlayerState* PS = nullptr;
+	if (const UWorld* World = GetWorld())
+	{
+		if (const APlayerController* PC = World->GetFirstPlayerController())
+		{
+			PS = PC->GetPlayerState<AGFPlayerState>();
+		}
+	}
+	for (int32 i = 0; i < RackIds.Num(); ++i)
+	{
+		const FGFFashionPiece* Piece = FGFFashionCatalog::FindPiece(RackIds[i]);
+		if (!Piece)
+		{
+			continue;
+		}
+		const bool bOwned = PS && PS->Inventory && PS->Inventory->GetCount(Piece->Id) > 0;
+		if (RackTints.IsValidIndex(i) && RackTints[i])
+		{
+			RackTints[i]->SetVectorParameterValue(ColorParam, FGFWardrobe::RackColor(*Piece, bOwned));
+		}
+		if (RackLabels.IsValidIndex(i) && RackLabels[i])
+		{
+			const FString Label = FGFWardrobe::RackLabel(*Piece, bOwned);
+			if (RackLabels[i]->Text.ToString() != Label)
+			{
+				RackLabels[i]->SetText(FText::FromString(Label));
+			}
+		}
+	}
+}
+
+void AGFRunwaySite::NoteLocalRack()
+{
+	if (bRackSeen)
+	{
+		return;
+	}
+	const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	if (!Pawn)
+	{
+		return;
+	}
+	for (int32 i = 0; i < Triggers.Num() && i < TriggerVerbs.Num(); ++i)
+	{
+		if (TriggerVerbs[i] != VerbPiece || !Triggers[i])
+		{
+			continue;
+		}
+		if (Triggers[i]->IsOverlappingActor(Pawn))
+		{
+			bRackSeen = true;
+			return;
+		}
+	}
+}
+
 void AGFRunwaySite::PollSpots()
 {
 	UWorld* World = GetWorld();
@@ -868,6 +1112,10 @@ void AGFRunwaySite::PollSpots()
 			else if (Verb == VerbLook)
 			{
 				TrySelectLook(Pawn, Name);
+			}
+			else if (Verb == VerbPiece)
+			{
+				TryEquipPiece(Pawn, Name);
 			}
 			else if (Verb == VerbStart)
 			{
