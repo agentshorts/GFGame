@@ -214,6 +214,7 @@ bool UGFSaveSubsystem::Migrate(UGFSaveGame* Save)
 		Save->SaveVersion = static_cast<int32>(EGFSaveVersion::WorldCharacterSplit);
 	}
 	// v2-v5 -> v6: nothing to convert. Paint is empty in those saves, so the world loads with no paint.
+	// v6 -> v7: crosshair lives on the character save, not the world. Old characters load the default plus.
 	Save->SaveVersion = static_cast<int32>(EGFSaveVersion::Latest);
 	return true;
 }

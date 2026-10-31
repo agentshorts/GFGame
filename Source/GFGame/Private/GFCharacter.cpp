@@ -3,6 +3,7 @@
 #include "GFFerryRiderComponent.h"
 #include "GFPlayerState.h"
 #include "GFGameState.h"
+#include "GFLocalProfileSubsystem.h"
 #include "GFZoneSubsystem.h"
 #include "GFVillainSession.h"
 #include "GFSocialDirector.h"
@@ -10,8 +11,12 @@
 #include "GFTerritorySubsystem.h"
 #include "GFLog.h"
 #include "GFAssetMap.h"
+#include "GFAnimMap.h"
 #include "GFSimpleAnimComponent.h"
 #include "GFVoxelWorld.h"
+#include "GFArenaDirector.h"
+#include "Aim/GFAimSim.h"
+#include "Animation/AnimSequenceBase.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -23,8 +28,11 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "InputAction.h"
+#include "InputCoreTypes.h"
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 
 AGFCharacter::AGFCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UGFCharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
@@ -42,7 +50,13 @@ AGFCharacter::AGFCharacter(const FObjectInitializer& ObjectInitializer)
 
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
 	SpringArm->SetupAttachment(RootComponent);
-	SpringArm->TargetArmLength = 450.f;
+	// Over-shoulder aim camera. Walk, jump, sprint, dash and the grapple are not tuned here.
+	SpringArm->TargetArmLength = GFAim::ArmLength;
+	SpringArm->SocketOffset = GFAim::ShoulderOffset();
+	SpringArm->bEnableCameraLag = true;
+	SpringArm->CameraLagSpeed = GFAim::CameraLagSpeed;
+	SpringArm->bEnableCameraRotationLag = false;
+	SpringArm->bDoCollisionTest = true;
 	SpringArm->SetRelativeLocation(FVector(0.f, 0.f, 60.f));
 	SpringArm->SetRelativeRotation(FRotator(-20.f, 0.f, 0.f));
 	SpringArm->bUsePawnControlRotation = true;
@@ -85,7 +99,9 @@ void AGFCharacter::BeginPlay()
 	{
 		FerryRider->BeginSeat();
 	}
+	ArmZoom = GFAim::ArmLength;
 	SetFirstPerson(false);
+	RefreshAimFromProfile();
 	if (SelectedBlock.IsNone())
 	{
 		CycleBlock(0);
@@ -113,17 +129,43 @@ UGFCharacterMovementComponent* AGFCharacter::GetGFMovement() const
 	return Cast<UGFCharacterMovementComponent>(GetCharacterMovement());
 }
 
+FKey AGFCharacter::DefaultShoulderSwapKey()
+{
+	return EKeys::MiddleMouseButton;
+}
+
+void AGFCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (!IsLocallyControlled())
+	{
+		return;
+	}
+	RefreshAimFromProfile();
+	SyncAimContext();
+	GFAimAdvance(AimState, AimTuning, DeltaSeconds);
+	ApplyShoulderOffset();
+	ApplyAimView();
+	UpdateCameraFade();
+	UpdateFistPose();
+}
+
+void AGFCharacter::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+	RefreshAimFromProfile();
+}
+
+void AGFCharacter::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+	RefreshAimFromProfile();
+}
+
 void AGFCharacter::SetFirstPerson(bool bEnable)
 {
 	bFirstPerson = bEnable;
-	FirstPersonCamera->SetActive(bEnable);
-	ThirdPersonCamera->SetActive(!bEnable);
-	bUseControllerRotationYaw = bEnable;
-	GetCharacterMovement()->bOrientRotationToMovement = !bEnable;
-	if (USkeletalMeshComponent* MeshComp = GetMesh())
-	{
-		MeshComp->SetOwnerNoSee(bEnable);
-	}
+	ApplyAimView();
 }
 
 void AGFCharacter::BuildDefaultInput()
@@ -148,6 +190,7 @@ void AGFCharacter::BuildDefaultInput()
 	MakeAction(DashAction, TEXT("IA_Dash"), EInputActionValueType::Boolean);
 	MakeAction(GrappleSwingAction, TEXT("IA_GrappleSwing"), EInputActionValueType::Boolean);
 	MakeAction(GrappleYankAction, TEXT("IA_GrappleYank"), EInputActionValueType::Boolean);
+	MakeAction(ShoulderSwapAction, TEXT("IA_ShoulderSwap"), EInputActionValueType::Boolean);
 	if (!bBuildContext)
 	{
 		return;
@@ -177,6 +220,7 @@ void AGFCharacter::BuildDefaultInput()
 	MappingContext->MapKey(DashAction, EKeys::LeftControl);
 	MappingContext->MapKey(GrappleSwingAction, EKeys::Q);
 	MappingContext->MapKey(GrappleYankAction, EKeys::E);
+	MappingContext->MapKey(ShoulderSwapAction, DefaultShoulderSwapKey());
 }
 
 void AGFCharacter::PawnClientRestart()
@@ -207,6 +251,8 @@ void AGFCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	EIC->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
 	EIC->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
 	EIC->BindAction(PlaceAction, ETriggerEvent::Started, this, &AGFCharacter::OnPlace);
+	EIC->BindAction(PlaceAction, ETriggerEvent::Completed, this, &AGFCharacter::OnPlaceReleased);
+	EIC->BindAction(PlaceAction, ETriggerEvent::Canceled, this, &AGFCharacter::OnPlaceReleased);
 	EIC->BindAction(RemoveAction, ETriggerEvent::Started, this, &AGFCharacter::OnRemove);
 	EIC->BindAction(ToggleViewAction, ETriggerEvent::Started, this, &AGFCharacter::OnToggleView);
 	EIC->BindAction(HotbarAction, ETriggerEvent::Triggered, this, &AGFCharacter::OnHotbar);
@@ -218,6 +264,7 @@ void AGFCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	EIC->BindAction(GrappleSwingAction, ETriggerEvent::Completed, this, &AGFCharacter::OnGrappleSwingStopped);
 	EIC->BindAction(GrappleSwingAction, ETriggerEvent::Canceled, this, &AGFCharacter::OnGrappleSwingStopped);
 	EIC->BindAction(GrappleYankAction, ETriggerEvent::Started, this, &AGFCharacter::OnGrappleYank);
+	EIC->BindAction(ShoulderSwapAction, ETriggerEvent::Started, this, &AGFCharacter::OnShoulderSwap);
 }
 
 void AGFCharacter::OnMove(const FInputActionValue& Value)
@@ -231,8 +278,9 @@ void AGFCharacter::OnMove(const FInputActionValue& Value)
 void AGFCharacter::OnLook(const FInputActionValue& Value)
 {
 	const FVector2D V = Value.Get<FVector2D>();
-	AddControllerYawInput(V.X);
-	AddControllerPitchInput(-V.Y);
+	const float Scale = GetAimLookScale();
+	AddControllerYawInput(V.X * Scale);
+	AddControllerPitchInput(-V.Y * Scale);
 }
 
 void AGFCharacter::OnToggleView(const FInputActionValue&)
@@ -242,12 +290,34 @@ void AGFCharacter::OnToggleView(const FInputActionValue&)
 
 void AGFCharacter::OnPlace(const FInputActionValue&)
 {
-	TryPlaceBlock();
+	SyncAimContext();
+	if (GFResolvePrimaryUse(AimState.Held, AimState.bSnoutZoom) == EGFTriggerUse::PlaceBlock)
+	{
+		TryPlaceBlock();
+		return;
+	}
+	PushAim(EGFAimEvent::AimPressed);
+}
+
+void AGFCharacter::OnPlaceReleased(const FInputActionValue&)
+{
+	SyncAimContext();
+	if (!AimUser.bHoldToAim || !AimState.bAdsIntent)
+	{
+		return;
+	}
+	PushAim(EGFAimEvent::AimReleased);
 }
 
 void AGFCharacter::OnRemove(const FInputActionValue&)
 {
-	TryRemoveBlock();
+	SyncAimContext();
+	if (GFResolvePrimaryUse(AimState.Held, AimState.bSnoutZoom) == EGFTriggerUse::PlaceBlock)
+	{
+		TryRemoveBlock();
+		return;
+	}
+	PushAim(EGFAimEvent::FirePressed);
 }
 
 void AGFCharacter::OnSprint(const FInputActionValue&)
@@ -301,10 +371,27 @@ void AGFCharacter::OnGrappleYank(const FInputActionValue&)
 void AGFCharacter::OnHotbar(const FInputActionValue& Value)
 {
 	const float Axis = Value.Get<float>();
-	if (!FMath::IsNearlyZero(Axis))
+	if (FMath::IsNearlyZero(Axis))
 	{
-		CycleBlock(Axis > 0.f ? 1 : -1);
+		return;
 	}
+	const APlayerController* PC = Cast<APlayerController>(GetController());
+	const bool bAlt = PC && (PC->IsInputKeyDown(EKeys::LeftAlt) || PC->IsInputKeyDown(EKeys::RightAlt));
+	if (bAlt)
+	{
+		ArmZoom = FMath::Clamp(ArmZoom + (Axis > 0.f ? GFAim::ArmLengthStep : -GFAim::ArmLengthStep), GFAim::ArmLengthMin, GFAim::ArmLengthMax);
+		if (SpringArm)
+		{
+			SpringArm->TargetArmLength = ArmZoom;
+		}
+		return;
+	}
+	CycleBlock(Axis > 0.f ? 1 : -1);
+}
+
+void AGFCharacter::OnShoulderSwap(const FInputActionValue&)
+{
+	PushAim(EGFAimEvent::ShoulderSwap);
 }
 
 AGFVoxelWorld* AGFCharacter::FindVoxelWorld() const
@@ -316,21 +403,39 @@ AGFVoxelWorld* AGFCharacter::FindVoxelWorld() const
 	return nullptr;
 }
 
+bool AGFCharacter::TraceCameraAim(FHitResult& OutHit, FVector& OutAimPoint) const
+{
+	const bool bEye = bFirstPerson || AimState.bAdsIntent || AimState.Phase != EGFAdsPhase::Hip;
+	const UCameraComponent* Cam = bEye ? FirstPersonCamera.Get() : ThirdPersonCamera.Get();
+	const FVector Dir = (Cam ? Cam->GetForwardVector() : GetControlRotation().Vector()).GetSafeNormal();
+	const FVector Start = Cam ? Cam->GetComponentLocation() : GetActorLocation();
+	const FVector End = Start + Dir * GFAim::MaxAimRange;
+	if (!GetWorld())
+	{
+		OutAimPoint = End;
+		return false;
+	}
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GFAimTrace), false, this);
+	const bool bHit = GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params);
+	OutAimPoint = bHit ? OutHit.ImpactPoint : End;
+	return bHit;
+}
+
 bool AGFCharacter::TraceBlock(FHitResult& OutHit) const
 {
-	const UCameraComponent* Cam = bFirstPerson ? FirstPersonCamera.Get() : ThirdPersonCamera.Get();
-	const FVector Start = Cam->GetComponentLocation();
-	const FVector End = Start + GetControlRotation().Vector() * (BuildReach + (bFirstPerson ? 0.f : SpringArm->TargetArmLength));
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(GFBuildTrace), false, this);
-	return GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params)
-		&& Cast<AGFVoxelWorld>(OutHit.GetActor()) != nullptr;
+	FVector AimPoint;
+	if (!TraceCameraAim(OutHit, AimPoint) || !Cast<AGFVoxelWorld>(OutHit.GetActor()))
+	{
+		return false;
+	}
+	return FVector::Dist(GetActorLocation(), OutHit.ImpactPoint) <= BuildReach + 5.f;
 }
 
 bool AGFCharacter::TryPlaceBlock()
 {
 	FHitResult Hit;
 	AGFVoxelWorld* Voxel = FindVoxelWorld();
-	if (!Voxel || SelectedBlock.IsNone() || !TraceBlock(Hit))
+	if (!Voxel || SelectedBlock.IsNone() || SelectedBlock == GFAim::FistsId() || AimState.Held != EGFAimHeldKind::Block || !TraceBlock(Hit))
 	{
 		return false;
 	}
@@ -375,8 +480,8 @@ bool AGFCharacter::TryRemoveBlock()
 
 void AGFCharacter::CycleBlock(int32 Direction)
 {
-	const AGFVoxelWorld* Voxel = FindVoxelWorld();
-	const TArray<FName> Ids = Voxel ? Voxel->GetPlaceableBlockIds() : TArray<FName>();
+	bHeldOverride = false;
+	const TArray<FName> Ids = GetHotbarIds();
 	if (Ids.Num() == 0)
 	{
 		return;
@@ -384,6 +489,7 @@ void AGFCharacter::CycleBlock(int32 Direction)
 	const int32 Current = Ids.IndexOfByKey(SelectedBlock);
 	const int32 Next = Current == INDEX_NONE ? 0 : (Current + Direction + Ids.Num()) % Ids.Num();
 	SelectedBlock = Ids[Next];
+	SyncAimContext();
 }
 
 namespace
@@ -460,4 +566,337 @@ float AGFCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEve
 		Attacker->NotifyTookDamage(true);
 	}
 	return Landed.bDamage ? Landed.Damage : 0.f;
+}
+
+TArray<FName> AGFCharacter::GetHotbarIds() const
+{
+	TArray<FName> Ids;
+	if (const AGFVoxelWorld* Voxel = FindVoxelWorld())
+	{
+		Ids = Voxel->GetPlaceableBlockIds();
+	}
+	if (Ids.Num() > 0)
+	{
+		Ids.Add(GFAim::FistsId());
+	}
+	return Ids;
+}
+
+bool AGFCharacter::IsCrosshairSpreadActive() const
+{
+	return GetVelocity().Size2D() > 20.f || AimState.SpreadFireLeft > 0.f;
+}
+
+void AGFCharacter::EquipAimHeld(EGFAimHeldKind Kind, EGFWeaponProfile Profile)
+{
+	bHeldOverride = Kind == EGFAimHeldKind::Weapon || Kind == EGFAimHeldKind::Ability;
+	AimState.Held = Kind;
+	AimState.Weapon = Profile;
+	if (Kind == EGFAimHeldKind::Fists)
+	{
+		bHeldOverride = false;
+		SelectedBlock = GFAim::FistsId();
+	}
+}
+
+void AGFCharacter::RequestAimWeaponSwap()
+{
+	PushAim(EGFAimEvent::SwapWeapon);
+}
+
+void AGFCharacter::RequestAimAbility()
+{
+	PushAim(EGFAimEvent::UseAbility);
+}
+
+void AGFCharacter::SetCrosshairSettings(const FGFCrosshairSettings& In)
+{
+	Crosshair = In;
+	Crosshair.Clamp();
+	CommitAimLook();
+}
+
+void AGFCharacter::SetAimUserSettings(const FGFAimUserSettings& In)
+{
+	AimUser = In;
+	AimUser.Clamp();
+	CommitAimLook();
+}
+
+void AGFCharacter::RefreshAimFromProfile()
+{
+	if (!IsLocallyControlled() || bAimPanelOpen)
+	{
+		return;
+	}
+	UGameInstance* GI = GetGameInstance();
+	UGFLocalProfileSubsystem* Profile = GI ? GI->GetSubsystem<UGFLocalProfileSubsystem>() : nullptr;
+	if (!Profile)
+	{
+		return;
+	}
+	const FGFCharacterData& Data = Profile->GetCharacter();
+	if (bAimProfileReady && Data.Revision == AimProfileRevision)
+	{
+		return;
+	}
+	Crosshair = Data.Crosshair;
+	Crosshair.Clamp();
+	AimUser = Data.AimUser;
+	AimUser.Clamp();
+	AimState.bHoldToAim = AimUser.bHoldToAim;
+	AimState.SensitivityScale = AimUser.SensitivityScale;
+	AimState.bScopeOverlayEnabled = AimUser.bScopeOverlay;
+	AimProfileRevision = Data.Revision;
+	bAimProfileReady = true;
+}
+
+void AGFCharacter::CommitAimLook()
+{
+	AimState.bHoldToAim = AimUser.bHoldToAim;
+	AimState.SensitivityScale = AimUser.SensitivityScale;
+	AimState.bScopeOverlayEnabled = AimUser.bScopeOverlay;
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UGFLocalProfileSubsystem* Profile = GI->GetSubsystem<UGFLocalProfileSubsystem>())
+		{
+			FGFCharacterData Data = Profile->GetCharacter();
+			Data.Crosshair = Crosshair;
+			Data.AimUser = AimUser;
+			Profile->SetCharacter(Data);
+			AimProfileRevision = Data.Revision;
+			bAimProfileReady = true;
+		}
+	}
+	if (AGFPlayerState* PS = GetPlayerState<AGFPlayerState>())
+	{
+		PS->RequestStoreAimLook(Crosshair, AimUser);
+	}
+}
+
+void AGFCharacter::SyncAimContext()
+{
+	if (!bHeldOverride)
+	{
+		AimState.Held = (SelectedBlock == GFAim::FistsId()) ? EGFAimHeldKind::Fists : EGFAimHeldKind::Block;
+	}
+	AimState.bSnoutZoom = IsAimingDownASnout();
+	AimState.bHoldToAim = AimUser.bHoldToAim;
+	AimState.SensitivityScale = AimUser.SensitivityScale;
+	AimState.bScopeOverlayEnabled = AimUser.bScopeOverlay;
+	AimState.bMoving = GetVelocity().Size2D() > 20.f;
+}
+
+bool AGFCharacter::IsAimingDownASnout() const
+{
+	const AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	const UWorld* World = GetWorld();
+	if (!PS || !World || PS->PlayerKey.IsEmpty())
+	{
+		return false;
+	}
+	for (TActorIterator<AGFArenaDirector> It(World); It; ++It)
+	{
+		for (const FGFArenaUnitView& Unit : It->Units)
+		{
+			if (!Unit.bFainted && Unit.PossessedBy == PS->PlayerKey)
+			{
+				return true;
+			}
+		}
+		break;
+	}
+	return false;
+}
+
+void AGFCharacter::PushAim(EGFAimEvent Event)
+{
+	const bool bWasFist = AimState.bFistScope;
+	const FGFAimStepOut Out = GFAimPush(AimState, AimTuning, Event);
+	ApplyShoulderOffset();
+	ApplyAimView();
+	UpdateFistPose();
+	if (Out.bFistCue && !bWasFist)
+	{
+		PlayFistScopeCue();
+	}
+	if (Out.bFired)
+	{
+		ApplyAimShot(Out);
+	}
+}
+
+void AGFCharacter::ApplyAimView()
+{
+	const bool bAimCamera = AimState.Phase != EGFAdsPhase::Hip;
+	const bool bFp = bFirstPerson || bAimCamera;
+	if (FirstPersonCamera)
+	{
+		FirstPersonCamera->SetActive(bFp);
+		FirstPersonCamera->SetFieldOfView(bAimCamera ? AimState.Fov : GFAim::HipFov);
+	}
+	if (ThirdPersonCamera)
+	{
+		ThirdPersonCamera->SetActive(!bFp);
+		ThirdPersonCamera->SetFieldOfView(GFAim::HipFov);
+	}
+	if (bUseControllerRotationYaw != bFp)
+	{
+		bUseControllerRotationYaw = bFp;
+	}
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		if (Move->bOrientRotationToMovement != !bFp)
+		{
+			Move->bOrientRotationToMovement = !bFp;
+		}
+	}
+	if (USkeletalMeshComponent* MeshComp = GetMesh())
+	{
+		MeshComp->SetOwnerNoSee(bFp);
+	}
+}
+
+void AGFCharacter::ApplyShoulderOffset()
+{
+	if (SpringArm)
+	{
+		SpringArm->SocketOffset = GFShoulderSocketOffset(AimState, AimTuning);
+	}
+}
+
+void AGFCharacter::UpdateCameraFade()
+{
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (!MeshComp || !ThirdPersonCamera)
+	{
+		return;
+	}
+	const bool bFp = bFirstPerson || AimState.Phase != EGFAdsPhase::Hip;
+	if (bFp)
+	{
+		MeshComp->SetScalarParameterValueOnMaterials(TEXT("Opacity"), 1.f);
+		return;
+	}
+	const float Distance = FVector::Dist(ThirdPersonCamera->GetComponentLocation(), GetActorLocation());
+	const float Alpha = GFCameraFadeAlpha(Distance);
+	MeshComp->SetScalarParameterValueOnMaterials(TEXT("Opacity"), Alpha);
+	MeshComp->SetOwnerNoSee(Alpha <= 0.02f);
+}
+
+void AGFCharacter::UpdateFistPose()
+{
+	if (!SimpleAnim)
+	{
+		return;
+	}
+	if (AimState.bFistScope == bFistPose)
+	{
+		return;
+	}
+	bFistPose = AimState.bFistScope;
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (bFistPose)
+	{
+		if (UAnimSequenceBase* Clip = FGFAnimMap::Load(GFAim::FistScopeAnim()))
+		{
+			if (MeshComp)
+			{
+				MeshComp->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+				MeshComp->PlayAnimation(Clip, true);
+				MeshComp->SetPlayRate(1.f);
+			}
+			SimpleAnim->PauseFor(10000.f);
+			bFistClipHeld = true;
+		}
+		return;
+	}
+	if (bFistClipHeld)
+	{
+		bFistClipHeld = false;
+		SimpleAnim->PauseFor(0.01f);
+	}
+}
+
+void AGFCharacter::PlayFistScopeCue()
+{
+	if (!FistScopeSound.IsValid() && !bFistScopeSoundSearched)
+	{
+		bFistScopeSoundSearched = true;
+		FistScopeSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/SFX_FistScope.SFX_FistScope"), nullptr, LOAD_NoWarn);
+	}
+	if (USoundBase* Sound = FistScopeSound.Get())
+	{
+		UGameplayStatics::PlaySound2D(this, Sound);
+	}
+}
+
+FVector AGFCharacter::AimMuzzleLocation() const
+{
+	if (const USkeletalMeshComponent* MeshComp = GetMesh())
+	{
+		static const FName Sockets[] = { TEXT("hand_r"), TEXT("RightHand"), TEXT("Hand_R") };
+		for (const FName Socket : Sockets)
+		{
+			if (MeshComp->DoesSocketExist(Socket))
+			{
+				return MeshComp->GetSocketLocation(Socket);
+			}
+		}
+	}
+	const FVector Forward = GetControlRotation().Vector();
+	return GetActorLocation() + Forward * 40.f + FVector(0.f, 0.f, 20.f);
+}
+
+void AGFCharacter::ApplyAimShot(const FGFAimStepOut& Shot)
+{
+	if (!Shot.bFired || !GetWorld())
+	{
+		return;
+	}
+	FHitResult CameraHit;
+	FVector AimPoint;
+	TraceCameraAim(CameraHit, AimPoint);
+	const FVector Muzzle = AimMuzzleLocation();
+	FHitResult ShotHit;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GFAimShot), false, this);
+	const bool bHit = GetWorld()->LineTraceSingleByChannel(ShotHit, Muzzle, AimPoint, ECC_Visibility, Params);
+	AActor* Target = bHit ? ShotHit.GetActor() : nullptr;
+	if (!Target || Target == this || !Target->IsA<APawn>() || Shot.Damage <= 0.f)
+	{
+		return;
+	}
+	const bool bFists = AimState.Held == EGFAimHeldKind::Fists;
+	const float Reach = bFists ? AimTuning.FistReach : AimTuning.MaxAimRange;
+	if (FVector::Dist(GetActorLocation(), ShotHit.ImpactPoint) > Reach)
+	{
+		return;
+	}
+	if (HasAuthority())
+	{
+		UGameplayStatics::ApplyDamage(Target, Shot.Damage, GetController(), this, nullptr);
+	}
+	else
+	{
+		ServerApplyAimDamage(Target, Shot.Damage, bFists);
+	}
+}
+
+void AGFCharacter::ServerApplyAimDamage_Implementation(AActor* Target, float Damage, bool bFists)
+{
+	if (!Target || Target == this || !Target->IsA<APawn>())
+	{
+		return;
+	}
+	const float Cap = bFists ? GFAim::HipPunchDamage : GFAim::WeaponDamage;
+	const float Reach = bFists ? GFAim::FistReach : GFAim::MaxAimRange;
+	if (Damage <= 0.f || Damage > Cap + 0.01f)
+	{
+		return;
+	}
+	if (FVector::Dist(GetActorLocation(), Target->GetActorLocation()) > Reach + 50.f)
+	{
+		return;
+	}
+	UGameplayStatics::ApplyDamage(Target, FMath::Min(Damage, Cap), GetController(), this, nullptr);
 }

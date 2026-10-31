@@ -142,6 +142,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GF|Net")
 	void RequestSetHeldItem(FName ItemId);
 
+	/** Local cosmetic. The server copy rides along on the next character write-back. */
+	void RequestStoreAimLook(const FGFCrosshairSettings& InCrosshair, const FGFAimUserSettings& InAimUser);
+	const FGFCrosshairSettings& GetCrosshairSettings() const { return StoredCrosshair; }
+	const FGFAimUserSettings& GetAimUserSettings() const { return StoredAimUser; }
+
 	/**
 	 * Give materials to another player (by key). Returns the transaction id; the server applies each id at most
 	 * once, so resending it (SendTransfer with the same id) is always safe. Result arrives in OnTransferResult.
@@ -267,6 +272,9 @@ public:
 	void ServerChoosePath(uint8 Slot);
 
 	UFUNCTION(Server, Reliable)
+	void ServerStoreAimLook(const FGFCrosshairSettings& InCrosshair, const FGFAimUserSettings& InAimUser);
+
+	UFUNCTION(Server, Reliable)
 	void ServerUploadCharacter(const FGFCharacterData& Data);
 
 	UFUNCTION(Client, Reliable)
@@ -328,4 +336,6 @@ protected:
 	bool bUploadedLocal = false;
 	bool bWriteBackScheduled = false;
 	FTimerHandle WriteBackTimer;
+	FGFCrosshairSettings StoredCrosshair;
+	FGFAimUserSettings StoredAimUser;
 };
