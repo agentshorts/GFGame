@@ -110,6 +110,27 @@ namespace GFMinePlayableTests
 		return true;
 	}
 
+	static FString JoinLines(const TArray<FString>& Lines)
+	{
+		FString Joined;
+		for (const FString& Line : Lines)
+		{
+			Joined += Line;
+			Joined += TEXT("\n");
+		}
+		return Joined;
+	}
+
+	static bool SameTint(const FLinearColor& A, const FLinearColor& B)
+	{
+		return A.Equals(B, 0.02f);
+	}
+
+	static void MaxUpgrade(FGFMineCrew& Crew, FName Id)
+	{
+		Crew.SetLevel(Id, FGFMineData::Get().MaxLevel(Id));
+	}
+
 	static bool Digging(const AGFPlayerState* PS)
 	{
 		if (!PS || PS->Progress.Crew.Pebblings.Num() == 0)
@@ -165,12 +186,7 @@ bool FGFMineSiteOnPadTest::RunTest(const FString&)
 
 	TArray<FString> Lines;
 	Site->GetPromptLines(nullptr, Lines);
-	FString Joined;
-	for (const FString& Line : Lines)
-	{
-		Joined += Line;
-		Joined += TEXT("\n");
-	}
+	const FString Joined = JoinLines(Lines);
 	const TCHAR* Words[] = { TEXT("Capture"), TEXT("Assign"), TEXT("Haul"), TEXT("Recall"), TEXT("Buy"), TEXT("Status") };
 	for (const TCHAR* Word : Words)
 	{
@@ -258,12 +274,26 @@ bool FGFMinePlayableLoopTest::RunTest(const FString&)
 	GS->AddPlayerState(PS);
 	Pawn->SetPlayerState(PS);
 
+	TArray<FString> Untamed;
+	Site->GetPromptLines(PS, Untamed);
+	const FString UntamedText = JoinLines(Untamed);
+	TestTrue(TEXT("The mine says the crew is shy"), UntamedText.Contains(TEXT("shy until your first tame")));
+	TestTrue(TEXT("The mine points at the Valley tame"), UntamedText.Contains(TEXT("Valley")));
+	TestTrue(TEXT("The Valley line names the hub gate"), UntamedText.Contains(TEXT("Valley gate is on the hub")));
+
 	const FGFModeResult Locked = Site->TryCapture(Pawn);
 	TestFalse(TEXT("Capture refused before a tame"), Locked.bOk);
 	TestEqual(TEXT("Locked"), Locked.Code.ToString(), FString(TEXT("Locked")));
 	TestEqual(TEXT("No pebbling yet"), PS->Progress.Crew.Pebblings.Num(), 0);
+	TestTrue(TEXT("The capture spot says Valley"), Site->LastPrompt.Contains(TEXT("Valley")));
+	TestTrue(TEXT("The capture spot still says Locked"), Site->LastPrompt.Contains(TEXT("Locked")));
 
 	PS->Progress.bHasTamed = true;
+	TArray<FString> Tamed;
+	Site->GetPromptLines(PS, Tamed);
+	const FString TamedText = JoinLines(Tamed);
+	TestFalse(TEXT("A tamed character is not sent back to the Valley"), TamedText.Contains(TEXT("Valley gate is on the hub")));
+	TestFalse(TEXT("A tamed character is not called shy"), TamedText.Contains(TEXT("shy until your first tame")));
 	Mine->HideSeconds = 0.f;
 	if (UCharacterMovementComponent* Move = Pawn->GetCharacterMovement())
 	{
@@ -344,6 +374,202 @@ bool FGFMinePlayableLoopTest::RunTest(const FString&)
 	TestTrue(TEXT("Back on the hub stand"), Pawn->GetActorLocation().Equals(Site->GetHubReturnLocation(), 5.f));
 	TestFalse(TEXT("The hub stand is outside the mine HUD"), Site->IsPlayerNear(Pawn));
 	TestTrue(TEXT("Hub stand is the Rime anchor plus 120"), Site->GetHubReturnLocation().Equals(FVector(0.f, 0.f, AGFMineSite::HubStandZCm), 1.f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMineRoomTintTest, "GFGame.Mine.Playable.RoomTint", GFMinePlayableTests::Flags)
+bool FGFMineRoomTintTest::RunTest(const FString&)
+{
+	using namespace GFMinePlayableTests;
+	FMineWorld W(TEXT("GFMineTintWorld"));
+	if (!TestNotNull(TEXT("World"), W.World))
+	{
+		return false;
+	}
+	// The game state comes first, as in a real map, so the mine director registers its mode handler on BeginPlay.
+	AGFGameState* GS = W.World->SpawnActor<AGFGameState>();
+	if (!TestNotNull(TEXT("Game state"), GS))
+	{
+		return false;
+	}
+	W.World->SetGameState(GS);
+	AGFHubGateDirector* Hub = W.World->SpawnActor<AGFHubGateDirector>();
+	if (!TestNotNull(TEXT("Hub director"), Hub))
+	{
+		return false;
+	}
+	Hub->Place(TEXT("/Game/Maps/L_Hub"), FVector::ZeroVector);
+	AGFMineSite* Site = AGFMineSite::Get(W.World);
+	if (!TestNotNull(TEXT("Mine site"), Site))
+	{
+		return false;
+	}
+
+	const FLinearColor ShallowsOpen = Site->GetRoomOpenColor(TEXT("Shallows"));
+	const FLinearColor GalleryOpen = Site->GetRoomOpenColor(TEXT("CrystalGallery"));
+	const FLinearColor GrottoOpen = Site->GetRoomOpenColor(TEXT("GlowGrotto"));
+	TestTrue(TEXT("Shallows is open at build"), SameTint(Site->GetRoomTint(TEXT("Shallows")), ShallowsOpen));
+	TestTrue(TEXT("Crystal Gallery starts dim"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryOpen * AGFMineSite::LockedRoomBrightness));
+	TestTrue(TEXT("Glow Grotto starts dim"), SameTint(Site->GetRoomTint(TEXT("GlowGrotto")), GrottoOpen * AGFMineSite::LockedRoomBrightness));
+	TestTrue(TEXT("Gallery sign starts locked"), Site->GetRoomSign(TEXT("CrystalGallery")).Contains(TEXT("(locked)")));
+	TestTrue(TEXT("Grotto sign starts locked"), Site->GetRoomSign(TEXT("GlowGrotto")).Contains(TEXT("(locked)")));
+	TestFalse(TEXT("Shallows sign is not locked"), Site->GetRoomSign(TEXT("Shallows")).Contains(TEXT("(locked)")));
+
+	FGFMineCrew WalkIn;
+	FGFMineRules::AddPebbling(WalkIn);
+	Site->SyncRoomTints(WalkIn);
+	TestTrue(TEXT("A crew with no Tunnels leaves the gallery dim"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryOpen * AGFMineSite::LockedRoomBrightness));
+	WalkIn.SetLevel(GFMineUpgrades::Tunnels, 1);
+	Site->SyncRoomTints(WalkIn);
+	TestTrue(TEXT("Tunnels lights the Crystal Gallery"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryOpen));
+	TestTrue(TEXT("Glow Grotto stays dim without Lanterns"), SameTint(Site->GetRoomTint(TEXT("GlowGrotto")), GrottoOpen * AGFMineSite::LockedRoomBrightness));
+	TestFalse(TEXT("Gallery sign drops the lock"), Site->GetRoomSign(TEXT("CrystalGallery")).Contains(TEXT("(locked)")));
+	TestTrue(TEXT("Grotto sign stays locked"), Site->GetRoomSign(TEXT("GlowGrotto")).Contains(TEXT("(locked)")));
+	WalkIn.SetLevel(GFMineUpgrades::Tunnels, 0);
+	Site->SyncRoomTints(WalkIn);
+	TestTrue(TEXT("Losing Tunnels dims the gallery again"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryOpen * AGFMineSite::LockedRoomBrightness));
+
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AGFPlayerState* PS = W.World->SpawnActor<AGFPlayerState>(AGFPlayerState::StaticClass(), FTransform::Identity, Params);
+	ACharacter* Pawn = W.World->SpawnActor<ACharacter>(ACharacter::StaticClass(), FTransform(FVector(400.f, 0.f, 200.f)), Params);
+	if (!TestNotNull(TEXT("Player"), PS) || !TestNotNull(TEXT("Pawn"), Pawn) || !TestNotNull(TEXT("Inventory"), PS->Inventory.Get()))
+	{
+		return false;
+	}
+	PS->PlayerKey = TEXT("Miner");
+	PS->SetPlayerId(7);
+	PS->bCharacterReady = true;
+	PS->Progress.bHasTamed = true;
+	GS->AddPlayerState(PS);
+	Pawn->SetPlayerState(PS);
+
+	TestEqual(TEXT("Picks still has 3 levels"), FGFMineData::Get().MaxLevel(GFMineUpgrades::Picks), 3);
+	MaxUpgrade(PS->Progress.Crew, GFMineUpgrades::Picks);
+	MaxUpgrade(PS->Progress.Crew, GFMineUpgrades::Satchels);
+	MaxUpgrade(PS->Progress.Crew, GFMineUpgrades::Rails);
+	MaxUpgrade(PS->Progress.Crew, GFMineUpgrades::CrewQuarters);
+	TestTrue(TEXT("Stone for Tunnels"), PS->Inventory->AddItem(TEXT("Stone"), 30));
+	TestTrue(TEXT("Coalnut for Tunnels"), PS->Inventory->AddItem(TEXT("Coalnut"), 6));
+	const FGFModeResult Tunnels = Site->TryBuy(Pawn);
+	if (!TestTrue(TEXT("Buying Tunnels"), Tunnels.bOk))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Tunnels 1"), PS->Progress.Crew.Level(GFMineUpgrades::Tunnels), 1);
+	TestTrue(TEXT("The buy retints the Crystal Gallery"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryOpen));
+	TestTrue(TEXT("Glow Grotto is still dim after Tunnels"), SameTint(Site->GetRoomTint(TEXT("GlowGrotto")), GrottoOpen * AGFMineSite::LockedRoomBrightness));
+	TestTrue(TEXT("Shallows stays bright"), SameTint(Site->GetRoomTint(TEXT("Shallows")), ShallowsOpen));
+
+	TestTrue(TEXT("Coalnut for Lanterns"), PS->Inventory->AddItem(TEXT("Coalnut"), 10));
+	TestTrue(TEXT("Glass for Lanterns"), PS->Inventory->AddItem(TEXT("Glass"), 4));
+	const FGFModeResult Lanterns = Site->TryBuy(Pawn);
+	if (!TestTrue(TEXT("Buying Lanterns"), Lanterns.bOk))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Lanterns 1"), PS->Progress.Crew.Level(GFMineUpgrades::Lanterns), 1);
+	TestTrue(TEXT("The buy retints the Glow Grotto"), SameTint(Site->GetRoomTint(TEXT("GlowGrotto")), GrottoOpen));
+	TestTrue(TEXT("Crystal Gallery stays bright"), SameTint(Site->GetRoomTint(TEXT("CrystalGallery")), GalleryOpen));
+	TestFalse(TEXT("Grotto sign is unlocked"), Site->GetRoomSign(TEXT("GlowGrotto")).Contains(TEXT("(locked)")));
+
+	const FGFMineRoomRow* Shallows = FGFMineData::Get().Room(TEXT("Shallows"));
+	const FGFMineRoomRow* Gallery = FGFMineData::Get().Room(TEXT("CrystalGallery"));
+	const FGFMineRoomRow* Grotto = FGFMineData::Get().Room(TEXT("GlowGrotto"));
+	if (TestNotNull(TEXT("Shallows row"), Shallows) && TestNotNull(TEXT("Gallery row"), Gallery) && TestNotNull(TEXT("Grotto row"), Grotto))
+	{
+		TestTrue(TEXT("Shallows still needs nothing"), Shallows->NeedsUpgrade.IsNone());
+		TestTrue(TEXT("Gallery still needs Tunnels"), Gallery->NeedsUpgrade == GFMineUpgrades::Tunnels);
+		TestTrue(TEXT("Grotto still needs Lanterns"), Grotto->NeedsUpgrade == GFMineUpgrades::Lanterns);
+		if (TestTrue(TEXT("Shallows still has a yield"), Shallows->Yields.Num() > 0))
+		{
+			TestEqual(TEXT("Shallows still drops Stone"), Shallows->Yields[0].ItemId.ToString(), FString(TEXT("Stone")));
+			TestEqual(TEXT("Shallows Stone min unchanged"), Shallows->Yields[0].Min, 2);
+			TestEqual(TEXT("Shallows Stone max unchanged"), Shallows->Yields[0].Max, 3);
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMineTestKitTameTest, "GFGame.Mine.Playable.TestKit", GFMinePlayableTests::Flags)
+bool FGFMineTestKitTameTest::RunTest(const FString&)
+{
+	using namespace GFMinePlayableTests;
+	TestFalse(TEXT("A comment does not turn the kit on"), AGFGameState::TestKitEnabledInIniText(TEXT("; bAutoGrantTestKit=True\n")));
+	TestFalse(TEXT("False stays off"), AGFGameState::TestKitEnabledInIniText(TEXT("[/Script/GFGame.GFGameMode]\nbAutoGrantTestKit=False\n")));
+	TestFalse(TEXT("A missing key stays off"), AGFGameState::TestKitEnabledInIniText(TEXT("[/Script/GFGame.GFGameMode]\nbFreeBuild=True\n")));
+	TestTrue(TEXT("Game mode section"), AGFGameState::TestKitEnabledInIniText(TEXT("[/Script/GFGame.GFGameMode]\nbAutoGrantTestKit=True\n")));
+	TestTrue(TEXT("Game state section"), AGFGameState::TestKitEnabledInIniText(TEXT("[/Script/GFNet.GFGameState]\nbAutoGrantTestKit=True\n")));
+	TestTrue(TEXT("Any other section"), AGFGameState::TestKitEnabledInIniText(TEXT("[/Script/Some.OtherKit]\nbAutoGrantTestKit=True\n")));
+	TestTrue(TEXT("One true section wins"), AGFGameState::TestKitEnabledInIniText(
+		TEXT("[/Script/GFGame.GFGameMode]\nbAutoGrantTestKit=False\n[/Script/Packaging.Local]\nbAutoGrantTestKit=True\n")));
+
+	FMineWorld W(TEXT("GFMineKitWorld"));
+	if (!TestNotNull(TEXT("World"), W.World))
+	{
+		return false;
+	}
+	AGFGameState* GS = W.World->SpawnActor<AGFGameState>();
+	AGFHubGateDirector* Hub = W.World->SpawnActor<AGFHubGateDirector>();
+	if (!TestNotNull(TEXT("Game state"), GS) || !TestNotNull(TEXT("Hub director"), Hub))
+	{
+		return false;
+	}
+	W.World->SetGameState(GS);
+	Hub->Place(TEXT("/Game/Maps/L_Hub"), FVector::ZeroVector);
+	AGFMineDirector* Mine = AGFMineDirector::Get(W.World, false);
+	AGFMineSite* Site = AGFMineSite::Get(W.World);
+	if (!TestNotNull(TEXT("Mine director"), Mine) || !TestNotNull(TEXT("Mine site"), Site))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AGFPlayerState* PS = W.World->SpawnActor<AGFPlayerState>(AGFPlayerState::StaticClass(), FTransform::Identity, Params);
+	ACharacter* Pawn = W.World->SpawnActor<ACharacter>(ACharacter::StaticClass(), FTransform(FVector(400.f, 0.f, 200.f)), Params);
+	if (!TestNotNull(TEXT("Player"), PS) || !TestNotNull(TEXT("Pawn"), Pawn))
+	{
+		return false;
+	}
+	PS->PlayerKey = TEXT("KitMiner");
+	PS->SetPlayerId(8);
+	PS->bCharacterReady = true;
+	PS->Progress.bHasTamed = false;
+	GS->AddPlayerState(PS);
+	Pawn->SetPlayerState(PS);
+	Mine->HideSeconds = 0.f;
+
+	const FGFModeResult Locked = Site->TryCapture(Pawn);
+	TestFalse(TEXT("Without the kit, capture is locked"), Locked.bOk);
+	TestEqual(TEXT("Locked"), Locked.Code.ToString(), FString(TEXT("Locked")));
+	TestTrue(TEXT("CheckCapture agrees"), FGFMineRules::CheckCapture(PS->Progress, 0.f) == EGFMineOrder::Locked);
+
+	GS->bAutoGrantTestKit = true;
+	GS->ApplyTestKitTame(PS);
+	TestTrue(TEXT("The test kit marks the first tame"), PS->Progress.bHasTamed);
+	TestEqual(TEXT("The kit does not add a companion"), PS->Companions.Num(), 0);
+	TestEqual(TEXT("The kit does not add a pebbling"), PS->Progress.Crew.Pebblings.Num(), 0);
+	TestTrue(TEXT("CheckCapture is no longer Locked"), FGFMineRules::CheckCapture(PS->Progress, 0.f) == EGFMineOrder::Ok);
+	TestTrue(TEXT("Rushing is still a startle"), FGFMineRules::CheckCapture(PS->Progress, 400.f) == EGFMineOrder::Startled);
+
+	if (UCharacterMovementComponent* Move = Pawn->GetCharacterMovement())
+	{
+		Move->Velocity = FVector::ZeroVector;
+	}
+	const FGFModeResult Caught = Site->TryCapture(Pawn);
+	TestTrue(TEXT("A kit playtest can capture"), Caught.bOk);
+	TestEqual(TEXT("One pebbling, from capture, not from the kit"), PS->Progress.Crew.Pebblings.Num(), 1);
+
+	AGFPlayerState* Already = W.World->SpawnActor<AGFPlayerState>(AGFPlayerState::StaticClass(), FTransform::Identity, Params);
+	if (TestNotNull(TEXT("Second player"), Already))
+	{
+		Already->Progress.bHasTamed = true;
+		const int32 Before = Already->Companions.Num();
+		GS->ApplyTestKitTame(Already);
+		TestTrue(TEXT("An existing tame stays"), Already->Progress.bHasTamed);
+		TestEqual(TEXT("Still no companion added"), Already->Companions.Num(), Before);
+	}
 	return true;
 }
 

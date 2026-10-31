@@ -51,7 +51,7 @@ struct FGFPendingRestore
  * Shared, replicated world state (PLAN.md section 4.1). The world itself (blocks, garden, plots, rent) belongs to
  * the host; per-player things live on AGFPlayerState.
  */
-UCLASS()
+UCLASS(Config = Game)
 class GFNET_API AGFGameState : public AGameState
 {
 	GENERATED_BODY()
@@ -74,6 +74,15 @@ public:
 	UPROPERTY(EditAnywhere, Category = "GF|Net")
 	float MaxEditReach = 1200.f;
 
+	/**
+	 * Playtest Game.ini key. Off unless that file sets it.
+	 * When on, accepting a character marks bHasTamed so Pebble Mine capture is not stuck on Locked.
+	 * This does not add a companion and it does not change room yields. The mine still does not grant the first tame.
+	 * Honored from [/Script/GFNet.GFGameState], [/Script/GFGame.GFGameMode], or any other section with this key.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "GF|Playtest")
+	bool bAutoGrantTestKit = false;
+
 	/** Server only: everyone who has visited this world. */
 	UPROPERTY()
 	TMap<FString, FGFGuestRecord> GuestRecords;
@@ -83,6 +92,15 @@ public:
 
 	/** What a brand new character gets, once. */
 	static TArray<FGFItemStack> StarterKit();
+
+	/**
+	 * Server. When the test kit flag is on, mark this character as having tamed.
+	 * No companion is added. A flag that is off leaves bHasTamed alone.
+	 */
+	void ApplyTestKitTame(AGFPlayerState* PS);
+
+	/** True when the text sets bAutoGrantTestKit to a true value in any section. A commented line does not count. */
+	static bool TestKitEnabledInIniText(const FString& Text);
 
 	// ---------------- Economy (server only, PLAN.md section 2) ----------------
 

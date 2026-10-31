@@ -127,6 +127,11 @@ void AGFPlayerState::ServerAcceptCharacter(FGFCharacterData Data)
 	}
 	CharacterRevision = Data.Revision;
 	ApplyCharacterData(Data);
+	// The playtest kit is materials plus this flag. The mine itself still refuses a first tame.
+	if (AGFGameState* KitState = GetGFGameState())
+	{
+		KitState->ApplyTestKitTame(this);
+	}
 	bCharacterReady = true;
 	ForceNetUpdate();
 	PushCharacterToOwner();
