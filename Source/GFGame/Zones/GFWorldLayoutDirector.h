@@ -1,7 +1,7 @@
 #pragma once
 
 // Authority-only dressing for L_Hub: spires, rim cliffs, seeded points of interest, stones, porch arches.
-// Match maps and the Kindle voxel grid are not this actor's job.
+// The Kindle spire shares Stone.Kindle (off the Rime spawn). Match maps and the Kindle voxel grid are not this actor's job.
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
