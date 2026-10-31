@@ -559,14 +559,29 @@ bool FGFHubGateArtTest::RunTest(const FString&)
 
 			if (Entry.HasSim())
 			{
-				TestEqual(*(Tag + TEXT(" art")), Entry.ArtObject, FString(FGFMiniGameCatalog::SimGateObject));
-				if (bSimArt)
+				const bool bArena = Entry.Id == FName(TEXT("Arena"));
+				if (bArena)
 				{
-					UStaticMeshComponent* GateMesh = Gate->GetGateMesh();
-					TestFalse(*(Tag + TEXT(" uses SM_Gate_Sim")), Gate->IsUsingPlaceholder());
-					TestTrue(*(Tag + TEXT(" at scale 1 on the ground")), GateMesh && GateMesh->GetRelativeScale3D().Equals(FVector::OneVector) && GateMesh->GetRelativeLocation().IsNearlyZero());
-					FLinearColor Dye;
-					TestTrue(*(Tag + TEXT(" Dye_R is the entry colour")), DyeOf(GateMesh, Dye) && Dye.Equals(Entry.PlaceholderColor, 0.001f));
+					TestEqual(*(Tag + TEXT(" art")), Entry.ArtObject, FString(FGFMiniGameCatalog::ArenaGateObject));
+					TestFalse(*(Tag + TEXT(" is not the shared sim portal")), Entry.ArtObject.Equals(FGFMiniGameCatalog::SimGateObject));
+					if (FPackageName::DoesPackageExist(FGFMiniGameCatalog::ArtPackage(Entry)))
+					{
+						UStaticMeshComponent* GateMesh = Gate->GetGateMesh();
+						TestFalse(*(Tag + TEXT(" uses SM_Gate_Arena")), Gate->IsUsingPlaceholder());
+						TestTrue(*(Tag + TEXT(" mesh path")), GateMesh && GateMesh->GetStaticMesh() && GateMesh->GetStaticMesh()->GetPathName() == Entry.ArtObject);
+					}
+				}
+				else
+				{
+					TestEqual(*(Tag + TEXT(" art")), Entry.ArtObject, FString(FGFMiniGameCatalog::SimGateObject));
+					if (bSimArt)
+					{
+						UStaticMeshComponent* GateMesh = Gate->GetGateMesh();
+						TestFalse(*(Tag + TEXT(" uses SM_Gate_Sim")), Gate->IsUsingPlaceholder());
+						TestTrue(*(Tag + TEXT(" at scale 1 on the ground")), GateMesh && GateMesh->GetRelativeScale3D().Equals(FVector::OneVector) && GateMesh->GetRelativeLocation().IsNearlyZero());
+						FLinearColor Dye;
+						TestTrue(*(Tag + TEXT(" Dye_R is the entry colour")), DyeOf(GateMesh, Dye) && Dye.Equals(Entry.PlaceholderColor, 0.001f));
+					}
 				}
 			}
 
@@ -592,13 +607,22 @@ bool FGFHubGateArtTest::RunTest(const FString&)
 			if (bWantSign)
 			{
 				++Signs;
-				TestTrue(*(Tag + TEXT(" sign asset exists")), FPackageName::DoesPackageExist(FSoftObjectPath(Entry.SignObject).GetLongPackageName()));
-				TestTrue(*(Tag + TEXT(" sign mesh")), Sign->GetStaticMesh() && Sign->GetStaticMesh()->GetPathName() == Entry.SignObject);
+				const bool bSignAsset = FPackageName::DoesPackageExist(FSoftObjectPath(Entry.SignObject).GetLongPackageName());
 				TestFalse(*(Tag + TEXT(" sign shows")), Sign->bHiddenInGame);
 				TestTrue(*(Tag + TEXT(" sign blocks")), Sign->GetCollisionEnabled() != ECollisionEnabled::NoCollision);
-				const FVector Want = Xform.GetLocation() + Yaw.RotateVector(FVector(0.f, FGFMiniGameCatalog::SignRightCm, 0.f));
-				TestTrue(*(Tag + TEXT(" sign 300 cm to the gate's right")), Sign->GetComponentLocation().Equals(Want, 1.f));
 				TestTrue(*(Tag + TEXT(" sign keeps the gate yaw")), FMath::IsNearlyEqual(FRotator::NormalizeAxis(Sign->GetComponentRotation().Yaw - Yaw.Yaw), 0.f, 0.1f));
+				if (bSignAsset)
+				{
+					TestTrue(*(Tag + TEXT(" sign mesh")), Sign->GetStaticMesh() && Sign->GetStaticMesh()->GetPathName() == Entry.SignObject);
+					const FVector Want = Xform.GetLocation() + Yaw.RotateVector(FVector(0.f, FGFMiniGameCatalog::SignRightCm, 0.f));
+					TestTrue(*(Tag + TEXT(" sign 300 cm to the gate's right")), Sign->GetComponentLocation().Equals(Want, 1.f));
+				}
+				else
+				{
+					TestTrue(*(Tag + TEXT(" placeholder sign board")), Sign->GetStaticMesh() != nullptr);
+					const FVector Want = Xform.GetLocation() + Yaw.RotateVector(FVector(0.f, FGFMiniGameCatalog::SignRightCm, 90.f));
+					TestTrue(*(Tag + TEXT(" placeholder sign on the gate's right")), Sign->GetComponentLocation().Equals(Want, 1.f));
+				}
 			}
 			else
 			{
@@ -606,14 +630,70 @@ bool FGFHubGateArtTest::RunTest(const FString&)
 			}
 		}
 	}
-	TestEqual(TEXT("Beat Hop, Runway and MOBA portals have signs"), Signs, 3);
-	for (const TCHAR* Id : { TEXT("BeatHop"), TEXT("Fashion"), TEXT("Moba") })
+	TestEqual(TEXT("Every portal has a sign"), Signs, FGFMiniGameCatalog::All().Num());
+	for (const FGFMiniGameEntry& Entry : FGFMiniGameCatalog::All())
 	{
-		const FGFMiniGameEntry* Row = FGFMiniGameCatalog::Find(Id);
-		TestTrue(*FString::Printf(TEXT("%s sign under Gates/Signs"), Id), Row && Row->SignObject.StartsWith(TEXT("/Game/Art/Gates/Signs/SM_Sign_")));
+		TestTrue(*FString::Printf(TEXT("%s sign under Gates/Signs"), *Entry.Id.ToString()), Entry.SignObject.StartsWith(TEXT("/Game/Art/Gates/Signs/SM_Sign_")));
 	}
 	const FGFMiniGameEntry* Beat = FGFMiniGameCatalog::Find(TEXT("BeatHop"));
 	TestTrue(TEXT("Beat Hop expects SM_Gate_Beat now"), Beat && Beat->bExpectArt);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFHubGateLooksTest, "GFGame.Gates.Looks", GFHubGateTests::Flags)
+bool FGFHubGateLooksTest::RunTest(const FString&)
+{
+	const TArray<FGFMiniGameEntry>& Entries = FGFMiniGameCatalog::All();
+	TestEqual(TEXT("Eight gates"), Entries.Num(), 8);
+
+	auto MeshKey = [](const FGFMiniGameEntry& Entry)
+	{
+		if (Entry.ArtObject.IsEmpty() || !FPackageName::DoesPackageExist(FGFMiniGameCatalog::ArtPackage(Entry)))
+		{
+			return FString(TEXT("placeholder-cube"));
+		}
+		return Entry.ArtObject;
+	};
+
+	for (int32 i = 0; i < Entries.Num(); ++i)
+	{
+		TestFalse(*FString::Printf(TEXT("%s has a sign"), *Entries[i].Id.ToString()), Entries[i].SignObject.IsEmpty());
+		for (int32 j = i + 1; j < Entries.Num(); ++j)
+		{
+			const bool bSameMesh = MeshKey(Entries[i]) == MeshKey(Entries[j]);
+			const bool bSameTint = Entries[i].PlaceholderColor.Equals(Entries[j].PlaceholderColor, 0.001f);
+			TestFalse(
+				*FString::Printf(TEXT("%s and %s share a mesh and tint"), *Entries[i].Id.ToString(), *Entries[j].Id.ToString()),
+				bSameMesh && bSameTint);
+		}
+	}
+
+	const FGFMiniGameEntry* Moba = FGFMiniGameCatalog::Find(TEXT("Moba"));
+	const FGFMiniGameEntry* Arena = FGFMiniGameCatalog::Find(TEXT("Arena"));
+	if (!TestNotNull(TEXT("Crystal Clash row"), Moba) || !TestNotNull(TEXT("Arena row"), Arena))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Crystal Clash sign"), Moba->Label, FString(TEXT("Crystal Clash")));
+	TestEqual(TEXT("Crystal Clash keeps the Moba id"), Moba->Id, FName(TEXT("Moba")));
+	TestEqual(TEXT("Crystal Clash art"), Moba->ArtObject, FString(FGFMiniGameCatalog::CrystalGateObject));
+	TestFalse(TEXT("Crystal Clash does not wear SM_Gate_Arena"), Moba->ArtObject.Contains(TEXT("SM_Gate_Arena")));
+	TestEqual(TEXT("Arena art"), Arena->ArtObject, FString(FGFMiniGameCatalog::ArenaGateObject));
+	TestFalse(TEXT("Arena is not the shared sim portal"), Arena->ArtObject.Equals(FGFMiniGameCatalog::SimGateObject));
+	TestFalse(TEXT("Arena mesh is not Crystal Clash"), Arena->ArtObject.Equals(Moba->ArtObject));
+
+	const TCHAR* SimSigns[] = { TEXT("Arena"), TEXT("Depths"), TEXT("Mine"), TEXT("Lab") };
+	const TCHAR* SimPaths[] = {
+		TEXT("/Game/Art/Gates/Signs/SM_Sign_Arena.SM_Sign_Arena"),
+		TEXT("/Game/Art/Gates/Signs/SM_Sign_Depths.SM_Sign_Depths"),
+		TEXT("/Game/Art/Gates/Signs/SM_Sign_PebbleMine.SM_Sign_PebbleMine"),
+		TEXT("/Game/Art/Gates/Signs/SM_Sign_Overtime.SM_Sign_Overtime")
+	};
+	for (int32 i = 0; i < 4; ++i)
+	{
+		const FGFMiniGameEntry* Row = FGFMiniGameCatalog::Find(SimSigns[i]);
+		TestTrue(*FString::Printf(TEXT("%s sign path"), SimSigns[i]), Row && Row->SignObject.Equals(SimPaths[i]));
+	}
 	return true;
 }
 

@@ -4,7 +4,7 @@
 // Markers stand on a mode map, or on a sim pad, and show that mode's name.
 // Missing gate art falls back to a tinted block so the gate still reads.
 // Sim portals share one dyeable mesh and their pads share one dyeable slab, both tinted with the entry colour.
-// Map-mode portals on the hub ring get their pictogram sign beside them.
+// Hub portals get their pictogram sign beside them. A missing sign mesh becomes a tinted board.
 // A sim pad sits outside the voxel floor, so its marker carries a solid slab.
 // Visuals are applied in OnConstruction. A bare automation world never begins play,
 // so BeginPlay alone would leave the sign blank and the mesh empty.

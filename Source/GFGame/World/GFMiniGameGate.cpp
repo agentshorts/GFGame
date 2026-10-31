@@ -173,9 +173,10 @@ void AGFMiniGameGate::ApplyVisuals()
 				Mesh->SetRelativeScale3D(FVector::OneVector);
 				Mesh->SetRelativeLocation(FVector::ZeroVector);
 				Mesh->EmptyOverrideMaterials();
-				if (Entry->HasSim())
+				if (Entry->HasSim() && Entry->ArtObject == FGFMiniGameCatalog::SimGateObject)
 				{
-					// The four sims share SM_Gate_Sim; the entry colour tells them apart.
+					// Depths, the mine and Overtime share SM_Gate_Sim. The entry colour tells them apart.
+					// The Arena does not: it wears SM_Gate_Arena and keeps that mesh's own materials.
 					DyeSlot0(Mesh, Entry->PlaceholderColor);
 				}
 				bUsingPlaceholder = false;
@@ -244,22 +245,44 @@ void AGFMiniGameGate::ApplyVisuals()
 	if (ModeSign)
 	{
 		UStaticMesh* SignArt = nullptr;
-		if (GateRole == EGFMiniGameGateRole::Portal && Entry && !Entry->SignObject.IsEmpty())
+		const bool bWantSign = GateRole == EGFMiniGameGateRole::Portal && Entry && !Entry->SignObject.IsEmpty();
+		if (bWantSign)
 		{
 			SignArt = LoadObject<UStaticMesh>(nullptr, *Entry->SignObject, nullptr, LOAD_NoWarn | LOAD_Quiet);
 		}
-		ModeSign->SetStaticMesh(SignArt);
-		ModeSign->SetRelativeLocation(FVector(0.f, FGFMiniGameCatalog::SignRightCm, 0.f));
 		ModeSign->SetRelativeRotation(FRotator::ZeroRotator);
-		ModeSign->SetHiddenInGame(SignArt == nullptr);
-		ModeSign->SetVisibility(SignArt != nullptr);
+		ModeSign->EmptyOverrideMaterials();
 		if (SignArt)
 		{
+			ModeSign->SetStaticMesh(SignArt);
+			ModeSign->SetRelativeScale3D(FVector::OneVector);
+			ModeSign->SetRelativeLocation(FVector(0.f, FGFMiniGameCatalog::SignRightCm, 0.f));
+			ModeSign->SetHiddenInGame(false);
+			ModeSign->SetVisibility(true);
 			ModeSign->SetCollisionProfileName(TEXT("BlockAll"));
+			ModeSign->SetCanEverAffectNavigation(false);
+		}
+		else if (bWantSign)
+		{
+			// The pictogram is not imported yet. A tinted board still marks the gate until art lands.
+			UStaticMesh* Board = FGFAssetMap::PlaceholderMesh(EGFPlaceholderShape::Cube);
+			ModeSign->SetStaticMesh(Board);
+			ModeSign->SetRelativeScale3D(FVector(0.15f, 1.4f, 1.8f));
+			ModeSign->SetRelativeLocation(FVector(0.f, FGFMiniGameCatalog::SignRightCm, 90.f));
+			ModeSign->SetMaterial(0, FGFAssetMap::MakeTint(ModeSign, Entry->PlaceholderColor));
+			ModeSign->SetHiddenInGame(false);
+			ModeSign->SetVisibility(true);
+			ModeSign->SetCollisionProfileName(TEXT("BlockAll"));
+			ModeSign->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 			ModeSign->SetCanEverAffectNavigation(false);
 		}
 		else
 		{
+			ModeSign->SetStaticMesh(nullptr);
+			ModeSign->SetRelativeLocation(FVector(0.f, FGFMiniGameCatalog::SignRightCm, 0.f));
+			ModeSign->SetRelativeScale3D(FVector::OneVector);
+			ModeSign->SetHiddenInGame(true);
+			ModeSign->SetVisibility(false);
 			ModeSign->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		}
 	}
