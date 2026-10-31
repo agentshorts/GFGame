@@ -4,9 +4,10 @@
   sockets are added again at the manifest points.
 - SK_Dino_Ripwing v3 and SK_Dino_BigGrumble v4 are texture-only: just _D is re-imported (mesh, skeleton and clips stay).
 - Then each manifest's ue/ helper runs: MI_Dino_Ripwing + MI_Dino_Ripwing_Ferry, and MI_Dino_BigGrumble on the Body slot.
-  The Ripwing helper writes the ferry Dye_R as linear (0.955, 0.584, 0.045), which is #FAC93C; the manifest and the
-  ferry spec say sunflower #FFC93C, so that one parameter is set again from the hex afterwards.
-GFART_INBOX overrides the inbox as in import_art_batch.py. Writes Saved/ArtImport/worldmap_v1_post.json.
+  Since Ripwing v4 the helper writes the ferry Dye_R itself from sRGB #FFC93C (linear 1.0, 0.584, 0.045), so nothing is
+  patched afterwards; the value is only read back and checked against FERRY_CREST.
+GFART_INBOX overrides the inbox as in import_art_batch.py. GFPOST_ONLY (comma-separated: SM_FerryBasket,
+SK_Dino_Ripwing, SK_Dino_BigGrumble) limits the run to those assets. Writes Saved/ArtImport/worldmap_v1_post.json.
 """
 import json, os, traceback
 import unreal
@@ -16,6 +17,12 @@ os.environ["GFART_ONLY"] = "__none__"  # only the batch importer's helpers are u
 _src = open(os.path.join(_here, "import_art_batch.py"), encoding="utf-8").read()
 exec(compile(_src[:_src.index("# Clean re-import")], os.path.join(_here, "import_art_batch.py"), "exec"), globals())
 report = {"assets": {}, "log": []}
+_only = [n.strip() for n in os.environ.get("GFPOST_ONLY", "").split(",") if n.strip()]
+
+
+def wanted(n):
+    return not _only or n in _only
+
 
 FERRY_CREST = "#FFC93C"
 
@@ -33,8 +40,10 @@ DINOS = {
 }
 
 r = {"checks": {}}
-report["assets"]["SM_FerryBasket"] = r
 try:
+    if not wanted("SM_FerryBasket"):
+        raise StopIteration
+    report["assets"]["SM_FerryBasket"] = r
     m = unreal.load_asset("/Game/Art/Props/Ferry/SM_FerryBasket")
     for sname, loc in BASKET_SOCKETS.items():
         if m.find_socket(sname) is not None:
@@ -48,10 +57,14 @@ try:
     got = {n: (None if m.find_socket(n) is None else vec(m.find_socket(n).get_editor_property("relative_location"))) for n in BASKET_SOCKETS}
     r["sockets"] = got
     r["checks"]["sockets"] = all(got[n] is not None and all(abs(a - b) < 1e-3 for a, b in zip(got[n], l)) for n, l in BASKET_SOCKETS.items())
+except StopIteration:
+    pass
 except Exception as e:
     r["error"] = str(e) + "\n" + traceback.format_exc()
 
 for name, (tdir, tex, helper) in DINOS.items():
+    if not wanted(name):
+        continue
     r = {"checks": {}}
     report["assets"][name] = r
     try:
@@ -66,12 +79,11 @@ for name, (tdir, tex, helper) in DINOS.items():
         code = open(os.path.join(folder, "ue", helper), encoding="utf-8").read()
         exec(compile(code, helper, "exec"), {"__name__": "__gfart_helper__"})
         if name == "SK_Dino_Ripwing":
+            # Read back only: the helper wrote it (no post-import pin).
             fmi = unreal.load_asset("/Game/Art/Dinos/Ripwing/Materials/MI_Dino_Ripwing_Ferry")
-            unreal.MaterialEditingLibrary.set_material_instance_vector_parameter_value(fmi, "Dye_R", srgb_hex(FERRY_CREST))
-            EAL.save_loaded_asset(fmi)
             c = unreal.MaterialEditingLibrary.get_material_instance_vector_parameter_value(fmi, "Dye_R")
             r["ferry_dye_r"] = [round(c.r, 4), round(c.g, 4), round(c.b, 4)]
-            r["checks"]["ferry_dye_r"] = abs(c.r - srgb_hex(FERRY_CREST).r) < 1e-3 and abs(c.g - srgb_hex(FERRY_CREST).g) < 1e-3
+            r["checks"]["ferry_dye_r"] = abs(c.r - srgb_hex(FERRY_CREST).r) < 1e-3 and abs(c.g - srgb_hex(FERRY_CREST).g) < 1e-3 and abs(c.b - srgb_hex(FERRY_CREST).b) < 1e-3
         mesh = unreal.load_asset(man["unreal_target"])
         r["body_material"] = [str(s.material_interface.get_name()) if s.material_interface else None for s in mesh.materials]
         want = "MI_" + name[3:]
