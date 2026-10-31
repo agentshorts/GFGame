@@ -60,8 +60,8 @@ const TArray<FGFMiniGameEntry>& FGFMiniGameCatalog::All()
 {
 	// Ring order, starting east and walking counter-clockwise. Labels are the signs.
 	// Beat Hop is the rhythm map. Depths is the platformer sim. They do not share a name.
-	// Every portal has a sign. The Arena wears SM_Gate_Arena. Crystal Clash does not.
-	// Depths, Pebble Mine and Overtime still share the dyeable sim portal, each with its own tint.
+	// Every portal has a sign. The Arena wears SM_Gate_Arena. Crystal Clash wears its own twin-spire gate.
+	// Depths, Pebble Mine and Overtime each have their own gate (gates_v2, #258), still dyed with the entry colour.
 	static const TArray<FGFMiniGameEntry> Entries = {
 		WithSign(MapMode(TEXT("Taming"), TEXT("Valley"), TEXT("/Game/Maps/L_Valley"),
 			TEXT("/Game/Art/Gates/SM_Gate_Valley.SM_Gate_Valley"),
@@ -74,7 +74,7 @@ const TArray<FGFMiniGameEntry>& FGFMiniGameCatalog::All()
 			TEXT("/Game/Art/Gates/Signs/SM_Sign_Runway.SM_Sign_Runway")),
 		WithSign(MapMode(TEXT("Moba"), TEXT("Crystal Clash"), TEXT("/Game/Maps/L_Moba"),
 			FGFMiniGameCatalog::CrystalGateObject,
-			FLinearColor(0.75f, 0.22f, 0.18f), false, 2, nullptr),
+			FLinearColor(0.75f, 0.22f, 0.18f), true, 2, nullptr),
 			TEXT("/Game/Art/Gates/Signs/SM_Sign_Moba.SM_Sign_Moba")),
 		WithSign(MapMode(TEXT("BeatHop"), TEXT("Beat Hop"), TEXT("/Game/Maps/L_Beat"),
 			TEXT("/Game/Art/Gates/SM_Gate_Beat.SM_Gate_Beat"),
@@ -85,15 +85,15 @@ const TArray<FGFMiniGameEntry>& FGFMiniGameCatalog::All()
 			FLinearColor(0.80f, 0.65f, 0.30f), 4, 0,
 			TEXT("/Script/GFArena.GFArenaDirector")),
 			TEXT("/Game/Art/Gates/Signs/SM_Sign_Arena.SM_Sign_Arena")),
-		WithSign(SimMode(TEXT("Depths"), TEXT("Depths"), FGFMiniGameCatalog::SimGateObject,
+		WithSign(SimMode(TEXT("Depths"), TEXT("Depths"), FGFMiniGameCatalog::DepthsGateObject,
 			FLinearColor(0.35f, 0.25f, 0.55f), 5, 1,
 			TEXT("/Script/GFDepths.GFDepthsDirector")),
 			TEXT("/Game/Art/Gates/Signs/SM_Sign_Depths.SM_Sign_Depths")),
-		WithSign(SimMode(TEXT("Mine"), TEXT("Pebble Mine"), FGFMiniGameCatalog::SimGateObject,
+		WithSign(SimMode(TEXT("Mine"), TEXT("Pebble Mine"), FGFMiniGameCatalog::PebbleMineGateObject,
 			FLinearColor(0.55f, 0.52f, 0.45f), 6, 2,
 			TEXT("/Script/GFMine.GFMineDirector")),
 			TEXT("/Game/Art/Gates/Signs/SM_Sign_PebbleMine.SM_Sign_PebbleMine")),
-		WithSign(SimMode(TEXT("Lab"), TEXT("Overtime"), FGFMiniGameCatalog::SimGateObject,
+		WithSign(SimMode(TEXT("Lab"), TEXT("Overtime"), FGFMiniGameCatalog::OvertimeGateObject,
 			FLinearColor(0.30f, 0.70f, 0.72f), 7, 3,
 			TEXT("/Script/GFLab.GFLabDirector")),
 			TEXT("/Game/Art/Gates/Signs/SM_Sign_Overtime.SM_Sign_Overtime")),
@@ -177,6 +177,19 @@ FVector FGFMiniGameCatalog::DefaultSpawn(FName SimMode)
 		return FVector::ZeroVector;
 	}
 	return PadOrigin(*Entry, FVector::ZeroVector);
+}
+
+bool FGFMiniGameCatalog::IsDyedGate(const FString& ArtObject)
+{
+	const TCHAR* Dyed[] = { SimGateObject, CrystalGateObject, DepthsGateObject, PebbleMineGateObject, OvertimeGateObject };
+	for (const TCHAR* Path : Dyed)
+	{
+		if (ArtObject.Equals(Path))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 FString FGFMiniGameCatalog::ArtPackage(const FGFMiniGameEntry& Entry)

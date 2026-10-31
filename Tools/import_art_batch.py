@@ -186,10 +186,17 @@ _HINT_NON_SLOTS = {
     "texture", "emissive_strength", "EmissiveStrength", "emissive_color",
     "Dye_R", "dye_r", "dye", "note", "comment",
 }
+_KNOWN_HINT_PARENTS = ("M_GF_Prop", "M_GF_Water", "M_GF_Glass", "M_GF_Lava", "M_GF_TeamTint", "M_GF_DyeMask")
+
 def _parent_name(man, spec):
     parent = spec.get("parent")
     if isinstance(parent, str) and parent.startswith("/Game/"):
         parent = parent.rsplit("/", 1)[-1]
+    # Descriptive hints (gates_v2): "M_GF_Prop (prop_materials path: ...)" -> M_GF_Prop.
+    if isinstance(parent, str):
+        lead = re.match(r"\s*(M_GF_[A-Za-z]+)(?=$|[\s(,;:])", parent)
+        if lead and lead.group(1) in _KNOWN_HINT_PARENTS:
+            parent = lead.group(1)
     if parent:
         return str(parent)
     blend = str(spec.get("blend_mode", "")).lower()
@@ -307,7 +314,12 @@ def _dye_hex(spec):
     if not dye:
         dye = defaults.get("LiningColor") or defaults.get("Dye_R")
     if isinstance(dye, str) and dye.strip():
-        return dye.strip()
+        dye = dye.strip()
+        # Descriptive values (gates_v2): "Moba PlaceholderColor #BF382E (0.75, 0.22, 0.18)" -> #BF382E.
+        if not re.fullmatch(r"#?[0-9A-Fa-f]{6}", dye):
+            found = re.search(r"#[0-9A-Fa-f]{6}\b", dye)
+            return found.group(0) if found else None
+        return dye
     return None
 
 def _one_hint_instance(man, slot, spec, index, shared_flat):
@@ -562,6 +574,17 @@ def dry_run_self_check(write=None):
                 if want != "hint":
                     check(got == _legacy_material_kind(man), "legacy drift {} {}".format(batch, typ))
     _check_plans(check)
+    # gates_v2 (#258): descriptive parent and Dye_R text still resolve to M_GF_Prop and a hex colour.
+    gate = _dry_manifest(
+        "SM_Gate_Crystal", "gates_v2", "static_mesh", "/Game/Art/Gates/SM_Gate_Crystal", ["Main"],
+        ["T_Gate_Crystal_D.png", "T_Gate_Crystal_E.png", "T_Gate_Crystal_M.png"],
+        {"parent": "M_GF_Prop (prop_materials path: Diffuse = _D, DyeMask = _M, Emissive = _E, EmissiveStrength 2.0)",
+         "importer": "batch gates_v2 is new", "Dye_R": "Moba PlaceholderColor #BF382E (0.75, 0.22, 0.18)"})
+    check(material_kind(gate) == "hint", "gates_v2 kind")
+    gi = (hint_material_plan(gate).get("instances") or [{}])[0]
+    check(gi.get("parent") == "M_GF_Prop" and gi.get("vectors", {}).get("Dye_R") == "#BF382E", "gates_v2 parent and dye")
+    check(gi.get("textures", {}).get("DyeMask") == "T_Gate_Crystal_M" and gi.get("textures", {}).get("Emissive") == "T_Gate_Crystal_E", "gates_v2 textures")
+    check(hint_material_plan(gate).get("slots") == {"Main": "MI_Gate_Crystal"}, "gates_v2 slots")
     if failures:
         for msg in failures:
             write("FAIL " + msg)
@@ -663,6 +686,9 @@ ORDER = [
     # MiningRange_Dressing_v2 is layout data (Data/MiningRange, supersedes v1), never listed here.
     "SM_Prop_Range_Sign", "SM_Prop_Range_Badge_SpellProof", "SM_Prop_Range_ResetLever_Base", "SM_Prop_Range_ResetLever_Handle",
     "SM_Prop_Range_LavaEdgeTrim", "SM_Prop_Range_FloorTint",
+    # hub gate meshes (batch gates_v2, #258): to /Game/Art/Gates. Static manifests with unreal_material_hint, so each gets
+    # an M_GF_Prop MI (Diffuse _D, DyeMask _M, Emissive _E). SM_Gate_Crystal replaces the Crystal Clash placeholder cube.
+    "SM_Gate_Crystal", "SM_Gate_Depths", "SM_Gate_PebbleMine", "SM_Gate_Overtime",
 ]
 # Skeletons shared across species live in their own folder, not in the folder of whichever mesh created them.
 # The first import creates the skeleton there; later imports reuse it. Pre-clean never deletes a shared

@@ -173,9 +173,9 @@ void AGFMiniGameGate::ApplyVisuals()
 				Mesh->SetRelativeScale3D(FVector::OneVector);
 				Mesh->SetRelativeLocation(FVector::ZeroVector);
 				Mesh->EmptyOverrideMaterials();
-				if (Entry->HasSim() && Entry->ArtObject == FGFMiniGameCatalog::SimGateObject)
+				if (FGFMiniGameCatalog::IsDyedGate(Entry->ArtObject))
 				{
-					// Depths, the mine and Overtime share SM_Gate_Sim. The entry colour tells them apart.
+					// Crystal Clash, Depths, the mine and Overtime (and SM_Gate_Sim) tint their _M R trim with the entry colour.
 					// The Arena does not: it wears SM_Gate_Arena and keeps that mesh's own materials.
 					DyeSlot0(Mesh, Entry->PlaceholderColor);
 				}
@@ -184,8 +184,7 @@ void AGFMiniGameGate::ApplyVisuals()
 		}
 		if (bUsingPlaceholder)
 		{
-			// Authored art is optional. Beat Hop, Depths, the mine, the lab and the dino arena
-			// have no gate mesh yet, and a failed load takes the same tinted block.
+			// Authored art is optional. A mode without a gate mesh, or a failed load, takes the same tinted block.
 			UStaticMesh* Block = FGFAssetMap::PlaceholderMesh(EGFPlaceholderShape::Cube);
 			Mesh->SetStaticMesh(Block);
 			// Engine cube is 100 cm and centred. A gate is 2 x 1 x 3 blocks, sitting on the ground.

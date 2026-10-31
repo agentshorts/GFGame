@@ -521,7 +521,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFHubGateArtTest, "GFGame.Gates.Art", GFHubGat
 bool FGFHubGateArtTest::RunTest(const FString&)
 {
 	using namespace GFHubGateTests;
-	// World map v1: the shared sim portal and pad slab carry the entry colour, and map portals get their sign.
+	// World map v1 + gates_v2 (#258): the per-mode sim gates, Crystal Clash and the pad slab carry the entry colour, and map portals get their sign.
 	FWorldScope Scope;
 	if (!TestNotNull(TEXT("World"), Scope.World))
 	{
@@ -573,15 +573,39 @@ bool FGFHubGateArtTest::RunTest(const FString&)
 				}
 				else
 				{
-					TestEqual(*(Tag + TEXT(" art")), Entry.ArtObject, FString(FGFMiniGameCatalog::SimGateObject));
-					if (bSimArt)
+					// gates_v2 (#258): Depths, Pebble Mine and Overtime each wear their own gate, dyed with the entry colour.
+					const FString WantArt =
+						Entry.Id == FName(TEXT("Depths")) ? FString(FGFMiniGameCatalog::DepthsGateObject)
+						: Entry.Id == FName(TEXT("Mine")) ? FString(FGFMiniGameCatalog::PebbleMineGateObject)
+						: Entry.Id == FName(TEXT("Lab")) ? FString(FGFMiniGameCatalog::OvertimeGateObject)
+						: FString();
+					TestEqual(*(Tag + TEXT(" art")), Entry.ArtObject, WantArt);
+					TestFalse(*(Tag + TEXT(" is not the shared sim portal")), Entry.ArtObject.Equals(FGFMiniGameCatalog::SimGateObject));
+					TestTrue(*(Tag + TEXT(" gate is dyed")), FGFMiniGameCatalog::IsDyedGate(Entry.ArtObject));
+					TestTrue(*(Tag + TEXT(" gate mesh imported")), FPackageName::DoesPackageExist(FGFMiniGameCatalog::ArtPackage(Entry)));
+					if (FPackageName::DoesPackageExist(FGFMiniGameCatalog::ArtPackage(Entry)))
 					{
 						UStaticMeshComponent* GateMesh = Gate->GetGateMesh();
-						TestFalse(*(Tag + TEXT(" uses SM_Gate_Sim")), Gate->IsUsingPlaceholder());
+						TestFalse(*(Tag + TEXT(" uses its gate mesh")), Gate->IsUsingPlaceholder());
+						TestTrue(*(Tag + TEXT(" mesh path")), GateMesh && GateMesh->GetStaticMesh() && GateMesh->GetStaticMesh()->GetPathName() == Entry.ArtObject);
 						TestTrue(*(Tag + TEXT(" at scale 1 on the ground")), GateMesh && GateMesh->GetRelativeScale3D().Equals(FVector::OneVector) && GateMesh->GetRelativeLocation().IsNearlyZero());
 						FLinearColor Dye;
 						TestTrue(*(Tag + TEXT(" Dye_R is the entry colour")), DyeOf(GateMesh, Dye) && Dye.Equals(Entry.PlaceholderColor, 0.001f));
 					}
+				}
+			}
+			else if (Entry.Id == FName(TEXT("Moba")))
+			{
+				// Crystal Clash wears SM_Gate_Crystal. The trim takes the Moba colour; the team spires are painted.
+				TestEqual(*(Tag + TEXT(" art")), Entry.ArtObject, FString(FGFMiniGameCatalog::CrystalGateObject));
+				TestTrue(*(Tag + TEXT(" gate mesh imported")), FPackageName::DoesPackageExist(FGFMiniGameCatalog::ArtPackage(Entry)));
+				if (FPackageName::DoesPackageExist(FGFMiniGameCatalog::ArtPackage(Entry)))
+				{
+					UStaticMeshComponent* GateMesh = Gate->GetGateMesh();
+					TestFalse(*(Tag + TEXT(" uses SM_Gate_Crystal")), Gate->IsUsingPlaceholder());
+					TestTrue(*(Tag + TEXT(" at scale 1 on the ground")), GateMesh && GateMesh->GetRelativeScale3D().Equals(FVector::OneVector) && GateMesh->GetRelativeLocation().IsNearlyZero());
+					FLinearColor Dye;
+					TestTrue(*(Tag + TEXT(" Dye_R is the Moba colour")), DyeOf(GateMesh, Dye) && Dye.Equals(Entry.PlaceholderColor, 0.001f));
 				}
 			}
 

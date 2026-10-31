@@ -58,8 +58,12 @@ struct GFCORE_API FGFMiniGameCatalog
 	static constexpr const TCHAR* SimGateObject = TEXT("/Game/Art/Gates/SM_Gate_Sim.SM_Gate_Sim");
 	/** The real Arena. This mesh is not the Crystal Clash door. */
 	static constexpr const TCHAR* ArenaGateObject = TEXT("/Game/Art/Gates/SM_Gate_Arena.SM_Gate_Arena");
-	/** Crystal Clash placeholder until a crystal arch is authored. Not SM_Gate_Arena. */
+	/** Crystal Clash twin-spire gate (gates_v2, #258). Not SM_Gate_Arena. Its _M R trim takes the Moba colour. */
 	static constexpr const TCHAR* CrystalGateObject = TEXT("/Game/Art/Gates/SM_Gate_Crystal.SM_Gate_Crystal");
+	/** Per-mode sim gates (gates_v2, #258). Each one's _M R takes the entry PlaceholderColor through Dye_R. */
+	static constexpr const TCHAR* DepthsGateObject = TEXT("/Game/Art/Gates/SM_Gate_Depths.SM_Gate_Depths");
+	static constexpr const TCHAR* PebbleMineGateObject = TEXT("/Game/Art/Gates/SM_Gate_PebbleMine.SM_Gate_PebbleMine");
+	static constexpr const TCHAR* OvertimeGateObject = TEXT("/Game/Art/Gates/SM_Gate_Overtime.SM_Gate_Overtime");
 	/** Sim pad slab, 4000 cm square, origin on the walk surface (slab Z -100..0). Dyed like the sim portal. */
 	static constexpr const TCHAR* PadObject = TEXT("/Game/Art/Gates/SM_GatePad.SM_GatePad");
 	/** Mode sign beside a hub portal, on the gate's right (actor +Y), same yaw as the gate (cm). */
@@ -82,6 +86,13 @@ struct GFCORE_API FGFMiniGameCatalog
 	 * The shipped anchor is the origin, so this is the pad itself. None if this id is not a sim.
 	 */
 	static FVector DefaultSpawn(FName SimMode);
+
+	/**
+	 * True when the gate mesh is an M_GF_Prop portal whose _M R region takes the entry PlaceholderColor (Dye_R):
+	 * the shared sim portal, Crystal Clash and the per-mode Depths, Pebble Mine and Overtime gates.
+	 * The Arena, Valley, Runway and Beat Hop gates keep their own materials.
+	 */
+	static bool IsDyedGate(const FString& ArtObject);
 
 	/** Package path of ArtObject, without the object name. Empty if there is no art path. */
 	static FString ArtPackage(const FGFMiniGameEntry& Entry);
