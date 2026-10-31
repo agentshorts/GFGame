@@ -60,6 +60,8 @@ private:
 	void DrawBeatHopSession();
 	/** Pebble Mine (#216): verb prompts while the local pawn is on the mine pad. */
 	void DrawMineSession();
+	/** Arena greybox: bout prompts while the local pawn is on the arena pad. */
+	void DrawArenaSession();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);

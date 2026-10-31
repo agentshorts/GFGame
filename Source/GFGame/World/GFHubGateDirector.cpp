@@ -1,5 +1,6 @@
 #include "GFHubGateDirector.h"
 
+#include "GFArenaDirector.h"
 #include "GFBeatHopCourse.h"
 #include "GFLog.h"
 #include "GFMineDirector.h"
@@ -152,6 +153,11 @@ void AGFHubGateDirector::Place(const FString& WorldPackage, const FVector& InRim
 				if (AGFMineDirector* Mine = Cast<AGFMineDirector>(Director))
 				{
 					Mine->EnsurePlayableSite();
+				}
+				// Arena greybox: start, finish, results and the hub arch on the same pad. No new map.
+				else if (AGFArenaDirector* Arena = Cast<AGFArenaDirector>(Director))
+				{
+					Arena->EnsurePlayableSite();
 				}
 			}
 		}

@@ -128,6 +128,15 @@ public:
 	/** Server: ends the fight now as a draw (map exit, host quits): stakes go home. */
 	void AbortFight();
 
+	/** Spawns the greybox bout spots on this pad. Safe to call again. Does not open a map. */
+	void EnsurePlayableSite();
+
+	/**
+	 * Server. While a bout is in progress, runs the sim to its real outcome and pays out.
+	 * A draw is the 180s timeout, not an abort. Returns false when no bout is running.
+	 */
+	bool ResolvePlayableBout();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
