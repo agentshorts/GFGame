@@ -760,7 +760,7 @@ void AGFMineSite::GetPromptLines(const AGFPlayerState* PS, TArray<FString>& OutL
 			}
 			Cost += FString::Printf(TEXT("%s x%d"), *C.ItemId.ToString(), C.Count);
 		}
-		OutLines.Add(FString::Printf(TEXT("Buy %s %d: %s. One shortfall is covered once. Drop rates stay normal."), *BuyId.ToString(), BuyLevel, *Cost));
+		OutLines.Add(FString::Printf(TEXT("Buy %s %d: %s. One shortfall is covered once. Drop rates stay normal."), *GFMineUpgrades::Label(BuyId), BuyLevel, *Cost));
 	}
 	else
 	{

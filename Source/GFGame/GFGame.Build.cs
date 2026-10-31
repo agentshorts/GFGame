@@ -7,7 +7,8 @@ public class GFGame : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "GameplayTags", "GFCore", "GFVoxel", "GFBuild", "GFGarden", "GFCompanion", "GFFashion", "GFMoba", "GFRhythm", "GFSave", "GFNet", "VoxelFinish" });
-		PrivateDependencyModuleNames.AddRange(new string[] { "GFSocial", "GFMine", "GFArena", "GFDepths", "GFLab", "Json", "RenderCore", "Slate", "SlateCore" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "GFSocial", "GFMine", "GFArena", "GFDepths", "GFLab", "Json", "RenderCore", "GFMagic", "Slate", "SlateCore" });
+		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "Magic"));
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "Territory"));
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "AI/Roaming"));
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "Dinos/Wild"));

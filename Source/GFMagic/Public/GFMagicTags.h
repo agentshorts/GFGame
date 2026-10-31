@@ -1,0 +1,56 @@
+#pragma once
+
+// Native tags for magic mining. UE_DEFINE_GAMEPLAY_TAG lives in GFMagicTags.cpp.
+// Anchor() keeps the registrars linked so a linker that drops unreferenced
+// statics does not take the tags with it.
+
+#include "CoreMinimal.h"
+#include "NativeGameplayTags.h"
+
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Ability_Mining);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Ability_Mining_Field);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Ability_Mining_Clawcall);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Ability_Mining_ToggleElement);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Ability_Mining_Overcharge);
+
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Element_Spark);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Element_Magma);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Element_Root);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Element_Frost);
+
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Cell_Mark_Charged);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Cell_Mark_Burning);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Cell_Mark_Rooted);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Cell_Mark_Frozen);
+
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Combo_Slagburst);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Combo_LightningRoot);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Combo_Shatterfrost);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Combo_SteamBlast);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Combo_Wildfire);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Combo_Frostbloom);
+
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Faction_Cinderwrights);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Faction_Verdant);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Faction_Rime);
+
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Path_Delver);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Path_Wrangler);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Path_Scavenger);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Path_PendingA);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Path_PendingB);
+
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_GameplayCue_Mining_Field);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_GameplayCue_Mining_Clawcall);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_GameplayCue_Mining_Magnet);
+
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Event_Mining_Break);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Event_Mining_Quench);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Event_Mining_Drop);
+
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Upgrade_Mining);
+
+struct GFMAGIC_API FGFMagicTags
+{
+	static void Anchor();
+};

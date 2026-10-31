@@ -7,6 +7,9 @@
 #include "GFVoxelWorld.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
+#include "GFMagicPlayerState.h"
+#include "GFBlockIntegritySubsystem.h"
+#include "GFMagicStairwell.h"
 #include "GFSpawnDefaults.h"
 #include "GFTerritorySubsystem.h"
 #include "GFDataTables.h"
@@ -65,7 +68,7 @@ AGFGameMode::AGFGameMode()
 	HUDClass = AGFHUD::StaticClass();
 	DefaultSpawnAnchor = TEXT("Rime");
 	GameStateClass = AGFGameState::StaticClass();
-	PlayerStateClass = AGFPlayerState::StaticClass();
+	PlayerStateClass = AGFMagicPlayerState::StaticClass();
 	bDelayedStart = false;
 	StartupDirectorClasses.Add(FSoftClassPath(TEXT("/Script/GFSocial.GFSocialDirector")));
 	StartupDirectorClasses.Add(FSoftClassPath(TEXT("/Script/GFGame.GFPaintVolume")));
@@ -103,6 +106,16 @@ void AGFGameMode::InitGameState()
 		}
 	}
 	GFGameModeKindleSpawn::GFEnsureHubKindleRing(this);
+	if (UWorld* World = GetWorld())
+	{
+		if (UGFBlockIntegritySubsystem* Magic = World->GetSubsystem<UGFBlockIntegritySubsystem>())
+		{
+			Magic->SetStairwell([](const APawn* Pawn, const FVector& Aim, const AGFVoxelWorld* Voxel)
+			{
+				return FGFMagicStairwell::Cells(Pawn, Aim, Voxel);
+			});
+		}
+	}
 }
 
 void AGFGameMode::PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)

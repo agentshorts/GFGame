@@ -1,0 +1,20 @@
+# First tier only: one pick of two, paid in a Spell Page and a Crystal.
+# UnnamedFourth and UnnamedFifth both show as Spark Focus until those paths are named.
+# The Picks mine upgrade keeps its id; the mine screen labels it Spark Focus.
+---,Tree,Owner,Tier,DisplayName,CostItemA,CostCountA,CostItemB,CostCountB,Effect,Magnitude
+LavaLance,Faction,Cinderwrights,1,"Lava Lance",SpellPage,1,Crystal,1,RangeCm,200
+FissureRake,Faction,Cinderwrights,1,"Fissure Rake",SpellPage,1,Crystal,1,ClawLength,2
+RootNetwork,Faction,Verdant,1,"Root Network",SpellPage,1,Crystal,1,SoilChain,1
+Regrowth,Faction,Verdant,1,"Regrowth",SpellPage,1,Crystal,1,ExtraDrop,1
+DeepQuench,Faction,Rime,1,"Deep Quench",SpellPage,1,Crystal,1,IntegrityRate,1.5
+Brittle,Faction,Rime,1,"Brittle",SpellPage,1,Crystal,1,IntegrityRate,1.25
+StairwellCall,Path,Delver,1,"Stairwell Call",SpellPage,1,Crystal,1,Stairwell,1
+OreGlint,Path,Delver,1,"Ore Glint",SpellPage,1,Crystal,1,OreGlint,2
+BondCall,Path,Wrangler,1,"Bond Call",SpellPage,1,Crystal,1,BondCall,1
+WorkingDinos,Path,Wrangler,1,"Working Dinos",SpellPage,1,Crystal,1,WorkingDinos,1
+JackpotArc,Path,Scavenger,1,"Jackpot Arc",SpellPage,1,Crystal,1,Jackpot,1
+LuckyHaul,Path,Scavenger,1,"Lucky Haul",SpellPage,1,Crystal,1,ExtraDrop,1
+PendingA_SparkFocusReach,Path,UnnamedFourth,1,"Spark Focus",SpellPage,1,Crystal,1,RangeCm,100
+PendingA_SparkFocusRate,Path,UnnamedFourth,1,"Spark Focus",SpellPage,1,Crystal,1,IntegrityRate,1.25
+PendingB_SparkFocusReach,Path,UnnamedFifth,1,"Spark Focus",SpellPage,1,Crystal,1,RangeCm,100
+PendingB_SparkFocusRate,Path,UnnamedFifth,1,"Spark Focus",SpellPage,1,Crystal,1,IntegrityRate,1.25

@@ -1017,7 +1017,12 @@ EGFLandResult AGFGameState::ApplyBlueprint(const FGFLandPlot& Plot, const FGFPlo
 	{
 		return EGFLandResult::NotAllowed;
 	}
-	return Voxel->ApplyRegion(Plot.Min, Blueprint.Voxels, Blueprint.Size) ? EGFLandResult::Ok : EGFLandResult::NoBlueprint;
+	if (!Voxel->ApplyRegion(Plot.Min, Blueprint.Voxels, Blueprint.Size))
+	{
+		return EGFLandResult::NoBlueprint;
+	}
+	OnBlueprintStamped.Broadcast(Plot.Min, Plot.Min + Plot.Size - FIntVector(1, 1, 1));
+	return EGFLandResult::Ok;
 }
 
 // --- Requests ---

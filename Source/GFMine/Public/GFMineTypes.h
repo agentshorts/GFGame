@@ -45,6 +45,12 @@ namespace GFMineUpgrades
 	static const FName Lanterns(TEXT("Lanterns"));       // opens the Glow Grotto
 	static const FName AutoHaul(TEXT("AutoHaul"));       // automation: full satchels go home by themselves
 	static const FName NightShift(TEXT("NightShift"));   // longer offline cap
+
+	/** The mine screen says Spark Focus. The upgrade id stays Picks. */
+	inline FString Label(FName Id)
+	{
+		return Id == Picks ? FString(TEXT("Spark Focus")) : Id.ToString();
+	}
 }
 
 /** Numbers that follow from the upgrades. */

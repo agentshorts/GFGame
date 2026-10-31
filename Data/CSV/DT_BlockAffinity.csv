@@ -1,0 +1,20 @@
+# Spark is 1 on almost everything. Each faction element is about 2x on its home blocks.
+# Lava is only touchable by Frost, and that quench turns it into Basalt. Fabric is spell-proof.
+# Built cells are spell-proof in code, on top of this table.
+---,Spark,Magma,Root,Frost,bSpellProof,bConductive,bTree,bSoil,bOre,FrostTransform,MagmaDrop
+Grass,1,0.5,2,0.5,False,False,False,True,False,None,None
+Dirt,1,0.5,2,0.5,False,False,False,True,False,None,None
+WoodPlank,1,0.5,2,0.5,False,False,False,False,False,None,None
+Stone,1,2,0.5,0.5,False,False,False,False,False,None,None
+Glass,1,0.5,0.5,2,False,False,False,False,False,None,None
+Fabric,0,0,0,0,True,False,False,False,False,None,None
+Ice,1,2,0.5,2,False,False,False,False,False,None,None
+Basalt,1,2,0.5,0.5,False,False,False,False,False,None,None
+Lava,0,0,0,2,False,False,False,False,False,Basalt,None
+Farmland,1,0.5,2,0.5,False,False,False,True,False,None,None
+Log,1,0.5,2,0.5,False,False,True,False,False,None,None
+Leaves,1,0.5,2,0.5,False,False,True,False,False,None,None
+ClayBed,1,0.5,2,0.5,False,False,False,True,False,None,None
+OreMetal,1,2,0.5,0.5,False,True,False,False,True,None,Metal
+CoalnutSeam,1,2,0.5,0.5,False,False,False,False,True,None,Coalnut
+CrystalVein,1,0.5,0.5,2,False,True,False,False,True,None,None

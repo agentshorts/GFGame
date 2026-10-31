@@ -14,6 +14,10 @@
 #include "GFAnimMap.h"
 #include "GFSimpleAnimComponent.h"
 #include "GFVoxelWorld.h"
+#include "GFBlockIntegritySubsystem.h"
+#include "GFMagicComponent.h"
+#include "GFMagicTables.h"
+#include "GFMagicTypes.h"
 #include "GFArenaDirector.h"
 #include "Aim/GFAimSim.h"
 #include "Animation/AnimSequenceBase.h"
@@ -148,18 +152,36 @@ void AGFCharacter::Tick(float DeltaSeconds)
 	ApplyAimView();
 	UpdateCameraFade();
 	UpdateFistPose();
+	if (bMagicHeld)
+	{
+		MagicPressSeconds += DeltaSeconds;
+		MagicAimElapsed += DeltaSeconds;
+		if (MagicAimElapsed >= GFMagic::TickSeconds)
+		{
+			MagicAimElapsed = 0.f;
+			SendMagicAim();
+		}
+	}
 }
 
 void AGFCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 	RefreshAimFromProfile();
+	if (UGFMagicComponent* Magic = FindMagic())
+	{
+		Magic->BindAvatar(this);
+	}
 }
 
 void AGFCharacter::OnRep_PlayerState()
 {
 	Super::OnRep_PlayerState();
 	RefreshAimFromProfile();
+	if (UGFMagicComponent* Magic = FindMagic())
+	{
+		Magic->BindAvatar(this);
+	}
 }
 
 void AGFCharacter::SetFirstPerson(bool bEnable)
@@ -191,6 +213,9 @@ void AGFCharacter::BuildDefaultInput()
 	MakeAction(GrappleSwingAction, TEXT("IA_GrappleSwing"), EInputActionValueType::Boolean);
 	MakeAction(GrappleYankAction, TEXT("IA_GrappleYank"), EInputActionValueType::Boolean);
 	MakeAction(ShoulderSwapAction, TEXT("IA_ShoulderSwap"), EInputActionValueType::Boolean);
+	MakeAction(ClawAction, TEXT("IA_Clawcall"), EInputActionValueType::Boolean);
+	MakeAction(ToggleElementAction, TEXT("IA_ToggleElement"), EInputActionValueType::Boolean);
+	MakeAction(OverchargeAction, TEXT("IA_Overcharge"), EInputActionValueType::Boolean);
 	if (!bBuildContext)
 	{
 		return;
@@ -214,6 +239,7 @@ void AGFCharacter::BuildDefaultInput()
 	MappingContext->MapKey(JumpAction, EKeys::SpaceBar);
 	MappingContext->MapKey(PlaceAction, EKeys::RightMouseButton);
 	MappingContext->MapKey(RemoveAction, EKeys::LeftMouseButton);
+	MappingContext->MapKey(RemoveAction, EKeys::Gamepad_RightTrigger);
 	MappingContext->MapKey(ToggleViewAction, EKeys::V);
 	MappingContext->MapKey(HotbarAction, EKeys::MouseWheelAxis);
 	MappingContext->MapKey(SprintAction, EKeys::LeftShift);
@@ -221,6 +247,11 @@ void AGFCharacter::BuildDefaultInput()
 	MappingContext->MapKey(GrappleSwingAction, EKeys::Q);
 	MappingContext->MapKey(GrappleYankAction, EKeys::E);
 	MappingContext->MapKey(ShoulderSwapAction, DefaultShoulderSwapKey());
+	MappingContext->MapKey(ClawAction, EKeys::C);
+	MappingContext->MapKey(ClawAction, EKeys::Gamepad_RightShoulder);
+	MappingContext->MapKey(ToggleElementAction, EKeys::R);
+	MappingContext->MapKey(ToggleElementAction, EKeys::Gamepad_DPad_Right);
+	MappingContext->MapKey(OverchargeAction, EKeys::T);
 }
 
 void AGFCharacter::PawnClientRestart()
@@ -254,6 +285,11 @@ void AGFCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	EIC->BindAction(PlaceAction, ETriggerEvent::Completed, this, &AGFCharacter::OnPlaceReleased);
 	EIC->BindAction(PlaceAction, ETriggerEvent::Canceled, this, &AGFCharacter::OnPlaceReleased);
 	EIC->BindAction(RemoveAction, ETriggerEvent::Started, this, &AGFCharacter::OnRemove);
+	EIC->BindAction(RemoveAction, ETriggerEvent::Completed, this, &AGFCharacter::OnRemoveReleased);
+	EIC->BindAction(RemoveAction, ETriggerEvent::Canceled, this, &AGFCharacter::OnRemoveReleased);
+	EIC->BindAction(ClawAction, ETriggerEvent::Started, this, &AGFCharacter::OnClaw);
+	EIC->BindAction(ToggleElementAction, ETriggerEvent::Started, this, &AGFCharacter::OnToggleElement);
+	EIC->BindAction(OverchargeAction, ETriggerEvent::Started, this, &AGFCharacter::OnOvercharge);
 	EIC->BindAction(ToggleViewAction, ETriggerEvent::Started, this, &AGFCharacter::OnToggleView);
 	EIC->BindAction(HotbarAction, ETriggerEvent::Triggered, this, &AGFCharacter::OnHotbar);
 	EIC->BindAction(SprintAction, ETriggerEvent::Started, this, &AGFCharacter::OnSprint);
@@ -312,12 +348,134 @@ void AGFCharacter::OnPlaceReleased(const FInputActionValue&)
 void AGFCharacter::OnRemove(const FInputActionValue&)
 {
 	SyncAimContext();
+	const bool bWeapon = AimState.bSnoutZoom || AimState.Held == EGFAimHeldKind::Weapon || AimState.Held == EGFAimHeldKind::Ability;
+	if (bWeapon)
+	{
+		PushAim(EGFAimEvent::FirePressed);
+		return;
+	}
+	if (UGFMagicComponent* Magic = FindMagic())
+	{
+		bMagicHeld = true;
+		MagicPressSeconds = 0.f;
+		MagicAimElapsed = 0.f;
+		Magic->SetFieldHeld(true);
+		Magic->TryActivate(GFMagic::InputField);
+		SendMagicAim();
+		return;
+	}
 	if (GFResolvePrimaryUse(AimState.Held, AimState.bSnoutZoom) == EGFTriggerUse::PlaceBlock)
 	{
 		TryRemoveBlock();
 		return;
 	}
 	PushAim(EGFAimEvent::FirePressed);
+}
+
+void AGFCharacter::OnRemoveReleased(const FInputActionValue&)
+{
+	if (!bMagicHeld)
+	{
+		return;
+	}
+	bMagicHeld = false;
+	if (UGFMagicComponent* Magic = FindMagic())
+	{
+		Magic->ReleaseAbility(GFMagic::InputField);
+		Magic->SetFieldHeld(false);
+	}
+	if (MagicPressSeconds >= GFMagic::TapSeconds)
+	{
+		return;
+	}
+	if (AimState.Held == EGFAimHeldKind::Fists)
+	{
+		PushAim(EGFAimEvent::FirePressed);
+		return;
+	}
+	if (AimedCellNeedsHands())
+	{
+		TryRemoveBlock();
+	}
+}
+
+void AGFCharacter::OnClaw(const FInputActionValue&)
+{
+	if (UGFMagicComponent* Magic = FindMagic())
+	{
+		SendMagicAim();
+		if (!Magic->TryActivate(GFMagic::InputClaw))
+		{
+			Magic->RequestClaw();
+		}
+	}
+}
+
+void AGFCharacter::OnToggleElement(const FInputActionValue&)
+{
+	if (UGFMagicComponent* Magic = FindMagic())
+	{
+		if (!Magic->TryActivate(GFMagic::InputToggle))
+		{
+			Magic->RequestToggle();
+		}
+	}
+}
+
+void AGFCharacter::OnOvercharge(const FInputActionValue&)
+{
+	if (UGFMagicComponent* Magic = FindMagic())
+	{
+		if (!Magic->TryActivate(GFMagic::InputOvercharge))
+		{
+			Magic->RequestOvercharge();
+		}
+	}
+}
+
+UGFMagicComponent* AGFCharacter::FindMagic() const
+{
+	const AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	return PS ? PS->FindComponentByClass<UGFMagicComponent>() : nullptr;
+}
+
+void AGFCharacter::SendMagicAim()
+{
+	UGFMagicComponent* Magic = FindMagic();
+	if (!Magic)
+	{
+		return;
+	}
+	FHitResult Hit;
+	FVector AimPoint = FVector::ZeroVector;
+	TraceCameraAim(Hit, AimPoint);
+	Magic->SetAim(GetActorLocation(), AimPoint);
+}
+
+bool AGFCharacter::AimedCellNeedsHands() const
+{
+	FHitResult Hit;
+	AGFVoxelWorld* Voxel = FindVoxelWorld();
+	if (!Voxel || !TraceBlock(Hit))
+	{
+		return false;
+	}
+	FIntVector HitCell, Adjacent;
+	Voxel->HitToCells(Hit.ImpactPoint, Hit.ImpactNormal, HitCell, Adjacent);
+	const FName BlockId = Voxel->GetBlock(HitCell);
+	if (BlockId.IsNone())
+	{
+		return false;
+	}
+	if (FGFMagicCatalog::AffinityOrDefault(BlockId).bSpellProof)
+	{
+		return true;
+	}
+	if (const UGFBlockIntegritySubsystem* Sub = GetWorld() ? GetWorld()->GetSubsystem<UGFBlockIntegritySubsystem>() : nullptr)
+	{
+		return Sub->IsPlaced(HitCell);
+	}
+	return false;
 }
 
 void AGFCharacter::OnSprint(const FInputActionValue&)

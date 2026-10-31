@@ -1,0 +1,10 @@
+# Crystal is the pool (max 100, regen 25/s). The field itself costs nothing, so holding it is not a chore.
+# Clawcall spends one charge and a little crystal. Overcharge is the short storm, not a combo.
+---,Element,RadiusCells,RangeCm,IntegrityPerSecond,FlatIntegrity,TunnelLength,TunnelWidth,TunnelHeight,MaxCharges,ChargeCost,RechargeSeconds,bChannel,ChargeMax,ChargeRegen,OverchargeSeconds,OverchargeRate
+Sparkfield,Spark,1,800,100,0,0,0,0,0,0,0,True,0,0,0,1
+Magmafield,Magma,1,800,100,0,0,0,0,0,0,0,True,0,0,0,1
+Rootfield,Root,1,800,100,0,0,0,0,0,0,0,True,0,0,0,1
+Frostfield,Frost,1,800,100,0,0,0,0,0,0,0,True,0,0,0,1
+Clawcall,Spark,0,800,0,250,6,3,2,2,20,6,False,0,0,0,1
+Overcharge,Spark,0,0,0,0,0,0,0,0,50,0,False,0,0,8,1.5
+Crystal,Spark,0,0,0,0,0,0,0,0,0,0,False,100,25,0,1

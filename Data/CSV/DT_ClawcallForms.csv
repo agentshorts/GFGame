@@ -1,0 +1,5 @@
+# Row name is the faction id. The form is the summon. The element is that faction's field.
+---,Form,Element
+Cinderwrights,Scythepaw,Magma
+Verdant,Tusksaw,Root
+Rime,Raptor,Frost
