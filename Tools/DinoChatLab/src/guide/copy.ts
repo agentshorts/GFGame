@@ -136,6 +136,7 @@ export const PANELS: Record<string, PanelCopy> = {
       { name: "Temperature and max tokens", meaning: "For the context model. Max tokens also clips the spoken line." },
       { name: "System prompt", meaning: "Edit it, then Rebuild prompt to pick up the live alignment and memory." },
       { name: "Reset chat / Export JSON", meaning: "Reset clears the transcript and summaries. Export writes a dino-chat-lab JSON file." },
+      { name: "SQLite notebook", meaning: "localStorage stays the default. The checkbox copies memory, stats, and work into SQLite once, then keeps a behavior log there. Export behavior log downloads that JSON. Switching off reads localStorage again and leaves the SQLite file." },
       { name: "PG filter", meaning: "Shows what the filter swapped on a dino line, or that nothing changed." },
       { name: "Context model", meaning: "Load a small WebLLM prebuilt in the browser. Steer and Rephrase wait until that load finishes." },
     ],

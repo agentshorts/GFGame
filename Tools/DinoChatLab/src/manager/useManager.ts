@@ -17,7 +17,9 @@ import {
   type SpeechPattern,
 } from "./profile";
 import { browserKv, claimUsername, readLocalUsername, remoteMe } from "./session";
-import { apiBaseFromEnv, createStorage, StorageConflictError, StoreError, type ManagerStorage } from "./storage";
+import { readStorageBackend } from "../core/sqliteStorage";
+import { enableSqlite } from "../core/storageSession";
+import { adoptAdapter, apiBaseFromEnv, createStorage, StorageConflictError, StoreError, type ManagerStorage } from "./storage";
 import { runManagerTurn, type TestLine } from "./testChat";
 
 export interface EditorDino {
@@ -147,7 +149,9 @@ export function useManager(options?: { kv?: KeyValueStore; apiBase?: string | nu
     username.value = name;
     playerName.value = name;
     needsName.value = false;
-    storage = createStorage({ apiBase, kv, owner: name, fetchImpl });
+    storage = !apiBase && readStorageBackend(kv) === "sqlite"
+      ? adoptAdapter((await enableSqlite(kv)).storage)
+      : createStorage({ apiBase, kv, owner: name, fetchImpl });
     const bundled = loadBundledPersonas().map(bundledRow);
     const bundledIds = new Set(bundled.map((row) => row.managed.persona.id));
     let stored: EditorDino[] = [];

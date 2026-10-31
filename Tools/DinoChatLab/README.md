@@ -120,7 +120,7 @@ See `HANDOFF_dino-chat-lab.md` for how a later Unreal hook could use an export w
 
 ## Memory core
 
-Public types live in `src/core/` (`types.ts`, `memory.ts`, `stats.ts`, `storage.ts`). Dinobook sim and the persona manager import those files. The lab stores them in `localStorage` under `dcl:*`. There is no account and no network. A SQLite `CREATE TABLE` script with the same columns is exported as `SQLITE_SCHEMA` for a later worker. This app does not run that SQL and it does not deploy.
+Public types live in `src/core/` (`types.ts`, `memory.ts`, `stats.ts`, `storage.ts`). Dinobook sim and the persona manager import those files. The lab stores them in `localStorage` under `dcl:*` unless the Talk panel checkbox **Keep the lab notebook in SQLite** is on. That checkbox copies the notebook once into sql.js (MIT, SQLite public domain) and runs `SQLITE_SCHEMA`, including `behavior_log`. The file sits in OPFS, or IndexedDB when OPFS is missing. There is no account and no network. The schema is still the shape a later worker would execute. This app does not deploy that worker.
 
 Rolling summaries are kept per dino (250 tokens) and per dino-player pair (150 tokens). They update every 6 turns, or when the window passes 80% of its budget. With no model loaded, the fallback keeps the newest lines. Elders (the checkbox on the slate) get a player-record block of at most 200 tokens. Everyone else gets a rep band such as `rep_wary`.
 

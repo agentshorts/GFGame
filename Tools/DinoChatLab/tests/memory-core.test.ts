@@ -447,6 +447,8 @@ describe("local storage", () => {
     expect(SQLITE_SCHEMA).toContain("CREATE TABLE IF NOT EXISTS stat_events");
     expect(SQLITE_SCHEMA).toContain("CREATE TABLE IF NOT EXISTS decision_log");
     expect(SQLITE_SCHEMA).toContain("PRIMARY KEY (player_key, family_id)");
+    expect(SQLITE_SCHEMA).toContain("CREATE TABLE IF NOT EXISTS behavior_log");
+    expect(SQLITE_SCHEMA).toContain("payload");
     expect(SQLITE_SCHEMA).toContain("CREATE TABLE IF NOT EXISTS dino_work");
     expect(SQLITE_SCHEMA).toContain("lifetime_earnings");
     expect(SQLITE_SCHEMA).toContain("hired_at");
