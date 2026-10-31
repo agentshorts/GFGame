@@ -184,7 +184,8 @@ FGFLandingPrediction GFTraversalSim::PredictLandingOnPlane(const FVector& Origin
 bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Command, const UGFMovementTuning& Tuning)
 {
 	const float Dt = GFTraversalDetail::GFTraversalNonNegative(Command.DeltaSeconds);
-	const bool bInfinite = Command.bInsideKindleRing;
+	const bool bInfinite = Command.bInsideKindleRing || Command.bCostsFree;
+	const float KickSpeed = Command.WallKickSpeedOverride >= 0.f ? Command.WallKickSpeedOverride : Tuning.WallKickSpeed;
 	bool bSpent = false;
 	Next.bOverrideVelocity = false;
 
@@ -239,7 +240,7 @@ bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Comma
 		Next.FlipTimeLeft = 0.f;
 		Next.bTraversalJump = true;
 		Next.bOverrideVelocity = true;
-		Next.OverrideVelocity = Normal * static_cast<double>(Tuning.WallKickSpeed) + FVector(0.0, 0.0, static_cast<double>(Tuning.WallKickUp));
+		Next.OverrideVelocity = Normal * static_cast<double>(KickSpeed) + FVector(0.0, 0.0, static_cast<double>(Tuning.WallKickUp));
 	}
 	else if (Next.bGripping)
 	{

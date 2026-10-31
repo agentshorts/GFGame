@@ -214,6 +214,8 @@ void AGFBeatHopCourse::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(AGFBeatHopCourse, RunStartServerTime);
 	DOREPLIFETIME(AGFBeatHopCourse, bRunning);
 	DOREPLIFETIME(AGFBeatHopCourse, RunCalibrationSeconds);
+	DOREPLIFETIME(AGFBeatHopCourse, bNinjaOptIn);
+	DOREPLIFETIME(AGFBeatHopCourse, NinjaReps);
 	DOREPLIFETIME(AGFBeatHopCourse, Judgements);
 	DOREPLIFETIME(AGFBeatHopCourse, ScoreReps);
 	DOREPLIFETIME(AGFBeatHopCourse, HitBricks);
@@ -259,6 +261,7 @@ bool AGFBeatHopCourse::StartRunForPlayers(FName SongId, EGFBeatDifficulty Diffic
 		return false;
 	}
 
+	EndNinjaOptIn();
 	Runs.Reset();
 	WasFalling.Reset();
 	EndReason.Reset();
@@ -337,6 +340,7 @@ bool AGFBeatHopCourse::StartRunForPlayers(FName SongId, EGFBeatDifficulty Diffic
 	RunCalibrationSeconds = RunMode == EGFBeatHopMode::Songs
 		? static_cast<double>(GetDefault<UGFRhythmSettings>()->SongsOffsetMs) / 1000.0
 		: 0.0;
+	BeginNinjaOptIn();
 	bRunning = true;
 	return true;
 }
@@ -1054,6 +1058,7 @@ void AGFBeatHopCourse::FinishRun()
 		return;
 	}
 	SweepMisses(TNumericLimits<double>::Max() / 4.0);
+	EndNinjaOptIn();
 	bRunning = false;
 	StopMusic();
 
@@ -1455,6 +1460,11 @@ void AGFBeatHopCourse::ApplyIncomingJudgements()
 		}
 		if (!IsValidBrick(Row.BrickIndex))
 		{
+			if (Row.BrickIndex == INDEX_NONE)
+			{
+				// Obstacle judgements travel on the ninja rep. They are not bricks.
+				AppliedJudgementSeqs.Add(Row.Seq);
+			}
 			continue; // course not built yet; OnRep_RunSpec tries again
 		}
 		AppliedJudgementSeqs.Add(Row.Seq);
@@ -1641,7 +1651,7 @@ void AGFBeatHopCourse::MirrorOwnerMovement()
 			}
 			continue;
 		}
-		Char->AddMovementInput(Forward, 1.f);
+		ApplyNinjaLocomotion(Char, Forward);
 	}
 }
 
@@ -3355,7 +3365,7 @@ void AGFBeatHopCourse::UpdateSession()
 				// On the beat (or on their own hop): leave the brick with a full hop's worth of speed, not from a standstill.
 				ReleaseHold(Char, bJumped);
 			}
-			Char->AddMovementInput(Forward, 1.f);
+			ApplyNinjaLocomotion(Char, Forward);
 		}
 	}
 
@@ -3754,4 +3764,281 @@ void AGFBeatHopCourse::OnRep_Hazards()
 		RescueDino->SetWorldLocation(FVector(RescueSpot));
 		RescueDino->SetHiddenInGame(bRescueShown == 0);
 	}
+}
+
+void AGFBeatHopCourse::ApplyIncomingNinja()
+{
+	for (const FGFBeatHopNinjaRep& Row : NinjaReps)
+	{
+		if (Row.Seq == 0 || AppliedNinjaSeqs.Contains(Row.Seq))
+		{
+			continue;
+		}
+		AppliedNinjaSeqs.Add(Row.Seq);
+		if (Row.Result == EGFJudgement::None || !NinjaObstacles.IsValidIndex(Row.ObstacleIndex))
+		{
+			continue;
+		}
+		const int32 Lane = NinjaObstacles[Row.ObstacleIndex].Lane;
+		AddPop(Row.PlayerKey, GetNinjaWorldLocation(Row.ObstacleIndex), Row.Result, 0, LaneColor(Lane));
+	}
+}
+
+void AGFBeatHopCourse::OnRep_Ninja()
+{
+	if (bNinjaOptIn)
+	{
+		NinjaProfile = GFBeatHopNinja::Profile();
+	}
+	ApplyIncomingNinja();
+}
+
+void AGFBeatHopCourse::BeginNinjaOptIn()
+{
+	NinjaProfile = GFBeatHopNinja::Profile();
+	bNinjaOptIn = true;
+	NinjaReps.Reset();
+	AppliedNinjaSeqs.Reset();
+	NextNinjaSeq = 0;
+	BrakeUntil.Reset();
+	SetNinjaChart({});
+}
+
+void AGFBeatHopCourse::EndNinjaOptIn()
+{
+	bNinjaOptIn = false;
+	BrakeUntil.Reset();
+}
+
+void AGFBeatHopCourse::SetNinjaChart(const TArray<FGFBeatHopObstacleInstance>& Chart)
+{
+	for (UStaticMeshComponent* Mesh : NinjaMeshes)
+	{
+		if (Mesh)
+		{
+			Mesh->DestroyComponent();
+		}
+	}
+	NinjaMeshes.Reset();
+	NinjaObstacles = Chart;
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, GFBeatHopCourse::CubePath);
+	const float Unit = FMath::Max(NinjaProfile.MeshUnitCm, KINDA_SMALL_NUMBER);
+	const float Speed = Beatmap.RefSpeedCms;
+	for (const FGFBeatHopObstacleInstance& Obstacle : NinjaObstacles)
+	{
+		if (!Cube || !Root)
+		{
+			NinjaMeshes.Add(nullptr);
+			continue;
+		}
+		UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transient);
+		Mesh->SetupAttachment(Root);
+		Mesh->SetStaticMesh(Cube);
+		const FVector Extent = GFBeatHopNinja::ObstacleExtent(Obstacle.Kind, Obstacle.HeightCm, NinjaProfile);
+		Mesh->SetRelativeScale3D(Extent / Unit);
+		const float Side = Obstacle.Kind == EGFBeatHopObstacle::WallRunPanel ? NinjaProfile.ObstacleSideOffsetCm : 0.f;
+		const float X = static_cast<float>(Obstacle.BeatTime) * Speed;
+		const float Y = static_cast<float>(Obstacle.Lane) * LaneWidthCm + Side;
+		Mesh->SetRelativeLocation(FVector(X, Y, Extent.Z * NinjaProfile.MeshCenterScale));
+		Mesh->SetCollisionProfileName(TEXT("BlockAll"));
+		Mesh->SetCanEverAffectNavigation(false);
+		Mesh->RegisterComponent();
+		NinjaMeshes.Add(Mesh);
+	}
+}
+
+bool AGFBeatHopCourse::IsNinjaObstacleFallen(int32 Index, double Now) const
+{
+	if (!NinjaObstacles.IsValidIndex(Index))
+	{
+		return false;
+	}
+	return GFBeatHopNinja::HasCrumbleFallen(NinjaObstacles[Index], Now, PeriodSeconds(), NinjaProfile);
+}
+
+FVector AGFBeatHopCourse::GetNinjaWorldLocation(int32 Index) const
+{
+	if (NinjaMeshes.IsValidIndex(Index) && NinjaMeshes[Index])
+	{
+		return NinjaMeshes[Index]->GetComponentLocation();
+	}
+	if (!NinjaObstacles.IsValidIndex(Index))
+	{
+		return GetActorLocation();
+	}
+	const FGFBeatHopObstacleInstance& Obstacle = NinjaObstacles[Index];
+	const FVector Extent = GFBeatHopNinja::ObstacleExtent(Obstacle.Kind, Obstacle.HeightCm, NinjaProfile);
+	const float Side = Obstacle.Kind == EGFBeatHopObstacle::WallRunPanel ? NinjaProfile.ObstacleSideOffsetCm : 0.f;
+	const FVector Local(
+		static_cast<double>(Obstacle.BeatTime) * static_cast<double>(Beatmap.RefSpeedCms),
+		static_cast<double>(Obstacle.Lane) * static_cast<double>(LaneWidthCm) + static_cast<double>(Side),
+		static_cast<double>(Extent.Z) * static_cast<double>(NinjaProfile.MeshCenterScale));
+	return GetActorTransform().TransformPosition(Local);
+}
+
+void AGFBeatHopCourse::PublishNinjaRep(const FString& PlayerKey, int32 Index, const FGFBeatHopNinjaPress& Press, const FGFBeatHopNinjaVerdict& Verdict)
+{
+	if (!HasAuthority() || !NinjaObstacles.IsValidIndex(Index))
+	{
+		return;
+	}
+	FGFBeatHopNinjaRep Row;
+	Row.ObstacleIndex = Index;
+	Row.PlayerKey = PlayerKey;
+	Row.Result = Verdict.Judgement;
+	Row.Move = static_cast<uint8>(Press.Move);
+	Row.bGlowing = Verdict.bGlowing ? 1 : 0;
+	Row.bWallRun = Press.Move == EGFBeatHopKitMove::WallRun && Verdict.Judgement != EGFJudgement::Miss ? 1 : 0;
+	Row.bGrapple = Press.Move == EGFBeatHopKitMove::Grapple && Verdict.Judgement != EGFJudgement::Miss ? 1 : 0;
+	Row.bMantle = (Verdict.bPendingMantle || Press.Move == EGFBeatHopKitMove::MantleLedge || Press.Move == EGFBeatHopKitMove::LedgeGrab) ? 1 : 0;
+	Row.bMantlePending = Verdict.bPendingMantle ? 1 : 0;
+	Row.OffsetSeconds = static_cast<float>(Press.Time - NinjaObstacles[Index].BeatTime);
+	if (++NextNinjaSeq == 0)
+	{
+		++NextNinjaSeq;
+	}
+	Row.Seq = NextNinjaSeq;
+	NinjaReps.Add(Row);
+	if (NinjaReps.Num() > GFBeatHopCourse::JudgementRing)
+	{
+		NinjaReps.RemoveAt(0, NinjaReps.Num() - GFBeatHopCourse::JudgementRing);
+	}
+}
+
+EGFJudgement AGFBeatHopCourse::JudgeNinja(const FString& PlayerKey, int32 ObstacleIndex, const FGFBeatHopNinjaPress& Press, EGFBeatHopNinjaContact Contact)
+{
+	if (!HasAuthority() || !bRunning || !bNinjaOptIn || PlayerKey.IsEmpty() || !NinjaObstacles.IsValidIndex(ObstacleIndex))
+	{
+		return EGFJudgement::None;
+	}
+	FGFBeatHopObstacleInstance& Obstacle = NinjaObstacles[ObstacleIndex];
+	if (Obstacle.JudgedBy.Contains(PlayerKey))
+	{
+		return EGFJudgement::None;
+	}
+	const FGFBeatHopNinjaVerdict Verdict = GFBeatHopNinja::Judge(
+		Obstacle,
+		Press,
+		Contact,
+		RunDifficulty,
+		Windows,
+		PeriodSeconds(),
+		NinjaProfile,
+		GFBeatHopNinja::IsMantleImplemented());
+	PublishNinjaRep(PlayerKey, ObstacleIndex, Press, Verdict);
+	if (Verdict.bPendingMantle || Verdict.Judgement == EGFJudgement::None)
+	{
+		return EGFJudgement::None;
+	}
+	Obstacle.JudgedBy.Add(PlayerKey);
+	if (Verdict.bTouchCrumble && Obstacle.TouchedAt < 0.0)
+	{
+		Obstacle.TouchedAt = Press.Time;
+	}
+	FPlayerRun& Run = RunFor(PlayerKey);
+	Run.Judge.ApplyJudgement(Verdict.Judgement);
+	const int32 Combo = Run.Judge.GetScore().Combo;
+	RecordJudgement(PlayerKey, INDEX_NONE, Verdict.Judgement, Press.Time - Obstacle.BeatTime, Combo);
+	AddPop(PlayerKey, GetNinjaWorldLocation(ObstacleIndex), Verdict.Judgement, Combo, LaneColor(Obstacle.Lane));
+	PublishScore(PlayerKey, Run.Judge.GetScore());
+	if (Verdict.Judgement == EGFJudgement::Perfect || Verdict.Judgement == EGFJudgement::Good)
+	{
+		const TArray<FGFItemStack> Stacks = FGFBeatHopRewards::ForLanding(Verdict.Judgement, Rewards, bRunCozy);
+		Grant(PlayerKey, Run, Stacks, TEXT("BeatHop.Ninja"), FString::Printf(TEXT("Ninja.%d"), ObstacleIndex));
+	}
+	return Verdict.Judgement;
+}
+
+void AGFBeatHopCourse::PutBackOnBrick(ACharacter* Character, const FString& PlayerKey, int32 Index)
+{
+	if (!Character || !IsValidBrick(Index) || !GetBrick(Index).Mesh)
+	{
+		return;
+	}
+	const FGFBeatHopBrick& Brick = GetBrick(Index);
+	const FVector Top = GetActorTransform().TransformPosition(
+		Brick.Mesh->GetRelativeLocation() + FVector(0.0, 0.0, Brick.TopOffsetZ + NinjaProfile.RespawnAboveBrickCm));
+	const FRotator Facing(0.0, GetActorRotation().Yaw, 0.0);
+	TeleportRunner(Character, PlayerKey, Top, Facing, FVector::ZeroVector, false);
+	HoldUntil.Add(Character, Brick.Time);
+	HoldBrick.Add(Character, Index);
+	PublishHold(Character, PlayerKey, Index, Brick.Time);
+	if (!PlayerKey.IsEmpty())
+	{
+		RunFor(PlayerKey).Judged.Add(Index);
+	}
+}
+
+bool AGFBeatHopCourse::RespawnBeforeObstacle(ACharacter* Character, const FString& PlayerKey, int32 ObstacleIndex)
+{
+	if (!NinjaObstacles.IsValidIndex(ObstacleIndex))
+	{
+		return false;
+	}
+	const int32 MissesBefore = PlayerKey.IsEmpty() ? 0 : RunFor(PlayerKey).Judge.GetScore().Misses;
+	PutBackOnBrick(Character, PlayerKey, NinjaObstacles[ObstacleIndex].SafeBrickIndex);
+	const int32 MissesAfter = PlayerKey.IsEmpty() ? 0 : RunFor(PlayerKey).Judge.GetScore().Misses;
+	return GetHoldBrick(Character) == NinjaObstacles[ObstacleIndex].SafeBrickIndex && MissesAfter == MissesBefore;
+}
+
+void AGFBeatHopCourse::NotifyBrakeTap(ACharacter* Character)
+{
+	if (!Character || !bNinjaOptIn || !NinjaProfile.bBrakeTapEnabled)
+	{
+		return;
+	}
+	BrakeUntil.Add(Character, GetRunTime() + static_cast<double>(NinjaProfile.BrakeTapSeconds));
+}
+
+bool AGFBeatHopCourse::IsNinjaBraking(const ACharacter* Character, double Now) const
+{
+	if (!Character)
+	{
+		return false;
+	}
+	const double* Until = BrakeUntil.Find(const_cast<ACharacter*>(Character));
+	return Until && Now < *Until;
+}
+
+void AGFBeatHopCourse::TickNinjaBrake(ACharacter* Character)
+{
+	UCharacterMovementComponent* Move = Character ? Character->GetCharacterMovement() : nullptr;
+	if (!Move)
+	{
+		return;
+	}
+	const double Scale = static_cast<double>(NinjaProfile.BrakeSpeedScale);
+	Move->Velocity.X *= Scale;
+	Move->Velocity.Y *= Scale;
+}
+
+void AGFBeatHopCourse::ApplyNinjaLocomotion(ACharacter* Character, const FVector& Forward)
+{
+	if (!Character)
+	{
+		return;
+	}
+	const double Now = GetRunTime();
+	if (bNinjaOptIn && NinjaProfile.bBrakeTapEnabled)
+	{
+		const FVector Input = Character->GetLastMovementInputVector();
+		const double Along = FVector::DotProduct(Input, Forward);
+		const double Limit = -static_cast<double>(NinjaProfile.BrakeEnterDot) * static_cast<double>(Input.Size());
+		if (Along < Limit)
+		{
+			NotifyBrakeTap(Character);
+		}
+	}
+	if (IsNinjaBraking(Character, Now))
+	{
+		TickNinjaBrake(Character);
+		return;
+	}
+	Character->AddMovementInput(Forward, NinjaProfile.AutoRunInputScale);
+}
+
+void AGFBeatHopCourse::ReceiveRemoteNinja(const TArray<FGFBeatHopNinjaRep>& In)
+{
+	NinjaReps = In;
+	ApplyIncomingNinja();
 }

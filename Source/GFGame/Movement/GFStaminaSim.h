@@ -41,6 +41,14 @@ struct GFGAME_API FGFStaminaCommand
 	FVector Velocity = FVector::ZeroVector;
 	FVector PlayerLocation = FVector::ZeroVector;
 	FGFTraversalContact Contact;
+
+	/** Beat Hop run (#277). Costs are skipped while this is set. Hub play leaves it false. */
+	bool bCostsFree = false;
+	/** Negative keeps the tuning asset's dash, wall-kick and jump values. */
+	float GroundDashDurationOverride = -1.f;
+	float AirDashDurationOverride = -1.f;
+	float WallKickSpeedOverride = -1.f;
+	int32 JumpsPerAirtimeOverride = -1;
 };
 
 /** Result of the last steps. Copied into saved moves so a replay starts from the same pool. */

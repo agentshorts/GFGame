@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "GFBeatHopNinja.h"
 #include "GFMovementTuning.generated.h"
 
 UCLASS(BlueprintType)
@@ -233,4 +234,11 @@ public:
 	/** Mesh pitch over that flip, degrees. 360 is one full turn around the actor's right axis. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (ClampMin = "0"))
 	float JumpFlipDegrees = 360.f;
+
+	/**
+	 * Beat Hop's copy of this kit (#277). Mini-games stay off until a run opts in.
+	 * Costs, windows, obstacle sizes and which difficulty gets which move are all on this profile.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "BeatHop")
+	FGFBeatHopTraversalProfile BeatHop;
 };

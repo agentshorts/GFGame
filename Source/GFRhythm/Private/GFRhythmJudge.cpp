@@ -67,6 +67,11 @@ void FGFRhythmJudge::AddMiss()
 	Apply(EGFJudgement::Miss);
 }
 
+void FGFRhythmJudge::ApplyJudgement(EGFJudgement Judgement)
+{
+	Apply(Judgement);
+}
+
 void FGFRhythmJudge::Apply(EGFJudgement J)
 {
 	switch (J)

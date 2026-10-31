@@ -85,19 +85,20 @@ namespace GFStaminaSimDetail
 		{
 			return false;
 		}
-		if (Tuning.JumpsPerAirtime <= 0)
+		const int32 JumpCap = Command.JumpsPerAirtimeOverride >= 0 ? Command.JumpsPerAirtimeOverride : Tuning.JumpsPerAirtime;
+		if (JumpCap <= 0)
 		{
 			return false;
 		}
 
 		const int32 Index = Command.bGrounded ? 1 : Next.JumpsUsed + 1;
-		if (Index > Tuning.JumpsPerAirtime)
+		if (Index > JumpCap)
 		{
 			return false;
 		}
 
 		const bool bExtra = Index >= 2;
-		const bool bInfinite = Command.bInsideKindleRing;
+		const bool bInfinite = Command.bInsideKindleRing || Command.bCostsFree;
 		if (bExtra && !bInfinite && Next.Stamina + KINDA_SMALL_NUMBER < Tuning.ExtraJumpCost)
 		{
 			return false;
@@ -249,7 +250,7 @@ FGFStaminaState GFStaminaSim::Step(const FGFStaminaState& State, const FGFStamin
 		Next.bSprintBlocked = false;
 	}
 
-	const bool bInfinite = Command.bInsideKindleRing;
+	const bool bInfinite = Command.bInsideKindleRing || Command.bCostsFree;
 	bool bSpent = GFTraversalSim::Apply(Next, Command, Tuning);
 	if (GFStaminaSimDetail::GFStaminaResolveJump(Next, State, Command, Tuning))
 	{
@@ -257,9 +258,12 @@ FGFStaminaState GFStaminaSim::Step(const FGFStaminaState& State, const FGFStamin
 	}
 
 	const bool bTraversalBusy = Next.bGripping || Next.bWallRunning || Next.bSwiveling || Next.bSwinging || Next.bYanking;
-	if (Command.bDashPressed && !Next.bDashing && !bTraversalBusy && Tuning.DashDuration > 0.f)
+	const bool bAirDash = !Command.bGrounded;
+	const float DashOverride = bAirDash ? Command.AirDashDurationOverride : Command.GroundDashDurationOverride;
+	const float DashDuration = DashOverride >= 0.f ? DashOverride : Tuning.DashDuration;
+	if (Command.bDashPressed && !Next.bDashing && !bTraversalBusy && DashDuration > 0.f)
 	{
-		const bool bAir = !Command.bGrounded;
+		const bool bAir = bAirDash;
 		const bool bAirOk = bAir && Next.AirDashesUsed < Tuning.AirDashesPerAirtime;
 		const bool bGroundOk = !bAir && Next.GroundCooldownLeft <= 0.f;
 		const bool bCanPay = bInfinite || Next.Stamina + KINDA_SMALL_NUMBER >= Tuning.DashCost;
@@ -272,7 +276,7 @@ FGFStaminaState GFStaminaSim::Step(const FGFStaminaState& State, const FGFStamin
 				bSpent = true;
 			}
 			Next.DashDir = ResolveDashDirection(Command.MoveDirection, Command.CameraForward);
-			Next.DashTimeLeft = GFStaminaSimDetail::GFStaminaNonNegative(Tuning.DashDuration - Dt);
+			Next.DashTimeLeft = GFStaminaSimDetail::GFStaminaNonNegative(DashDuration - Dt);
 			Next.bDashing = true;
 			if (bAir)
 			{

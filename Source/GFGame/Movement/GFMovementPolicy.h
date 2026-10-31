@@ -21,5 +21,9 @@ namespace GFMovementPolicy
 	 * bModeOptedIn means the mode made a choice. bOptInValue is that choice.
 	 * With no choice, mini-game maps are off and everything else is on.
 	 */
-	GFGAME_API bool IsStaminaEnabled(const FString& MapOrPackage, bool bModeOptedIn, bool bOptInValue);
+	/**
+	 * bBeatHopRun is the Beat Hop opt-in (#277). It turns the kit on for that run even on a mini-game map.
+	 * With the run over, the map rule applies again, so the hub and other modes stay as they were.
+	 */
+	GFGAME_API bool IsStaminaEnabled(const FString& MapOrPackage, bool bModeOptedIn, bool bOptInValue, bool bBeatHopRun = false);
 }
