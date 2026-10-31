@@ -14,7 +14,9 @@
 //   Distances within OverlapTieSlopCm (1 cm) count as a tie. The tied faction with more effective members
 //   wins. If the member counts match too, the lexicographically smaller faction id wins (case-insensitive),
 //   so the result does not depend on array order and does not flicker. The loser does not own the point.
-//   Overlap does not become neutral. Neutral is only the optional disc, and only where no faction owns.
+//   Overlap does not become neutral, and it is not shared. The whole overlap is inside the safe union,
+//   and a hazard box under it is not a hazard, so that ground is safe to farm. The other faction does
+//   not gain member rights there. Neutral is only the optional disc, and only where no faction owns.
 //   Z is ignored. A nameless faction owns nothing. With an empty radius table, a faction with no
 //   effective members owns nothing. A set table uses index 0 for that count.
 //

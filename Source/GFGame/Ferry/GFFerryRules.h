@@ -62,6 +62,29 @@ struct GFGAME_API FGFFerryArt
 	static FName LandAnim() { return TEXT("Ripwing.Ferry_Land"); }
 	static FName SeatAnim() { return TEXT("Player.Emote_Sit"); }
 
+	/** Takeoff until the takeoff clip ends, landing for the last land clip, carry in between. */
+	static FName FlightPhase(float Elapsed, float Duration)
+	{
+		const float TakeoffEnd = FrameSeconds(TakeoffFrames);
+		const float LandLen = FrameSeconds(LandFrames);
+		const float LandStart = FMath::Max(TakeoffEnd, Duration - LandLen);
+		if (Elapsed >= LandStart)
+		{
+			return LandAnim();
+		}
+		if (Elapsed >= FMath::Min(TakeoffEnd, LandStart))
+		{
+			return CarryAnim();
+		}
+		return TakeoffAnim();
+	}
+
+	/** Seconds of carry between the takeoff clip and the landing clip. */
+	static float CarrySeconds(float Duration)
+	{
+		return FMath::Max(0.f, Duration - FrameSeconds(TakeoffFrames) - FrameSeconds(LandFrames));
+	}
+
 	static FName GripSocket() { return TEXT("Grip"); }
 	static FName SeatSocket() { return TEXT("Seat"); }
 	static FName FerryGripSocket() { return TEXT("FerryGrip"); }
@@ -105,6 +128,8 @@ struct GFGAME_API FGFFerryRoutePerson
 	FString Key;
 	FVector Location = FVector::ZeroVector;
 	bool bFlying = false;
+	/** Highest in-party companion level. 1 when that player has nobody in the party. */
+	int32 PartyLevel = 1;
 };
 
 struct GFGAME_API FGFFerryRules
@@ -122,6 +147,9 @@ struct GFGAME_API FGFFerryRules
 
 	/** 0 when the inventory holds Tuning.PassItem, otherwise FareCount. */
 	static int32 Quote(const FGFInventory& Inventory, const FGFFerryTuning& Tuning);
+
+	/** A tier-1 building block. Stone and other materials are not blocks. Fabric is a block, but not tier 1. */
+	static bool IsBasicBlock(const FGFItemRow& Row);
 
 	static FGFFerryResult CanBoard(
 		bool bAuthority,
@@ -214,6 +242,9 @@ struct GFGAME_API FGFFerryRules
 	 */
 	static FVector DropPoint(const FVector& From, const FVector& To, const FVector& RiderLocation, float BoardRadius);
 
+	/** Geometry for the spawn rules. The id is the box id; the territory hazard id stays on the mob box. */
+	static FGFTerritoryHazard BoxBounds(const FGFFerryMobBox& Box);
+
 	static const FGFFerryStop* FindStop(const TArray<FGFFerryStop>& Stops, FName Id);
 	/** First route that touches StopId. A stop on several routes still resolves to that first one. */
 	static const FGFFerryRoute* FindRouteFrom(const TArray<FGFFerryRoute>& Routes, FName StopId);
@@ -245,9 +276,15 @@ struct GFGAME_API FGFFerryRouteSpawnRules
 
 	static bool CanSpawn(int32 Alive, int32 MaxAlive, bool bActive);
 
+	/** Highest PartyLevel among non-flying people within Margin. 1 when nobody qualifies. */
+	static int32 RoutePartyLevel(const FGFTerritoryHazard& Box, float Margin, const TArray<FGFFerryRoutePerson>& People);
+
+	/** PartyLevel + LevelBonus, and at least 1. */
+	static int32 MobLevelForParty(int32 PartyLevel, int32 LevelBonus);
+
 	/**
 	 * Outside the box by more than Margin, or idle for IdleDespawnSeconds with nobody near.
-	 * "Near" is the same test as IsRouteActive.
+	 * bAnyoneNear uses IsRouteActive. The leash passes LeashMargin; idle passes DespawnRange.
 	 */
 	static bool ShouldDespawn(
 		const FGFTerritoryHazard& Box,

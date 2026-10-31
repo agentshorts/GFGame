@@ -18,7 +18,7 @@ New code is `Source/GFGame/Ferry/` plus `Source/GFGame/Ferry/Tests/GFFerryTests.
 
 `AGFGameMode::ChoosePlayerStart` uses `DefaultSpawnAnchor`, kept equal to `StarterFaction` and set to `Rime`. A `PlayerStart` tagged with that anchor wins, otherwise `Super` (so a mini-game map keeps its own starts). With no `PlayerStart` the player stands on `FGFPlayerStartRules::FallbackLocation`, the same point as `FGFSpawnDefaults::StarterFallback`: the anchor centre plus 120 cm. Shipped Rime is the origin, so that point is `(0, 0, 120)`. An unknown anchor is `(0, 0, 120)`. The ferry perch `EmptyMapStart` at `(0, -300, 100)`, yaw 36, stays separate and is not this spawn.
 
-`Data/CSV/DT_Items.csv` appends `FerryTame` and `FerryPass`.
+`Data/CSV/DT_Items.csv` keeps `FerryPass`. `FerryTame` is retired; it is no longer the pass currency.
 
 ## Config keys
 
@@ -31,8 +31,9 @@ New code is `Source/GFGame/Ferry/` plus `Source/GFGame/Ferry/Tests/GFFerryTests.
 
 - `Stops`: `RimeLanding` at `(1200, 600, 0)`, anchor `Rime`; `CinderLanding` at `(6000, 600, 0)`, anchor `Cinderwrights`
 - `Routes`: `RimeCinder`, `StopA=RimeLanding` (home), `StopB=CinderLanding`, `LandRouteHazardId=LavaBridge`
-- `Tuning`: `FareItem=Dirt`, `FareCount=3`, `PassMaterialItem=FerryTame`, `PassPrice=5`, `PassItem=FerryPass`, `FlightSeconds=12`, `CruiseAltitude=1500`, `BoardRadius=400`
-- `MobSpawn`: species `Raptor` and `Hornback`, `MobLevel=10`, `MobDamagePerLevel=0.15`, `SpawnIntervalSeconds=8`, `MaxAlive=6`, `ActivationMargin=1000`, `IdleDespawnSeconds=60`
+- `Tuning`: `FareItems=Dirt,WoodPlank,Glass`, `FareCount=3`, `PassMaterialItem=Fizzberry`, `PassPrice=12`, `PassItem=FerryPass`, `FlightSeconds=13.4`, `CruiseAltitude=1500`, `BoardRadius=400`
+- `MobSpawn`: `LevelBonus=5`, `MobDamagePerLevel=0.15`, `SpawnIntervalSeconds=6`, `MaxAlivePerBox=4`, `ActivationMargin=4000`, `LeashMargin=800`, `DespawnRange=6000`, `IdleDespawnSeconds=60`
+- `MobBoxes`: `LavaWest` Raptor at x 2400, `LavaMid` Scythepaw at x 3700, `LavaEast` Lanternmaw at x 5000. Each half-extent is 500 by 300. `HazardId=LavaBridge`
 
 Each of those lines is commented in `DefaultGame.ini`.
 
@@ -52,9 +53,9 @@ There is no dino level stat. The spawner writes:
 
 `AttackDamage_new = AttackDamage_base * (1 + MobDamagePerLevel * (MobLevel - 1))`
 
-`AttackDamage_base` is `AGFDino`'s `AttackDamage` before this scale (default 10). At level 10 and 0.15 that is `10 * 2.35 = 23.5`.
+`AttackDamage_base` is `AGFDino`'s `AttackDamage` before this scale (default 10). An empty party counts as level 1, plus `LevelBonus` 5, so level 6. At 0.15 that is `10 * 1.75 = 17.5`.
 
-Spawn points are up to 64 uniform samples inside the hazard box. A point is kept only when `GetHazardAt` returns `LandRouteHazardId` (wild ground; owned land and any other hazard fail). Mob Z is the box center Z plus 100. One `AGFDino` spawns per elapsed interval, up to `MaxAlive`, and `ServerForceHostile` aims it at the nearest non-flying player within the margin. The first spawn waits one full interval. Going inactive resets that wait. Flying players do not activate the route and do not count as near. A mob despawns when it is outside the box by more than the margin, or when its age reaches `IdleDespawnSeconds` and nobody is near.
+Spawn points are up to 64 uniform samples inside each mob box. A point is kept only when `GetHazardAt` returns that box's `HazardId` (wild `LavaBridge`; owned land and any other hazard fail). Mob Z is the box center Z plus 100. Each box spawns one `AGFDino` per elapsed interval, up to `MaxAlivePerBox`, and `ServerForceHostile` aims it at the nearest non-flying player within 40 m. The first spawn waits one full interval. Going inactive resets that wait. Flying players do not wake a box and do not count as near. A mob despawns when it is more than 8 m outside its box, or after 60 s with nobody within 60 m. The forest route has no mob box.
 
 ## Defaults chosen
 
@@ -62,11 +63,11 @@ These are already issues. The numbers below are the ones in `DefaultGame.ini`.
 
 - #25 One route, `RimeCinder`, between Rime and Cinderwrights. `StopA` is the Rime stop. Verdant has no ferry.
 - #26 `RimeLanding` `(1200, 600)` and `CinderLanding` `(6000, 600)`. Each is about 1342 cm from its anchor, inside the 1-member disc (Rime r >= 1600, Cinderwrights r >= 1400). One ferry stays parked at each stop. A trip uses a separate flying copy.
-- #27 Fare is 3 Dirt, burned once on boarding through `ServerBurn` with reason `Ferry.Fare`. The fare TxId is the client's request id, so a duplicate RPC does not charge and does not start a second flight. If `StartFlight` fails, the fare is minted back (`Ferry.FareRefund`) and the result is `FlightFailed`. A player who cannot pay is refused and nothing is spent. A flight that has started is not refunded.
-- #28 A pass costs 5 `FerryTame`, burned, then 1 `FerryPass` is minted. If the mint fails, the burn is minted back (`Ferry.PassRollback`) and that request id cannot mint a free pass later. Holding `FerryPass` makes both directions free. A second buy returns `AlreadyHasPass`. `FerryPass` is account-bound: gifts, mail, wagers, and rent cannot move it.
-- #29 The trip is a 12 s flight with a 1500 cm arc, not a teleport. `BoardRadius` is 400 cm. The rider cannot move, take damage, or be targeted in flight. A disconnect places a surviving pawn at the drop.
+- #27 Fare is 3 of any basic block (tier-1 building blocks: Dirt, WoodPlank, Glass), any mix, burned once on boarding through `ServerBurn` with reason `Ferry.Fare`. The fare TxId is the client's request id, so a duplicate RPC does not charge and does not start a second flight. If `StartFlight` fails, the fare is minted back (`Ferry.FareRefund`) and the result is `FlightFailed`. A player who cannot pay is refused and nothing is spent. A flight that has started is not refunded.
+- #28 A pass costs 12 `Fizzberry`, burned, then 1 `FerryPass` is minted. If the mint fails, the burn is minted back (`Ferry.PassRollback`) and that request id cannot mint a free pass later. Holding `FerryPass` makes both directions free. A second buy returns `AlreadyHasPass`. `FerryPass` is account-bound: gifts, mail, wagers, and rent cannot move it. `FerryTame` is not the currency and the row is gone.
+- #29 The trip is a 13.4 s flight with a 1500 cm arc, not a teleport. Takeoff is 40 frames and landing is 48 frames at 30 fps; the carry fills the rest. `BoardRadius` is 400 cm. The rider cannot move, take damage, or be targeted in flight. A disconnect places a surviving pawn at the drop.
 - #30 The ferry is not an `AGFDino`, cannot be tamed or owned, ignores damage, and carries `GF.FactionProtected`. `AGFDino` will not target that tag. Riders in flight get the same tag. Big Grumble skips it when gathering players and when applying a shove.
-- #31 Land-route mobs are level 10 Raptor and Hornback, one every 8 s, up to 6, only where `LavaBridge` is still wild, and only while a non-flying player is within 1000 cm. They despawn past that margin, or after 60 s with nobody near. Damage scale is 2.35x.
+- #31 Lava-bridge land-route mobs are Raptor, Scythepaw, and Lanternmaw, one species per box, at the nearby party's level plus 5. One every 6 s, up to 4 alive per box, only where that box is still wild `LavaBridge`, and only while a non-flying player is within 40 m. They despawn 8 m past the box, or after 60 s with nobody within 60 m. An empty party is level 6. Damage scale at that level is 1.75x.
 - #32 `DefaultSpawnAnchor` is `Rime`, the same id as `StarterFaction`. Tagged `PlayerStart` wins, then any map start, then `StarterFallback` (anchor centre + 120 cm). Shipped Rime is `(0, 0, 120)`. The ferry perch `(0, -300, 100)`, yaw 36, stays separate.
 
 ## Rebase onto staging 45fc8d0
@@ -90,16 +91,16 @@ Checked:
 
 New, recorded in [#149](https://github.com/agentshorts/GFGame/issues/149):
 
-- `FerryTame` display name "Ferry Tame", stack max 999 (Big Grumble's tame row is 99). `FerryPass` display name "Ferry Pass", stack max 1. Both are Material, tier 4, value 20, category Rare, not wagerable, not rentable, so `ValidateItemTable` accepts them.
+- `FerryPass` display name "Ferry Pass", stack max 1. It is Material, tier 4, value 20, category Rare, not wagerable, not rentable, and `bAccountBound`, so `ValidateItemTable` accepts it. `FerryTame` is not in the table.
 - Pass ledger reasons are `Ferry.Pass` (burn), `Ferry.PassGrant` (mint), and `Ferry.PassRollback`. Fare refund reason is `Ferry.FareRefund`. The fare TxId is the request guid. Pass burn and mint ids are that guid with `FGuid::D` XOR `0x50535331` and `0x50535332`. Fare refund uses `0x46524652`. Pass rollback uses `0x50535242`. An invalid request id fails with `NotAuthority`.
 - An account the ledger cannot read returns `NotAuthority`. A stop that is not on a route returns `UnknownStop`. Authority is checked before the already-paid and already-owns-a-pass short circuits. A replayed fare `TxId` returns `Ok` and does not charge, and it does not re-check boarding.
 - Boarding is horizontal. The drop is `BoardRadius / 2` past the arrival stop along the route.
 - Body key `Dino.Ripwing`. Parked anim `Ripwing.Perch_Idle`, yaw -90, at the perch point. Transit anims are `Ripwing.Ferry_Takeoff`, `Ripwing.Ferry_Carry_Fly`, and `Ripwing.Ferry_Land`. Body collision is off. The skeletal mesh and ferry material load when those assets exist. Missing perch, basket, and clip assets are left empty.
-- The spawner tries 64 samples, lifts the mob 100 cm, waits one full interval before the first spawn, and resets that wait when the route goes inactive.
+- Each box tries 64 samples, lifts the mob 100 cm, waits one full interval before the first spawn, and resets that wait when the box goes inactive.
 
 ## Follow-ups
 
-- `FerryTame` has no source. Do not invent a drop or a shop for it here.
+- `FerryTame` is retired in the same change as the 12 Fizzberry pass. Do not add it back as a currency.
 - There is no overworld player health. Mob damage is written onto `AttackDamage` and `ApplyDamage` still runs, but a hit does not change a player until health exists.
 - The perch and basket meshes, the ferry clips, and the boarding UI are placed in the editor. This branch stores the asset paths and plays a clip when it loads.
 - `DT_Items` needs a CSV reimport so `bAccountBound` reaches the cooked data table. The CSV fallback already reads that column.
@@ -115,6 +116,7 @@ Automation names, `EditorContext | EngineFilter`. Fare, pass, layout, spawn, and
 - `GFGame.Ferry.FareRefund`
 - `GFGame.Ferry.PassRollback`
 - `GFGame.Ferry.PassBound`
+- `GFGame.Ferry.Receipt` (12 Fizzberry, basic-block fare, phase timing, ledger salts, FerryPass row, FerryTame gone)
 - `GFGame.Ferry.SpawnerRouteOnly`
 - `GFGame.Ferry.Layout`
 - `GFGame.Spawn.DefaultAnchor`

@@ -656,7 +656,7 @@ FName UGFSocialComponent::ServerSetGuest(AGFPlayerState* By, AGFPlayerState* Tar
 	{
 		return FGFSocialCodes::NoSuchPlayer;
 	}
-	const FName Code = FGFProtectionRules::CanSetGuest(Describe(By), Describe(Target), Access);
+	const FName Code = FGFProtectionRules::CanSetGuest(Describe(By), Describe(Target), Access, bGuest);
 	if (Code != FGFSocialCodes::Ok)
 	{
 		return Code;

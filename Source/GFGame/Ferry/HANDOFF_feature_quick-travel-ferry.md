@@ -4,7 +4,7 @@ Branch base is staging. No Unreal build was run. Compile and run `GFGame.Ferry.Q
 
 ## What changed
 
-The ferry director already flew a protected Ripwing between Rime and Cinderwrights, charged 3 Dirt, and sold a pass for 5 FerryTame. There was no stand to walk up to, and Verdant had no stop.
+The ferry director already flew a protected Ripwing between Rime and Cinderwrights, charged 3 basic blocks, and sold a pass for 12 Fizzberry. There was no stand to walk up to, and Verdant had no stop.
 
 `AGFFerryDirector` now spawns one `AGFFerryStand` per stop. The stand is engine cubes and text. Walk onto a destination pad and the server calls `RequestTripTo` (a new guid each step-on). Walk onto the pass pad and it calls `BuyPass`. The flight, the drop, the fare ledger, and the faction-protection tag are unchanged. A second step-on while you are still in that pad does not ask again.
 
@@ -22,5 +22,5 @@ The HUD draws the stand lines (fare, destinations, pass price, last result) whil
 
 `EditorContext | EngineFilter`.
 
-- `GFGame.Ferry.QuickTravel.Links` — one stand per safe zone, inside the 1-member disc, a route each way, pads inside the board disc and clear of drops, fare 3 Dirt, pass 5 FerryTame, Rime spawn is not a stand, the ferry does not follow.
-- `GFGame.Ferry.QuickTravel.Trip` — a pad refuses a trip with no blocks, then burns 3 Dirt, flies, and drops at Verdant; the pass pad burns FerryTame; the return is free; a destination-less trip from Rime still reaches Cinderwrights; parked birds do not move and still ignore damage.
+- `GFGame.Ferry.QuickTravel.Links` — one stand per safe zone, inside the 1-member disc, a route each way, pads inside the board disc and clear of drops, fare 3 basic blocks including Dirt, pass 12 Fizzberry, Rime spawn is not a stand, the ferry does not follow.
+- `GFGame.Ferry.QuickTravel.Trip` — a pad refuses a trip with no blocks, then burns 3 Dirt, flies, and drops at Verdant; the pass pad burns Fizzberry; the return is free; a destination-less trip from Rime still reaches Cinderwrights; parked birds do not move and still ignore damage.

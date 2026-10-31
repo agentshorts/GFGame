@@ -70,5 +70,4 @@ LabCoat,"NSLOCTEXT(""GFItems"", ""LabCoat"", ""Lab Coat"")",None,Outfit,1,Uncomm
 SafetyGoggles,"NSLOCTEXT(""GFItems"", ""SafetyGoggles"", ""Safety Goggles"")",None,Outfit,1,Common,,0,0,None,False,False,None,False
 BurrowLantern,"NSLOCTEXT(""GFItems"", ""BurrowLantern"", ""Burrow Lantern"")",None,Furniture,99,Uncommon,,0,0,None,False,False,None,False
 BigGrumbleTame,"NSLOCTEXT(""GFItems"", ""BigGrumbleTame"", ""Grumble Tamestone"")",None,Material,99,Rare,,4,20,Rare,False,False,None,False
-FerryTame,"NSLOCTEXT(""GFItems"", ""FerryTame"", ""Ferry Tame"")",None,Material,999,Rare,,4,20,Rare,False,False,None,False
 FerryPass,"NSLOCTEXT(""GFItems"", ""FerryPass"", ""Ferry Pass"")",None,Material,1,Rare,,4,20,Rare,False,False,None,True

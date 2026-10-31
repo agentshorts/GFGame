@@ -716,7 +716,7 @@ namespace GFSocialTest
 }
 
 // Faction protection on the server component (bare world): the verbs' permission checks (leader, grant, guest, the
-// target standing on the setter's land for toggles and guest changes; a granted member may also Guest / Unguest), the Dragger record and timestamp, the config chat line (on by default),
+// target standing on the setter's land for toggles and Guest; Unguest works from anywhere; a granted member may also Guest / Unguest), the Dragger record and timestamp, the config chat line (on by default),
 // the build / break gate, powers (target on safe land and, for a visitor, unprotected; members, guests and the host
 // immune), jailed players never protected, and the IsSafeFor wiring through UGFSafeZoneSubsystem.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSocialProtectionTest, "GFGame.Social.Protection", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -819,8 +819,8 @@ bool FGFSocialProtectionTest::RunTest(const FString&)
 	TestEqual(TEXT("Leader revokes"), S->ServerSetToggleGrant(L, M, false), C::Ok);
 	TestEqual(TEXT("Revoked member can't toggle"), S->ServerSetProtected(M, V, true), C::NotAllowed);
 
-	// Guests: the leader or a granted member, target on the setter's faction land; rights plus protection, no
-	// Protect / Unprotect on top.
+	// Guests: the leader or a granted member. Guest needs the setter's faction land. Unguest works from anywhere.
+	// Rights plus protection, no Protect / Unprotect on top.
 	TestEqual(TEXT("Member without the grant can't make a guest"), S->ServerSetGuest(M, V, true), C::NotAllowed);
 	TestEqual(TEXT("Leader grants M again"), S->ServerSetToggleGrant(L, M, true), C::Ok);
 	PutAt(W.World, V, OnB);
@@ -831,12 +831,12 @@ bool FGFSocialProtectionTest::RunTest(const FString&)
 	TestEqual(TEXT("Granted member makes V a guest"), S->ServerSetGuest(M, V, true), C::Ok);
 	TestTrue(TEXT("V is a guest"), S->Access.IsGuest(FA, TEXT("V")));
 	PutAt(W.World, V, OnB);
-	TestEqual(TEXT("Unguest needs the target on your land too"), S->ServerSetGuest(M, V, false), C::NotOnYourLand);
+	TestEqual(TEXT("Guest again, still off this land"), S->ServerSetGuest(M, V, true), C::NotOnYourLand);
 	TestTrue(TEXT("...so V stays a guest"), S->Access.IsGuest(FA, TEXT("V")));
-	PutAt(W.World, V, OnA);
-	TestEqual(TEXT("Granted member unguests V"), S->ServerSetGuest(M, V, false), C::Ok);
+	TestEqual(TEXT("Unguest from another faction's land"), S->ServerSetGuest(M, V, false), C::Ok);
 	TestFalse(TEXT("V is no longer a guest"), S->Access.IsGuest(FA, TEXT("V")));
 	TestEqual(TEXT("...and the granted member is the Dragger"), V->LastDrag.DraggerKey, FString(TEXT("M")));
+	PutAt(W.World, V, OnA);
 	TestEqual(TEXT("Granted member still can't grant others"), S->ServerSetToggleGrant(M, L, true), C::NotAllowed);
 	TestEqual(TEXT("Leader revokes M"), S->ServerSetToggleGrant(L, M, false), C::Ok);
 	TestEqual(TEXT("Revoked member can't make a guest"), S->ServerSetGuest(M, V, true), C::NotAllowed);

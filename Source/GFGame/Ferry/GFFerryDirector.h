@@ -35,8 +35,13 @@ public:
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "GF|Ferry")
 	FGFFerryMobSpawn MobSpawn;
 
+	/** Lava-bridge spawn boxes. Each has its own species, timer, and alive cap. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "GF|Ferry")
+	TArray<FGFFerryMobBox> MobBoxes;
+
 	/**
-	 * Server. Charges the fare or accepts a pass, then starts the flight.
+	 * Server. Burns the fare (or accepts a pass), then starts the flight.
+	 * A flight that has started is not refunded. The fare comes back only when the flight never starts.
 	 * The destination is the other end of the first route that touches FromStop.
 	 * RequestId is the fare TxId. A second call with the same id does not charge and does not start another flight.
 	 */
@@ -83,7 +88,7 @@ private:
 	struct FRouteMob
 	{
 		TWeakObjectPtr<AGFDino> Dino;
-		FName HazardId;
+		FName BoxId;
 		float Age = 0.f;
 	};
 
@@ -105,6 +110,6 @@ private:
 
 	TArray<FFlight> Flights;
 	TArray<FRouteMob> Mobs;
-	float SpawnWait = 0.f;
+	TArray<float> BoxWait;
 	FRandomStream MobRng;
 };

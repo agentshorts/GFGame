@@ -180,10 +180,10 @@ bool FGFQuickTravelLinksTest::RunTest(const FString&)
 	const int32 ZoneCount = Map.Factions.Num();
 	TestEqual(TEXT("A route between each pair"), Director->Routes.Num(), ZoneCount * (ZoneCount - 1) / 2);
 	TestTrue(TEXT("Fare is a few blocks"), Director->Tuning.FareCount > 0 && Director->Tuning.FareCount <= 5);
-	TestEqual(TEXT("Fare item"), Director->Tuning.FareItem, FName(TEXT("Dirt")));
+	TestTrue(TEXT("Fare accepts Dirt"), Director->Tuning.FareItems.Contains(FName(TEXT("Dirt"))));
 	TestEqual(TEXT("Fare count"), Director->Tuning.FareCount, 3);
-	TestEqual(TEXT("Pass burns the taming material"), Director->Tuning.PassMaterialItem, FName(TEXT("FerryTame")));
-	TestEqual(TEXT("Pass price"), Director->Tuning.PassPrice, 5);
+	TestEqual(TEXT("Pass burns Fizzberry"), Director->Tuning.PassMaterialItem, FName(TEXT("Fizzberry")));
+	TestEqual(TEXT("Pass price"), Director->Tuning.PassPrice, 12);
 	TestEqual(TEXT("Pass item"), Director->Tuning.PassItem, FName(TEXT("FerryPass")));
 
 	if (!TestTrue(TEXT("First route still exists"), Director->Routes.Num() > 0))
@@ -319,8 +319,9 @@ bool FGFQuickTravelTripTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("Prompt says it does not follow"), Joined.Contains(TEXT("does not follow")));
 	TestTrue(TEXT("Prompt names the fare"), Joined.Contains(TEXT("Dirt")));
+	TestTrue(TEXT("Prompt names a basic-block fare"), Joined.Contains(TEXT("basic blocks")));
 	TestTrue(TEXT("Prompt names Verdant"), Joined.Contains(TEXT("Verdant")));
-	TestTrue(TEXT("Prompt names the tame material"), Joined.Contains(TEXT("FerryTame")));
+	TestTrue(TEXT("Prompt names Fizzberry"), Joined.Contains(TEXT("Fizzberry")));
 
 	TArray<TPair<AGFFerryDino*, FVector>> Parked;
 	for (TActorIterator<AGFFerryDino> It(Trip.World); It; ++It)
@@ -349,7 +350,7 @@ bool FGFQuickTravelTripTest::RunTest(const FString&)
 	}
 
 	const int32 Dirt = Director->Tuning.FareCount;
-	const FName DirtId = Director->Tuning.FareItem;
+	const FName DirtId(TEXT("Dirt"));
 	Pawn->SetActorLocation(FlyPad->GetComponentLocation(), false, nullptr, ETeleportType::TeleportPhysics);
 	HomeStand->Tick(0.1f);
 	TestFalse(TEXT("No blocks, no flight"), Pawn->FerryRider->IsInFlight());
@@ -396,11 +397,11 @@ bool FGFQuickTravelTripTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	TestTrue(TEXT("Has the tame material"), PS->Inventory->AddItem(Director->Tuning.PassMaterialItem, Director->Tuning.PassPrice));
+	TestTrue(TEXT("Has the pass material"), PS->Inventory->AddItem(Director->Tuning.PassMaterialItem, Director->Tuning.PassPrice));
 	Pawn->SetActorLocation(Buy->GetComponentLocation(), false, nullptr, ETeleportType::TeleportPhysics);
 	GreenStand->Tick(0.1f);
 	TestEqual(TEXT("Pass minted"), PS->Inventory->GetCount(Director->Tuning.PassItem), 1);
-	TestEqual(TEXT("Tame material burned"), PS->Inventory->GetCount(Director->Tuning.PassMaterialItem), 0);
+	TestEqual(TEXT("Pass material burned"), PS->Inventory->GetCount(Director->Tuning.PassMaterialItem), 0);
 	TestEqual(TEXT("Pass did not spend blocks"), PS->Inventory->GetCount(DirtId), 0);
 
 	Pawn->SetActorLocation(Back->GetComponentLocation(), false, nullptr, ETeleportType::TeleportPhysics);

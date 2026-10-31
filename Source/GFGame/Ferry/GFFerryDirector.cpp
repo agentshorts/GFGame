@@ -2,6 +2,7 @@
 #include "GFFerryDino.h"
 #include "GFFerryRiderComponent.h"
 #include "GFFerryStand.h"
+#include "GFCompanionRoster.h"
 #include "GFDino.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
@@ -39,13 +40,29 @@ namespace GFFerryDirectorPrivate
 		return Result == EGFTxResult::Applied || Result == EGFTxResult::AlreadyApplied;
 	}
 
-	const FGFTerritoryHazard* FindHazard(const TArray<FGFTerritoryHazard>& Hazards, FName Id)
+	const FGFFerryMobBox* FindMobBox(const TArray<FGFFerryMobBox>& Boxes, FName Id)
 	{
 		if (Id.IsNone())
 		{
 			return nullptr;
 		}
-		return Hazards.FindByPredicate([Id](const FGFTerritoryHazard& Hazard) { return Hazard.Id == Id; });
+		return Boxes.FindByPredicate([Id](const FGFFerryMobBox& Box) { return Box.Id == Id; });
+	}
+
+	int32 PartyLevelOf(const TArray<FGFCompanionEntry>& Roster)
+	{
+		int32 Best = 1;
+		bool bAny = false;
+		for (const FGFCompanionEntry& Entry : Roster)
+		{
+			if (!Entry.bInParty)
+			{
+				continue;
+			}
+			bAny = true;
+			Best = FMath::Max(Best, Entry.Level);
+		}
+		return bAny ? FMath::Max(1, Best) : 1;
 	}
 
 	void SeatOnBasket(APawn* Rider, USceneComponent* Basket)
@@ -105,7 +122,11 @@ void AGFFerryDirector::BeginPlay()
 	{
 		return;
 	}
-	SpawnWait = MobSpawn.SpawnIntervalSeconds;
+	BoxWait.SetNum(MobBoxes.Num());
+	for (float& Wait : BoxWait)
+	{
+		Wait = MobSpawn.SpawnIntervalSeconds;
+	}
 	MobRng.GenerateNewSeed();
 	SpawnStopDinos();
 	SpawnStands();
@@ -197,6 +218,7 @@ FGFFerryResult AGFFerryDirector::RequestTripTo(APawn* Rider, FName FromStop, FNa
 	}
 	if (!From || !To || !StartFlight(Rider, *From, *To))
 	{
+		// The flight never started. A trip that has left the pad is not refunded.
 		if (Plan.bCharge && Burned == EGFTxResult::Applied)
 		{
 			GS->ServerMint(RefundTx, PS->PlayerKey, Plan.Stacks, FGFFerryRules::FareRefundReason());
@@ -398,16 +420,7 @@ bool AGFFerryDirector::AdvanceFlight(FFlight& Flight, float DeltaSeconds)
 		}
 	}
 
-	FName Phase = FGFFerryArt::TakeoffAnim();
-	if (Flight.Elapsed >= LandStart)
-	{
-		Phase = FGFFerryArt::LandAnim();
-	}
-	else if (Flight.Elapsed >= FMath::Min(TakeoffEnd, LandStart))
-	{
-		Phase = FGFFerryArt::CarryAnim();
-	}
-	Craft->SetAnim(Phase);
+	Craft->SetAnim(FGFFerryArt::FlightPhase(Flight.Elapsed, Flight.Duration));
 
 	UStaticMeshComponent* Basket = Flight.Basket.Get();
 	if (Basket && !Flight.bBasketGrabbed && Flight.Elapsed >= GrabAt && Flight.Elapsed < LandStart)
@@ -490,6 +503,7 @@ TArray<FGFFerryRoutePerson> AGFFerryDirector::GatherPeople() const
 		FGFFerryRoutePerson Person;
 		Person.Key = PS->PlayerKey;
 		Person.Location = Pawn->GetActorLocation();
+		Person.PartyLevel = GFFerryDirectorPrivate::PartyLevelOf(PS->Companions);
 		if (const UGFFerryRiderComponent* Ride = Pawn->FindComponentByClass<UGFFerryRiderComponent>())
 		{
 			Person.bFlying = Ride->IsInFlight();
@@ -502,58 +516,44 @@ TArray<FGFFerryRoutePerson> AGFFerryDirector::GatherPeople() const
 void AGFFerryDirector::TickMobs(float DeltaSeconds)
 {
 	UGFTerritorySubsystem* Territory = UGFTerritorySubsystem::Get(this);
-	const TArray<FGFTerritoryHazard> NoHazards;
-	const TArray<FGFTerritoryHazard>& Hazards = Territory ? Territory->Hazards : NoHazards;
 	const TArray<FGFFerryRoutePerson> People = GatherPeople();
+	const float Dt = FMath::Max(0.f, DeltaSeconds);
+	if (BoxWait.Num() != MobBoxes.Num())
+	{
+		BoxWait.SetNum(MobBoxes.Num());
+		for (float& Wait : BoxWait)
+		{
+			Wait = MobSpawn.SpawnIntervalSeconds;
+		}
+	}
 
 	for (int32 Index = Mobs.Num() - 1; Index >= 0; --Index)
 	{
 		FRouteMob& Mob = Mobs[Index];
-		Mob.Age += FMath::Max(0.f, DeltaSeconds);
+		Mob.Age += Dt;
 		AGFDino* Dino = Mob.Dino.Get();
 		if (!Dino)
 		{
 			Mobs.RemoveAt(Index);
 			continue;
 		}
-		const FGFTerritoryHazard* Box = GFFerryDirectorPrivate::FindHazard(Hazards, Mob.HazardId);
-		const bool bNear = Box && FGFFerryRouteSpawnRules::IsRouteActive(*Box, MobSpawn.ActivationMargin, People);
-		if (!Box || FGFFerryRouteSpawnRules::ShouldDespawn(*Box, Dino->GetActorLocation(), MobSpawn.ActivationMargin, Mob.Age, MobSpawn.IdleDespawnSeconds, bNear))
+		const FGFFerryMobBox* Box = GFFerryDirectorPrivate::FindMobBox(MobBoxes, Mob.BoxId);
+		if (!Box)
+		{
+			Dino->Destroy();
+			Mobs.RemoveAt(Index);
+			continue;
+		}
+		const FGFTerritoryHazard Bounds = FGFFerryRules::BoxBounds(*Box);
+		const bool bNear = FGFFerryRouteSpawnRules::IsRouteActive(Bounds, MobSpawn.DespawnRange, People);
+		if (FGFFerryRouteSpawnRules::ShouldDespawn(Bounds, Dino->GetActorLocation(), MobSpawn.LeashMargin, Mob.Age, MobSpawn.IdleDespawnSeconds, bNear))
 		{
 			Dino->Destroy();
 			Mobs.RemoveAt(Index);
 		}
 	}
 
-	bool bActive = false;
-	for (const FGFFerryRoute& Route : Routes)
-	{
-		const FGFTerritoryHazard* Box = GFFerryDirectorPrivate::FindHazard(Hazards, Route.LandRouteHazardId);
-		if (Box && FGFFerryRouteSpawnRules::IsRouteActive(*Box, MobSpawn.ActivationMargin, People))
-		{
-			bActive = true;
-			break;
-		}
-	}
-	if (!bActive)
-	{
-		SpawnWait = MobSpawn.SpawnIntervalSeconds;
-		return;
-	}
-
-	SpawnWait -= DeltaSeconds;
-	if (SpawnWait > 0.f)
-	{
-		return;
-	}
-	SpawnWait = MobSpawn.SpawnIntervalSeconds;
-
-	int32 Alive = 0;
-	for (const FRouteMob& Mob : Mobs)
-	{
-		Alive += Mob.Dino.IsValid() ? 1 : 0;
-	}
-	if (!FGFFerryRouteSpawnRules::CanSpawn(Alive, MobSpawn.MaxAlive, true) || !Territory)
+	if (!Territory)
 	{
 		return;
 	}
@@ -564,15 +564,35 @@ void AGFFerryDirector::TickMobs(float DeltaSeconds)
 		return Hit.bHazard ? Hit.Id : NAME_None;
 	};
 
-	for (const FGFFerryRoute& Route : Routes)
+	for (int32 Index = 0; Index < MobBoxes.Num(); ++Index)
 	{
-		const FGFTerritoryHazard* Box = GFFerryDirectorPrivate::FindHazard(Hazards, Route.LandRouteHazardId);
-		if (!Box || !FGFFerryRouteSpawnRules::IsRouteActive(*Box, MobSpawn.ActivationMargin, People))
+		const FGFFerryMobBox& Box = MobBoxes[Index];
+		const FGFTerritoryHazard Bounds = FGFFerryRules::BoxBounds(Box);
+		if (!FGFFerryRouteSpawnRules::IsRouteActive(Bounds, MobSpawn.ActivationMargin, People))
+		{
+			BoxWait[Index] = MobSpawn.SpawnIntervalSeconds;
+			continue;
+		}
+		BoxWait[Index] -= Dt;
+		if (BoxWait[Index] > 0.f)
+		{
+			continue;
+		}
+		BoxWait[Index] = MobSpawn.SpawnIntervalSeconds;
+		int32 Alive = 0;
+		for (const FRouteMob& Mob : Mobs)
+		{
+			if (Mob.BoxId == Box.Id && Mob.Dino.IsValid())
+			{
+				++Alive;
+			}
+		}
+		if (!FGFFerryRouteSpawnRules::CanSpawn(Alive, MobSpawn.MaxAlivePerBox, true) || Box.Species.IsNone() || Box.HazardId.IsNone())
 		{
 			continue;
 		}
 		FVector Point;
-		if (!FGFFerryRouteSpawnRules::PickSpawnPoint(*Box, Route.LandRouteHazardId, MobRng, HazardAt, Point))
+		if (!FGFFerryRouteSpawnRules::PickSpawnPoint(Bounds, Box.HazardId, MobRng, HazardAt, Point))
 		{
 			continue;
 		}
@@ -581,14 +601,9 @@ void AGFFerryDirector::TickMobs(float DeltaSeconds)
 			continue;
 		}
 		const FGFTerritoryHazardHit Live = Territory->GetHazardAt(Point);
-		if (!Live.bHazard || Live.Id != Route.LandRouteHazardId)
+		if (!Live.bHazard || Live.Id != Box.HazardId)
 		{
 			continue;
-		}
-		const FName Species = FGFFerryRouteSpawnRules::PickSpecies(MobSpawn.MobSpecies, MobRng);
-		if (Species.IsNone())
-		{
-			return;
 		}
 		Point.Z += GFFerryDirectorPrivate::MobSpawnLift;
 		FActorSpawnParameters Params;
@@ -603,8 +618,10 @@ void AGFFerryDirector::TickMobs(float DeltaSeconds)
 			Dino->Destroy();
 			continue;
 		}
-		Dino->SetSpecies(Species);
-		Dino->AttackDamage = FGFFerryRouteSpawnRules::ScaledAttackDamage(Dino->AttackDamage, MobSpawn.MobLevel, MobSpawn.MobDamagePerLevel);
+		Dino->SetSpecies(Box.Species);
+		const int32 Party = FGFFerryRouteSpawnRules::RoutePartyLevel(Bounds, MobSpawn.ActivationMargin, People);
+		const int32 Level = FGFFerryRouteSpawnRules::MobLevelForParty(Party, MobSpawn.LevelBonus);
+		Dino->AttackDamage = FGFFerryRouteSpawnRules::ScaledAttackDamage(Dino->AttackDamage, Level, MobSpawn.MobDamagePerLevel);
 
 		const FGFFerryRoutePerson* Nearest = nullptr;
 		float Best = 0.f;
@@ -614,7 +631,7 @@ void AGFFerryDirector::TickMobs(float DeltaSeconds)
 			{
 				continue;
 			}
-			if (FGFFerryRouteSpawnRules::DistanceToBox(*Box, Person.Location) > MobSpawn.ActivationMargin)
+			if (FGFFerryRouteSpawnRules::DistanceToBox(Bounds, Person.Location) > MobSpawn.ActivationMargin)
 			{
 				continue;
 			}
@@ -631,9 +648,8 @@ void AGFFerryDirector::TickMobs(float DeltaSeconds)
 		}
 		FRouteMob Mob;
 		Mob.Dino = Dino;
-		Mob.HazardId = Route.LandRouteHazardId;
+		Mob.BoxId = Box.Id;
 		Mobs.Add(Mob);
-		return;
 	}
 }
 

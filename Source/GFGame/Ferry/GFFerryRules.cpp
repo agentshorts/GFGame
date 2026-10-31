@@ -114,6 +114,13 @@ int32 FGFFerryRules::Quote(const FGFInventory& Inventory, const FGFFerryTuning& 
 	return FMath::Max(0, Tuning.FareCount);
 }
 
+bool FGFFerryRules::IsBasicBlock(const FGFItemRow& Row)
+{
+	return Row.Category == EGFItemCategory::Block
+		&& Row.Tier == 1
+		&& Row.MaterialCategory == EGFMaterialCategory::Building;
+}
+
 bool FGFFerryRules::IsWithinBoardRadius(const FVector& RiderLocation, const FVector& StopLocation, float BoardRadius)
 {
 	return FVector::Dist2D(RiderLocation, StopLocation) <= FMath::Max(0.f, BoardRadius);
@@ -133,7 +140,16 @@ FGFFerryResult FGFFerryRules::CanBoard(
 		return Gate;
 	}
 	const int32 Cost = Quote(Inventory, Tuning);
-	if (Cost > 0 && (Tuning.FareItem.IsNone() || Inventory.GetCount(Tuning.FareItem) < Cost))
+	if (Cost <= 0)
+	{
+		return GFFerryRulesPrivate::FerryRulesSucceed();
+	}
+	int32 Covered = 0;
+	for (const FGFItemStack& Stack : ChargeFare(Inventory, Tuning))
+	{
+		Covered += Stack.Count;
+	}
+	if (Covered < Cost)
 	{
 		return GFFerryRulesPrivate::FerryRulesFail(FGFFerryCodes::CantAfford);
 	}
@@ -143,10 +159,35 @@ FGFFerryResult FGFFerryRules::CanBoard(
 TArray<FGFItemStack> FGFFerryRules::ChargeFare(const FGFInventory& Inventory, const FGFFerryTuning& Tuning)
 {
 	TArray<FGFItemStack> Stacks;
-	const int32 Cost = Quote(Inventory, Tuning);
-	if (Cost > 0 && !Tuning.FareItem.IsNone())
+	int32 Need = Quote(Inventory, Tuning);
+	if (Need <= 0)
 	{
-		Stacks.Add(FGFItemStack(Tuning.FareItem, Cost));
+		return Stacks;
+	}
+	TArray<FName> Ids = Tuning.FareItems;
+	Ids.Sort([](const FName& A, const FName& B) { return A.Compare(B) < 0; });
+	FName Previous = NAME_None;
+	for (const FName& Id : Ids)
+	{
+		if (Need <= 0)
+		{
+			break;
+		}
+		if (Id.IsNone() || Id == Previous)
+		{
+			continue;
+		}
+		Previous = Id;
+		const int32 Take = FMath::Min(Inventory.GetCount(Id), Need);
+		if (Take > 0)
+		{
+			Stacks.Add(FGFItemStack(Id, Take));
+			Need -= Take;
+		}
+	}
+	if (Need > 0)
+	{
+		Stacks.Reset();
 	}
 	return Stacks;
 }
@@ -417,6 +458,16 @@ FVector FGFFerryRules::DropPoint(const FVector& From, const FVector& To, const F
 	return Drop;
 }
 
+FGFTerritoryHazard FGFFerryRules::BoxBounds(const FGFFerryMobBox& Box)
+{
+	FGFTerritoryHazard Hazard;
+	Hazard.Id = Box.Id;
+	Hazard.Kind = Box.HazardId;
+	Hazard.Center = Box.Center;
+	Hazard.HalfExtent = Box.HalfExtent;
+	return Hazard;
+}
+
 const FGFFerryStop* FGFFerryRules::FindStop(const TArray<FGFFerryStop>& Stops, FName Id)
 {
 	if (Id.IsNone())
@@ -521,6 +572,32 @@ bool FGFFerryRouteSpawnRules::IsRouteActive(const FGFTerritoryHazard& Box, float
 bool FGFFerryRouteSpawnRules::CanSpawn(int32 Alive, int32 MaxAlive, bool bActive)
 {
 	return bActive && MaxAlive > 0 && Alive < MaxAlive;
+}
+
+int32 FGFFerryRouteSpawnRules::RoutePartyLevel(const FGFTerritoryHazard& Box, float Margin, const TArray<FGFFerryRoutePerson>& People)
+{
+	int32 Best = 1;
+	bool bAny = false;
+	const float Limit = FMath::Max(0.f, Margin);
+	for (const FGFFerryRoutePerson& Person : People)
+	{
+		if (Person.bFlying || Person.Key.IsEmpty())
+		{
+			continue;
+		}
+		if (DistanceToBox(Box, Person.Location) > Limit)
+		{
+			continue;
+		}
+		bAny = true;
+		Best = FMath::Max(Best, Person.PartyLevel);
+	}
+	return bAny ? FMath::Max(1, Best) : 1;
+}
+
+int32 FGFFerryRouteSpawnRules::MobLevelForParty(int32 PartyLevel, int32 LevelBonus)
+{
+	return FMath::Max(1, PartyLevel) + FMath::Max(0, LevelBonus);
 }
 
 bool FGFFerryRouteSpawnRules::ShouldDespawn(

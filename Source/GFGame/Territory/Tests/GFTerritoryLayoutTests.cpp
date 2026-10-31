@@ -362,4 +362,90 @@ bool FGFTerritoryLayoutHazardsTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTerritoryOverlapFarmTest, "GFGame.Territory.Layout.OverlapFarm", GFTerritoryLayoutTests::Flags)
+bool FGFTerritoryOverlapFarmTest::RunTest(const FString&)
+{
+	using namespace GFTerritoryLayoutTests;
+
+	FGFTerritoryMap Map;
+	if (!TestTrue(TEXT("Shipped territory config"), Load(Map)))
+	{
+		return false;
+	}
+	const FGFTerritoryHazard* Forest = FindHazard(Map, DeadlyForest);
+	const FGFTerritoryFaction* RimeFaction = Map.FindFaction(Rime);
+	const FGFTerritoryFaction* VerdantFaction = Map.FindFaction(Verdant);
+	if (!TestNotNull(TEXT("DeadlyForest"), Forest) || !TestNotNull(TEXT("Rime"), RimeFaction) || !TestNotNull(TEXT("Verdant"), VerdantFaction))
+	{
+		return false;
+	}
+
+	const FVector ForestCenter = Forest->Center;
+	TestTrue(TEXT("One member each"), SetCounts(Map, 1, 1, 0));
+	const FGFTerritoryHazardHit WildForest = Map.GetHazardAt(ForestCenter);
+	TestTrue(TEXT("One member leaves the forest wild"), Map.GetZoneAt(ForestCenter).Zone == EGFTerritoryZone::Wild);
+	TestTrue(TEXT("That wild point is DeadlyForest"), WildForest.bHazard);
+	TestEqual(TEXT("DeadlyForest id"), WildForest.Id, DeadlyForest);
+	TestFalse(TEXT("A wild forest is not safe ground"), Map.IsInsideSafe(ForestCenter));
+
+	TestTrue(TEXT("Four members each"), SetCounts(Map, 4, 4, 0));
+	const float RimeRadius = Map.RadiusOf(*RimeFaction);
+	const float VerdantRadius = Map.RadiusOf(*VerdantFaction);
+	const float ForestToRime = FVector::Dist2D(ForestCenter, RimeFaction->Center);
+	const float ForestToVerdant = FVector::Dist2D(ForestCenter, VerdantFaction->Center);
+	TestTrue(TEXT("Forest centre is inside both discs"), ForestToRime <= RimeRadius && ForestToVerdant <= VerdantRadius);
+	TestTrue(TEXT("Verdant is closer to the forest centre"), ForestToVerdant + FGFTerritoryMap::OverlapTieSlopCm < ForestToRime);
+	TestEqual(TEXT("Forest centre owner is Verdant"), Map.OwnerAt(ForestCenter), Verdant);
+	TestFalse(TEXT("Owned forest is not a hazard"), Map.GetHazardAt(ForestCenter).bHazard);
+	TestTrue(TEXT("Owned forest is inside the safe union"), Map.IsInsideSafe(ForestCenter));
+	TestTrue(TEXT("Verdant may farm it"), Map.IsSafeFor(Verdant, ForestCenter));
+	TestFalse(TEXT("Rime may not"), Map.IsSafeFor(Rime, ForestCenter));
+
+	const FVector RimeSide(-1500.f, 0.f, 0.f);
+	const float SideToRime = FVector::Dist2D(RimeSide, RimeFaction->Center);
+	const float SideToVerdant = FVector::Dist2D(RimeSide, VerdantFaction->Center);
+	TestTrue(TEXT("(-1500, 0) is inside both discs"), SideToRime <= RimeRadius && SideToVerdant <= VerdantRadius);
+	TestEqual(TEXT("(-1500, 0) owner is Rime"), Map.OwnerAt(RimeSide), Rime);
+	TestTrue(TEXT("(-1500, 0) is safe ground"), Map.IsInsideSafe(RimeSide));
+	TestFalse(TEXT("(-1500, 0) is not a hazard"), Map.GetHazardAt(RimeSide).bHazard);
+
+	const FVector Tie(-2200.f, 0.f, 0.f);
+	const float TieToRime = FVector::Dist2D(Tie, RimeFaction->Center);
+	const float TieToVerdant = FVector::Dist2D(Tie, VerdantFaction->Center);
+	TestTrue(TEXT("Midpoint distances tie"), FMath::Abs(TieToRime - TieToVerdant) <= FGFTerritoryMap::OverlapTieSlopCm);
+	TestEqual(TEXT("Equal members: smaller name wins"), Map.OwnerAt(Tie), Rime);
+	TestTrue(TEXT("The tie is still safe ground"), Map.IsInsideSafe(Tie));
+	TestFalse(TEXT("The tie is not a hazard"), Map.GetHazardAt(Tie).bHazard);
+
+	const FGFFactionAccess Access;
+	TestTrue(TEXT("The owner has member rights"), FGFProtectionRules::HasVisitorRights(TEXT("Owner"), Verdant, false, Map.OwnerAt(ForestCenter), Access));
+	TestFalse(TEXT("The other faction is a visitor"), FGFProtectionRules::HasVisitorRights(TEXT("Visitor"), Rime, false, Map.OwnerAt(ForestCenter), Access));
+
+	for (float X = -4400.f; X <= 0.f; X += 400.f)
+	{
+		for (float Y = -1200.f; Y <= 1200.f; Y += 400.f)
+		{
+			const FVector Point(X, Y, 40.f);
+			const float ToRime = FVector::Dist2D(Point, RimeFaction->Center);
+			const float ToVerdant = FVector::Dist2D(Point, VerdantFaction->Center);
+			if (ToRime > RimeRadius || ToVerdant > VerdantRadius)
+			{
+				continue;
+			}
+			TestTrue(TEXT("Overlap is inside the safe union"), Map.IsInsideSafe(Point));
+			TestFalse(TEXT("Overlap is not a hazard"), Map.GetHazardAt(Point).bHazard);
+			if (FMath::Abs(ToRime - ToVerdant) > FGFTerritoryMap::OverlapTieSlopCm)
+			{
+				const FName Nearer = ToRime < ToVerdant ? Rime : Verdant;
+				TestEqual(TEXT("Nearer centre owns the overlap"), Map.OwnerAt(Point), Nearer);
+			}
+			else
+			{
+				TestEqual(TEXT("A distance tie keeps the smaller name"), Map.OwnerAt(Point), Rime);
+			}
+		}
+	}
+	return true;
+}
+
 #endif
