@@ -7,7 +7,7 @@
   set 150 cm beside the walk line; a lantern that would land inside the stop's board radius (400) is skipped.
 - SM_Rime_FrostPine x11 (radius 1500-3000, scale 0.8-1.3) and SM_Rime_IceRock x8 (radius 800-2500), seeded scatter.
 Kept clear: the spawn, the ferry stop, the lava bridge box (X 1400-6000, |Y| < 700), the DeadlyForest box, every hub
-gate and its sign, the walk lines and each other. All actors go in the "Rime" folder with tag GFRime; a re-run deletes
+gate and its sign, the Beat Hop jukebox (#213), the walk lines and each other. All actors go in the "Rime" folder with tag GFRime; a re-run deletes
 the previous Rime_ actors first, so the layout never doubles. Writes Saved/ArtImport/place_rime_report.json.
 """
 import json, math, os, random
@@ -40,6 +40,12 @@ for i in range(GATES):
     gates.append(g)
     signs.append((g[0] - math.sin(yaw) * SIGN_RIGHT, g[1] + math.cos(yaw) * SIGN_RIGHT))
 GATE_PATH_END = (0.0, RING_R - 400.0)      # spawn -> gates walk line ends short of the +Y gate
+# #213: SM_Furn_Jukebox rides on the Beat Hop portal (AGFMiniGameGate) at gate-local (0, -SIGN_RIGHT, 0), the sign's mirror:
+# world (-1626.34, 1202.08), yaw -45. Footprint 100 x 75, so keep 250 cm clear around it like a sign.
+BEAT_HOP_RING_INDEX = 3
+_jg = gates[BEAT_HOP_RING_INDEX]
+_jyaw = math.atan2(-_jg[1], -_jg[0])
+JUKEBOX = (_jg[0] + math.sin(_jyaw) * SIGN_RIGHT, _jg[1] - math.cos(_jyaw) * SIGN_RIGHT)
 
 def blocked(p, clear):
     in_spawn = SPAWN_BOX[0] - 250 - clear <= p[0] <= SPAWN_BOX[1] + 250 + clear and SPAWN_BOX[2] - 250 - clear <= p[1] <= SPAWN_BOX[3] + 250 + clear
@@ -51,6 +57,8 @@ def blocked(p, clear):
         return "forest"
     if any(d2(p, g) < 450 + clear for g in gates) or any(d2(p, s) < 250 + clear for s in signs):
         return "gate"
+    if d2(p, JUKEBOX) < 250 + clear:
+        return "jukebox"
     return None
 
 placed = []  # (label, mesh, (x, y), yaw, scale, radius)

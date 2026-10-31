@@ -166,6 +166,7 @@ void AGFHUD::DrawHUD()
 	}
 	PollToasts();
 	DrawBeatHopPops();
+	DrawBeatHopSession();
 	DrawCrosshair();
 	DrawCompass();
 	DrawStaminaArc();
@@ -810,4 +811,96 @@ void AGFHUD::DrawBeatHopPops()
 			}
 		}
 	}
+}
+
+void AGFHUD::DrawBeatHopSession()
+{
+	UWorld* World = GetWorld();
+	if (!World || !Canvas)
+	{
+		return;
+	}
+	const AGFBeatHopCourse* Course = nullptr;
+	for (TActorIterator<AGFBeatHopCourse> It(World); It; ++It)
+	{
+		if (It->IsSession())
+		{
+			Course = *It;
+			break;
+		}
+	}
+	if (!Course)
+	{
+		return;
+	}
+	UFont* Font = HudFont();
+	const float Scale = FMath::Clamp(Canvas->ClipY / 720.f, 1.f, 3.f);
+	const float LineH = 16.f * Scale;
+	auto Panel = [&](const TArray<TPair<FString, FLinearColor>>& Lines, float CenterX, float TopY)
+	{
+		float W = 0.f;
+		for (const TPair<FString, FLinearColor>& L : Lines)
+		{
+			float TW = 0.f, TH = 0.f;
+			GetTextSize(L.Key, TW, TH, Font, Scale);
+			W = FMath::Max(W, TW);
+		}
+		const float Pad = 10.f * Scale;
+		const float H = Lines.Num() * LineH + Pad * 2.f;
+		const float X = CenterX - W * 0.5f - Pad;
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.6f), X, TopY, W + Pad * 2.f, H);
+		float Y = TopY + Pad;
+		for (const TPair<FString, FLinearColor>& L : Lines)
+		{
+			DrawText(L.Key, L.Value, X + Pad, Y, Font, Scale, false);
+			Y += LineH;
+		}
+	};
+	const FLinearColor Gold(1.f, 0.82f, 0.25f);
+	const FLinearColor Soft(0.85f, 0.85f, 0.9f);
+	TArray<TPair<FString, FLinearColor>> Lines;
+
+	if (Course->IsShowingResults())
+	{
+		Lines.Emplace(TEXT("FINISH!"), Gold);
+		for (const FGFBeatHopResultRow& Row : Course->GetResults())
+		{
+			const FString Grade = StaticEnum<EGFBeatHopGrade>()->GetNameStringByValue(static_cast<int64>(Row.Grade));
+			Lines.Emplace(FString::Printf(TEXT("%s   Grade %s   Score %d   Best combo %d   (Perfect %d / Good %d / Miss %d)"),
+				*Row.PlayerName, *Grade, Row.Score, Row.BestCombo, Row.Perfects, Row.Goods, Row.Misses), FLinearColor::White);
+		}
+		if (Course->GetResults().Num() == 0)
+		{
+			Lines.Emplace(TEXT("(no hops landed)"), Soft);
+		}
+		Lines.Emplace(FString::Printf(TEXT("Back to the hub in %d"), FMath::CeilToInt(Course->GetResultsSecondsLeft())), Soft);
+		Panel(Lines, Canvas->ClipX * 0.5f, Canvas->ClipY * 0.28f);
+		return;
+	}
+
+	const FString Title = AGFBeatHopCourse::SongTitle(Course->IsRunning() ? Course->GetRunSongId() : Course->GetSelectedSong());
+	const FString Diff = AGFBeatHopCourse::DifficultyName(Course->IsRunning() ? Course->GetRunDifficulty() : Course->GetSelectedDifficulty());
+	if (Course->IsRunning())
+	{
+		FString MyKey;
+		if (const APlayerController* PC = GetOwningPlayerController())
+		{
+			if (const AGFPlayerState* PS = PC->GetPlayerState<AGFPlayerState>())
+			{
+				MyKey = PS->PlayerKey;
+			}
+		}
+		const FGFRhythmScore* Score = MyKey.IsEmpty() ? nullptr : Course->GetScore(MyKey);
+		Lines.Emplace(FString::Printf(TEXT("BEAT HOP  %s (%s)"), *Title, *Diff), Gold);
+		Lines.Emplace(FString::Printf(TEXT("Score %d   Combo %d   Time %.0f / %.0f s"), Score ? Score->Score : 0, Score ? Score->Combo : 0,
+			FMath::Max(0.0, Course->GetRunTime()), Course->GetRunEndTime()), FLinearColor::White);
+		Panel(Lines, Canvas->ClipX * 0.5f, 12.f * Scale);
+		return;
+	}
+
+	Lines.Emplace(TEXT("BEAT HOP"), Gold);
+	Lines.Emplace(FString::Printf(TEXT("Song: %s    Difficulty: %s"), *Title, *Diff), FLinearColor::White);
+	Lines.Emplace(TEXT("Step on a tile to pick a song or difficulty, then run through the gate ahead."), Soft);
+	Lines.Emplace(TEXT("You run on your own: Space to hop on the beat, A / D to switch lanes."), Soft);
+	Panel(Lines, Canvas->ClipX * 0.5f, 12.f * Scale);
 }

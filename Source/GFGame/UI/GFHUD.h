@@ -56,6 +56,8 @@ private:
 	void DrawHint();
 	/** Beat Hop: PERFECT / GOOD / MISS and COMBO xN over the brick, plus the lane sparkle (T_VFX_Judgement, T_VFX_Sparkle). */
 	void DrawBeatHopPops();
+	/** Beat Hop session (#212): the song pick, the run readout and the results panel. */
+	void DrawBeatHopSession();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);

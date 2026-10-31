@@ -1,5 +1,6 @@
 #include "GFHubGateDirector.h"
 
+#include "GFBeatHopCourse.h"
 #include "GFLog.h"
 #include "GFMiniGameCatalog.h"
 #include "GFMiniGameGate.h"
@@ -92,17 +93,17 @@ namespace
 		return Gate;
 	}
 
-	void EnsureClass(UWorld* World, const FString& ClassPath, const FVector& At, bool bMoveExisting)
+	AActor* EnsureClass(UWorld* World, const FString& ClassPath, const FVector& At, bool bMoveExisting)
 	{
 		if (ClassPath.IsEmpty())
 		{
-			return;
+			return nullptr;
 		}
 		UClass* Class = FSoftClassPath(ClassPath).TryLoadClass<AActor>();
 		if (!Class)
 		{
 			UE_LOG(LogGF, Warning, TEXT("Gate: class %s did not load"), *ClassPath);
-			return;
+			return nullptr;
 		}
 		for (TActorIterator<AActor> It(World, Class); It; ++It)
 		{
@@ -110,7 +111,7 @@ namespace
 			{
 				It->SetActorLocation(At);
 			}
-			return;
+			return *It;
 		}
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -119,6 +120,7 @@ namespace
 		{
 			Spawned->SetActorLocation(At);
 		}
+		return Spawned;
 	}
 }
 
@@ -150,7 +152,12 @@ void AGFHubGateDirector::Place(const FString& WorldPackage, const FVector& InRim
 		else if (Entry.HasMap() && FGFMiniGameCatalog::WorldIs(WorldPackage, Entry.Map))
 		{
 			EnsureGate(World, Entry, EGFMiniGameGateRole::Marker, FVector(-500.f, 0.f, 0.f), FRotator::ZeroRotator, InRimeCenter);
-			EnsureClass(World, Entry.PlacedClass, FVector::ZeroVector, false);
+			AActor* Placed = EnsureClass(World, Entry.PlacedClass, FVector::ZeroVector, false);
+			// Beat Hop (#212): the course runs as a session on its own map: lobby, start gate, results, back to the hub.
+			if (AGFBeatHopCourse* Course = Cast<AGFBeatHopCourse>(Placed))
+			{
+				Course->BeginSession();
+			}
 		}
 	}
 }

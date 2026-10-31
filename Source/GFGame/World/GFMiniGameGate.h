@@ -72,6 +72,9 @@ public:
 	UStaticMeshComponent* GetPadFloor() const { return PadFloor; }
 	/** Pictogram sign beside a hub portal. Hidden, with no mesh and no collision, when the mode has no sign or this is a marker. */
 	UStaticMeshComponent* GetModeSign() const { return ModeSign; }
+	/** Beat Hop hub portal only (#213): the jukebox at gate-local (0, -SignRightCm, 0), mirroring the sign. Hidden elsewhere. */
+	UStaticMeshComponent* GetJukebox() const { return Jukebox; }
+	static constexpr const TCHAR* JukeboxPath = TEXT("/Game/Art/Furniture/SM_Furn_Jukebox.SM_Furn_Jukebox");
 
 private:
 	UFUNCTION()
@@ -94,6 +97,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UStaticMeshComponent> ModeSign;
+
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UStaticMeshComponent> Jukebox;
 
 	UPROPERTY(VisibleAnywhere)
 	FString Label;

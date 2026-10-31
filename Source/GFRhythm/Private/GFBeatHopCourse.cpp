@@ -9,6 +9,12 @@
 #include "GFSimpleAnimComponent.h"
 #include "Animation/AnimSequenceBase.h"
 #include "Components/BoxComponent.h"
+#include "Components/TextRenderComponent.h"
+#include "GFMiniGameCatalog.h"
+#include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
+#include "Kismet/GameplayStatics.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -34,6 +40,7 @@ namespace GFBeatHopCourse
 	// Art (batch beat_hop_v1). Bricks and kit pieces are bottom-centred: their top is Size.Z above the origin.
 	static const TCHAR* ArtRoot = TEXT("/Game/Art/BeatHop/");
 	static const FName EmissiveStrengthParam = TEXT("EmissiveStrength");
+	static const FName ScreenFrameParam = TEXT("Frame");
 	static const FName EmissiveColorParam = TEXT("EmissiveColor");
 	static constexpr double ArtBrickHeightCm = 31.25;
 	static constexpr double ArtBrickLengthCm = 100.0;
@@ -68,6 +75,19 @@ namespace GFBeatHopCourse
 	static constexpr float StrafeSpeedCms = 120.f;
 	static constexpr float FallBelowTopCm = 60.f;
 	static constexpr float MoveSpeedCms = 20.f;
+
+	// Session lobby (#212), course-relative. The lobby floor runs from LobbyFromX to LobbyEndX, where the start pad
+	// takes over; it never moves, so picking a song (which rebuilds the track kit) never pulls the floor away.
+	static constexpr double LobbyFromX = -2200.0;
+	static constexpr double LobbyEndX = -200.0;
+	static constexpr double LobbySpawnX = -2050.0;
+	static constexpr double SongRowX = -1700.0;
+	static constexpr double DifficultyRowX = -1250.0;
+	static constexpr double TileSpacingY = 160.0;
+	static constexpr double LostMarginCm = 1500.0;
+	static const FLinearColor Sunflower(0.913f, 0.578f, 0.054f);
+	static const FLinearColor Lavender(0.456f, 0.266f, 0.745f);
+	static const FLinearColor TileOff(0.03f, 0.03f, 0.035f);
 
 	static FString ArtPath(const TCHAR* Folder, const FString& Name)
 	{
@@ -165,6 +185,10 @@ AGFBeatHopCourse::AGFBeatHopCourse()
 void AGFBeatHopCourse::BeginPlay()
 {
 	Super::BeginPlay();
+	if (bSession && LobbyComponents.Num() == 0)
+	{
+		BuildLobby();
+	}
 	if (KitComponents.Num() == 0)
 	{
 		BuildTrackKit(); // the start pad and gate stand ready before the first run
@@ -180,6 +204,11 @@ void AGFBeatHopCourse::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(AGFBeatHopCourse, bRunCozy);
 	DOREPLIFETIME(AGFBeatHopCourse, RunStartServerTime);
 	DOREPLIFETIME(AGFBeatHopCourse, bRunning);
+	DOREPLIFETIME(AGFBeatHopCourse, bSession);
+	DOREPLIFETIME(AGFBeatHopCourse, SelectedSong);
+	DOREPLIFETIME(AGFBeatHopCourse, SelectedDifficulty);
+	DOREPLIFETIME(AGFBeatHopCourse, Results);
+	DOREPLIFETIME(AGFBeatHopCourse, ResultsEndServerTime);
 }
 
 bool AGFBeatHopCourse::StartRun(FName SongId, EGFBeatDifficulty Difficulty, EGFBeatHopMode Mode, bool bCozy, FString& OutReason)
@@ -390,6 +419,10 @@ FLinearColor AGFBeatHopCourse::LaneColor(int32 Lane) const
 
 double AGFBeatHopCourse::GetServerWorldTime() const
 {
+	if (DebugServerTime >= 0.0)
+	{
+		return DebugServerTime;
+	}
 	const UWorld* World = GetWorld();
 	if (!World)
 	{
@@ -870,9 +903,9 @@ void AGFBeatHopCourse::UpdateRun()
 			FinishRun();
 		}
 	}
-	else if (!HasAuthority())
+	else if (!HasAuthority() && bRunning)
 	{
-		// Clients only drive visuals; misses show once the window passes.
+		// Clients only drive visuals; misses show once the window passes (a lobby preview never crumbles).
 		const double W = WindowSeconds();
 		for (FGFBeatHopBrick& B : Bricks)
 		{
@@ -922,6 +955,10 @@ void AGFBeatHopCourse::FinishRun()
 		}
 	}
 	RetryPendingGrants();
+	if (bSession)
+	{
+		OnSessionRunFinished();
+	}
 }
 
 void AGFBeatHopCourse::EndRun(const FString& Reason)
@@ -940,9 +977,14 @@ void AGFBeatHopCourse::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	UpdateRun();
+	if (bSession && HasAuthority())
+	{
+		UpdateSession();
+	}
 	const double WorldNow = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	TickDebris(DeltaSeconds);
 	UpdatePulse(WorldNow);
+	UpdateScreen(WorldNow);
 	DriveAnims(WorldNow);
 	Pops.RemoveAll([WorldNow](const FGFBeatHopPop& P) { return WorldNow - P.ShownAt > FGFBeatHopVfx::PopSeconds + 0.5; });
 	if (HasAuthority() && PendingGrants.Num() > 0)
@@ -1126,6 +1168,10 @@ void AGFBeatHopCourse::ClearTrackKit()
 	StartGate = nullptr;
 	FinishGate = nullptr;
 	CatchTiles = nullptr;
+	StartTrigger = nullptr;
+	FinishTrigger = nullptr;
+	ScreenMaterial = nullptr;
+	ShownScreenFrame = -1;
 	ShownPulse = -1.f;
 }
 
@@ -1245,7 +1291,9 @@ void AGFBeatHopCourse::BuildTrackKit()
 		}
 		AddKitInstances(*BrickPath(TEXT("SM_Block_Beat_Neutral")), Tiles, true);
 	};
-	Pad(FirstX - 200.0 - StartPadCm, FirstX - 200.0);
+	// Session: the start pad runs back to the lobby floor (which never moves), so there's no gap to fall through.
+	const double PadFromX = bSession ? FMath::Min(LobbyEndX, FirstX - 200.0) : FirstX - 200.0 - StartPadCm;
+	Pad(PadFromX, FirstX - 200.0);
 	// The gate's -X face (countdown screen, coral lamps) faces the players on the pad.
 	StartGate = AddKitMesh(*TrackPath(TEXT("SM_Track_StartGate")), FTransform(FVector(FirstX - 450.0, 0.0, 0.0)), true);
 	if (StartGate)
@@ -1255,10 +1303,19 @@ void AGFBeatHopCourse::BuildTrackKit()
 		{
 			PulseMaterials.Last()->SetVectorParameterValue(EmissiveColorParam, Coral);
 		}
-		// The Screen slot has no art material yet: keep it a dark panel instead of the engine grid.
+		// Slot 1 "Screen": the countdown material (MI_Track_StartGate_Screen, beat_hop_v2) gets a MID whose scalar Frame
+		// picks the cell; its EmissiveStrength stays at the MI's 1.5 (#204). Without that material, a dark panel.
 		if (StartGate->GetNumMaterials() > 1)
 		{
-			if (UMaterialInterface* Basic = LoadObject<UMaterialInterface>(nullptr, MaterialPath))
+			UMaterialInterface* ScreenBase = StartGate->GetMaterial(1);
+			float FrameDefault = 0.f;
+			if (ScreenBase && ScreenBase->GetScalarParameterValue(FMaterialParameterInfo(ScreenFrameParam), FrameDefault))
+			{
+				ScreenMaterial = UMaterialInstanceDynamic::Create(ScreenBase, this);
+				StartGate->SetMaterial(1, ScreenMaterial);
+				ShownScreenFrame = -1;
+			}
+			else if (UMaterialInterface* Basic = LoadObject<UMaterialInterface>(nullptr, MaterialPath))
 			{
 				UMaterialInstanceDynamic* Screen = UMaterialInstanceDynamic::Create(Basic, this);
 				Screen->SetVectorParameterValue(ColorParam, FLinearColor(0.02f, 0.02f, 0.03f));
@@ -1275,7 +1332,7 @@ void AGFBeatHopCourse::BuildTrackKit()
 		TrackPulse(FinishGate);
 	}
 
-	const double KitFrom = FirstX - 200.0 - StartPadCm - 400.0;
+	const double KitFrom = (bSession ? FMath::Min(LobbyFromX, PadFromX) : PadFromX) - 400.0;
 	const double KitTo = (bAny || bLive ? LastX : FirstX) + 200.0 + StartPadCm + 400.0;
 
 	// Catch floor: 400 cm tiles under the lanes; collision top 12.5 cm above the tile origin.
@@ -1403,6 +1460,32 @@ void AGFBeatHopCourse::BuildTrackKit()
 			}
 			CheckpointSpots.Add(Spot);
 			UE_LOG(LogGF, Verbose, TEXT("Beat Hop: checkpoint %d at beat %d (X %.0f)"), Index, Beat, X);
+		}
+	}
+	// Session triggers (#212): walking through the start gate starts the run; crossing the finish gate ends it.
+	if (bSession)
+	{
+		auto Trigger = [&](double X, const FVector& Extent) -> UBoxComponent*
+		{
+			UBoxComponent* Box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
+			Box->SetupAttachment(Root);
+			Box->SetBoxExtent(Extent);
+			Box->SetRelativeLocation(FVector(X, 0.0, Extent.Z - 50.0));
+			Box->SetCollisionProfileName(TEXT("Trigger"));
+			Box->SetGenerateOverlapEvents(true);
+			Box->SetCanEverAffectNavigation(false);
+			return Box;
+		};
+		StartTrigger = Trigger(FirstX - 450.0 + 40.0, FVector(40.0, HalfWidth + 60.0, 250.0));
+		StartTrigger->OnComponentBeginOverlap.AddDynamic(this, &AGFBeatHopCourse::OnStartTriggerOverlap);
+		StartTrigger->RegisterComponent();
+		KitComponents.Add(StartTrigger);
+		if (!bLive && bAny)
+		{
+			FinishTrigger = Trigger(LastX + 400.0, FVector(80.0, HalfWidth + 300.0, 600.0));
+			FinishTrigger->OnComponentBeginOverlap.AddDynamic(this, &AGFBeatHopCourse::OnFinishTriggerOverlap);
+			FinishTrigger->RegisterComponent();
+			KitComponents.Add(FinishTrigger);
 		}
 	}
 	UE_LOG(LogGF, Verbose, TEXT("Beat Hop: track kit %d pieces, %d checkpoints"), KitComponents.Num(), CheckpointTriggers.Num());
@@ -1564,8 +1647,7 @@ void AGFBeatHopCourse::DriveAnims(double Now)
 			{
 				if (HasAuthority())
 				{
-					Char->TeleportTo(GetRespawnPoint(Char), Char->GetActorRotation(), false, true);
-					Move->StopMovementImmediately();
+					RespawnCharacter(Char);
 				}
 				H->bCaught = false;
 				H->Key = NAME_None;
@@ -1671,5 +1753,791 @@ void AGFBeatHopCourse::DriveAnims(double Now)
 		{
 			It.RemoveCurrent();
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Session (#212): lobby with song and difficulty tiles, start trigger, run movement, finish, results, back to the hub.
+
+FString AGFBeatHopCourse::SongTitle(FName SongId)
+{
+	for (const EGFBeatDifficulty D : { EGFBeatDifficulty::Easy, EGFBeatDifficulty::Normal, EGFBeatDifficulty::Hard })
+	{
+		if (const FGFBeatmap* Map = FGFBuiltInSongs::Find(SongId, D))
+		{
+			if (!Map->Title.IsEmpty())
+			{
+				return Map->Title;
+			}
+		}
+	}
+	return SongId.ToString();
+}
+
+FString AGFBeatHopCourse::DifficultyName(EGFBeatDifficulty Difficulty)
+{
+	switch (Difficulty)
+	{
+	case EGFBeatDifficulty::Easy: return TEXT("Easy");
+	case EGFBeatDifficulty::Normal: return TEXT("Normal");
+	case EGFBeatDifficulty::Hard: return TEXT("Hard");
+	default: return TEXT("?");
+	}
+}
+
+void AGFBeatHopCourse::BeginSession()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	if (!bSession)
+	{
+		bSession = true;
+		SetReplicatingMovement(true);
+		// Up in the sky: clear of the voxel terrain, the map's own spawn and the gate sign on the ground.
+		SetActorLocationAndRotation(FVector(0.0, 0.0, SessionHeightCm), FRotator::ZeroRotator);
+		const TArray<FName> Ids = FGFBuiltInSongs::SongIds();
+		if ((SelectedSong.IsNone() || !Ids.Contains(SelectedSong)) && Ids.Num() > 0)
+		{
+			SelectedSong = Ids[0];
+		}
+		SelectedDifficulty = EGFBeatDifficulty::Easy;
+		BuildLobby();
+		RebuildPreview();
+		UE_LOG(LogGF, Log, TEXT("Beat Hop: session on, %s (%s) ready at the start gate"), *SongTitle(SelectedSong), *DifficultyName(SelectedDifficulty));
+	}
+	ForEachPlayerPawn([this](APawn* Pawn)
+	{
+		if (IsLostFromCourse(Pawn))
+		{
+			PlaceInLobby(Pawn);
+		}
+	});
+}
+
+void AGFBeatHopCourse::OnRep_Session()
+{
+	if (!bSession)
+	{
+		return;
+	}
+	if (LobbyComponents.Num() == 0)
+	{
+		BuildLobby();
+		if (RunSongId.IsNone())
+		{
+			BuildTrackKit(); // the start pad reaches back to the lobby once the session is on
+		}
+		else
+		{
+			OnRep_RunSpec();
+		}
+	}
+	UpdateLobbyLook();
+}
+
+UTextRenderComponent* AGFBeatHopCourse::AddLobbyText(const FString& Text, const FVector& Relative, float Size, const FColor& Color)
+{
+	UTextRenderComponent* T = NewObject<UTextRenderComponent>(this, NAME_None, RF_Transient);
+	T->SetupAttachment(Root);
+	T->SetText(FText::FromString(Text));
+	T->SetWorldSize(Size);
+	T->SetHorizontalAlignment(EHTA_Center);
+	T->SetVerticalAlignment(EVRTA_TextCenter);
+	T->SetTextRenderColor(Color);
+	// Text faces +X by default; the lobby looks toward +X (the gate), so turn it round to face the players.
+	T->SetRelativeLocationAndRotation(Relative, FRotator(0.0, 180.0, 0.0));
+	T->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	T->SetCanEverAffectNavigation(false);
+	T->RegisterComponent();
+	LobbyComponents.Add(T);
+	return T;
+}
+
+void AGFBeatHopCourse::BuildLobby()
+{
+	using namespace GFBeatHopCourse;
+	if (LobbyComponents.Num() > 0)
+	{
+		return;
+	}
+	SongTileIds = FGFBuiltInSongs::SongIds();
+	SongTiles.Reset();
+	DifficultyTiles.Reset();
+	SongTileMaterials.Reset();
+	DifficultyTileMaterials.Reset();
+
+	// Floor: neutral bricks five lanes wide (wide enough for Hard), or one engine-cube slab if the art is missing.
+	{
+		TArray<FTransform> Tiles;
+		const FVector BrickScale(1.0, 1.0, BrickSizeCm.Z / ArtBrickHeightCm);
+		for (double X = LobbyFromX + 50.0; X < LobbyEndX; X += ArtBrickLengthCm)
+		{
+			for (int32 C = -2; C <= 2; ++C)
+			{
+				Tiles.Add(FTransform(FRotator::ZeroRotator, FVector(X, C * 100.0, -BrickSizeCm.Z), BrickScale));
+			}
+		}
+		if (UInstancedStaticMeshComponent* Floor = AddKitInstances(*ArtPath(TEXT("Bricks"), TEXT("SM_Block_Beat_Neutral")), Tiles, true))
+		{
+			KitComponents.Remove(Floor); // the lobby outlives track-kit rebuilds
+			LobbyComponents.Add(Floor);
+		}
+		else if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, CubePath))
+		{
+			UStaticMeshComponent* Slab = NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transient);
+			Slab->SetupAttachment(Root);
+			Slab->SetStaticMesh(Cube);
+			Slab->SetRelativeLocation(FVector((LobbyFromX + LobbyEndX) * 0.5, 0.0, -50.0));
+			Slab->SetRelativeScale3D(FVector((LobbyEndX - LobbyFromX) / 100.0, 5.0, 1.0));
+			Slab->SetCollisionProfileName(TEXT("BlockAll"));
+			Slab->SetCanEverAffectNavigation(false);
+			Slab->RegisterComponent();
+			LobbyComponents.Add(Slab);
+		}
+	}
+
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, CubePath);
+	UMaterialInterface* Basic = LoadObject<UMaterialInterface>(nullptr, MaterialPath);
+	auto Tile = [&](double X, double Y, const FString& Label, TArray<TObjectPtr<UBoxComponent>>& Boxes, TArray<TObjectPtr<UMaterialInstanceDynamic>>& Mids)
+	{
+		UStaticMeshComponent* Plate = NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transient);
+		Plate->SetupAttachment(Root);
+		if (Cube)
+		{
+			Plate->SetStaticMesh(Cube);
+		}
+		Plate->SetRelativeLocation(FVector(X, Y, 3.0)); // engine cube: centred, 100 cm; a 6 cm plate on the floor
+		Plate->SetRelativeScale3D(FVector(1.2, 1.2, 0.06));
+		Plate->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Plate->SetCanEverAffectNavigation(false);
+		UMaterialInstanceDynamic* Mid = Basic ? UMaterialInstanceDynamic::Create(Basic, this) : nullptr;
+		if (Mid)
+		{
+			Plate->SetMaterial(0, Mid);
+		}
+		Plate->RegisterComponent();
+		LobbyComponents.Add(Plate);
+		Mids.Add(Mid);
+
+		UBoxComponent* Box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
+		Box->SetupAttachment(Root);
+		Box->SetBoxExtent(FVector(60.0, 60.0, 100.0));
+		Box->SetRelativeLocation(FVector(X, Y, 100.0));
+		Box->SetCollisionProfileName(TEXT("Trigger"));
+		Box->SetGenerateOverlapEvents(true);
+		Box->SetCanEverAffectNavigation(false);
+		Box->OnComponentBeginOverlap.AddDynamic(this, &AGFBeatHopCourse::OnLobbyTileOverlap);
+		Box->RegisterComponent();
+		LobbyComponents.Add(Box);
+		Boxes.Add(Box);
+		AddLobbyText(Label, FVector(X, Y, 175.0), 22.f, FColor::White);
+	};
+
+	const int32 NumSongs = SongTileIds.Num();
+	for (int32 i = 0; i < NumSongs; ++i)
+	{
+		Tile(SongRowX, (i - (NumSongs - 1) * 0.5) * TileSpacingY, SongTitle(SongTileIds[i]), SongTiles, SongTileMaterials);
+	}
+	const EGFBeatDifficulty Diffs[] = { EGFBeatDifficulty::Easy, EGFBeatDifficulty::Normal, EGFBeatDifficulty::Hard };
+	for (int32 i = 0; i < static_cast<int32>(UE_ARRAY_COUNT(Diffs)); ++i)
+	{
+		Tile(DifficultyRowX, (i - 1) * TileSpacingY, DifficultyName(Diffs[i]), DifficultyTiles, DifficultyTileMaterials);
+	}
+	AddLobbyText(TEXT("SONG"), FVector(SongRowX, 0.0, 250.0), 34.f, Sunflower.ToFColor(true));
+	AddLobbyText(TEXT("DIFFICULTY"), FVector(DifficultyRowX, 0.0, 250.0), 34.f, Mint.ToFColor(true));
+	AddLobbyText(TEXT("BEAT HOP"), FVector(-600.0, 0.0, 430.0), 80.f, Lavender.ToFColor(true));
+	StatusText = AddLobbyText(TEXT(""), FVector(-600.0, 0.0, 350.0), 30.f, FColor::White);
+	UpdateLobbyLook();
+}
+
+void AGFBeatHopCourse::UpdateLobbyLook()
+{
+	using namespace GFBeatHopCourse;
+	for (int32 i = 0; i < SongTileMaterials.Num(); ++i)
+	{
+		if (UMaterialInstanceDynamic* Mid = SongTileMaterials[i])
+		{
+			const bool bOn = SongTileIds.IsValidIndex(i) && SongTileIds[i] == SelectedSong;
+			Mid->SetVectorParameterValue(ColorParam, bOn ? LaneColor(i + 1) : TileOff);
+		}
+	}
+	const FLinearColor DiffColors[] = { Mint, Sunflower, Coral };
+	for (int32 i = 0; i < DifficultyTileMaterials.Num(); ++i)
+	{
+		if (UMaterialInstanceDynamic* Mid = DifficultyTileMaterials[i])
+		{
+			const bool bOn = static_cast<int32>(SelectedDifficulty) == i;
+			Mid->SetVectorParameterValue(ColorParam, bOn ? DiffColors[i % 3] : TileOff);
+		}
+	}
+	if (StatusText)
+	{
+		FString Line;
+		if (IsShowingResults())
+		{
+			Line = TEXT("Finished! Back to the hub in a moment");
+		}
+		else if (bRunning)
+		{
+			Line = FString::Printf(TEXT("%s (%s) is on: hop!"), *SongTitle(RunSongId), *DifficultyName(RunDifficulty));
+		}
+		else
+		{
+			Line = FString::Printf(TEXT("%s (%s): run through the gate"), *SongTitle(SelectedSong), *DifficultyName(SelectedDifficulty));
+		}
+		StatusText->SetText(FText::FromString(Line));
+	}
+}
+
+void AGFBeatHopCourse::RebuildPreview()
+{
+	if (bRunning)
+	{
+		return;
+	}
+	const FGFBeatmap* Map = FGFBuiltInSongs::Find(SelectedSong, SelectedDifficulty);
+	if (!Map)
+	{
+		BuildTrackKit();
+		UpdateLobbyLook();
+		return;
+	}
+	// The selected song's course stands ready (bricks idle), so the gate is where the run will start.
+	RunMode = EGFBeatHopMode::Songs;
+	RunSongId = SelectedSong;
+	RunDifficulty = SelectedDifficulty;
+	Windows = FGFJudgeWindows::For(EGFBeatHopMode::Songs, SelectedDifficulty);
+	BuildFromBeatmap(*Map);
+	UpdateLobbyLook();
+}
+
+bool AGFBeatHopCourse::SelectSong(FName SongId)
+{
+	if (!HasAuthority() || bRunning || IsShowingResults() || !FGFBuiltInSongs::SongIds().Contains(SongId))
+	{
+		return false;
+	}
+	if (SongId != SelectedSong || RunSongId != SongId)
+	{
+		SelectedSong = SongId;
+		if (!FGFBuiltInSongs::Find(SelectedSong, SelectedDifficulty))
+		{
+			SelectedDifficulty = EGFBeatDifficulty::Easy;
+		}
+		RebuildPreview();
+		UE_LOG(LogGF, Log, TEXT("Beat Hop: song %s"), *SongTitle(SelectedSong));
+	}
+	return true;
+}
+
+bool AGFBeatHopCourse::SelectDifficulty(EGFBeatDifficulty Difficulty)
+{
+	if (!HasAuthority() || bRunning || IsShowingResults() || !FGFBuiltInSongs::Find(SelectedSong, Difficulty))
+	{
+		return false;
+	}
+	if (Difficulty != SelectedDifficulty || RunDifficulty != Difficulty)
+	{
+		SelectedDifficulty = Difficulty;
+		RebuildPreview();
+		UE_LOG(LogGF, Log, TEXT("Beat Hop: difficulty %s"), *DifficultyName(SelectedDifficulty));
+	}
+	return true;
+}
+
+void AGFBeatHopCourse::OnLobbyTileOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+	const APawn* Pawn = Cast<APawn>(OtherActor);
+	if (!HasAuthority() || !Pawn || !Pawn->IsPlayerControlled())
+	{
+		return;
+	}
+	for (int32 i = 0; i < SongTiles.Num(); ++i)
+	{
+		if (SongTiles[i] == OverlappedComponent && SongTileIds.IsValidIndex(i))
+		{
+			SelectSong(SongTileIds[i]);
+			return;
+		}
+	}
+	for (int32 i = 0; i < DifficultyTiles.Num(); ++i)
+	{
+		if (DifficultyTiles[i] == OverlappedComponent)
+		{
+			SelectDifficulty(static_cast<EGFBeatDifficulty>(i));
+			return;
+		}
+	}
+}
+
+void AGFBeatHopCourse::OnStartTriggerOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+	APawn* Pawn = Cast<APawn>(OtherActor);
+	if (HasAuthority() && Pawn && Pawn->IsPlayerControlled() && !bRunning && !IsShowingResults())
+	{
+		PendingStart = Pawn; // started next tick: starting rebuilds the kit, this trigger included
+	}
+}
+
+void AGFBeatHopCourse::OnFinishTriggerOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+	APawn* Pawn = Cast<APawn>(OtherActor);
+	if (HasAuthority() && Pawn && Pawn->IsPlayerControlled() && bRunning)
+	{
+		PendingFinish = Pawn;
+	}
+}
+
+double AGFBeatHopCourse::RunTimeAtLocalX(double LocalX) const
+{
+	const double Speed = FMath::Max(1.0, static_cast<double>(Beatmap.RefSpeedCms));
+	return LocalX / Speed;
+}
+
+bool AGFBeatHopCourse::TryStartFromGate(APawn* Pawn, FString& OutReason)
+{
+	OutReason.Reset();
+	PendingStart.Reset();
+	if (!HasAuthority())
+	{
+		OutReason = TEXT("Only the host can start a run.");
+		return false;
+	}
+	if (bRunning)
+	{
+		OutReason = TEXT("A run is already on.");
+		return false;
+	}
+	if (IsShowingResults() || bTravelled)
+	{
+		OutReason = TEXT("The results are up: back to the hub in a moment.");
+		return false;
+	}
+	FName Song = SelectedSong;
+	if (Song.IsNone())
+	{
+		const TArray<FName> Ids = FGFBuiltInSongs::SongIds();
+		Song = Ids.Num() > 0 ? Ids[0] : NAME_None;
+	}
+	if (!StartRun(Song, SelectedDifficulty, EGFBeatHopMode::Songs, false, OutReason))
+	{
+		UE_LOG(LogGF, Warning, TEXT("Beat Hop: the gate could not start %s: %s"), *Song.ToString(), *OutReason);
+		return false;
+	}
+
+	// Bricks sit at (run time x speed) along X, so starting the clock at the crossing point puts the runner on time.
+	FVector StartLocal = FVector::ZeroVector;
+	if (Pawn)
+	{
+		StartLocal = GetActorTransform().InverseTransformPosition(Pawn->GetActorLocation());
+		RunStartServerTime -= RunTimeAtLocalX(StartLocal.X);
+	}
+
+	// Everyone in the session gets a result line, even if they never land on a brick.
+	if (const AGameStateBase* GS = GetWorld() ? GetWorld()->GetGameState() : nullptr)
+	{
+		for (const APlayerState* PS : GS->PlayerArray)
+		{
+			const AGFPlayerState* GFPS = Cast<AGFPlayerState>(PS);
+			if (GFPS && !GFPS->PlayerKey.IsEmpty())
+			{
+				RunFor(GFPS->PlayerKey);
+			}
+		}
+	}
+
+	// Co-op: everyone else starts alongside the one who walked through, one lane over each.
+	int32 Slot = 0;
+	ForEachPlayerPawn([&](APawn* Other)
+	{
+		if (Other != Pawn && Pawn)
+		{
+			++Slot;
+			const double Y = ((Slot % 2) ? 1.0 : -1.0) * ((Slot + 1) / 2) * LaneWidthCm;
+			Other->TeleportTo(GetActorTransform().TransformPosition(FVector(StartLocal.X, Y, StartLocal.Z)), GetActorRotation(), false, false);
+		}
+		if (ACharacter* Char = Cast<ACharacter>(Other))
+		{
+			ApplyRunMovement(Char);
+		}
+	});
+	if (ACharacter* Char = Cast<ACharacter>(Pawn))
+	{
+		ApplyRunMovement(Char);
+	}
+	HoldUntil.Reset();
+	UpdateLobbyLook();
+	UE_LOG(LogGF, Log, TEXT("Beat Hop: run started at the gate: %s (%s), clock %.2f s, song ends at %.2f s"),
+		*SongTitle(RunSongId), *DifficultyName(RunDifficulty), GetRunTime(), EndTime);
+	return true;
+}
+
+bool AGFBeatHopCourse::ReachFinish(APawn* Pawn)
+{
+	PendingFinish.Reset();
+	if (!HasAuthority() || !bRunning)
+	{
+		return false;
+	}
+	UE_LOG(LogGF, Log, TEXT("Beat Hop: %s crossed the finish at %.2f s"), Pawn ? *Pawn->GetName() : TEXT("someone"), GetRunTime());
+	FinishRun();
+	return true;
+}
+
+void AGFBeatHopCourse::ApplyRunMovement(ACharacter* Character)
+{
+	UCharacterMovementComponent* Move = Character ? Character->GetCharacterMovement() : nullptr;
+	if (!Move)
+	{
+		return;
+	}
+	if (!SavedMoves.Contains(Character))
+	{
+		FSavedRunMove Saved;
+		Saved.MaxWalkSpeed = Move->MaxWalkSpeed;
+		Saved.GravityScale = Move->GravityScale;
+		Saved.AirControl = Move->AirControl;
+		SavedMoves.Add(Character, Saved);
+	}
+	// Run at the chart's speed, and scale gravity so one ordinary hop lasts one beat: hop on the beat, land on the next brick.
+	Move->MaxWalkSpeed = FMath::Max(100.f, Beatmap.RefSpeedCms);
+	const double Period = PeriodSeconds();
+	const float Gravity = FMath::Abs(GetWorld() ? GetWorld()->GetGravityZ() : -GFBeatHopCourse::Gravity);
+	if (Period > 0.0 && Gravity > 0.f && Move->JumpZVelocity > 0.f)
+	{
+		Move->GravityScale = FMath::Clamp(2.f * Move->JumpZVelocity / (Gravity * static_cast<float>(Period)), 0.5f, 4.f);
+	}
+	Move->AirControl = 1.f;
+}
+
+bool AGFBeatHopCourse::HasRunMovement(const ACharacter* Character) const
+{
+	return SavedMoves.Contains(const_cast<ACharacter*>(Character));
+}
+
+void AGFBeatHopCourse::RestoreRunMovement()
+{
+	for (const TPair<TWeakObjectPtr<ACharacter>, FSavedRunMove>& Pair : SavedMoves)
+	{
+		ACharacter* Char = Pair.Key.Get();
+		UCharacterMovementComponent* Move = Char ? Char->GetCharacterMovement() : nullptr;
+		if (Move)
+		{
+			Move->MaxWalkSpeed = Pair.Value.MaxWalkSpeed;
+			Move->GravityScale = Pair.Value.GravityScale;
+			Move->AirControl = Pair.Value.AirControl;
+		}
+	}
+	SavedMoves.Reset();
+}
+
+void AGFBeatHopCourse::RespawnCharacter(ACharacter* Character)
+{
+	if (!Character)
+	{
+		return;
+	}
+	UCharacterMovementComponent* Move = Character->GetCharacterMovement();
+	if (bSession && !bRunning)
+	{
+		PlaceInLobby(Character);
+		return;
+	}
+	if (bSession && bRunning)
+	{
+		// Back onto the next brick the song hasn't reached yet; stand there until it does, then carry on in time.
+		const double Now = GetRunTime();
+		const double Lead = PeriodSeconds();
+		for (const FGFBeatHopBrick& B : Bricks)
+		{
+			if (B.Mesh && !B.bCrumbled && B.Time >= Now + Lead)
+			{
+				const FVector Top = GetActorTransform().TransformPosition(B.Mesh->GetRelativeLocation() + FVector(0.0, 0.0, B.TopOffsetZ + 100.0));
+				Character->TeleportTo(Top, FRotator(0.0, GetActorRotation().Yaw, 0.0), false, true);
+				if (Move)
+				{
+					Move->StopMovementImmediately();
+				}
+				HoldUntil.Add(Character, B.Time);
+				return;
+			}
+		}
+		// Nothing left to hop on: straight to the finish pad.
+		Character->TeleportTo(GetActorTransform().TransformPosition(FVector(KitEndX + 250.0, 0.0, 120.0)), FRotator(0.0, GetActorRotation().Yaw, 0.0), false, true);
+		if (Move)
+		{
+			Move->StopMovementImmediately();
+		}
+		return;
+	}
+	Character->TeleportTo(GetRespawnPoint(Character), Character->GetActorRotation(), false, true);
+	if (Move)
+	{
+		Move->StopMovementImmediately();
+	}
+}
+
+FVector AGFBeatHopCourse::GetLobbySpawn() const
+{
+	return GetActorTransform().TransformPosition(FVector(GFBeatHopCourse::LobbySpawnX, 0.0, 110.0));
+}
+
+bool AGFBeatHopCourse::IsLostFromCourse(const APawn* Pawn) const
+{
+	using namespace GFBeatHopCourse;
+	if (!Pawn)
+	{
+		return false;
+	}
+	const FVector L = GetActorTransform().InverseTransformPosition(Pawn->GetActorLocation());
+	const double HalfWidth = FMath::Max(5, NumLanes) * LaneWidthCm * 0.5;
+	const double FromX = (bSession ? LobbyFromX : KitStartX - 200.0 - StartPadCm) - LostMarginCm;
+	const double ToX = KitEndX + 200.0 + StartPadCm + LostMarginCm;
+	if (L.X < FromX || L.X > ToX || FMath::Abs(L.Y) > HalfWidth + LostMarginCm || L.Z > 4000.0)
+	{
+		return true;
+	}
+	// Mid-run the catch floor and the hop clips deal with falls; otherwise anything below the pad is off it.
+	const double Floor = bRunning ? -CatchFloorDepthCm - LostMarginCm : -FallBelowTopCm - 250.0;
+	return L.Z < Floor;
+}
+
+void AGFBeatHopCourse::PlaceInLobby(APawn* Pawn)
+{
+	if (!Pawn)
+	{
+		return;
+	}
+	const FRotator Facing(0.0, GetActorRotation().Yaw, 0.0);
+	if (!Pawn->TeleportTo(GetLobbySpawn(), Facing, false, false))
+	{
+		Pawn->SetActorLocationAndRotation(GetLobbySpawn(), Facing, false, nullptr, ETeleportType::TeleportPhysics);
+	}
+	if (ACharacter* Char = Cast<ACharacter>(Pawn))
+	{
+		if (UCharacterMovementComponent* Move = Char->GetCharacterMovement())
+		{
+			Move->StopMovementImmediately();
+		}
+	}
+	if (AController* C = Pawn->GetController())
+	{
+		C->SetControlRotation(Facing);
+	}
+	UE_LOG(LogGF, Log, TEXT("Beat Hop: %s put in the lobby"), *Pawn->GetName());
+}
+
+void AGFBeatHopCourse::ForEachPlayerPawn(TFunctionRef<void(APawn*)> Fn) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	TArray<APawn*> Pawns;
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (APlayerController* PC = It->Get())
+		{
+			if (APawn* Pawn = PC->GetPawn())
+			{
+				Pawns.AddUnique(Pawn);
+			}
+		}
+	}
+	for (APawn* Pawn : Pawns)
+	{
+		Fn(Pawn);
+	}
+}
+
+void AGFBeatHopCourse::UpdateSession()
+{
+	if (!HasAuthority() || !bSession)
+	{
+		return;
+	}
+	// Late joiners, respawned pawns and anyone who wandered off go back on the course.
+	ForEachPlayerPawn([this](APawn* Pawn)
+	{
+		if (!IsLostFromCourse(Pawn))
+		{
+			return;
+		}
+		ACharacter* Char = Cast<ACharacter>(Pawn);
+		if (Char && bRunning)
+		{
+			RespawnCharacter(Char);
+			ApplyRunMovement(Char);
+		}
+		else
+		{
+			PlaceInLobby(Pawn);
+		}
+	});
+
+	if (APawn* Starter = PendingStart.Get())
+	{
+		FString Why;
+		TryStartFromGate(Starter, Why);
+	}
+	PendingStart.Reset();
+	if (APawn* Finisher = PendingFinish.Get())
+	{
+		ReachFinish(Finisher);
+	}
+	PendingFinish.Reset();
+
+	if (bRunning)
+	{
+		// Auto-run along the course; a player put back mid-run waits on their brick for the song to catch up.
+		const double Now = GetRunTime();
+		const FVector Forward = GetActorForwardVector();
+		for (const TPair<TWeakObjectPtr<ACharacter>, FSavedRunMove>& Pair : SavedMoves)
+		{
+			ACharacter* Char = Pair.Key.Get();
+			if (!Char)
+			{
+				continue;
+			}
+			if (const double* Hold = HoldUntil.Find(Char))
+			{
+				if (Now < *Hold)
+				{
+					if (UCharacterMovementComponent* Move = Char->GetCharacterMovement())
+					{
+						Move->Velocity = FVector(0.0, 0.0, Move->Velocity.Z);
+					}
+					continue;
+				}
+				HoldUntil.Remove(Char);
+			}
+			Char->AddMovementInput(Forward, 1.f);
+		}
+	}
+
+	if (IsShowingResults() && !bTravelled && GetServerWorldTime() >= ResultsEndServerTime)
+	{
+		TravelToHub();
+	}
+}
+
+void AGFBeatHopCourse::OnSessionRunFinished()
+{
+	Results.Reset();
+	const AGameStateBase* GS = GetWorld() ? GetWorld()->GetGameState() : nullptr;
+	for (const TPair<FString, FPlayerRun>& Pair : Runs)
+	{
+		const FGFRhythmScore& Score = Pair.Value.Judge.GetScore();
+		FGFBeatHopResultRow Row;
+		Row.PlayerKey = Pair.Key;
+		Row.PlayerName = Pair.Key;
+		if (GS)
+		{
+			for (const APlayerState* PS : GS->PlayerArray)
+			{
+				const AGFPlayerState* GFPS = Cast<AGFPlayerState>(PS);
+				if (GFPS && GFPS->PlayerKey == Pair.Key)
+				{
+					Row.PlayerName = GFPS->GetPlayerName();
+				}
+			}
+		}
+		Row.Score = Score.Score;
+		Row.BestCombo = Score.BestCombo;
+		Row.Perfects = Score.Perfects;
+		Row.Goods = Score.Goods;
+		Row.Misses = Score.Misses;
+		Row.Grade = FGFRhythmJudge::GradeFor(Score);
+		Results.Add(Row);
+	}
+	Results.Sort([](const FGFBeatHopResultRow& A, const FGFBeatHopResultRow& B) { return A.Score > B.Score; });
+	ResultsEndServerTime = GetServerWorldTime() + FMath::Max(0.f, ResultsSeconds);
+	RestoreRunMovement();
+	HoldUntil.Reset();
+	UpdateLobbyLook();
+	for (const FGFBeatHopResultRow& Row : Results)
+	{
+		UE_LOG(LogGF, Log, TEXT("Beat Hop: result %s: score %d, best combo %d, grade %s (P%d G%d M%d)"), *Row.PlayerName, Row.Score, Row.BestCombo,
+			*StaticEnum<EGFBeatHopGrade>()->GetNameStringByValue(static_cast<int64>(Row.Grade)), Row.Perfects, Row.Goods, Row.Misses);
+	}
+}
+
+double AGFBeatHopCourse::GetResultsSecondsLeft() const
+{
+	return IsShowingResults() ? FMath::Max(0.0, ResultsEndServerTime - GetServerWorldTime()) : 0.0;
+}
+
+void AGFBeatHopCourse::TravelToHub()
+{
+	bTravelled = true;
+	const FString Map = FGFMiniGameCatalog::HubMap().ToString();
+	LastTravelMap = Map;
+	UE_LOG(LogGF, Log, TEXT("Beat Hop: back to the hub (%s)"), *Map);
+	if (TravelOverride)
+	{
+		TravelOverride(Map);
+		return;
+	}
+	UWorld* World = GetWorld();
+	if (!World || !World->IsGameWorld())
+	{
+		return;
+	}
+	const ENetMode Mode = GetNetMode();
+	if (Mode == NM_ListenServer)
+	{
+		World->ServerTravel(Map + TEXT("?listen"));
+	}
+	else if (Mode == NM_DedicatedServer)
+	{
+		World->ServerTravel(Map);
+	}
+	else
+	{
+		UGameplayStatics::OpenLevel(this, FName(*Map));
+	}
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// StartGate countdown screen (beat_hop_v2): timing from T_BeatHop_Countdown_layout.json.
+
+int32 AGFBeatHopCourse::CountdownFrame(double RunTime, double GoTime, double Period, bool bRunningNow, double WorldNow)
+{
+	enum : int32 { Off = 0, ReadyA = 1, Three = 2, Two = 3, One = 4, Go = 5, GoFlash = 6, ReadyB = 7 };
+	if (!bRunningNow)
+	{
+		return (FMath::FloorToInt64(WorldNow * 2.0) % 2 == 0) ? ReadyA : ReadyB; // waiting on the pad: 2 Hz
+	}
+	const double P = FMath::Max(Period, 0.05);
+	if (RunTime < GoTime - 3.0 * P)
+	{
+		return (FMath::FloorToInt64(RunTime / P) % 2 == 0) ? ReadyA : ReadyB; // on the beat
+	}
+	if (RunTime < GoTime - 2.0 * P) { return Three; }
+	if (RunTime < GoTime - P) { return Two; }
+	if (RunTime < GoTime) { return One; }
+	if (RunTime < GoTime + 0.5)
+	{
+		return (FMath::FloorToInt64((RunTime - GoTime) / 0.125) % 2 == 0) ? GoFlash : Go;
+	}
+	if (RunTime < GoTime + 1.0) { return Go; }
+	return Off;
+}
+
+void AGFBeatHopCourse::UpdateScreen(double WorldNow)
+{
+	if (!ScreenMaterial || GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	const double GoTime = Bricks.Num() > 0 ? Bricks[0].Time : 0.0;
+	const int32 Frame = CountdownFrame(bRunning ? GetRunTime() : 0.0, GoTime, PeriodSeconds(), bRunning, WorldNow);
+	if (Frame != ShownScreenFrame)
+	{
+		ShownScreenFrame = Frame;
+		ScreenMaterial->SetScalarParameterValue(GFBeatHopCourse::ScreenFrameParam, static_cast<float>(Frame));
 	}
 }

@@ -102,6 +102,13 @@ AGFMiniGameGate::AGFMiniGameGate()
 	ModeSign->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	ModeSign->SetHiddenInGame(true);
 	ModeSign->SetVisibility(false);
+
+	Jukebox = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Jukebox"));
+	Jukebox->SetupAttachment(Root);
+	Jukebox->SetRelativeLocation(FVector(0.f, -FGFMiniGameCatalog::SignRightCm, 0.f));
+	Jukebox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Jukebox->SetHiddenInGame(true);
+	Jukebox->SetVisibility(false);
 }
 
 void AGFMiniGameGate::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -254,6 +261,32 @@ void AGFMiniGameGate::ApplyVisuals()
 		else
 		{
 			ModeSign->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
+	}
+
+	// #213: the jukebox stands on the Beat Hop hub portal's other side, mirroring the sign (gate-local (0, -300, 0),
+	// yaw 0 relative to the gate, so it faces Rime with it). With Rime at the origin that's world (-1626.34, 1202.08), yaw -45.
+	if (Jukebox)
+	{
+		UStaticMesh* JukeboxArt = nullptr;
+		if (GateRole == EGFMiniGameGateRole::Portal && EntryId == FName(TEXT("BeatHop")))
+		{
+			JukeboxArt = LoadObject<UStaticMesh>(nullptr, JukeboxPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+		}
+		Jukebox->SetStaticMesh(JukeboxArt);
+		Jukebox->SetRelativeLocation(FVector(0.f, -FGFMiniGameCatalog::SignRightCm, 0.f));
+		Jukebox->SetRelativeRotation(FRotator::ZeroRotator);
+		Jukebox->SetRelativeScale3D(FVector::OneVector);
+		Jukebox->SetHiddenInGame(JukeboxArt == nullptr);
+		Jukebox->SetVisibility(JukeboxArt != nullptr);
+		if (JukeboxArt)
+		{
+			Jukebox->SetCollisionProfileName(TEXT("BlockAll"));
+			Jukebox->SetCanEverAffectNavigation(false);
+		}
+		else
+		{
+			Jukebox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		}
 	}
 }

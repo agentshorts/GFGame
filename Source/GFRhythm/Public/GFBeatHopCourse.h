@@ -18,7 +18,9 @@ class UMaterialInstanceDynamic;
 class UStaticMesh;
 class UMaterialInterface;
 class UTexture2D;
+class UTextRenderComponent;
 class ACharacter;
+class APawn;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FGFOnBrickLanding, const FString&, PlayerKey, int32, BrickIndex, EGFJudgement, Judgement, int32, MaterialsEarned);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGFOnBeatHopRunFinished, const FString&, PlayerKey, const FGFMiniGameResult&, Result);
@@ -91,6 +93,37 @@ struct GFRHYTHM_API FGFBeatHopPop
 	FLinearColor LaneColor = FLinearColor::White;
 	/** World time (s) the pop appeared. */
 	double ShownAt = 0.0;
+};
+
+/** One player's line on the end-of-run results board (session mode, replicated to everyone). */
+USTRUCT(BlueprintType)
+struct GFRHYTHM_API FGFBeatHopResultRow
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
+	FString PlayerKey;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
+	FString PlayerName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
+	int32 Score = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
+	int32 BestCombo = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
+	int32 Perfects = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
+	int32 Goods = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
+	int32 Misses = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|Rhythm")
+	EGFBeatHopGrade Grade = EGFBeatHopGrade::C;
 };
 
 /**
@@ -234,6 +267,82 @@ public:
 	/** (Re)builds the gates, checkpoints, catch floor, rails and scenery around the current bricks. */
 	void BuildTrackKit();
 
+	// -----------------------------------------------------------------------------------------------------------------
+	// Session (#212): the course on L_Beat runs itself. It lifts into the sky, builds a lobby behind the start pad with
+	// song and difficulty tiles, keeps players on it, starts a run when someone walks through the start gate, ends it at
+	// the finish gate (or when the song runs out), shows the results, then sends everyone back to the hub.
+
+	/** Server: turn the session on (the hub gate director calls this on L_Beat). Safe to call again. */
+	void BeginSession();
+	bool IsSession() const { return bSession; }
+
+	/** Server: pick the song / difficulty for the next run (the lobby tiles call these). False if unknown or mid-run. */
+	bool SelectSong(FName SongId);
+	bool SelectDifficulty(EGFBeatDifficulty Difficulty);
+	FName GetSelectedSong() const { return SelectedSong; }
+	FName GetRunSongId() const { return RunSongId; }
+	EGFBeatDifficulty GetRunDifficulty() const { return RunDifficulty; }
+	EGFBeatDifficulty GetSelectedDifficulty() const { return SelectedDifficulty; }
+	/** Song id of each lobby song tile, in tile order. */
+	const TArray<FName>& GetSongTileIds() const { return SongTileIds; }
+	static FString SongTitle(FName SongId);
+	static FString DifficultyName(EGFBeatDifficulty Difficulty);
+
+	/** Server: a pawn crossed the start gate. Starts the selected song; the run clock lines up with where it crossed. */
+	bool TryStartFromGate(APawn* Pawn, FString& OutReason);
+	/** Server: a pawn crossed the finish gate. Ends the run (results, then back to the hub). */
+	bool ReachFinish(APawn* Pawn);
+	/** Server: results countdown, return to the hub, deferred gate starts. Tick calls this every frame. */
+	void UpdateSession();
+
+	bool IsShowingResults() const { return ResultsEndServerTime > 0.0; }
+	double GetResultsSecondsLeft() const;
+	const TArray<FGFBeatHopResultRow>& GetResults() const { return Results; }
+	/** Run timeline time (s) at which the song is over (last note + padding). */
+	double GetRunEndTime() const { return EndTime; }
+	/** Where the run clock starts when the run begins at a pawn crossing this local X. */
+	double RunTimeAtLocalX(double LocalX) const;
+
+	/** World location players are put on in the lobby. */
+	FVector GetLobbySpawn() const;
+	/** True when a pawn is nowhere near the course (just spawned on the ground, fell off the world, wandered off). */
+	bool IsLostFromCourse(const APawn* Pawn) const;
+	/** Server: put a pawn in the lobby, facing the start gate. */
+	void PlaceInLobby(APawn* Pawn);
+	/** True while the run's movement (auto-run, beat-length hop) is applied to this character. */
+	bool HasRunMovement(const ACharacter* Character) const;
+
+	/**
+	 * StartGate countdown screen cell (beat_hop_v2, T_BeatHop_Countdown layout): 0 Off, 1 Ready_A, 2 "3", 3 "2", 4 "1",
+	 * 5 GO, 6 GO flash, 7 Ready_B. Idle: Ready_A/B at 2 Hz. Run: Ready on the beat, then 3/2/1 at GO-3/-2/-1 beats,
+	 * GO flash/GO every 0.125 s for 0.5 s, GO held 0.5 s, then Off. GO is the first brick's time.
+	 */
+	static int32 CountdownFrame(double RunTime, double GoTime, double Period, bool bRunningNow, double WorldNow);
+	/** The StartGate Screen slot's MID (null if the gate art or its countdown material isn't there). */
+	UMaterialInstanceDynamic* GetScreenMaterial() const { return ScreenMaterial; }
+	int32 GetShownScreenFrame() const { return ShownScreenFrame; }
+	/** Pushes the countdown cell to the screen (Tick does this every frame). */
+	void UpdateScreen(double WorldNow);
+
+	UBoxComponent* GetStartTrigger() const { return StartTrigger; }
+	UBoxComponent* GetFinishTrigger() const { return FinishTrigger; }
+	int32 NumSongTiles() const { return SongTiles.Num(); }
+	int32 NumDifficultyTiles() const { return DifficultyTiles.Num(); }
+
+	/** Tests: replace the level change at the end of the results (gets the map package name). */
+	void SetTravelOverride(TFunction<void(const FString&)> InOverride) { TravelOverride = MoveTemp(InOverride); }
+	/** The map the session last sent players to (empty until it has). */
+	const FString& GetLastTravelMap() const { return LastTravelMap; }
+	/** Tests: freeze the server world clock at a time (negative = use the real clock). */
+	void SetDebugServerTime(double Seconds) { DebugServerTime = Seconds; }
+
+	/** How high the session lifts the course (cm), clear of the voxel terrain and the map's own spawn. */
+	static constexpr double SessionHeightCm = 10000.0;
+
+	/** Results stay up this long (s) before everyone goes back to the hub. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Rhythm")
+	float ResultsSeconds = 7.f;
+
 	UPROPERTY(BlueprintAssignable, Category = "GF|Rhythm")
 	FGFOnBrickLanding OnBrickLanding;
 
@@ -305,6 +414,24 @@ protected:
 	UFUNCTION()
 	void OnRep_RunSpec();
 
+	UPROPERTY(ReplicatedUsing = OnRep_Session)
+	bool bSession = false;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Session)
+	FName SelectedSong;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Session)
+	EGFBeatDifficulty SelectedDifficulty = EGFBeatDifficulty::Easy;
+
+	UPROPERTY(Replicated)
+	TArray<FGFBeatHopResultRow> Results;
+
+	UPROPERTY(Replicated)
+	double ResultsEndServerTime = 0.0;
+
+	UFUNCTION()
+	void OnRep_Session();
+
 private:
 	struct FPlayerRun
 	{
@@ -341,6 +468,24 @@ private:
 	UStaticMeshComponent* AddKitMesh(const TCHAR* Path, const FTransform& Relative, bool bCollide);
 	UInstancedStaticMeshComponent* AddKitInstances(const TCHAR* Path, const TArray<FTransform>& Relative, bool bCollide);
 	void TrackPulse(UMeshComponent* Mesh);
+
+	void BuildLobby();
+	void UpdateLobbyLook();
+	void RebuildPreview();
+	void ApplyRunMovement(ACharacter* Character);
+	void RestoreRunMovement();
+	void RespawnCharacter(ACharacter* Character);
+	void OnSessionRunFinished();
+	void TravelToHub();
+	void ForEachPlayerPawn(TFunctionRef<void(APawn*)> Fn) const;
+	UTextRenderComponent* AddLobbyText(const FString& Text, const FVector& Relative, float Size, const FColor& Color);
+
+	UFUNCTION()
+	void OnStartTriggerOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+	UFUNCTION()
+	void OnFinishTriggerOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+	UFUNCTION()
+	void OnLobbyTileOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
 
 	UFUNCTION()
 	void OnCheckpointOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
@@ -428,4 +573,53 @@ private:
 	IGFLedgerAccounts* AccountsOverride = nullptr;
 	double EndTime = 0.0;
 	int32 NumLanes = 4;
+
+	// Session (#212)
+	struct FSavedRunMove
+	{
+		float MaxWalkSpeed = 0.f;
+		float GravityScale = 1.f;
+		float AirControl = 0.f;
+	};
+
+	UPROPERTY()
+	TObjectPtr<UBoxComponent> StartTrigger;
+
+	UPROPERTY()
+	TObjectPtr<UBoxComponent> FinishTrigger;
+
+	/** Lobby floor, tiles, labels and signs (built once; the track kit rebuilds around them). */
+	UPROPERTY()
+	TArray<TObjectPtr<USceneComponent>> LobbyComponents;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UBoxComponent>> SongTiles;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UBoxComponent>> DifficultyTiles;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> SongTileMaterials;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> DifficultyTileMaterials;
+
+	UPROPERTY()
+	TObjectPtr<UTextRenderComponent> StatusText;
+
+	/** StartGate slot 1 "Screen": a MID of MI_Track_StartGate_Screen whose scalar Frame picks the countdown cell. */
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> ScreenMaterial;
+	int32 ShownScreenFrame = -1;
+
+	TArray<FName> SongTileIds;
+	TMap<TWeakObjectPtr<ACharacter>, FSavedRunMove> SavedMoves;
+	/** Caught players put back mid-run stand still on their brick until the song reaches it (run time). */
+	TMap<TWeakObjectPtr<ACharacter>, double> HoldUntil;
+	TWeakObjectPtr<APawn> PendingStart;
+	TWeakObjectPtr<APawn> PendingFinish;
+	TFunction<void(const FString&)> TravelOverride;
+	FString LastTravelMap;
+	double DebugServerTime = -1.0;
+	bool bTravelled = false;
 };

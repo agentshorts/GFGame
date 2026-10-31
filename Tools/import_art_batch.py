@@ -86,6 +86,11 @@ ORDER = [
     "SM_Track_Rail_Side", "SM_Track_Pillar", "SM_Track_CatchFloor", "SM_Track_StartGate", "SM_Track_FinishGate",
     "SM_Track_Checkpoint", "SM_Track_Speaker", "SM_Track_FloatingNote_A", "SM_Track_FloatingNote_B", "SM_Track_DiscoCube",
     "SM_Track_Skyline_A", "SM_Track_Skyline_B", "SM_Furn_Jukebox", "SM_VFX_Cube", "SM_VFX_Cube_2mv", "VFX_BeatHop_v1",
+    # Beat Hop v2 (batch beat_hop_v2, #201): StartGate countdown screen cells (texture_set into /Game/Art/BeatHop/Track/Screen,
+    # UI settings: Nearest, no mips). Then run its GF_BeatHop_screen.py for M_GF_CountdownScreen / MI_Track_StartGate_Screen.
+    # SK_Player_Base v7 is also tagged beat_hop_v2, but only Fall and Crouch_Walk changed: use Tools/reimport_player_clips.py
+    # for those two, not GFART_BATCH=beat_hop_v2 (which would re-create SKEL_GF_Humanoid and drag the outfits).
+    "VFX_BeatHop_Countdown_v1",
 ]
 # Skeletons shared across species live in their own folder, not in the folder of whichever mesh created them.
 # The first import creates the skeleton there; later imports reuse it. Pre-clean never deletes a shared
