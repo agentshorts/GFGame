@@ -66,6 +66,8 @@ private:
 	void DrawArenaSession();
 	/** Grumble Dig greybox: start, dig, results, while the local pawn is on the porch site. */
 	void DrawGrumbleSession();
+	/** Hallow Night: start, finish, results and hub prompts while the local pawn is on the Depths pad. */
+	void DrawDepthsSession();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);
