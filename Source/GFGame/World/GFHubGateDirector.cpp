@@ -2,6 +2,7 @@
 
 #include "GFBeatHopCourse.h"
 #include "GFLog.h"
+#include "GFMineDirector.h"
 #include "GFMiniGameCatalog.h"
 #include "GFMiniGameGate.h"
 #include "GFTerritorySubsystem.h"
@@ -146,7 +147,12 @@ void AGFHubGateDirector::Place(const FString& WorldPackage, const FVector& InRim
 			{
 				const FVector Pad = FGFMiniGameCatalog::PadOrigin(Entry, InRimeCenter);
 				EnsureGate(World, Entry, EGFMiniGameGateRole::Marker, Pad, FRotator::ZeroRotator, InRimeCenter);
-				EnsureClass(World, Entry.DirectorClass, Pad, true);
+				AActor* Director = EnsureClass(World, Entry.DirectorClass, Pad, true);
+				// Pebble Mine (#216): rooms and verb spots on the pad the gate already drops you on.
+				if (AGFMineDirector* Mine = Cast<AGFMineDirector>(Director))
+				{
+					Mine->EnsurePlayableSite();
+				}
 			}
 		}
 		else if (Entry.HasMap() && FGFMiniGameCatalog::WorldIs(WorldPackage, Entry.Map))

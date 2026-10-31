@@ -46,6 +46,9 @@ public:
 	/** Applies the offline haul since Crew.LastSeenUtcTicks and restarts the clock. */
 	FGFMineOffline CollectOffline(AGFPlayerState* PS);
 
+	/** Spawns the playable rooms and verb spots on this pad (#216). Safe to call again. */
+	void EnsurePlayableSite();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;

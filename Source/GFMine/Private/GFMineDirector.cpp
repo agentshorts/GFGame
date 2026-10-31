@@ -1,4 +1,5 @@
 #include "GFMineDirector.h"
+#include "GFMineSite.h"
 #include "GFMiniGameCatalog.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
@@ -58,7 +59,35 @@ void AGFMineDirector::BeginPlay()
 		{
 			G->RegisterModeHandler(this);
 		}
+		EnsurePlayableSite();
 	}
+}
+
+void AGFMineDirector::EnsurePlayableSite()
+{
+	UWorld* World = GetWorld();
+	if (!HasAuthority() || !World || World->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	if (AGFGameState* G = GS())
+	{
+		G->RegisterModeHandler(this);
+	}
+	AGFMineSite* Site = AGFMineSite::Get(World);
+	if (!Site)
+	{
+		FActorSpawnParameters Params;
+		Params.Owner = this;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Site = World->SpawnActor<AGFMineSite>(AGFMineSite::StaticClass(), FTransform(GetActorLocation()), Params);
+	}
+	if (!Site)
+	{
+		return;
+	}
+	Site->AttachToActor(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+	Site->BuildIfNeeded();
 }
 
 void AGFMineDirector::EndPlay(const EEndPlayReason::Type Reason)
