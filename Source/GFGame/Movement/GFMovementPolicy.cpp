@@ -1,12 +1,49 @@
 #include "GFMovementPolicy.h"
-#include "GFBeatHopGateSubsystem.h"
-#include "GFFashionGateSubsystem.h"
-#include "GFMobaGateSubsystem.h"
-#include "GFTamingGateSubsystem.h"
+#include "GFMiniGameGateSubsystem.h"
 #include "Engine/World.h"
+#include "UObject/UObjectIterator.h"
 
 namespace GFMovementPolicyDetail
 {
+	bool GFMovementIsConcreteGate(const UClass* Class)
+	{
+		return Class
+			&& Class->IsNative()
+			&& Class->IsChildOf(UGFMiniGameGateSubsystem::StaticClass())
+			&& !Class->HasAnyClassFlags(CLASS_Abstract)
+			&& !Class->GetName().StartsWith(TEXT("SKEL_"))
+			&& !Class->GetName().StartsWith(TEXT("REINST_"));
+	}
+
+	const TArray<FString>& GFMovementGateShortNames()
+	{
+		// Built on first use, after game modules have registered their gate classes.
+		// PerformMovement asks every frame on the server, so this walk does not repeat.
+		static const TArray<FString> Names = []
+		{
+			TArray<FString> Found;
+			for (TObjectIterator<UClass> It; It; ++It)
+			{
+				if (!GFMovementIsConcreteGate(*It))
+				{
+					continue;
+				}
+				const UGFMiniGameGateSubsystem* Gate = Cast<UGFMiniGameGateSubsystem>(It->GetDefaultObject());
+				if (!Gate || Gate->GetMapName().IsNone())
+				{
+					continue;
+				}
+				const FString Short = GFMovementPolicy::ShortMapName(Gate->GetMapName().ToString());
+				if (!Short.IsEmpty())
+				{
+					Found.AddUnique(Short);
+				}
+			}
+			return Found;
+		}();
+		return Names;
+	}
+
 	FString GFMovementStripPiePrefix(const FString& Name)
 	{
 		if (!Name.StartsWith(TEXT("UEDPIE_")))
@@ -46,15 +83,9 @@ bool GFMovementPolicy::IsMiniGameMapName(const FString& MapOrPackage)
 	{
 		return false;
 	}
-	const FName Gates[] = {
-		GetDefault<UGFTamingGateSubsystem>()->GetMapName(),
-		GetDefault<UGFFashionGateSubsystem>()->GetMapName(),
-		GetDefault<UGFMobaGateSubsystem>()->GetMapName(),
-		GetDefault<UGFBeatHopGateSubsystem>()->GetMapName(),
-	};
-	for (const FName Gate : Gates)
+	for (const FString& Gate : GFMovementPolicyDetail::GFMovementGateShortNames())
 	{
-		if (Short.Equals(ShortMapName(Gate.ToString()), ESearchCase::IgnoreCase))
+		if (Short.Equals(Gate, ESearchCase::IgnoreCase))
 		{
 			return true;
 		}

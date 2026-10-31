@@ -7,8 +7,10 @@
 #include "GFMovementPolicy.h"
 #include "GFMovementTuning.h"
 #include "GFStaminaSim.h"
+#include "GFMiniGameGateSubsystem.h"
 #include "Components/SphereComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "UObject/UObjectIterator.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -283,14 +285,53 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMovementMiniGameTest, "GFGame.Movement.MiniG
 bool FGFMovementMiniGameTest::RunTest(const FString&)
 {
 	using namespace GFMovementTestsPrivate;
-	TestTrue(TEXT("Beat Hop map"), GFMovementPolicy::IsMiniGameMapName(TEXT("/Game/Maps/L_Beat")));
-	TestTrue(TEXT("PIE Beat Hop map"), GFMovementPolicy::IsMiniGameMapName(TEXT("UEDPIE_0_L_Beat")));
-	TestTrue(TEXT("Valley map"), GFMovementPolicy::IsMiniGameMapName(TEXT("/Game/Maps/L_Valley")));
-	TestTrue(TEXT("Arena map"), GFMovementPolicy::IsMiniGameMapName(TEXT("/Game/Maps/L_Arena")));
-	TestTrue(TEXT("Runway map"), GFMovementPolicy::IsMiniGameMapName(TEXT("/Game/Maps/L_Runway")));
+	// Warm the gate-name cache before this function starts its own class iterator.
 	TestFalse(TEXT("Hub map"), GFMovementPolicy::IsMiniGameMapName(TEXT("/Game/Maps/L_Hub")));
 	TestFalse(TEXT("Net test map"), GFMovementPolicy::IsMiniGameMapName(TEXT("/Game/Maps/L_NetTest")));
+	TestFalse(TEXT("Old arena package"), GFMovementPolicy::IsMiniGameMapName(TEXT("/Game/Maps/L_Arena")));
 	TestFalse(TEXT("Empty map name"), GFMovementPolicy::IsMiniGameMapName(TEXT("")));
+
+	// Maps the gate classes actually load. L_Arena is not one of them.
+	const TCHAR* GateMaps[] = {
+		TEXT("/Game/Maps/L_Valley"),
+		TEXT("/Game/Maps/L_Runway"),
+		TEXT("/Game/Maps/L_Moba"),
+		TEXT("/Game/Maps/L_Beat"),
+		TEXT("/Game/Maps/L_Crucible"),
+		TEXT("/Game/Maps/L_Depths"),
+		TEXT("/Game/Maps/L_GrumbleDig"),
+		TEXT("/Game/Maps/L_Mine"),
+	};
+	TArray<FString> LoadedShort;
+	for (TObjectIterator<UClass> It; It; ++It)
+	{
+		if (!It->IsNative()
+			|| !It->IsChildOf(UGFMiniGameGateSubsystem::StaticClass())
+			|| It->HasAnyClassFlags(CLASS_Abstract)
+			|| It->GetName().StartsWith(TEXT("SKEL_"))
+			|| It->GetName().StartsWith(TEXT("REINST_")))
+		{
+			continue;
+		}
+		const UGFMiniGameGateSubsystem* Gate = Cast<UGFMiniGameGateSubsystem>(It->GetDefaultObject());
+		if (!Gate || Gate->GetMapName().IsNone())
+		{
+			continue;
+		}
+		const FString Full = Gate->GetMapName().ToString();
+		LoadedShort.AddUnique(GFMovementPolicy::ShortMapName(Full));
+		TestTrue(*FString::Printf(TEXT("Loaded gate %s"), *Full), GFMovementPolicy::IsMiniGameMapName(Full));
+	}
+	TestEqual(TEXT("Every gate class has a map"), LoadedShort.Num(), static_cast<int32>(UE_ARRAY_COUNT(GateMaps)));
+	for (const TCHAR* GateMap : GateMaps)
+	{
+		const FString Short = GFMovementPolicy::ShortMapName(GateMap);
+		TestTrue(*FString::Printf(TEXT("%s is a gate map"), *Short), LoadedShort.Contains(Short));
+		TestTrue(*FString::Printf(TEXT("%s package"), GateMap), GFMovementPolicy::IsMiniGameMapName(GateMap));
+		TestTrue(*FString::Printf(TEXT("PIE %s"), *Short), GFMovementPolicy::IsMiniGameMapName(FString::Printf(TEXT("UEDPIE_0_%s"), *Short)));
+		TestTrue(*FString::Printf(TEXT("PIE package %s"), *Short), GFMovementPolicy::IsMiniGameMapName(FString::Printf(TEXT("/Game/Maps/UEDPIE_0_%s"), *Short)));
+		TestFalse(*FString::Printf(TEXT("%s defaults off"), *Short), GFMovementPolicy::IsStaminaEnabled(GateMap, false, false));
+	}
 
 	TestFalse(TEXT("Mini-game defaults off"), GFMovementPolicy::IsStaminaEnabled(TEXT("/Game/Maps/L_Beat"), false, false));
 	TestTrue(TEXT("Opt-in turns a mini-game on"), GFMovementPolicy::IsStaminaEnabled(TEXT("UEDPIE_0_L_Beat"), true, true));
@@ -300,7 +341,7 @@ bool FGFMovementMiniGameTest::RunTest(const FString&)
 	const UGFMovementTuning& Tuning = GFMovementTuningCDO();
 	FGFStaminaState State = GFMovementFullState();
 	FGFStaminaCommand Off = GFMovementCommand(2.f);
-	Off.bStaminaEnabled = GFMovementPolicy::IsStaminaEnabled(TEXT("/Game/Maps/L_Arena"), false, false);
+	Off.bStaminaEnabled = GFMovementPolicy::IsStaminaEnabled(TEXT("/Game/Maps/L_Crucible"), false, false);
 	Off.bSprintHeld = true;
 	Off.bDashPressed = true;
 	State = GFStaminaSim::Step(State, Off, Tuning);
@@ -311,7 +352,7 @@ bool FGFMovementMiniGameTest::RunTest(const FString&)
 	TestEqual(TEXT("Speed stays the base run"), GFStaminaSim::HorizontalSpeed(State, Tuning, Tuning.BaseRunSpeed), Tuning.BaseRunSpeed);
 
 	FGFStaminaCommand On = Off;
-	On.bStaminaEnabled = GFMovementPolicy::IsStaminaEnabled(TEXT("/Game/Maps/L_Arena"), true, true);
+	On.bStaminaEnabled = GFMovementPolicy::IsStaminaEnabled(TEXT("/Game/Maps/L_Crucible"), true, true);
 	On.bDashPressed = false;
 	On.DeltaSeconds = 1.f;
 	State = GFStaminaSim::Step(State, On, Tuning);
