@@ -1,5 +1,6 @@
 {
- "schema": "gf/mining_range_dressing/v1",
+ "schema": "gf/mining_range_dressing/v2",
+ "supersedes": "MiningRange_Dressing_v1 (only lava_edge_trim yaws changed (+90; v1 assumed the strip ran along mesh X, it runs along UE local Y); badge and handle got explicit UE-local values; everything else identical)",
  "level": "L_MiningRange",
  "source": "MiningRange_Rows_v1",
  "cell_cm": 100,
@@ -331,7 +332,12 @@
     "right": 44,
     "up": 10
    },
-   "yaw_deg": 90
+   "yaw_deg": 90,
+   "sign_local_offset_ue_cm": [
+    4,
+    -44,
+    10
+   ]
   },
   {
    "row_id": "Common_PlayerWall",
@@ -342,7 +348,12 @@
     "right": 44,
     "up": 10
    },
-   "yaw_deg": 90
+   "yaw_deg": 90,
+   "sign_local_offset_ue_cm": [
+    4,
+    -44,
+    10
+   ]
   }
  ],
  "reset_lever": {
@@ -363,7 +374,7 @@
     0,
     73
    ],
-   "hinge_axis": "mesh side-to-side axis",
+   "hinge_axis": "UE local Y (pitch), side to side",
    "rest_pitch_deg": -35,
    "pulled_pitch_deg": 35,
    "note": "interact = rotate to pulled, run gf.MineRange reset, spring back"
@@ -377,7 +388,7 @@
     510,
     100
    ],
-   "yaw_deg": 0
+   "yaw_deg": 90
   },
   {
    "mesh": "SM_Prop_Range_LavaEdgeTrim",
@@ -386,7 +397,7 @@
     510,
     100
    ],
-   "yaw_deg": 0
+   "yaw_deg": 90
   },
   {
    "mesh": "SM_Prop_Range_LavaEdgeTrim",
@@ -395,7 +406,7 @@
     510,
     100
    ],
-   "yaw_deg": 0
+   "yaw_deg": 90
   },
   {
    "mesh": "SM_Prop_Range_LavaEdgeTrim",
@@ -404,7 +415,7 @@
     510,
     100
    ],
-   "yaw_deg": 0
+   "yaw_deg": 90
   },
   {
    "mesh": "SM_Prop_Range_LavaEdgeTrim",
@@ -413,7 +424,7 @@
     510,
     100
    ],
-   "yaw_deg": 0
+   "yaw_deg": 90
   },
   {
    "mesh": "SM_Prop_Range_LavaEdgeTrim",
@@ -422,7 +433,7 @@
     510,
     100
    ],
-   "yaw_deg": 0
+   "yaw_deg": 90
   },
   {
    "mesh": "SM_Prop_Range_LavaEdgeTrim",
@@ -431,7 +442,7 @@
     510,
     100
    ],
-   "yaw_deg": 0
+   "yaw_deg": 90
   },
   {
    "mesh": "SM_Prop_Range_LavaEdgeTrim",
@@ -440,7 +451,7 @@
     650,
     100
    ],
-   "yaw_deg": 90
+   "yaw_deg": 180
   },
   {
    "mesh": "SM_Prop_Range_LavaEdgeTrim",
@@ -449,7 +460,7 @@
     650,
     100
    ],
-   "yaw_deg": 90
+   "yaw_deg": 180
   },
   {
    "mesh": "SM_Prop_Range_LavaEdgeTrim",
@@ -458,7 +469,7 @@
     750,
     100
    ],
-   "yaw_deg": 90
+   "yaw_deg": 180
   },
   {
    "mesh": "SM_Prop_Range_LavaEdgeTrim",
@@ -467,7 +478,7 @@
     750,
     100
    ],
-   "yaw_deg": 90
+   "yaw_deg": 180
   }
  ],
  "floor_tints": [
@@ -1301,5 +1312,6 @@
   "badges": 2,
   "trims": 11,
   "floor_tints": 72
- }
+ },
+ "mesh_axes_note": "All yaws are Unreal yaws for the imported meshes (front = UE +X, Force Front X). SM_Prop_Range_LavaEdgeTrim is 20 x 100 x 6 cm in UE (long along local Y)."
 }
