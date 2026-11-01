@@ -91,3 +91,14 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Licensed animation packs (Fab, Paragon, Mixamo, ActorCore, Rokoko...) stay local.
+# This repo is public and those licenses forbid redistribution, so never commit them.
+/Content/LicensedAnims/
+
+# Unreal MCP client configs written by ModelContextProtocol.GenerateClientConfig
+/.mcp.json
+/.cursor/mcp.json
+/.vscode/mcp.json
+/.gemini/settings.json
+/.codex/config.toml
