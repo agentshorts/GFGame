@@ -657,7 +657,7 @@ bool FGFMiningMagicDemoTest::RunTest(const FString&)
 	TestEqual(TEXT("One trigger per row"), Range->DemoTriggerCount(), Range->GetLayout().Rows.Num());
 
 	AGFMagicPlayerState* PS = W.World->SpawnActor<AGFMagicPlayerState>();
-	if (!TestNotNull(TEXT("Caster"), PS) || !TestNotNull(TEXT("Magic"), PS->Magic) || !TestNotNull(TEXT("Bag"), PS->Inventory))
+	if (!TestNotNull(TEXT("Caster"), PS) || !TestNotNull(TEXT("Magic"), PS->Magic.Get()) || !TestNotNull(TEXT("Bag"), PS->Inventory.Get()))
 	{
 		return false;
 	}
