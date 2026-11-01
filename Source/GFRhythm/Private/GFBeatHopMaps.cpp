@@ -295,9 +295,9 @@ namespace GFBeatHopMapsPrivate
 		FFileHelper::SaveStringToFile(Json, *Path);
 	}
 
-	static FLayoutHook& HookSlot()
+	static GFBeatHopMaps::FLayoutHook& HookSlot()
 	{
-		static FLayoutHook Hook = nullptr;
+		static GFBeatHopMaps::FLayoutHook Hook = nullptr;
 		return Hook;
 	}
 }
@@ -521,7 +521,7 @@ void GFBeatHopMaps::SetLayoutHook(FLayoutHook Hook)
 
 void GFBeatHopMaps::NotifyLayout(AGFBeatHopCourse* Course)
 {
-	if (const FLayoutHook Hook = GFBeatHopMapsPrivate::HookSlot())
+	if (const GFBeatHopMaps::FLayoutHook Hook = GFBeatHopMapsPrivate::HookSlot())
 	{
 		Hook(Course);
 	}
