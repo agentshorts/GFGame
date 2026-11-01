@@ -1,4 +1,5 @@
 #include "GFBeatHopCourse.h"
+#include "GFBeatHopMaps.h"
 #include "GFBuiltInSongs.h"
 #include "GFBeatClockSubsystem.h"
 #include "GFBeatHopGateSubsystem.h"
@@ -89,6 +90,8 @@ namespace GFBeatHopCourse
 	static constexpr double SongRowX = -1700.0;
 	static constexpr double DifficultyRowX = -1250.0;
 	static constexpr double CourseRowX = -800.0;
+	/** Map row sits between difficulty and the Fern / Rime / Cinder row. Plates are 120 cm, so the gap is about 105 cm. */
+	static constexpr double MapRowX = -1025.0;
 	static constexpr double HireRowX = -450.0;
 	static constexpr double TileSpacingY = 160.0;
 	static constexpr double LostMarginCm = 1500.0;
@@ -189,6 +192,7 @@ AGFBeatHopCourse::AGFBeatHopCourse()
 	};
 	RescueSalt = FGuid::NewGuid();
 	SelectedCourseId = FGFBeatHopCourses::Default().Id;
+	SelectedMapId = GFBeatHopMaps::FreeHopId();
 }
 
 void AGFBeatHopCourse::BeginPlay()
@@ -209,6 +213,8 @@ void AGFBeatHopCourse::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AGFBeatHopCourse, RunSongId);
 	DOREPLIFETIME(AGFBeatHopCourse, RunCourseId);
+	DOREPLIFETIME(AGFBeatHopCourse, RunMapId);
+	DOREPLIFETIME(AGFBeatHopCourse, RunLayoutBpm);
 	DOREPLIFETIME(AGFBeatHopCourse, RunDifficulty);
 	DOREPLIFETIME(AGFBeatHopCourse, RunMode);
 	DOREPLIFETIME(AGFBeatHopCourse, bRunCozy);
@@ -227,6 +233,7 @@ void AGFBeatHopCourse::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(AGFBeatHopCourse, SelectedSong);
 	DOREPLIFETIME(AGFBeatHopCourse, SelectedDifficulty);
 	DOREPLIFETIME(AGFBeatHopCourse, SelectedCourseId);
+	DOREPLIFETIME(AGFBeatHopCourse, SelectedMapId);
 	DOREPLIFETIME(AGFBeatHopCourse, Results);
 	DOREPLIFETIME(AGFBeatHopCourse, ResultsEndServerTime);
 	DOREPLIFETIME(AGFBeatHopCourse, RevengeSpot);
@@ -262,6 +269,61 @@ bool AGFBeatHopCourse::StartRunForPlayers(FName SongId, EGFBeatDifficulty Diffic
 		return false;
 	}
 
+	// A hand-shaped course refuses a tempo outside its file before the run is touched.
+	// Live mode then rebuilds that course on the songs clock at the detected BPM.
+	const FGFBeatHopMapDef* Hand = GFBeatHopMaps::Find(SelectedMapId);
+	if (Hand)
+	{
+		if (Mode == EGFBeatHopMode::Live)
+		{
+			float Heard = 0.f;
+			if (UGFBeatClockSubsystem* Clock = GetWorld() ? GetWorld()->GetSubsystem<UGFBeatClockSubsystem>() : nullptr)
+			{
+				Heard = Clock->GetBPM();
+			}
+			FString Msg;
+			if (!GFBeatHopMaps::Fits(*Hand, Heard, Msg))
+			{
+				OutReason = Msg;
+				SongRefuseReason = Msg;
+				if (bSession)
+				{
+					UpdateLobbyLook();
+				}
+				return false;
+			}
+			PendingLayoutBpm = Heard;
+			return StartRunForPlayers(Hand->DefaultSong, Hand->JudgeDifficulty, EGFBeatHopMode::Songs, bCozy, NumPlayers, OutReason);
+		}
+		Difficulty = Hand->JudgeDifficulty;
+		float LayoutBpm = PendingLayoutBpm;
+		if (LayoutBpm <= 0.f)
+		{
+			if (const FGFBeatmap* Chart = FGFBuiltInSongs::Find(SongId, Difficulty))
+			{
+				LayoutBpm = Chart->Bpm;
+			}
+		}
+		FString Msg;
+		if (!GFBeatHopMaps::Fits(*Hand, LayoutBpm, Msg))
+		{
+			OutReason = Msg;
+			SongRefuseReason = Msg;
+			PendingLayoutBpm = 0.f;
+			if (bSession)
+			{
+				UpdateLobbyLook();
+			}
+			return false;
+		}
+		PendingLayoutBpm = LayoutBpm;
+		SongRefuseReason.Reset();
+	}
+	else
+	{
+		PendingLayoutBpm = 0.f;
+	}
+
 	EndNinjaOptIn();
 	Runs.Reset();
 	WasFalling.Reset();
@@ -293,9 +355,18 @@ bool AGFBeatHopCourse::StartRunForPlayers(FName SongId, EGFBeatDifficulty Diffic
 
 	if (Mode == EGFBeatHopMode::Songs)
 	{
-		const FGFBeatmap* Map = FGFBuiltInSongs::Find(SongId, Difficulty);
-		check(Map); // CanStart checked it
-		BuildFromBeatmap(*Map);
+		if (Hand)
+		{
+			ApplyAuthoredMap(*Hand, PendingLayoutBpm);
+			PendingLayoutBpm = 0.f;
+		}
+		else
+		{
+			ClearAuthoredLayout();
+			const FGFBeatmap* Map = FGFBuiltInSongs::Find(SongId, Difficulty);
+			check(Map); // CanStart checked it
+			BuildFromBeatmap(*Map);
+		}
 	}
 	else
 	{
@@ -342,24 +413,45 @@ bool AGFBeatHopCourse::StartRunForPlayers(FName SongId, EGFBeatDifficulty Diffic
 		? static_cast<double>(GetDefault<UGFRhythmSettings>()->SongsOffsetMs) / 1000.0
 		: 0.0;
 	BeginNinjaOptIn();
+	if (Hand && StoredObstacles.Num() > 0)
+	{
+		SetNinjaChart(StoredObstacles);
+	}
 	bRunning = true;
+	if (QueuedDevSection > 0)
+	{
+		const int32 Section = QueuedDevSection;
+		QueuedDevSection = 0;
+		DevJumpToSection(Section);
+	}
 	return true;
 }
 
 void AGFBeatHopCourse::OnRep_RunSpec()
 {
 	// Clients rebuild the same course from the replicated song and difficulty.
-	if (!HasAuthority() && !RunSongId.IsNone())
+	if (HasAuthority() || RunSongId.IsNone())
 	{
-		if (const FGFBeatmap* Map = FGFBuiltInSongs::Find(RunSongId, RunDifficulty))
-		{
-			Windows = FGFJudgeWindows::For(EGFBeatHopMode::Songs, RunDifficulty);
-			BuildFromBeatmap(*Map);
-			// Judgements or hit bricks may have arrived before the meshes existed.
-			ApplyIncomingHitBricks();
-			ApplyIncomingJudgements();
-			UpdateScreen(GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0);
-		}
+		return;
+	}
+	if (const FGFBeatHopMapDef* Hand = GFBeatHopMaps::Find(RunMapId))
+	{
+		const float Bpm = RunLayoutBpm > 0.f ? RunLayoutBpm : Hand->ReferenceBpm;
+		ApplyAuthoredMap(*Hand, Bpm);
+		ApplyIncomingHitBricks();
+		ApplyIncomingJudgements();
+		UpdateScreen(GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0);
+		return;
+	}
+	ClearAuthoredLayout();
+	if (const FGFBeatmap* Map = FGFBuiltInSongs::Find(RunSongId, RunDifficulty))
+	{
+		Windows = FGFJudgeWindows::For(EGFBeatHopMode::Songs, RunDifficulty);
+		BuildFromBeatmap(*Map);
+		// Judgements or hit bricks may have arrived before the meshes existed.
+		ApplyIncomingHitBricks();
+		ApplyIncomingJudgements();
+		UpdateScreen(GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0);
 	}
 }
 
@@ -425,7 +517,8 @@ int32 AGFBeatHopCourse::AddBrick(double Time, double LenSeconds, int32 Lane, int
 	double X = (Time - StartTime) * Speed + LenSeconds * Speed * 0.5;
 	double Y = (Lane - (Lanes - 1) * 0.5) * LaneWidthCm;
 	// Songs follow the selected course. Fern is the chart itself. Live bricks stay on the chart (#114).
-	if (RunMode == EGFBeatHopMode::Songs)
+	// A hand-shaped map already placed every brick. Fern / Rime / Cinder must not weave it.
+	if (RunMode == EGFBeatHopMode::Songs && !GFBeatHopMaps::IsHandShaped(RunMapId))
 	{
 		const FGFBeatHopCourseDef* Layout = FGFBeatHopCourses::Find(RunCourseId);
 		if (!Layout)
@@ -456,8 +549,9 @@ int32 AGFBeatHopCourse::AddBrick(double Time, double LenSeconds, int32 Lane, int
 		const double ArtLength = Type == EGFBeatNoteType::Hold ? GFBeatHopCourse::ArtHoldLengthCm : GFBeatHopCourse::ArtBrickLengthCm;
 		// Switch arrows point +Y (toward higher lanes); a switch to a lower lane mirrors in Y.
 		const double SignY = (Type == EGFBeatNoteType::Switch && LastAddedLane != INDEX_NONE && Lane < LastAddedLane) ? -1.0 : 1.0;
+		const double WidthScale = AuthoredBrickWidthScale > 0.f ? static_cast<double>(AuthoredBrickWidthScale) : 1.0;
 		Mesh->SetRelativeLocation(FVector(X, Y, -BrickSizeCm.Z));
-		Mesh->SetRelativeScale3D(FVector(Length / ArtLength, SignY * BrickSizeCm.Y * PadScale / GFBeatHopCourse::ArtBrickLengthCm, BrickSizeCm.Z / GFBeatHopCourse::ArtBrickHeightCm));
+		Mesh->SetRelativeScale3D(FVector(Length / ArtLength, SignY * BrickSizeCm.Y * PadScale * WidthScale / GFBeatHopCourse::ArtBrickLengthCm, BrickSizeCm.Z / GFBeatHopCourse::ArtBrickHeightCm));
 		B.TopOffsetZ = BrickSizeCm.Z;
 		if (UMaterialInterface* ArtMat = Mesh->GetMaterial(0))
 		{
@@ -472,8 +566,9 @@ int32 AGFBeatHopCourse::AddBrick(double Time, double LenSeconds, int32 Lane, int
 			Mesh->SetStaticMesh(CubeMesh);
 		}
 		// Engine cube is 100 cm, centred on its origin.
+		const double WidthScale = AuthoredBrickWidthScale > 0.f ? static_cast<double>(AuthoredBrickWidthScale) : 1.0;
 		Mesh->SetRelativeLocation(FVector(X, Y, -BrickSizeCm.Z * 0.5));
-		Mesh->SetRelativeScale3D(FVector(Length / 100.0, BrickSizeCm.Y * PadScale / 100.0, BrickSizeCm.Z / 100.0));
+		Mesh->SetRelativeScale3D(FVector(Length / 100.0, BrickSizeCm.Y * PadScale * WidthScale / 100.0, BrickSizeCm.Z / 100.0));
 		B.TopOffsetZ = BrickSizeCm.Z * 0.5;
 		if (BaseMaterial)
 		{
@@ -1076,7 +1171,11 @@ void AGFBeatHopCourse::FinishRun()
 		FPlayerRun& Run = Pair.Value;
 		const FGFRhythmScore& Score = Run.Judge.GetScore();
 		// The grade bundle is the win payout. A timeout still scores, and it does not pay (#114).
-		if (bLastPassed)
+		// Free Hop pays on any finish. A hand-shaped course pays on a finish at grade B or better.
+		const EGFBeatHopGrade Grade = FGFRhythmJudge::GradeFor(Score);
+		const bool bHand = GFBeatHopMaps::IsHandShaped(RunMapId);
+		const bool bPay = bLastPassed && (!bHand || static_cast<uint8>(Grade) >= static_cast<uint8>(EGFBeatHopGrade::B));
+		if (bPay)
 		{
 			Grant(Pair.Key, Run, FGFBeatHopRewards::ForSongEnd(Score, TotalNotes, Rewards, bRunCozy), TEXT("BeatHop.SongEnd"), TEXT("SongEnd"));
 			FGFActivityWin::OnActivity().Broadcast(GetWorld(), Pair.Key, TEXT("BeatHop"), RunCourseId);
@@ -2071,15 +2170,19 @@ void AGFBeatHopCourse::BuildTrackKit()
 
 	// Checkpoints every CheckpointEveryBeats beats (songs). The strip has no collision of its own (only its pole),
 	// so a trigger box across the lanes records the reach. A caught player goes back to the brick nearest the strip.
-	if (!bLive && bAny && CheckpointEveryBeats > 0 && Beatmap.Bpm > 0.f)
+	const int32 CheckpointEvery = AuthoredCheckpointEvery >= 0 ? AuthoredCheckpointEvery : CheckpointEveryBeats;
+	if (!bLive && bAny && CheckpointEvery > 0 && Beatmap.Bpm > 0.f)
 	{
 		const double Speed = static_cast<double>(Beatmap.RefSpeedCms);
 		double GapScale = 1.0;
-		if (const FGFBeatHopCourseDef* Layout = FGFBeatHopCourses::Find(RunCourseId))
+		if (!GFBeatHopMaps::IsHandShaped(RunMapId))
 		{
-			GapScale = FMath::Max(0.1, static_cast<double>(Layout->GapScale));
+			if (const FGFBeatHopCourseDef* Layout = FGFBeatHopCourses::Find(RunCourseId))
+			{
+				GapScale = FMath::Max(0.1, static_cast<double>(Layout->GapScale));
+			}
 		}
-		for (int32 Beat = CheckpointEveryBeats; ; Beat += CheckpointEveryBeats)
+		for (int32 Beat = CheckpointEvery; ; Beat += CheckpointEvery)
 		{
 			const double X = Beatmap.BeatToSeconds(Beat) * Speed * GapScale;
 			if (X >= LastX - 150.0)
@@ -2159,6 +2262,8 @@ void AGFBeatHopCourse::BuildTrackKit()
 			KitComponents.Add(FinishTrigger);
 		}
 	}
+	BuildMapSigns(HalfWidth);
+	GFBeatHopMaps::NotifyLayout(this);
 	UE_LOG(LogGF, Verbose, TEXT("Beat Hop: track kit %d pieces, %d checkpoints"), KitComponents.Num(), CheckpointTriggers.Num());
 }
 
@@ -2597,11 +2702,19 @@ void AGFBeatHopCourse::BuildLobby()
 	SongTiles.Reset();
 	DifficultyTiles.Reset();
 	CourseTiles.Reset();
+	MapTiles.Reset();
 	RescueTiles.Reset();
 	SongTileMaterials.Reset();
 	DifficultyTileMaterials.Reset();
 	CourseTileMaterials.Reset();
+	MapTileMaterials.Reset();
 	RescueTileMaterial = nullptr;
+	MapTileIds.Reset();
+	MapTileIds.Add(GFBeatHopMaps::FreeHopId());
+	for (const FGFBeatHopMapDef& Map : GFBeatHopMaps::All())
+	{
+		MapTileIds.Add(Map.Id);
+	}
 
 	// Floor: neutral bricks five lanes wide (wide enough for Hard), or one engine-cube slab if the art is missing.
 	{
@@ -2680,6 +2793,13 @@ void AGFBeatHopCourse::BuildLobby()
 	{
 		Tile(DifficultyRowX, (i - 1) * TileSpacingY, DifficultyName(Diffs[i]), DifficultyTiles, DifficultyTileMaterials);
 	}
+	const int32 NumMaps = MapTileIds.Num();
+	for (int32 i = 0; i < NumMaps; ++i)
+	{
+		const FGFBeatHopMapDef* Map = GFBeatHopMaps::Find(MapTileIds[i]);
+		const FString Label = Map ? Map->Title : TEXT("Free Hop");
+		Tile(MapRowX, (i - (NumMaps - 1) * 0.5) * TileSpacingY, Label, MapTiles, MapTileMaterials);
+	}
 	const int32 NumCourses = CourseTileIds.Num();
 	for (int32 i = 0; i < NumCourses; ++i)
 	{
@@ -2695,6 +2815,7 @@ void AGFBeatHopCourse::BuildLobby()
 	}
 	AddLobbyText(TEXT("SONG"), FVector(SongRowX, 0.0, 250.0), 34.f, Sunflower.ToFColor(true));
 	AddLobbyText(TEXT("DIFFICULTY"), FVector(DifficultyRowX, 0.0, 250.0), 34.f, Mint.ToFColor(true));
+	AddLobbyText(TEXT("MAP"), FVector(MapRowX, 0.0, 250.0), 34.f, Lavender.ToFColor(true));
 	AddLobbyText(TEXT("COURSE"), FVector(CourseRowX, 0.0, 250.0), 34.f, Coral.ToFColor(true));
 	AddLobbyText(TEXT("BEAT HOP"), FVector(-600.0, 0.0, 430.0), 80.f, Lavender.ToFColor(true));
 	StatusText = AddLobbyText(TEXT(""), FVector(-600.0, 0.0, 350.0), 30.f, FColor::White);
@@ -2730,22 +2851,52 @@ void AGFBeatHopCourse::UpdateLobbyLook()
 			Mid->SetVectorParameterValue(ColorParam, bOn && Course ? Course->Tint : TileOff);
 		}
 	}
+	for (int32 i = 0; i < MapTileMaterials.Num(); ++i)
+	{
+		if (UMaterialInstanceDynamic* Mid = MapTileMaterials[i])
+		{
+			const FName Id = MapTileIds.IsValidIndex(i) ? MapTileIds[i] : NAME_None;
+			const FGFBeatHopMapDef* Map = GFBeatHopMaps::Find(Id);
+			const bool bOn = Id == SelectedMapId;
+			const FLinearColor On = Map ? Map->Tint : Lavender;
+			Mid->SetVectorParameterValue(ColorParam, bOn ? On : TileOff);
+		}
+	}
 	if (RescueTileMaterial)
 	{
 		RescueTileMaterial->SetVectorParameterValue(ColorParam, Rescues.Hires.Num() > 0 ? Mint : TileOff);
 	}
 	if (StatusText)
 	{
+		const FGFBeatHopMapDef* Hand = GFBeatHopMaps::Find(bRunning ? RunMapId : SelectedMapId);
 		const FGFBeatHopCourseDef* Course = FGFBeatHopCourses::Find(bRunning ? RunCourseId : SelectedCourseId);
 		const FString CourseTitle = Course ? Course->Title : TEXT("Fern Lane");
 		FString Line;
-		if (IsShowingResults())
+		if (Hand && IsShowingResults())
+		{
+			const int32 Score = Results.Num() > 0 ? Results[0].Score : 0;
+			const int32 Best = Results.Num() > 0 ? Results[0].BestScore : 0;
+			Line = FString::Printf(TEXT("%s. Par %d. Score %d. Best %d."), *Hand->Title, Hand->ParScore, Score, Best);
+		}
+		else if (IsShowingResults())
 		{
 			Line = bLastPassed ? TEXT("Course passed! Back to the hub in a moment") : TEXT("Not this time. Back to the hub in a moment");
+		}
+		else if (Hand && bRunning)
+		{
+			Line = FString::Printf(TEXT("%s. Hop!"), *Hand->Title);
 		}
 		else if (bRunning)
 		{
 			Line = FString::Printf(TEXT("%s, %s (%s) is on: hop!"), *CourseTitle, *SongTitle(RunSongId), *DifficultyName(RunDifficulty));
+		}
+		else if (Hand && !SongRefuseReason.IsEmpty())
+		{
+			Line = SongRefuseReason;
+		}
+		else if (Hand)
+		{
+			Line = TEXT("Walk through the start gate.");
 		}
 		else
 		{
@@ -2761,6 +2912,24 @@ void AGFBeatHopCourse::RebuildPreview()
 	{
 		return;
 	}
+	if (const FGFBeatHopMapDef* Hand = GFBeatHopMaps::Find(SelectedMapId))
+	{
+		RunMode = EGFBeatHopMode::Songs;
+		RunSongId = SelectedSong;
+		RunDifficulty = Hand->JudgeDifficulty;
+		RunCourseId = SelectedCourseId.IsNone() || !FGFBeatHopCourses::Find(SelectedCourseId)
+			? FGFBeatHopCourses::Default().Id
+			: SelectedCourseId;
+		float Bpm = Hand->ReferenceBpm;
+		if (const FGFBeatmap* Chart = FGFBuiltInSongs::Find(SelectedSong, Hand->JudgeDifficulty))
+		{
+			Bpm = Chart->Bpm;
+		}
+		ApplyAuthoredMap(*Hand, Bpm);
+		UpdateLobbyLook();
+		return;
+	}
+	ClearAuthoredLayout();
 	const FGFBeatmap* Map = FGFBuiltInSongs::Find(SelectedSong, SelectedDifficulty);
 	if (!Map)
 	{
@@ -2786,10 +2955,26 @@ bool AGFBeatHopCourse::SelectSong(FName SongId)
 	{
 		return false;
 	}
+	if (const FGFBeatHopMapDef* Hand = GFBeatHopMaps::Find(SelectedMapId))
+	{
+		float Bpm = 0.f;
+		if (const FGFBeatmap* Chart = FGFBuiltInSongs::Find(SongId, Hand->JudgeDifficulty))
+		{
+			Bpm = Chart->Bpm;
+		}
+		FString Msg;
+		if (!GFBeatHopMaps::Fits(*Hand, Bpm, Msg))
+		{
+			SongRefuseReason = Msg;
+			UpdateLobbyLook();
+			return false;
+		}
+	}
+	SongRefuseReason.Reset();
 	if (SongId != SelectedSong || RunSongId != SongId)
 	{
 		SelectedSong = SongId;
-		if (!FGFBuiltInSongs::Find(SelectedSong, SelectedDifficulty))
+		if (!GFBeatHopMaps::IsHandShaped(SelectedMapId) && !FGFBuiltInSongs::Find(SelectedSong, SelectedDifficulty))
 		{
 			SelectedDifficulty = EGFBeatDifficulty::Easy;
 		}
@@ -2801,7 +2986,11 @@ bool AGFBeatHopCourse::SelectSong(FName SongId)
 
 bool AGFBeatHopCourse::SelectDifficulty(EGFBeatDifficulty Difficulty)
 {
-	if (!HasAuthority() || bRunning || IsShowingResults() || !FGFBuiltInSongs::Find(SelectedSong, Difficulty))
+	if (!HasAuthority() || bRunning || IsShowingResults() || GFBeatHopMaps::IsHandShaped(SelectedMapId))
+	{
+		return false;
+	}
+	if (!FGFBuiltInSongs::Find(SelectedSong, Difficulty))
 	{
 		return false;
 	}
@@ -2834,6 +3023,14 @@ void AGFBeatHopCourse::OnLobbyTileOverlap(UPrimitiveComponent* OverlappedCompone
 		if (DifficultyTiles[i] == OverlappedComponent)
 		{
 			SelectDifficulty(static_cast<EGFBeatDifficulty>(i));
+			return;
+		}
+	}
+	for (int32 i = 0; i < MapTiles.Num(); ++i)
+	{
+		if (MapTiles[i] == OverlappedComponent && MapTileIds.IsValidIndex(i))
+		{
+			SelectMap(MapTileIds[i]);
 			return;
 		}
 	}
@@ -2969,7 +3166,7 @@ double AGFBeatHopCourse::RunTimeAtLocalX(double LocalX) const
 {
 	const double Speed = FMath::Max(1.0, static_cast<double>(Beatmap.RefSpeedCms));
 	double Scale = 1.0;
-	if (RunMode != EGFBeatHopMode::Live)
+	if (RunMode != EGFBeatHopMode::Live && !GFBeatHopMaps::IsHandShaped(RunMapId))
 	{
 		if (const FGFBeatHopCourseDef* Layout = FGFBeatHopCourses::Find(RunCourseId))
 		{
@@ -3405,6 +3602,12 @@ void AGFBeatHopCourse::OnSessionRunFinished()
 		Row.Misses = Score.Misses;
 		Row.Grade = FGFRhythmJudge::GradeFor(Score);
 		Row.bPassed = bLastPassed;
+		const FGFBeatHopMapDef* Hand = GFBeatHopMaps::Find(RunMapId);
+		const FName BestId = Hand ? RunMapId : GFBeatHopMaps::FreeHopId();
+		Row.MapTitle = Hand ? Hand->Title : FString();
+		Row.ParScore = Hand ? Hand->ParScore : 0;
+		GFBeatHopMaps::NoteBest(BestId, Pair.Key, Score.Score);
+		Row.BestScore = GFBeatHopMaps::BestScore(BestId, Pair.Key);
 		Results.Add(Row);
 	}
 	Results.Sort([](const FGFBeatHopResultRow& A, const FGFBeatHopResultRow& B) { return A.Score > B.Score; });
@@ -3672,7 +3875,8 @@ void AGFBeatHopCourse::ApplyHazardPush(ACharacter* Character, const FVector& Cou
 void AGFBeatHopCourse::RefreshHazards(const APawn* Runner)
 {
 	// Live bricks stay on the chart. Course hazards belong to the song courses.
-	if (RunMode == EGFBeatHopMode::Live)
+	// A hand-shaped map is the course. Fern / Rime / Cinder do not weave it or chase it.
+	if (RunMode == EGFBeatHopMode::Live || GFBeatHopMaps::IsHandShaped(RunMapId))
 	{
 		Revenge.bSpawned = false;
 		bRevengeShown = 0;
@@ -3715,7 +3919,7 @@ void AGFBeatHopCourse::RefreshHazards(const APawn* Runner)
 
 void AGFBeatHopCourse::TickHazards(float DeltaSeconds)
 {
-	if (!HasAuthority() || !bRunning || DeltaSeconds <= 0.f || RunMode == EGFBeatHopMode::Live)
+	if (!HasAuthority() || !bRunning || DeltaSeconds <= 0.f || RunMode == EGFBeatHopMode::Live || GFBeatHopMaps::IsHandShaped(RunMapId))
 	{
 		return;
 	}
@@ -3838,9 +4042,17 @@ void AGFBeatHopCourse::SetNinjaChart(const TArray<FGFBeatHopObstacleInstance>& C
 		Mesh->SetStaticMesh(Cube);
 		const FVector Extent = GFBeatHopNinja::ObstacleExtent(Obstacle.Kind, Obstacle.HeightCm, NinjaProfile);
 		Mesh->SetRelativeScale3D(Extent / Unit);
-		const float Side = Obstacle.Kind == EGFBeatHopObstacle::WallRunPanel ? NinjaProfile.ObstacleSideOffsetCm : 0.f;
+		float Side = Obstacle.Kind == EGFBeatHopObstacle::WallRunPanel ? NinjaProfile.ObstacleSideOffsetCm : 0.f;
 		const float X = static_cast<float>(Obstacle.BeatTime) * Speed;
-		const float Y = static_cast<float>(Obstacle.Lane) * LaneWidthCm + Side;
+		float Y = static_cast<float>(Obstacle.Lane) * LaneWidthCm;
+		if (bAlignNinjaToLanes)
+		{
+			const float Lanes = static_cast<float>(FMath::Max(1, NumLanes));
+			Y = (static_cast<float>(Obstacle.Lane) - (Lanes - 1.f) * 0.5f) * LaneWidthCm;
+			const bool bMantleAside = bMantleLaneClear && Obstacle.Kind == EGFBeatHopObstacle::MantleLedge;
+			Side = (Obstacle.Kind == EGFBeatHopObstacle::WallRunPanel || bMantleAside) ? NinjaProfile.ObstacleSideOffsetCm : 0.f;
+		}
+		Y += Side;
 		Mesh->SetRelativeLocation(FVector(X, Y, Extent.Z * NinjaProfile.MeshCenterScale));
 		Mesh->SetCollisionProfileName(TEXT("BlockAll"));
 		Mesh->SetCanEverAffectNavigation(false);
@@ -3870,10 +4082,19 @@ FVector AGFBeatHopCourse::GetNinjaWorldLocation(int32 Index) const
 	}
 	const FGFBeatHopObstacleInstance& Obstacle = NinjaObstacles[Index];
 	const FVector Extent = GFBeatHopNinja::ObstacleExtent(Obstacle.Kind, Obstacle.HeightCm, NinjaProfile);
-	const float Side = Obstacle.Kind == EGFBeatHopObstacle::WallRunPanel ? NinjaProfile.ObstacleSideOffsetCm : 0.f;
+	float Side = Obstacle.Kind == EGFBeatHopObstacle::WallRunPanel ? NinjaProfile.ObstacleSideOffsetCm : 0.f;
+	double Y = static_cast<double>(Obstacle.Lane) * static_cast<double>(LaneWidthCm);
+	if (bAlignNinjaToLanes)
+	{
+		const double Lanes = static_cast<double>(FMath::Max(1, NumLanes));
+		Y = (static_cast<double>(Obstacle.Lane) - (Lanes - 1.0) * 0.5) * static_cast<double>(LaneWidthCm);
+		const bool bMantleAside = bMantleLaneClear && Obstacle.Kind == EGFBeatHopObstacle::MantleLedge;
+		Side = (Obstacle.Kind == EGFBeatHopObstacle::WallRunPanel || bMantleAside) ? NinjaProfile.ObstacleSideOffsetCm : 0.f;
+	}
+	Y += static_cast<double>(Side);
 	const FVector Local(
 		static_cast<double>(Obstacle.BeatTime) * static_cast<double>(Beatmap.RefSpeedCms),
-		static_cast<double>(Obstacle.Lane) * static_cast<double>(LaneWidthCm) + static_cast<double>(Side),
+		Y,
 		static_cast<double>(Extent.Z) * static_cast<double>(NinjaProfile.MeshCenterScale));
 	return GetActorTransform().TransformPosition(Local);
 }
@@ -4043,4 +4264,346 @@ void AGFBeatHopCourse::ReceiveRemoteNinja(const TArray<FGFBeatHopNinjaRep>& In)
 {
 	NinjaReps = In;
 	ApplyIncomingNinja();
+}
+
+void AGFBeatHopCourse::ClearAuthoredLayout()
+{
+	RunMapId = NAME_None;
+	RunLayoutBpm = 0.f;
+	AuthoredBrickWidthScale = 1.f;
+	AuthoredCheckpointEvery = -1;
+	bAlignNinjaToLanes = false;
+	bMantleLaneClear = false;
+	StoredObstacles.Reset();
+	if (NinjaObstacles.Num() > 0 || NinjaMeshes.Num() > 0)
+	{
+		SetNinjaChart({});
+	}
+}
+
+void AGFBeatHopCourse::ApplyAuthoredMap(const FGFBeatHopMapDef& Map, float Bpm)
+{
+	RunMapId = Map.Id;
+	RunLayoutBpm = Bpm;
+	AuthoredBrickWidthScale = Map.BrickWidthScale > 0.f ? Map.BrickWidthScale : 1.f;
+	AuthoredCheckpointEvery = FMath::Max(0, Map.CheckpointEveryBeats);
+	bAlignNinjaToLanes = true;
+	bMantleLaneClear = !Map.bMantleClimb || !GFBeatHopNinja::IsMantleImplemented();
+	Windows.PerfectMs = Map.PerfectWindowMs;
+	Windows.GoodMs = Map.GoodWindowMs;
+	NinjaProfile = GFBeatHopNinja::Profile();
+
+	FGFBeatHopMapBuilt Built;
+	FString Error;
+	if (!GFBeatHopMaps::Build(Map, Bpm, Built, Error))
+	{
+		UE_LOG(LogGF, Error, TEXT("Beat Hop: %s"), *Error);
+		ClearAuthoredLayout();
+		BuildTrackKit();
+		return;
+	}
+	BuildFromBeatmap(Built.Beatmap);
+	for (FGFBeatHopObstacleInstance& Obstacle : Built.Obstacles)
+	{
+		int32 Safe = INDEX_NONE;
+		for (int32 Index = GetFirstBrickIndex(); Index < NumBricks(); ++Index)
+		{
+			if (GetBrick(Index).Time <= Obstacle.BeatTime + 0.001)
+			{
+				Safe = Index;
+			}
+		}
+		Obstacle.SafeBrickIndex = Safe;
+	}
+	StoredObstacles = Built.Obstacles;
+	SetNinjaChart(StoredObstacles);
+	if (HasAuthority())
+	{
+		RefreshHazards(nullptr);
+	}
+}
+
+void AGFBeatHopCourse::BuildMapSigns(double HalfWidth)
+{
+	bHasCourseSign = false;
+	CourseSignNumber = 0;
+	CourseSignPips = 0;
+	CourseSignMoveMarks = 0;
+	SectionSignCount = 0;
+	CourseSignName.Reset();
+
+	const FGFBeatHopMapDef* Map = GFBeatHopMaps::Find(RunMapId);
+	if (!Map || !StartGate)
+	{
+		return;
+	}
+	bHasCourseSign = true;
+	CourseSignNumber = Map->Number;
+	CourseSignPips = static_cast<int32>(Map->DisplayDifficulty) + 1;
+	CourseSignName = Map->Title;
+
+	TArray<FString> Marks;
+	for (const FGFBeatHopMapPiece& Piece : Map->Pieces)
+	{
+		const FString Key = GFBeatHopMaps::VarietyKey(Piece.Kind);
+		if (!Key.IsEmpty() && !Marks.Contains(Key))
+		{
+			Marks.Add(Key);
+		}
+	}
+	CourseSignMoveMarks = Marks.Num();
+	SectionSignCount = Map->Sections.Num();
+
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, GFBeatHopCourse::CubePath);
+	UMaterialInterface* Basic = LoadObject<UMaterialInterface>(nullptr, GFBeatHopCourse::MaterialPath);
+	auto CubeAt = [&](const FVector& At, const FVector& Scale, const FLinearColor& Color, const FRotator& Rot)
+	{
+		if (!Cube)
+		{
+			return;
+		}
+		UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transient);
+		Mesh->SetupAttachment(Root);
+		Mesh->SetStaticMesh(Cube);
+		Mesh->SetRelativeLocationAndRotation(At, Rot);
+		Mesh->SetRelativeScale3D(Scale);
+		Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Mesh->SetCanEverAffectNavigation(false);
+		if (Basic)
+		{
+			UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(Basic, this);
+			Mid->SetVectorParameterValue(GFBeatHopCourse::ColorParam, Color);
+			Mesh->SetMaterial(0, Mid);
+		}
+		Mesh->RegisterComponent();
+		KitComponents.Add(Mesh);
+	};
+	auto Label = [&](const FString& Text, const FVector& At, float Size)
+	{
+		UTextRenderComponent* Render = NewObject<UTextRenderComponent>(this, NAME_None, RF_Transient);
+		Render->SetupAttachment(Root);
+		Render->SetText(FText::FromString(Text));
+		Render->SetWorldSize(Size);
+		Render->SetHorizontalAlignment(EHTA_Center);
+		Render->SetVerticalAlignment(EVRTA_TextCenter);
+		Render->SetTextRenderColor(FColor::White);
+		Render->SetRelativeLocationAndRotation(At, FRotator(0.0, 180.0, 0.0));
+		Render->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Render->SetCanEverAffectNavigation(false);
+		Render->RegisterComponent();
+		KitComponents.Add(Render);
+	};
+	auto Teach = [&](const FString& Kind, const FVector& At)
+	{
+		const FLinearColor Ink = Map->Tint;
+		if (Kind == TEXT("lane"))
+		{
+			CubeAt(At + FVector(0, -16, 0), FVector(0.16, 0.16, 0.16), Ink, FRotator::ZeroRotator);
+			CubeAt(At + FVector(0, 16, 0), FVector(0.16, 0.16, 0.16), Ink, FRotator::ZeroRotator);
+		}
+		else if (Kind == TEXT("dash"))
+		{
+			for (int32 i = 0; i < 3; ++i)
+			{
+				CubeAt(At + FVector(-20.0 + i * 20.0, 0, 0), FVector(0.12, 0.12, 0.12), Ink, FRotator::ZeroRotator);
+			}
+		}
+		else if (Kind == TEXT("mantle"))
+		{
+			CubeAt(At, FVector(0.22, 0.22, 0.12), Ink, FRotator::ZeroRotator);
+			CubeAt(At + FVector(0, 0, 22), FVector(0.16, 0.16, 0.12), Ink, FRotator::ZeroRotator);
+		}
+		else if (Kind == TEXT("wall"))
+		{
+			CubeAt(At, FVector(0.12, 0.28, 0.7), Ink, FRotator::ZeroRotator);
+		}
+		else if (Kind == TEXT("grapple"))
+		{
+			CubeAt(At, FVector(0.08, 0.08, 0.55), Ink, FRotator::ZeroRotator);
+			CubeAt(At + FVector(0, 0, 36), FVector(0.2, 0.2, 0.08), Ink, FRotator::ZeroRotator);
+		}
+		else if (Kind == TEXT("swivel"))
+		{
+			CubeAt(At, FVector(0.18, 0.18, 0.18), Ink, FRotator(0.0, 45.0, 45.0));
+		}
+		else if (Kind == TEXT("crumble"))
+		{
+			CubeAt(At + FVector(-18, 0, 0), FVector(0.16, 0.16, 0.16), Ink, FRotator::ZeroRotator);
+			CubeAt(At, FVector(0.12, 0.12, 0.12), Ink, FRotator::ZeroRotator);
+			CubeAt(At + FVector(16, 0, 0), FVector(0.08, 0.08, 0.08), Ink, FRotator::ZeroRotator);
+		}
+		else if (Kind == TEXT("beatwall"))
+		{
+			CubeAt(At, FVector(0.12, 0.55, 0.28), Ink, FRotator::ZeroRotator);
+		}
+		else if (Kind == TEXT("ledge"))
+		{
+			CubeAt(At, FVector(0.18, 0.18, 0.14), Ink, FRotator::ZeroRotator);
+			CubeAt(At + FVector(0, 0, 20), FVector(0.14, 0.14, 0.14), Ink, FRotator::ZeroRotator);
+			CubeAt(At + FVector(0, 0, 38), FVector(0.1, 0.1, 0.1), Ink, FRotator::ZeroRotator);
+		}
+		else if (Kind == TEXT("chain"))
+		{
+			for (int32 i = 0; i < 3; ++i)
+			{
+				CubeAt(At + FVector(-22.0 + i * 22.0, 0, 8.0 * i), FVector(0.12, 0.12, 0.12), Ink, FRotator::ZeroRotator);
+			}
+		}
+		else
+		{
+			CubeAt(At, FVector(0.18, 0.18, 0.18), Ink, FRotator::ZeroRotator);
+		}
+	};
+
+	const FVector Gate = StartGate->GetRelativeLocation();
+	const FVector Board = Gate + FVector(0.0, HalfWidth + 220.0, 150.0);
+	const FLinearColor BoardColor(0.08f, 0.09f, 0.12f);
+	CubeAt(Board, FVector(0.08, 1.7, 2.1), BoardColor, FRotator::ZeroRotator);
+	for (int32 i = 0; i < CourseSignNumber; ++i)
+	{
+		CubeAt(Board + FVector(-6.0, -50.0 + i * 28.0, 70.0), FVector(0.12, 0.16, 0.16), FLinearColor::White, FRotator::ZeroRotator);
+	}
+	for (int32 i = 0; i < CourseSignPips; ++i)
+	{
+		CubeAt(Board + FVector(-6.0, -40.0 + i * 24.0, 40.0), FVector(0.1, 0.14, 0.1), Map->Tint, FRotator::ZeroRotator);
+	}
+	for (int32 i = 0; i < Marks.Num(); ++i)
+	{
+		Teach(Marks[i], Board + FVector(-6.0, -60.0 + (i % 4) * 36.0, -10.0 - (i / 4) * 36.0));
+	}
+	Label(Map->Title, Board + FVector(0.0, 0.0, 130.0), 28.f);
+	Label(TEXT("Walk through the start gate."), Gate + FVector(-180.0, 0.0, 220.0), 22.f);
+
+	for (const FGFBeatHopMapSection& Section : Map->Sections)
+	{
+		const double X = Beatmap.BeatToSeconds(Section.StartBeat) * static_cast<double>(Beatmap.RefSpeedCms);
+		const FVector At(X, -(HalfWidth + 180.0), 90.0);
+		CubeAt(At, FVector(0.08, 0.7, 0.9), BoardColor, FRotator::ZeroRotator);
+		Teach(Section.Teach, At + FVector(-6.0, 0.0, 0.0));
+	}
+}
+
+FString AGFBeatHopCourse::GetArrivalPrompt() const
+{
+	if (bRunning || IsShowingResults() || !GFBeatHopMaps::IsHandShaped(SelectedMapId))
+	{
+		return FString();
+	}
+	return TEXT("Walk through the start gate.");
+}
+
+bool AGFBeatHopCourse::SelectMap(FName MapId)
+{
+	if (!HasAuthority() || bRunning || IsShowingResults())
+	{
+		return false;
+	}
+	if (MapId.IsNone() || MapId == GFBeatHopMaps::FreeHopId())
+	{
+		if (SelectedMapId != GFBeatHopMaps::FreeHopId())
+		{
+			SelectedMapId = GFBeatHopMaps::FreeHopId();
+			SongRefuseReason.Reset();
+			RebuildPreview();
+			UE_LOG(LogGF, Log, TEXT("Beat Hop: map Free Hop"));
+		}
+		return true;
+	}
+	const FGFBeatHopMapDef* Map = GFBeatHopMaps::Find(MapId);
+	if (!Map)
+	{
+		return false;
+	}
+	SelectedMapId = Map->Id;
+	SelectedDifficulty = Map->DisplayDifficulty;
+	SelectedSong = Map->DefaultSong;
+	SongRefuseReason.Reset();
+	RebuildPreview();
+	UE_LOG(LogGF, Log, TEXT("Beat Hop: map %s"), *Map->Title);
+	return true;
+}
+
+bool AGFBeatHopCourse::ScriptClearCourse(const FString& PlayerKey, bool bFinish)
+{
+	if (!HasAuthority() || !bRunning || PlayerKey.IsEmpty())
+	{
+		return false;
+	}
+	for (int32 Index = GetFirstBrickIndex(); Index < NumBricks(); ++Index)
+	{
+		HandleLanding(PlayerKey, Index, GetBrick(Index).Time);
+	}
+	for (int32 Index = 0; Index < NinjaObstacles.Num(); ++Index)
+	{
+		const FGFBeatHopObstacleInstance& Obstacle = NinjaObstacles[Index];
+		FGFBeatHopNinjaPress Press;
+		Press.Time = Obstacle.BeatTime;
+		Press.Move = GFBeatHopNinja::MoveFor(Obstacle.Kind, Obstacle.HeightCm, RunDifficulty, NinjaProfile);
+		const bool bAir = Obstacle.Kind == EGFBeatHopObstacle::WallRunPanel
+			|| Obstacle.Kind == EGFBeatHopObstacle::DashGate
+			|| Obstacle.Kind == EGFBeatHopObstacle::GrapplePost
+			|| Obstacle.Kind == EGFBeatHopObstacle::SwivelPole;
+		Press.bGrounded = !bAir;
+		Press.LeftGroundAt = bAir ? Obstacle.BeatTime : -1.0;
+		JudgeNinja(PlayerKey, Index, Press, EGFBeatHopNinjaContact::Clear);
+	}
+	return bFinish ? ReachFinish(nullptr) : true;
+}
+
+FString AGFBeatHopCourse::DevJumpToSection(int32 SectionOneBased)
+{
+#if UE_BUILD_SHIPPING
+	return TEXT("Dev builds only.");
+#else
+	if (!HasAuthority())
+	{
+		return TEXT("Only the host can jump.");
+	}
+	const FGFBeatHopMapDef* Map = GFBeatHopMaps::Find(bRunning ? RunMapId : SelectedMapId);
+	if (!Map)
+	{
+		return TEXT("No hand-shaped course.");
+	}
+	if (SectionOneBased < 1 || SectionOneBased > Map->Sections.Num())
+	{
+		return TEXT("No such section.");
+	}
+	if (!bRunning)
+	{
+		QueuedDevSection = SectionOneBased;
+		FString Reason;
+		if (!StartRun(Map->DefaultSong, Map->DisplayDifficulty, EGFBeatHopMode::Songs, false, Reason))
+		{
+			QueuedDevSection = 0;
+			return Reason.IsEmpty() ? TEXT("The course did not start.") : Reason;
+		}
+		return FString();
+	}
+	const double Target = Beatmap.BeatToSeconds(Map->Sections[SectionOneBased - 1].StartBeat);
+	if (DebugRunTime >= 0.0)
+	{
+		DebugRunTime = Target;
+	}
+	RunStartServerTime = GetServerWorldTime() - Target - RunCalibrationSeconds;
+	int32 Brick = INDEX_NONE;
+	for (int32 Index = GetFirstBrickIndex(); Index < NumBricks(); ++Index)
+	{
+		if (GetBrick(Index).Time + 0.001 >= Target)
+		{
+			Brick = Index;
+			break;
+		}
+	}
+	if (Brick != INDEX_NONE)
+	{
+		ForEachPlayerPawn([this, Brick](APawn* Pawn)
+		{
+			if (ACharacter* Character = Cast<ACharacter>(Pawn))
+			{
+				PutBackOnBrick(Character, RunnerId(Character), Brick);
+			}
+		});
+	}
+	return FString();
+#endif
 }

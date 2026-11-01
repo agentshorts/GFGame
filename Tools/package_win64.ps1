@@ -90,6 +90,15 @@ if (-not $Exe) {
 
 Write-Host "Packaged executable: $($Exe.FullName)"
 
+$TryFile = Join-Path (Split-Path -Parent $PSScriptRoot) "WHAT_TO_TRY.txt"
+if (Test-Path -LiteralPath $TryFile) {
+    Copy-Item -LiteralPath $TryFile -Destination (Join-Path $OutputDir "WHAT_TO_TRY.txt") -Force
+    Write-Host "Copied WHAT_TO_TRY.txt into $OutputDir"
+}
+else {
+    Write-Warning "WHAT_TO_TRY.txt was not found next to the project."
+}
+
 # Binaries\Win64 sits two folders under the staged project root.
 if ($Exe.DirectoryName -match '[\\/]Binaries[\\/]Win64$') {
     $ProjectDir = Split-Path -Parent (Split-Path -Parent $Exe.DirectoryName)

@@ -1,0 +1,43 @@
+{
+	"id": "WarmUpWobble",
+	"number": 1,
+	"title": "Warm-Up Wobble",
+	"difficulty": "Easy",
+	"judge_difficulty": "Easy",
+	"default_song": "PebbleParade",
+	"bpm_min": 80,
+	"bpm_max": 110,
+	"reference_bpm": 96,
+	"par_score": 2400,
+	"brick_width_scale": 1.6,
+	"perfect_window_ms": 70,
+	"good_window_ms": 150,
+	"checkpoint_every_beats": 8,
+	"mantle_climb": false,
+	"lanes": 4,
+	"ref_speed_cms": 600,
+	"tint": [0.392, 0.791, 0.624],
+	"notes": "Mantle ledges stay beside the lane until mantling exists. A pad, a gap and a landing hop are the way across.",
+	"sections": [
+		{"id": "Hop", "teach": "hop", "start_beat": 4},
+		{"id": "Lane", "teach": "lane", "start_beat": 12},
+		{"id": "Dash", "teach": "dash", "start_beat": 20},
+		{"id": "Mantle", "teach": "mantle", "start_beat": 28}
+	],
+	"pieces": [
+		{"kind": "hop", "beat": 4, "lane": 1},
+		{"kind": "hop", "beat": 6, "lane": 1},
+		{"kind": "hop", "beat": 8, "lane": 1},
+		{"kind": "hop", "beat": 10, "lane": 1},
+		{"kind": "lane", "beat": 12, "lane": 2},
+		{"kind": "lane", "beat": 14, "lane": 0},
+		{"kind": "lane", "beat": 16, "lane": 1},
+		{"kind": "hop", "beat": 18, "lane": 1},
+		{"kind": "dash", "beat": 20, "lane": 1},
+		{"kind": "hop", "beat": 22, "lane": 1},
+		{"kind": "pad", "beat": 28, "lane": 1},
+		{"kind": "gap", "beat": 30, "lane": 1},
+		{"kind": "mantle", "beat": 30, "lane": 1, "height_cm": 120},
+		{"kind": "hop", "beat": 32, "lane": 1}
+	]
+}
