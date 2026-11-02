@@ -1,7 +1,9 @@
 #include "GFMagicActors.h"
 #include "GFAssetMap.h"
 #include "GFMagicRules.h"
+#include "Components/SpotLightComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Math/RotationMatrix.h"
 #include "Net/UnrealNetwork.h"
 
 namespace
@@ -91,6 +93,12 @@ AGFMagicFieldMarker::AGFMagicFieldMarker()
 	SetReplicateMovement(true);
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	SetRootComponent(Mesh);
+	Light = CreateDefaultSubobject<USpotLightComponent>(TEXT("Beam"));
+	Light->SetupAttachment(Mesh);
+	Light->SetMobility(EComponentMobility::Movable);
+	Light->SetCastShadows(false);
+	Light->SetIntensity(0.f);
+	Light->SetVisibility(false);
 }
 
 void AGFMagicFieldMarker::BeginPlay()
@@ -103,22 +111,67 @@ void AGFMagicFieldMarker::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AGFMagicFieldMarker, Element);
+	DOREPLIFETIME(AGFMagicFieldMarker, BeamDir);
+	DOREPLIFETIME(AGFMagicFieldMarker, BeamHalfAngle);
+	DOREPLIFETIME(AGFMagicFieldMarker, BeamRangeCm);
+	DOREPLIFETIME(AGFMagicFieldMarker, BeamIntensity);
 }
 
-void AGFMagicFieldMarker::SetElement(EGFMagicElement InElement)
+void AGFMagicFieldMarker::SetBeam(EGFMagicElement InElement, const FVector& Dir, float HalfAngleDeg, float RangeCm, float Intensity)
 {
 	Element = InElement;
+	BeamDir = Dir.GetSafeNormal().IsNearlyZero() ? FVector(0.f, 0.f, -1.f) : Dir.GetSafeNormal();
+	BeamHalfAngle = FMath::Max(1.f, HalfAngleDeg);
+	BeamRangeCm = FMath::Max(100.f, RangeCm);
+	BeamIntensity = FMath::Max(0.f, Intensity);
 	ApplyMesh();
 }
 
-void AGFMagicFieldMarker::OnRep_Element()
+void AGFMagicFieldMarker::OnRep_Beam()
 {
 	ApplyMesh();
 }
 
 void AGFMagicFieldMarker::ApplyMesh()
 {
-	PrepareMesh(Mesh, this, FGFMagicRules::ElementColor(Element), 1.6f);
+	if (!Mesh)
+	{
+		return;
+	}
+	const bool bCone = Element == EGFMagicElement::Spark || BeamIntensity > 0.f;
+	const FLinearColor Color = FGFMagicRules::ElementColor(Element);
+	Mesh->SetStaticMesh(FGFAssetMap::PlaceholderMesh(bCone ? EGFPlaceholderShape::Cone : EGFPlaceholderShape::Sphere));
+	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (UMaterialInterface* Tint = FGFAssetMap::MakeTint(this, Color))
+	{
+		Mesh->SetMaterial(0, Tint);
+	}
+	const FVector Dir = BeamDir.GetSafeNormal().IsNearlyZero() ? FVector(0.f, 0.f, -1.f) : BeamDir.GetSafeNormal();
+	if (bCone)
+	{
+		const float HalfRad = FMath::DegreesToRadians(FMath::Clamp(BeamHalfAngle, 1.f, 89.f));
+		const float Length = FMath::Max(100.f, BeamRangeCm);
+		const float Radius = Length * FMath::Tan(HalfRad);
+		Mesh->SetRelativeScale3D(FVector(Radius / 50.f, Radius / 50.f, Length / 100.f));
+		Mesh->SetRelativeRotation(FRotationMatrix::MakeFromZ(Dir).Rotator());
+	}
+	else
+	{
+		Mesh->SetRelativeScale3D(FVector(1.6f));
+		Mesh->SetRelativeRotation(FRotator::ZeroRotator);
+	}
+	if (Light)
+	{
+		const bool bLit = bCone && BeamIntensity > 0.f;
+		Light->SetVisibility(bLit);
+		Light->SetIntensity(bLit ? BeamIntensity : 0.f);
+		Light->SetOuterConeAngle(FMath::Clamp(BeamHalfAngle, 1.f, 80.f));
+		Light->SetInnerConeAngle(FMath::Clamp(BeamHalfAngle * 0.5f, 0.f, 80.f));
+		Light->SetAttenuationRadius(FMath::Max(100.f, BeamRangeCm));
+		Light->SetCastShadows(false);
+		Light->SetRelativeRotation(FRotationMatrix::MakeFromX(Dir).Rotator());
+		Light->SetLightColor(Color);
+	}
 }
 
 AGFMagicClaw::AGFMagicClaw()

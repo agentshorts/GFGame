@@ -252,4 +252,87 @@ bool FGFNetMagicMiningTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFNetMagicFrostbindTest, "GFGame.Net.MagicMining.Frostbind", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFNetMagicFrostbindTest::RunTest(const FString&)
+{
+	using namespace GFNetTest;
+	using namespace GFNetMagicTest;
+	FCtxRef Ctx = Start(this, 2);
+	TSharedRef<FString> Key = MakeShared<FString>();
+
+	Do(Ctx, [this, Key]()
+	{
+		UWorld* Server = ServerWorld();
+		UWorld* Client = ClientWorlds()[0];
+		AGFGameState* GS = GameState(Server);
+		AGFPlayerState* Mine = LocalPlayerState(Client);
+		AGFPlayerState* OnServer = Mine ? PlayerStateByKey(Server, Mine->PlayerKey) : nullptr;
+		AGFVoxelWorld* Grid = Voxel(Server);
+		if (!TestNotNull(TEXT("Server frost caster"), OnServer) || !TestNotNull(TEXT("Voxel"), Grid) || !OnServer->GetPawn())
+		{
+			return;
+		}
+		*Key = Mine->PlayerKey;
+		if (GS)
+		{
+			// Same gate as the field test. Plot rules are on by default and would refuse the chain.
+			GS->bFreeBuild = true;
+			GS->bEnforcePlotPermissions = false;
+			GS->MaxEditReach = 0.f;
+		}
+		for (int32 Step = 0; Step < 7; ++Step)
+		{
+			Grid->ServerApplyEdit(FIntVector(8 + Step, 4, 6), TEXT("Ice"));
+		}
+		Grid->ServerApplyEdit(FIntVector(8, 5, 6), TEXT("Fabric"));
+		HoldStill(OnServer->GetPawn());
+		HoldStill(Mine->GetPawn());
+		OnServer->GetPawn()->SetActorLocation(Grid->CellToWorld(FIntVector(8, 4, 6)), false, nullptr, ETeleportType::TeleportPhysics);
+		HoldStill(OnServer->GetPawn());
+		OnServer->FactionId = TEXT("Rime");
+		if (UGFMagicComponent* Magic = OnServer->FindComponentByClass<UGFMagicComponent>())
+		{
+			Magic->AuthorityToggle();
+		}
+		if (UGFMagicComponent* Magic = Mine->FindComponentByClass<UGFMagicComponent>())
+		{
+			Magic->SetAim(Grid->CellToWorld(FIntVector(8, 4, 6)), Grid->CellToWorld(FIntVector(8, 4, 6)));
+		}
+	});
+	WaitUntil(Ctx, TEXT("the frost aim arrived"), 5.f, [Key]()
+	{
+		AGFPlayerState* OnServer = PlayerStateByKey(ServerWorld(), *Key);
+		AGFVoxelWorld* Grid = Voxel(ServerWorld());
+		UGFMagicComponent* Magic = OnServer ? OnServer->FindComponentByClass<UGFMagicComponent>() : nullptr;
+		return Magic && Grid && Magic->GetElement() == EGFMagicElement::Frost
+			&& FVector::Dist(Magic->GetAimPoint(), Grid->CellToWorld(FIntVector(8, 4, 6))) < 50.f;
+	});
+	Do(Ctx, []()
+	{
+		if (AGFPlayerState* Mine = LocalPlayerState(ClientWorlds()[0]))
+		{
+			if (UGFMagicComponent* Magic = Mine->FindComponentByClass<UGFMagicComponent>())
+			{
+				Magic->SetFieldHeld(true);
+			}
+		}
+	});
+	WaitUntil(Ctx, TEXT("the freeze chain shattered past the beam and the fabric stayed"), 10.f, [Key]()
+	{
+		UWorld* Server = ServerWorld();
+		UWorld* Client = ClientWorlds()[0];
+		AGFVoxelWorld* ServerGrid = Voxel(Server);
+		AGFVoxelWorld* ClientGrid = Voxel(Client);
+		return ServerGrid && ClientGrid
+			&& ServerGrid->GetBlock(FIntVector(8, 4, 6)).IsNone()
+			&& ServerGrid->GetBlock(FIntVector(12, 4, 6)).IsNone()
+			&& ClientGrid->GetBlock(FIntVector(12, 4, 6)).IsNone()
+			&& ServerGrid->GetBlock(FIntVector(14, 4, 6)) == FName(TEXT("Ice"))
+			&& ServerGrid->GetBlock(FIntVector(8, 5, 6)) == FName(TEXT("Fabric"))
+			&& VoxelsConverged();
+	});
+	Stop(Ctx);
+	return true;
+}
+
 #endif

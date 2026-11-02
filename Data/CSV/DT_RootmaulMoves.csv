@@ -1,0 +1,12 @@
+# Rootmaul combo. BarkAxe and Stonebreaker override the moves they change; the rest fall back to Rootmaul.
+# Row name is Form_MoveId. Light swings are free. Taproot and the overhead spend crystal.
+---,Form,MoveId,MontageSection,Input,Width,Height,Depth,Power,ChargeCost,LungeCm,NextOnLight,NextOnHeavy,bPitch,bRooted,TimeSeconds
+Rootmaul_Swing1,Rootmaul,Swing1,Swing1,Light,3,2,1,120,0,50,Swing2,SplinterSweep,False,False,0.40
+Rootmaul_Swing2,Rootmaul,Swing2,Swing2,Light,3,2,1,120,0,50,Groundsplitter,Taproot,False,False,0.40
+Rootmaul_Groundsplitter,Rootmaul,Groundsplitter,Groundsplitter,Light,3,3,2,220,0,50,Swing1,Swing1,False,True,0.70
+Rootmaul_SplinterSweep,Rootmaul,SplinterSweep,SplinterSweep,Heavy,5,2,1,160,0,50,Swing1,Swing1,False,False,0.60
+Rootmaul_Taproot,Rootmaul,Taproot,Taproot,Heavy,1,1,4,300,15,50,Swing1,Swing1,True,False,0.80
+Rootmaul_HeavyOverhead,Rootmaul,HeavyOverhead,HeavyOverhead,Heavy,3,3,1,200,10,50,Swing1,Swing1,False,False,0.75
+BarkAxe_Swing1,BarkAxe,Swing1,Swing1,Light,1,2,2,120,0,50,Swing2,SplinterSweep,False,False,0.30
+Stonebreaker_Swing1,Stonebreaker,Swing1,Swing1,Light,3,2,1,120,0,50,Swing2,Groundsplitter,False,False,0.50
+Stonebreaker_Groundsplitter,Stonebreaker,Groundsplitter,Groundsplitter,Light,3,3,3,220,0,50,Swing1,Swing1,False,True,0.70

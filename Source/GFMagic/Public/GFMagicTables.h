@@ -15,7 +15,9 @@ struct GFMAGIC_API FGFMagicCatalog
 	static const FGFMiningSpellRow* FieldSpell(EGFMagicElement Element);
 	static const FGFClawcallFormRow* Form(FName FactionId);
 	static const FGFSpellUpgradeRow* Upgrade(FName UpgradeId);
+	static const FGFRootmaulMoveRow* Move(FName Form, FName MoveId);
 	static const UDataTable* UpgradeTable();
+	static const UDataTable* MoveTable();
 	static const UDataTable* ComboTable();
 	static float BlockHardness(FName BlockId);
 	static FName BlockDrop(FName BlockId);

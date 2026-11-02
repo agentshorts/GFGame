@@ -44,6 +44,8 @@ struct FGFMiningRow
 	FString Sign1;
 	FString Sign2;
 	FString Sign3;
+	/** Pipe-separated gf.Magic commands. Loaded from MiningRange_Demos_v1.csv, with a code fallback. */
+	FString DemoCommands;
 };
 
 struct FGFMiningCell
@@ -136,6 +138,7 @@ struct GFGAME_API FGFMiningRangeLayout
 	static FString RowsPath();
 	static FString TreePath();
 	static FString DressingPath();
+	static FString DemosPath();
 
 	/** Rows, tree, ground, lip, then dressing v2 if the file parses. */
 	bool LoadProject();

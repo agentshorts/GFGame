@@ -1,20 +1,19 @@
-# Spark is 1 on almost everything. Each faction element is about 2x on its home blocks.
-# Lava is only touchable by Frost, and that quench turns it into Basalt. Fabric is spell-proof.
-# Built cells are spell-proof in code, on top of this table.
----,Spark,Magma,Root,Frost,bSpellProof,bConductive,bTree,bSoil,bOre,FrostTransform,MagmaDrop
-Grass,1,0.5,2,0.5,False,False,False,True,False,None,None
-Dirt,1,0.5,2,0.5,False,False,False,True,False,None,None
-WoodPlank,1,0.5,2,0.5,False,False,False,False,False,None,None
-Stone,1,2,0.5,0.5,False,False,False,False,False,None,None
-Glass,1,0.5,0.5,2,False,False,False,False,False,None,None
-Fabric,0,0,0,0,True,False,False,False,False,None,None
-Ice,1,2,0.5,2,False,False,False,False,False,None,None
-Basalt,1,2,0.5,0.5,False,False,False,False,False,None,None
-Lava,0,0,0,2,False,False,False,False,False,Basalt,None
-Farmland,1,0.5,2,0.5,False,False,False,True,False,None,None
-Log,1,0.5,2,0.5,False,False,True,False,False,None,None
-Leaves,1,0.5,2,0.5,False,False,True,False,False,None,None
-ClayBed,1,0.5,2,0.5,False,False,False,True,False,None,None
-OreMetal,1,2,0.5,0.5,False,True,False,False,True,None,Metal
-CoalnutSeam,1,2,0.5,0.5,False,False,False,False,True,None,Coalnut
-CrystalVein,1,0.5,0.5,2,False,True,False,False,True,None,None
+# v3 matrix. Hardness stays on DT_Blocks. FreezeSpread is the fraction a shatter pushes into this block.
+# Lava is claw-immune so a frost summon cannot quench it. Frost still quenches through the beam.
+---,Spark,Magma,Root,Frost,bSpellProof,bConductive,bTree,bSoil,bOre,FrostTransform,MagmaDrop,FreezeSpread,bClawcallImmune
+Grass,1,1,2,0.5,False,False,False,True,False,None,None,0.3,False
+Dirt,1,1,2,0.5,False,False,False,True,False,None,None,0.3,False
+WoodPlank,0.75,1.5,2,0.75,False,False,False,False,False,None,None,0.3,False
+Stone,1,2,1,1,False,False,False,False,False,None,None,0.6,False
+Glass,1.5,1,1,2,False,False,False,False,False,None,None,1,False
+Fabric,0,0,0,0,True,False,False,False,False,None,None,0,False
+Ice,0.75,3,0.75,2,False,False,False,False,False,None,None,1,False
+Basalt,1,2,0.5,1.25,False,False,False,False,False,None,None,0.6,False
+Lava,0,0,0,2,False,False,False,False,False,Basalt,None,0,True
+Farmland,1,1,2,0.5,False,False,False,True,False,None,None,0.3,False
+Log,0.75,1.5,2.5,0.75,False,False,True,False,False,None,None,0.3,False
+Leaves,1,2,2,0.5,False,False,True,False,False,None,None,0.3,False
+ClayBed,1,1.5,2,0.75,False,False,False,True,False,None,None,0.6,False
+OreMetal,1.5,2,0.5,1,False,True,False,False,True,None,Metal,0.6,False
+CoalnutSeam,1,1,1.5,1,False,False,False,False,True,None,Coalnut,0.6,False
+CrystalVein,1.5,0.75,0.5,2.5,False,True,False,False,True,None,None,1,False

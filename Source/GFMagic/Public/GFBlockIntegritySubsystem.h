@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GFMagicComponent.h"
+#include "GFMagicShapes.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "GFBlockIntegritySubsystem.generated.h"
 
@@ -47,9 +48,27 @@ private:
 	UGFMagicComponent* FindCaster(const FString& Key) const;
 	void ApplyCast(UGFMagicComponent* Caster, FMagicDeferredCast Deferred, int32& Budget, AGFVoxelWorld* Voxel);
 	void Commit(AGFVoxelWorld* Voxel, const FMagicHitOutput& Out);
+	void ApplySwings(UGFMagicComponent* Caster, int32& Budget, AGFVoxelWorld* Voxel);
+	void CastField(UGFMagicComponent* Caster, int32& Budget, AGFVoxelWorld* Voxel, TArray<FIntVector>& Detonate);
+	void SpawnGlobs(UGFMagicComponent* Caster, const FGFMiningSpellRow& Spell, AGFVoxelWorld* Voxel);
+	void StepGlobs(AGFVoxelWorld* Voxel);
+	void StepPuddlesAndSmears(int32& Budget, AGFVoxelWorld* Voxel);
+	void StepFreeze(int32& Budget, AGFVoxelWorld* Voxel, const TArray<FIntVector>& Detonate, UGFMagicComponent* BeamCaster, const TArray<FIntVector>& Beam, const FIntVector& AimCell);
+	FMagicWorldView MakeView(AGFPlayerState* PS, AGFVoxelWorld* Voxel) const;
+	void RememberMark(const FIntVector& Cell, FName Mark, float Seconds);
+	FName ActiveShape(const UGFMagicComponent* Caster) const;
 
 	TSet<FIntVector> Placed;
 	TMap<FIntVector, FMagicWound> Wounds;
+	TArray<FMagicGlob> Globs;
+	TArray<FMagicPuddle> Puddles;
+	TArray<FMagicSmear> Smears;
+	TMap<FIntVector, FMagicFreezeCell> Freeze;
+	TMap<int32, int32> FreezeChains;
+	TMap<FString, float> GlobFraction;
+	TMap<FIntVector, FMagicMark> Marks;
+	int32 NextChainId = 1;
+	double MiningNow = 0.0;
 	float Accumulator = 0.f;
 	bool bBound = false;
 	FDelegateHandle EditHandle;

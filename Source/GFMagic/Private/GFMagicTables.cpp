@@ -39,15 +39,20 @@ const FGFMiningSpellRow* FGFMagicCatalog::Spell(FName SpellId)
 
 const FGFMiningSpellRow* FGFMagicCatalog::FieldSpell(EGFMagicElement Element)
 {
-	const TCHAR* Id = TEXT("Sparkfield");
+	const TCHAR* Id = TEXT("Sparkcone");
+	const TCHAR* Legacy = TEXT("Sparkfield");
 	switch (Element)
 	{
-	case EGFMagicElement::Magma: Id = TEXT("Magmafield"); break;
-	case EGFMagicElement::Root: Id = TEXT("Rootfield"); break;
-	case EGFMagicElement::Frost: Id = TEXT("Frostfield"); break;
+	case EGFMagicElement::Magma: Id = TEXT("MagmaSpray"); Legacy = TEXT("Magmafield"); break;
+	case EGFMagicElement::Root: Id = TEXT("Rootmaul"); Legacy = TEXT("Rootfield"); break;
+	case EGFMagicElement::Frost: Id = TEXT("Frostbind"); Legacy = TEXT("Frostfield"); break;
 	default: break;
 	}
-	return Spell(Id);
+	if (const FGFMiningSpellRow* Row = Spell(Id))
+	{
+		return Row;
+	}
+	return Spell(Legacy);
 }
 
 const FGFClawcallFormRow* FGFMagicCatalog::Form(FName FactionId)
@@ -65,6 +70,38 @@ const FGFSpellUpgradeRow* FGFMagicCatalog::Upgrade(FName UpgradeId)
 const UDataTable* FGFMagicCatalog::UpgradeTable()
 {
 	return Table(TEXT("DT_SpellUpgrades"), FGFSpellUpgradeRow::StaticStruct());
+}
+
+const UDataTable* FGFMagicCatalog::MoveTable()
+{
+	return Table(TEXT("DT_RootmaulMoves"), FGFRootmaulMoveRow::StaticStruct());
+}
+
+const FGFRootmaulMoveRow* FGFMagicCatalog::Move(FName Form, FName MoveId)
+{
+	const UDataTable* Rows = MoveTable();
+	if (!Rows)
+	{
+		return nullptr;
+	}
+	const FGFRootmaulMoveRow* Fallback = nullptr;
+	for (const FName& Name : Rows->GetRowNames())
+	{
+		const FGFRootmaulMoveRow* Row = Rows->FindRow<FGFRootmaulMoveRow>(Name, TEXT("MagicMove"), false);
+		if (!Row || Row->MoveId != MoveId)
+		{
+			continue;
+		}
+		if (Row->Form == Form)
+		{
+			return Row;
+		}
+		if (Row->Form == TEXT("Rootmaul"))
+		{
+			Fallback = Row;
+		}
+	}
+	return Fallback;
 }
 
 const UDataTable* FGFMagicCatalog::ComboTable()
