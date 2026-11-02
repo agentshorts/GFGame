@@ -1,0 +1,422 @@
+{
+ "schema": "gf.mineable/v1",
+ "kit": "town_v1",
+ "source": "handoff/inbox/town_v1/MINEABLE_town_v1_v2.json",
+ "rule": "Only crystal and trees can be mined. mode whole_mesh: any face; mode slots: only faces of the listed material slots; mode none (and any mesh not listed): never.",
+ "meshes": [
+  {
+   "asset": "SM_Town_Barrel",
+   "path": "/Game/Art/Town/Props/SM_Town_Barrel",
+   "folder": "SM_Town_Barrel_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 30,
+   "reason": "prop"
+  },
+  {
+   "asset": "SM_Town_Bench",
+   "path": "/Game/Art/Town/Props/SM_Town_Bench",
+   "folder": "SM_Town_Bench_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 32,
+   "reason": "prop"
+  },
+  {
+   "asset": "SM_Town_Canal_Bridge",
+   "path": "/Game/Art/Town/Canal/SM_Town_Canal_Bridge",
+   "folder": "SM_Town_Canal_Bridge_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 122,
+   "reason": "canal"
+  },
+  {
+   "asset": "SM_Town_Canal_Corner",
+   "path": "/Game/Art/Town/Canal/SM_Town_Canal_Corner",
+   "folder": "SM_Town_Canal_Corner_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 50,
+   "reason": "canal"
+  },
+  {
+   "asset": "SM_Town_Canal_Straight",
+   "path": "/Game/Art/Town/Canal/SM_Town_Canal_Straight",
+   "folder": "SM_Town_Canal_Straight_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 30,
+   "reason": "canal"
+  },
+  {
+   "asset": "SM_Town_CaravanCart",
+   "path": "/Game/Art/Town/Outskirts/Caravan/SM_Town_CaravanCart",
+   "folder": "SM_Town_CaravanCart_v3",
+   "manifest": "manifest_v3.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 570,
+   "reason": "crystal lantern and crystal weave band"
+  },
+  {
+   "asset": "SM_Town_CaravanPen",
+   "path": "/Game/Art/Town/Outskirts/Caravan/SM_Town_CaravanPen",
+   "folder": "SM_Town_CaravanPen_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 598,
+   "reason": "hanging crystal lantern"
+  },
+  {
+   "asset": "SM_Town_Crate",
+   "path": "/Game/Art/Town/Props/SM_Town_Crate",
+   "folder": "SM_Town_Crate_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 10,
+   "reason": "prop"
+  },
+  {
+   "asset": "SM_Town_ForestTree_A",
+   "path": "/Game/Art/Town/Outskirts/Forest/SM_Town_ForestTree_A",
+   "folder": "SM_Town_ForestTree_A_v3",
+   "manifest": "manifest_v3.json",
+   "mode": "whole_mesh",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 456,
+   "reason": "forest tree"
+  },
+  {
+   "asset": "SM_Town_ForestTree_B",
+   "path": "/Game/Art/Town/Outskirts/Forest/SM_Town_ForestTree_B",
+   "folder": "SM_Town_ForestTree_B_v4",
+   "manifest": "manifest_v4.json",
+   "mode": "whole_mesh",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 468,
+   "reason": "forest tree"
+  },
+  {
+   "asset": "SM_Town_ForestTree_C",
+   "path": "/Game/Art/Town/Outskirts/Forest/SM_Town_ForestTree_C",
+   "folder": "SM_Town_ForestTree_C_v3",
+   "manifest": "manifest_v3.json",
+   "mode": "whole_mesh",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 396,
+   "reason": "forest tree"
+  },
+  {
+   "asset": "SM_Town_Fountain",
+   "path": "/Game/Art/Town/TownV1/SM_Town_Fountain",
+   "folder": "SM_Town_Fountain_v5",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 5878,
+   "reason": "plaza centrepiece"
+  },
+  {
+   "asset": "SM_Town_House_Large",
+   "path": "/Game/Art/Town/Homes/SM_Town_House_Large",
+   "folder": "SM_Town_House_Large_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 1524,
+   "reason": "crystal weave bands, corner seams, roof-ridge strip, window mullions and door inlay"
+  },
+  {
+   "asset": "SM_Town_House_Med",
+   "path": "/Game/Art/Town/Homes/SM_Town_House_Med",
+   "folder": "SM_Town_House_Med_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 890,
+   "reason": "crystal weave bands, corner seams, roof-ridge strip, window mullions and door inlay"
+  },
+  {
+   "asset": "SM_Town_House_Small",
+   "path": "/Game/Art/Town/Homes/SM_Town_House_Small",
+   "folder": "SM_Town_House_Small_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 432,
+   "reason": "crystal weave bands, corner seams, roof-ridge strip, window mullions and door inlay"
+  },
+  {
+   "asset": "SM_Town_LampPost",
+   "path": "/Game/Art/Town/TownV1/SM_Town_LampPost",
+   "folder": "SM_Town_LampPost_v7",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 342,
+   "reason": "crystal lantern"
+  },
+  {
+   "asset": "SM_Town_Paving",
+   "path": "/Game/Art/Town/Ground/SM_Town_Paving",
+   "folder": "SM_Town_Paving_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 10,
+   "reason": "paving"
+  },
+  {
+   "asset": "SM_Town_Paving_Mosaic",
+   "path": "/Game/Art/Town/Ground/SM_Town_Paving_Mosaic",
+   "folder": "SM_Town_Paving_Mosaic_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 10,
+   "reason": "paving"
+  },
+  {
+   "asset": "SM_Town_Paving_Worn",
+   "path": "/Game/Art/Town/Ground/SM_Town_Paving_Worn",
+   "folder": "SM_Town_Paving_Worn_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 10,
+   "reason": "paving"
+  },
+  {
+   "asset": "SM_Town_Planter",
+   "path": "/Game/Art/Town/Props/SM_Town_Planter",
+   "folder": "SM_Town_Planter_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 90,
+   "reason": "prop"
+  },
+  {
+   "asset": "SM_Town_PowerLine_Span",
+   "path": "/Game/Art/Town/TownV1/SM_Town_PowerLine_Span",
+   "folder": "SM_Town_PowerLine_Span_v5",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 132,
+   "reason": "crystal power line between pylons"
+  },
+  {
+   "asset": "SM_Town_PowerPylon",
+   "path": "/Game/Art/Town/TownV1/SM_Town_PowerPylon",
+   "folder": "SM_Town_PowerPylon_v6",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 6440,
+   "reason": "crystal insulators and nodes"
+  },
+  {
+   "asset": "SM_Town_Stall_Coilback",
+   "path": "/Game/Art/Town/TownV1/SM_Town_Stall_Coilback",
+   "folder": "SM_Town_Stall_Coilback_v5",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 2110,
+   "reason": "market stall"
+  },
+  {
+   "asset": "SM_Town_Stall_Emberhare",
+   "path": "/Game/Art/Town/TownV1/SM_Town_Stall_Emberhare",
+   "folder": "SM_Town_Stall_Emberhare_v5",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 1476,
+   "reason": "market stall"
+  },
+  {
+   "asset": "SM_Town_Stall_Frosthorn",
+   "path": "/Game/Art/Town/TownV1/SM_Town_Stall_Frosthorn",
+   "folder": "SM_Town_Stall_Frosthorn_v5",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 1428,
+   "reason": "market stall"
+  },
+  {
+   "asset": "SM_Town_Stall_GlacierWater",
+   "path": "/Game/Art/Town/TownV1/SM_Town_Stall_GlacierWater",
+   "folder": "SM_Town_Stall_GlacierWater_v5",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 1516,
+   "reason": "market stall"
+  },
+  {
+   "asset": "SM_Town_Tower_Spire",
+   "path": "/Game/Art/Town/Walls/SM_Town_Tower_Spire",
+   "folder": "SM_Town_Tower_Spire_v2",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 312,
+   "reason": "crystal spire cap and crystal trim"
+  },
+  {
+   "asset": "SM_Town_Wall_Corner",
+   "path": "/Game/Art/Town/Walls/SM_Town_Wall_Corner",
+   "folder": "SM_Town_Wall_Corner_v1",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 336,
+   "reason": "wall"
+  },
+  {
+   "asset": "SM_Town_Wall_Gate",
+   "path": "/Game/Art/Town/Walls/SM_Town_Wall_Gate",
+   "folder": "SM_Town_Wall_Gate_v1",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 288,
+   "reason": "wall (gate)"
+  },
+  {
+   "asset": "SM_Town_Wall_Straight",
+   "path": "/Game/Art/Town/Walls/SM_Town_Wall_Straight",
+   "folder": "SM_Town_Wall_Straight_v1",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 120,
+   "reason": "wall"
+  }
+ ]
+}

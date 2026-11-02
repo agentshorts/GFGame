@@ -23,6 +23,7 @@ class UGFInventoryComponent;
 class AGFGameState;
 class AGFVoxelWorld;
 class AActor;
+struct FHitResult;
 
 /**
  * Per-player replicated state (PLAN.md section 4.1). Owns the player's inventory (server-authoritative,
@@ -241,6 +242,12 @@ public:
 	 * Otherwise the same land, mode, and plot gates as a remove.
 	 */
 	bool CanMineAt(const FVector& WorldPoint, const FIntVector& Cell, FString& OutReason) const;
+	/**
+	 * Mesh mining gate (town meshes, trees). The FGFMineable whitelist first (only crystal slots and trees), then the
+	 * same character, land and plot gates as CanMineAt. True for a whitelisted hit when there is no game state.
+	 * Trace with FGFMineable::QueryParams() so the hit carries its face index.
+	 */
+	bool CanMineHit(const FHitResult& Hit, FString& OutReason) const;
 	/** Item a block costs to place and gives back when removed. */
 	FName ItemForBlock(FName BlockId) const;
 
@@ -321,6 +328,8 @@ public:
 	bool bLoggedOut = false;
 
 protected:
+	/** Land, mode and plot gates shared by CanMineAt and CanMineHit. */
+	bool PassesMineLandRules(const AGFGameState* GS, const FVector& WorldPoint, const FIntVector& Cell, bool bCellInWorld, FString& OutReason) const;
 	UFUNCTION()
 	void HandleInventoryChanged(FName ItemId, int32 NewCount);
 	UFUNCTION()

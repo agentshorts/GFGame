@@ -4,6 +4,8 @@
 #include "GFLocalProfileSubsystem.h"
 #include "GFInventoryComponent.h"
 #include "GFPathRules.h"
+#include "GFMineable.h"
+#include "Engine/HitResult.h"
 #include "GFVoxelWorld.h"
 #include "GFTamingComponent.h"
 #include "GameFramework/Character.h"
@@ -747,6 +749,11 @@ bool AGFPlayerState::CanMineAt(const FVector& WorldPoint, const FIntVector& Cell
 		OutReason = TEXT("out of bounds");
 		return false;
 	}
+	return PassesMineLandRules(GS, WorldPoint, Cell, /*bCellInWorld*/ true, OutReason);
+}
+
+bool AGFPlayerState::PassesMineLandRules(const AGFGameState* GS, const FVector& WorldPoint, const FIntVector& Cell, bool bCellInWorld, FString& OutReason) const
+{
 	const EGFOverworldEdit Land = GS->OverworldEditQuery.IsBound()
 		? GS->OverworldEditQuery.Execute(FactionId, WorldPoint)
 		: EGFOverworldEdit::Inactive;
@@ -762,7 +769,8 @@ bool AGFPlayerState::CanMineAt(const FVector& WorldPoint, const FIntVector& Cell
 		OutReason = Why.ToString();
 		return false;
 	}
-	if (GS->bEnforcePlotPermissions)
+	// Plots live inside the voxel world, so a point outside it has no plot to check.
+	if (GS->bEnforcePlotPermissions && bCellInWorld)
 	{
 		const bool bOpenFactionGround = (Land == EGFOverworldEdit::Own || Land == EGFOverworldEdit::Shared)
 			&& GS->Land.PlotAt(Cell) == nullptr;
@@ -772,6 +780,30 @@ bool AGFPlayerState::CanMineAt(const FVector& WorldPoint, const FIntVector& Cell
 		}
 	}
 	return true;
+}
+
+bool AGFPlayerState::CanMineHit(const FHitResult& Hit, FString& OutReason) const
+{
+	// Whitelist first: only crystal slots and trees, whatever the land says.
+	if (!FGFMineable::CanMineHit(Hit, OutReason))
+	{
+		return false;
+	}
+	const AGFGameState* GS = GetGFGameState();
+	if (!GS)
+	{
+		return true;
+	}
+	if (!bCharacterReady)
+	{
+		OutReason = TEXT("character not loaded");
+		return false;
+	}
+	const FVector Point = Hit.bBlockingHit ? FVector(Hit.ImpactPoint) : FVector(Hit.Location);
+	const AGFVoxelWorld* Voxel = GetVoxelWorld();
+	const FIntVector Cell = Voxel ? Voxel->WorldToCell(Point) : FIntVector::ZeroValue;
+	const bool bCellInWorld = Voxel && Voxel->GetGrid().IsInBounds(Cell);
+	return PassesMineLandRules(GS, Point, Cell, bCellInWorld, OutReason);
 }
 
 bool AGFPlayerState::ServerHandleEdit(const FIntVector& Cell, FName BlockId, FString* OutReason, int32* OutChunkRevision)
