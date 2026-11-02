@@ -6,7 +6,8 @@ townsfolk clips (fbx_v4).
   UnrealEditor-Cmd.exe GFGame.uproject -run=pythonscript -script="<abs>/Tools/import_towns_v2.py" -unattended -nullrhi -nosplash
 
 Env: GFTOWN_KIT (default <project>/handoff/inbox/towns_v2), GFTOWN_V1_KIT (default <kit>/../town_v1),
-GFTOWN_PHASE=rig to run only the rig check (one FBX, nothing kept), GFTOWN_SKIP_MESHES=1, GFTOWN_SKIP_CLIPS=1.
+GFTOWN_PHASE=rig to run only the rig check (one FBX, nothing kept), GFTOWN_SKIP_MESHES=1, GFTOWN_SKIP_CLIPS=1,
+GFTOWN_ONLY=SM_A,SM_B to import just those whitelist meshes (skips the town_v1 fountain).
 
 - Meshes come from Data/Town/towns_v2_mineable.json (Tools/gen_towns_v2_mineable.py). Import, textures, materials
   and per-mesh QA reuse Tools/import_town_v1.py (do_mesh); the mining data is stamped with kit towns_v2.
@@ -198,7 +199,10 @@ def do_clips(front_x, rot):
 
 def do_meshes():
     base.KIT, base.KIT_NAME = KIT, "towns_v2"
+    only = {s.strip() for s in os.environ.get("GFTOWN_ONLY", "").split(",") if s.strip()}
     for entry in json.load(open(WHITELIST, encoding="utf-8"))["meshes"]:
+        if only and entry["asset"] not in only:
+            continue
         r = {"checks": {}}
         report["meshes"][entry["asset"]] = r
         try:
@@ -207,6 +211,8 @@ def do_meshes():
             r["error"] = str(e) + "\n" + traceback.format_exc()
         r["pass"] = "error" not in r and all(v is True for v in r["checks"].values())
         log("{}: pass={} {}".format(entry["asset"], r["pass"], r["checks"]))
+    if only:
+        return
     # town_v1 fix: the fountain v7 (same asset path, still refused, kit town_v1).
     base.KIT, base.KIT_NAME = V1_KIT, "town_v1"
     for entry in json.load(open(WHITELIST_V1, encoding="utf-8"))["meshes"]:

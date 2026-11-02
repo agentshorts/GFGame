@@ -1,16 +1,19 @@
-"""Builds the towns_v2 maps from Carina's layout placements (run after Tools/import_towns_v2.py):
+"""Builds the towns_v2 maps from the kit layout placements (run after Tools/import_towns_v2.py):
 
-  L_Town_Cinderwright_A   layouts_v2/Town_Cinderwright_Layout_v2 (current Cinderwright layout), charcoal ground
+  L_Town_Cinderwright_A   fixes_v1/layouts/Town_Cinderwright_Layout_v3 (v2 plus the second crane), charcoal ground slabs
   L_Town_Rime_A           layouts_v1/Town_Rime_Layout_v1, snow/ice ground
   L_Homestead_Verdant_A   layouts_v1/Town_Verdant_Homestead_Layout_v1, grass ground
-  L_World_Factions_A      layouts_v2/World_Factions_Layout_v2 with its layout_refs flattened (Verdant A v2, Verdant
-                          homestead v1, Rime v1, Cinderwright v2), grass / snow / charcoal ground split between towns
+  L_World_Factions_A      fixes_v1/layouts/World_Factions_Layout_v3 with its layout_refs flattened (Verdant A v2, Verdant
+                          homestead v1, Rime v1, Cinderwright v3), grass / snow / charcoal ground split between towns
 
   UnrealEditor-Cmd.exe GFGame.uproject -run=pythonscript -script="<abs>/Tools/place_towns_v2.py" -unattended -nullrhi -nosplash
 
 Env: GFTOWN_KIT (default <project>/handoff/inbox/towns_v2), GFTOWN_V1_KIT (default <kit>/../town_v1),
-GFTOWN_MAPS (comma list of map names, default all). Each map is rebuilt from scratch: flat ground slab(s) with the top
-at Z = 0 (the kits have no landscape), sun, sky light, atmosphere, fog, a player start at the +X entry, and one
+GFTOWN_MAPS (comma list of map names, default all), GFTOWN_LIGHTS (FIXES_V1: "director" (default) places no sun, sky light,
+atmosphere or fog so the game environment director lights the map exactly like the hub (fixed manual exposure, fog 0.005);
+"placed" keeps the editor-placed lights and adds the same manual exposure volume and fog the director would use).
+Each map is rebuilt from scratch: flat ground with the top at Z = 0 (the kits have no landscape; Cinderwright charcoal is
+tiled with the 64 m GroundSlab mesh), lights only with GFTOWN_LIGHTS=placed, a player start at the +X entry, and one
 StaticMeshActor per placement in outliner folders by group. Writes Saved/ArtImport/towns_v2_layout_report.json.
 """
 import collections, json, math, os
@@ -30,12 +33,18 @@ LAYOUTS = {
     "Town_Verdant_Homestead_Layout_v1": os.path.join(KIT, "layouts_v1", "Town_Verdant_Homestead_Layout_v1_placements.json"),
     "Town_Rime_Layout_v1": os.path.join(KIT, "layouts_v1", "Town_Rime_Layout_v1_placements.json"),
     "Town_Cinderwright_Layout_v2": os.path.join(KIT, "layouts_v2", "Town_Cinderwright_Layout_v2_placements.json"),
+    "Town_Cinderwright_Layout_v3": os.path.join(KIT, "fixes_v1", "layouts", "Town_Cinderwright_Layout_v3_placements.json"),  # FIXES_V1
+    "World_Factions_Layout_v3": os.path.join(KIT, "fixes_v1", "layouts", "World_Factions_Layout_v3_placements.json"),  # FIXES_V1
     "World_Factions_Layout_v2": os.path.join(KIT, "layouts_v2", "World_Factions_Layout_v2_placements.json"),
 }
-MAPS = [("L_Town_Cinderwright_A", "Town_Cinderwright_Layout_v2", "charcoal"),
+CW = "Town_Cinderwright_Layout_v3"  # FIXES_V1 (was Town_Cinderwright_Layout_v2)
+GROUND_SLAB = "SM_Town_Cinderwright_GroundSlab"  # FIXES_V1: 64 m charcoal slab, pivot at the bottom centre, 6.25 cm thick
+SLAB_CM, SLAB_T = 6400.0, 6.25
+LIGHTS = (os.environ.get("GFTOWN_LIGHTS", "").strip() or "director").lower()
+MAPS = [("L_Town_Cinderwright_A", CW, "charcoal"),
         ("L_Town_Rime_A", "Town_Rime_Layout_v1", "snow"),
         ("L_Homestead_Verdant_A", "Town_Verdant_Homestead_Layout_v1", "grass"),
-        ("L_World_Factions_A", "World_Factions_Layout_v2", None)]
+        ("L_World_Factions_A", "World_Factions_Layout_v3", None)]  # FIXES_V1 (was v2)
 report = {"maps": {}}
 
 
@@ -76,6 +85,66 @@ def slab(label, x0, x1, y0, y1, mat):
     return [x0, x1, y0, y1, mat]
 
 
+def tile_ground(label, x0, x1, y0, y1, mat, paths, anchor_x0=False):
+    """FIXES_V1: charcoal ground is tiled with the GroundSlab mesh (top at z 0, its own charcoal material) instead of one
+    engine cube stretched with the basalt block material. Other grounds, or a missing slab asset, fall back to slab()."""
+    ap = paths.get(GROUND_SLAB)
+    if mat != "charcoal" or not ap or not EAL.does_asset_exist(ap):
+        return slab(label, x0, x1, y0, y1, mat)
+    mesh = unreal.load_asset(ap)
+    nx, ny = int(math.ceil((x1 - x0) / SLAB_CM)), int(math.ceil((y1 - y0) / SLAB_CM))
+    # centred on the rect (town map); anchored at x0 for the world so the slabs never run under the grass / snow cubes
+    sx = x0 + SLAB_CM / 2 if anchor_x0 else (x0 + x1) / 2 - (nx - 1) * SLAB_CM / 2
+    sy = (y0 + y1) / 2 - (ny - 1) * SLAB_CM / 2
+    sx, sy = round(sx / 6.25) * 6.25, round(sy / 6.25) * 6.25  # on the 6.25 cm grid (matches Town_Cinderwright_GroundSlab_v1_placements.json)
+    for i in range(nx):
+        for j in range(ny):
+            g = spawn(unreal.StaticMeshActor, unreal.Vector(sx + i * SLAB_CM, sy + j * SLAB_CM, -SLAB_T))
+            g.static_mesh_component.set_static_mesh(mesh)
+            g.set_actor_label("{}_{:02d}_{:02d}".format(label, i, j)); g.set_folder_path("Town/Ground")
+    return [x0, x1, y0, y1, mat, "slabs {}x{}".format(nx, ny)]
+
+
+def lights():
+    """FIXES_V1. director: place nothing; the environment director adds sun, atmosphere, sky light, fog 0.005 and the
+    fixed manual exposure at runtime (it only adds the exposure when it owns the sun, which is why placed suns washed
+    the ground out). placed: the original editor lights plus the director's exposure volume and fog values."""
+    if LIGHTS == "director":
+        return "director"
+    sun = spawn(unreal.DirectionalLight, unreal.Vector(0, 0, 2000), unreal.Rotator(0, -45, 135))
+    sun.set_actor_label("Sun"); sun.set_folder_path("Town/Lighting")
+    try:
+        sun.light_component.set_editor_property("atmosphere_sun_light", True)
+        sun.light_component.set_editor_property("intensity", 10.0)
+    except Exception:
+        pass
+    sky = spawn(unreal.SkyLight, unreal.Vector(0, 0, 1500))
+    sky.set_actor_label("SkyLight"); sky.set_folder_path("Town/Lighting")
+    try:
+        sky.light_component.set_editor_property("real_time_capture", True)
+    except Exception:
+        pass
+    a = spawn(unreal.SkyAtmosphere, unreal.Vector(0, 0, 0)); a.set_actor_label("SkyAtmosphere"); a.set_folder_path("Town/Lighting")
+    fog = spawn(unreal.ExponentialHeightFog, unreal.Vector(0, 0, 0)); fog.set_actor_label("Fog"); fog.set_folder_path("Town/Lighting")
+    try:
+        fc = fog.get_component_by_class(unreal.ExponentialHeightFogComponent)
+        fc.set_editor_property("fog_density", 0.005); fc.set_editor_property("enable_volumetric_fog", False)
+    except Exception as e:
+        log("fog settings: {}".format(e))
+    ppv = spawn(unreal.PostProcessVolume, unreal.Vector(0, 0, 0)); ppv.set_actor_label("Exposure_Manual"); ppv.set_folder_path("Town/Lighting")
+    try:
+        ppv.set_editor_property("unbound", True); ppv.set_editor_property("priority", 1.0); ppv.set_editor_property("blend_weight", 1.0)
+        s = ppv.get_editor_property("settings")
+        for k, v in (("auto_exposure_method", unreal.AutoExposureMethod.AEM_MANUAL), ("auto_exposure_bias", 0.0),
+                     ("auto_exposure_apply_physical_camera_exposure", False),
+                     ("auto_exposure_min_brightness", 1.0), ("auto_exposure_max_brightness", 1.0)):
+            s.set_editor_property("override_" + k, True); s.set_editor_property(k, v)
+        ppv.set_editor_property("settings", s)
+    except Exception as e:
+        log("exposure volume settings: {}".format(e))
+    return "placed"
+
+
 def bounds(P):
     xs = [p[2][0] for p in P]; ys = [p[2][1] for p in P]
     return min(xs), max(xs), min(ys), max(ys)
@@ -87,19 +156,26 @@ def build(map_name, layout_name, ground, paths):
     path = "/Game/Maps/" + map_name
     if EAL.does_asset_exist(path):
         EAL.delete_asset(path)
-    if not les.new_level(path):
+    if EAL.does_asset_exist(path):
+        # A rerun: the editor keeps the old world loaded and refuses the delete, so clear it in place instead.
+        if not les.load_level(path):
+            raise RuntimeError("load_level failed " + path)
+        old = [a for a in eas.get_all_level_actors() if not isinstance(a, (unreal.WorldSettings, unreal.Brush))]
+        eas.destroy_actors(old)
+        log("{}: cleared {} actors from the existing map".format(map_name, len(old)))
+    elif not les.new_level(path):
         raise RuntimeError("new_level failed " + path)
     rep = {"layout": layout_name, "missing_assets": [], "ground": []}
     x0, x1, y0, y1 = bounds(P)
     pad = 2000.0
     if ground:
-        rep["ground"].append(slab("Town_Ground", x0 - pad, x1 + pad, y0 - pad, y1 + pad, ground))
+        rep["ground"].append(tile_ground("Town_Ground", x0 - pad, x1 + pad, y0 - pad, y1 + pad, ground, paths))  # FIXES_V1
     else:
         # World: split the ground between the towns (grass Verdant, snow toward Rime, charcoal toward Cinderwright).
         by = collections.defaultdict(list)
         for p in P:
             by[p[7]].append(p)
-        cx = bounds(by["Town_Cinderwright_Layout_v2"])[0]
+        cx = bounds(by[CW])[0]  # FIXES_V1
         vx1 = max(bounds(by[k])[1] for k in ("Town_Verdant_A_Layout_v2", "Town_Verdant_Homestead_Layout_v1", "Town_Rime_Layout_v1"))
         split_x = (cx + vx1) / 2 if cx > vx1 else cx
         ry = bounds(by["Town_Rime_Layout_v1"])[2]
@@ -108,22 +184,8 @@ def build(map_name, layout_name, ground, paths):
         X0, X1, Y0, Y1 = x0 - pad, x1 + pad, y0 - pad, y1 + pad
         rep["ground"].append(slab("Ground_Grass", X0, split_x, Y0, split_y, "grass"))
         rep["ground"].append(slab("Ground_Snow", X0, split_x, split_y, Y1, "snow"))
-        rep["ground"].append(slab("Ground_Charcoal", split_x, X1, Y0, Y1, "charcoal"))
-    sun = spawn(unreal.DirectionalLight, unreal.Vector(0, 0, 2000), unreal.Rotator(0, -45, 135))
-    sun.set_actor_label("Sun"); sun.set_folder_path("Town/Lighting")
-    try:
-        sun.light_component.set_editor_property("atmosphere_sun_light", True)
-    except Exception:
-        pass
-    sky = spawn(unreal.SkyLight, unreal.Vector(0, 0, 1500))
-    sky.set_actor_label("SkyLight"); sky.set_folder_path("Town/Lighting")
-    try:
-        sky.light_component.set_editor_property("real_time_capture", True)
-    except Exception:
-        pass
-    for cls, label in ((unreal.SkyAtmosphere, "SkyAtmosphere"), (unreal.ExponentialHeightFog, "Fog")):
-        a = spawn(cls, unreal.Vector(0, 0, 0))
-        a.set_actor_label(label); a.set_folder_path("Town/Lighting")
+        rep["ground"].append(tile_ground("Ground_Charcoal", split_x, X1, Y0, Y1, "charcoal", paths, anchor_x0=True))  # FIXES_V1
+    rep["lights"] = lights()  # FIXES_V1 (was: sun, sky light, atmosphere and fog always placed)
     # Player start on the +X entry road (every town's entry is on local +X; the world starts at Verdant's gate).
     if layout_name.startswith("World"):
         sx = 3600.0

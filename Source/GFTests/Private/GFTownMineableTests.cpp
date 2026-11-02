@@ -18,6 +18,7 @@
 #include "GFTownNodes.h"
 #include "GFVoxelWorld.h"
 #include "Engine/StaticMesh.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
@@ -686,10 +687,10 @@ bool FGFTownsV2MineDataTest::RunTest(const FString&)
 		TestEqual(Name + TEXT(" tri count (manifest tri_count)"), LodTris(Mesh), E.TriCount);
 		TestTrue(Name + TEXT(" sits on the ground (min z ~ 0)"), FMath::Abs(Mesh->GetBoundingBox().Min.Z) < 0.5);
 	}
-	TestEqual(TEXT("towns_v2 meshes"), All.Num(), 65);
+	TestEqual(TEXT("towns_v2 meshes (kit plus the fixes_v1 ground slab)"), All.Num(), 66);
 	TestEqual(TEXT("whole-mesh (ash trees, snow pines)"), Whole, 4);
 	TestEqual(TEXT("crystal-slot meshes"), Slots, 25);
-	TestEqual(TEXT("not mineable"), None, 36);
+	TestEqual(TEXT("not mineable"), None, 37);
 	TestEqual(TEXT("mineable list (crystal slots plus trees)"), Whole + Slots, 29);
 	for (const TCHAR* Refused : { TEXT("SM_Town_Cinderwright_LavaField_Pool"), TEXT("SM_Town_Cinderwright_LavaField_Straight"), TEXT("SM_Town_Cinderwright_YardPlate_Tile"), TEXT("SM_Town_Cinderwright_SmokePlume_A"), TEXT("SM_Town_Cinderwright_Chimney"), TEXT("SM_Town_Cinderwright_Crane"), TEXT("SM_Town_Cinderwright_PowerLine_Span"), TEXT("SM_Town_Cinderwright_CharcoalRock_A"), TEXT("SM_Town_Homestead_Glasshouse"), TEXT("SM_Town_Rime_IceGround_Tile"), TEXT("SM_Town_Road_T") })
 	{
@@ -705,6 +706,63 @@ bool FGFTownsV2MineDataTest::RunTest(const FString&)
 		if (UStaticMesh* Mesh = F ? LoadMesh(F->Path) : nullptr)
 		{
 			TestEqual(TEXT("fountain v7 imported tris"), LodTris(Mesh), 5470);
+		}
+	}
+	return true;
+}
+
+// towns_v2 fixes_v1: chunk_H houses carry plain MI names, the smoke plumes have no collision (you walk through smoke),
+// and Cinderwright gets a 64 m charcoal ground slab (one UCX box, top at 6.25 cm) in place of a stretched engine cube.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTownsV2FixesV1Test, "GFGame.TownMineable.V2FixesV1", GFTownMineTestFlags)
+bool FGFTownsV2FixesV1Test::RunTest(const FString&)
+{
+	TArray<FGFMineableEntry> All;
+	FString Err;
+	if (!TestTrue(TEXT("towns_v2 whitelist loads: ") + Err, FGFMineable::LoadTownsV2Whitelist(All, Err)))
+	{
+		return false;
+	}
+	for (const TCHAR* House : { TEXT("SM_Town_Cinderwright_House_Large"), TEXT("SM_Town_Cinderwright_House_Med"), TEXT("SM_Town_Cinderwright_House_Small"),
+		TEXT("SM_Town_Rime_House_Large"), TEXT("SM_Town_Rime_House_Med"), TEXT("SM_Town_Rime_House_Small") })
+	{
+		const FGFMineableEntry* E = FindEntry(All, House);
+		UStaticMesh* Mesh = E ? LoadMesh(E->Path) : nullptr;
+		if (!TestNotNull(FString(House) + TEXT(" is listed and imported"), Mesh))
+		{
+			continue;
+		}
+		TestTrue(FString(House) + TEXT(" still mines its crystal slot"), E->Mode == EGFMineableMode::Slots);
+		const TArray<FStaticMaterial>& Mats = Mesh->GetStaticMaterials();
+		const FString Want = TEXT("MI_") + FString(House).RightChop(3) + TEXT("_Main");
+		TestTrue(FString(House) + TEXT(" Main slot uses ") + Want, Mats.Num() > 0 && Mats[0].MaterialInterface && Mats[0].MaterialInterface->GetName() == Want);
+	}
+	for (const TCHAR* Smoke : { TEXT("SM_Town_Cinderwright_SmokePlume_A"), TEXT("SM_Town_Cinderwright_SmokePlume_B") })
+	{
+		const FGFMineableEntry* E = FindEntry(All, Smoke);
+		if (UStaticMesh* Mesh = E ? LoadMesh(E->Path) : nullptr)
+		{
+			const int32 Elems = Mesh->GetBodySetup() ? Mesh->GetBodySetup()->AggGeom.GetElementCount() : 0;
+			TestEqual(FString(Smoke) + TEXT(" has no collision"), Elems, 0);
+		}
+		else
+		{
+			AddError(FString(Smoke) + TEXT(" is missing"));
+		}
+	}
+	const FGFMineableEntry* Slab = FindEntry(All, TEXT("SM_Town_Cinderwright_GroundSlab"));
+	if (TestTrue(TEXT("ground slab is listed and refused"), Slab && Slab->Mode == EGFMineableMode::None))
+	{
+		if (UStaticMesh* Mesh = LoadMesh(Slab->Path))
+		{
+			const FBox B = Mesh->GetBoundingBox();
+			TestTrue(TEXT("ground slab is 64 x 64 m, 6.25 cm thick, bottom at z 0"),
+				B.Min.Equals(FVector(-3200.0, -3200.0, 0.0), 0.5) && B.Max.Equals(FVector(3200.0, 3200.0, 6.25), 0.5));
+			TestEqual(TEXT("ground slab collision is its one UCX hull"), Mesh->GetBodySetup() ? Mesh->GetBodySetup()->AggGeom.GetElementCount() : 0, 1);
+			TestEqual(TEXT("ground slab tri count"), LodTris(Mesh), 12);
+		}
+		else
+		{
+			AddError(TEXT("ground slab is not imported"));
 		}
 	}
 	return true;

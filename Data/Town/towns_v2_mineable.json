@@ -157,10 +157,23 @@
    "reason": "crystal_slot"
   },
   {
+   "asset": "SM_Town_Cinderwright_GroundSlab",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/Ground/SM_Town_Cinderwright_GroundSlab",
+   "folder": "fixes_v1/chunk_M/SM_Town_Cinderwright_GroundSlab_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 12,
+   "reason": "none"
+  },
+  {
    "asset": "SM_Town_Cinderwright_House_Large",
    "path": "/Game/Art/Town/Cinderwright/Homes/SM_Town_Cinderwright_House_Large",
-   "folder": "chunk_H/SM_Town_Cinderwright_House_Large_v2",
-   "manifest": "manifest_v2.json",
+   "folder": "fixes_v1/chunk_H/SM_Town_Cinderwright_House_Large_v2",
+   "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
     1
@@ -175,8 +188,8 @@
   {
    "asset": "SM_Town_Cinderwright_House_Med",
    "path": "/Game/Art/Town/Cinderwright/Homes/SM_Town_Cinderwright_House_Med",
-   "folder": "chunk_H/SM_Town_Cinderwright_House_Med_v2",
-   "manifest": "manifest_v2.json",
+   "folder": "fixes_v1/chunk_H/SM_Town_Cinderwright_House_Med_v2",
+   "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
     1
@@ -191,8 +204,8 @@
   {
    "asset": "SM_Town_Cinderwright_House_Small",
    "path": "/Game/Art/Town/Cinderwright/Homes/SM_Town_Cinderwright_House_Small",
-   "folder": "chunk_H/SM_Town_Cinderwright_House_Small_v2",
-   "manifest": "manifest_v2.json",
+   "folder": "fixes_v1/chunk_H/SM_Town_Cinderwright_House_Small_v2",
+   "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
     1
@@ -408,8 +421,8 @@
   {
    "asset": "SM_Town_Cinderwright_SmokePlume_A",
    "path": "/Game/Art/Town/FX/Cinderwright/SM_Town_Cinderwright_SmokePlume_A",
-   "folder": "chunk_L/SM_Town_Cinderwright_SmokePlume_A_v1",
-   "manifest": "manifest_v1.json",
+   "folder": "fixes_v1/chunk_L/SM_Town_Cinderwright_SmokePlume_A_v1",
+   "manifest": "manifest_v2.json",
    "mode": "none",
    "slots": [],
    "material_slots": [
@@ -421,8 +434,8 @@
   {
    "asset": "SM_Town_Cinderwright_SmokePlume_B",
    "path": "/Game/Art/Town/FX/Cinderwright/SM_Town_Cinderwright_SmokePlume_B",
-   "folder": "chunk_L/SM_Town_Cinderwright_SmokePlume_B_v1",
-   "manifest": "manifest_v1.json",
+   "folder": "fixes_v1/chunk_L/SM_Town_Cinderwright_SmokePlume_B_v1",
+   "manifest": "manifest_v2.json",
    "mode": "none",
    "slots": [],
    "material_slots": [
@@ -514,8 +527,8 @@
   {
    "asset": "SM_Town_Cinderwright_YardPlate_Tile",
    "path": "/Game/Art/Town/Terrain/Cinderwright/Ground/SM_Town_Cinderwright_YardPlate_Tile",
-   "folder": "chunk_L/SM_Town_Cinderwright_YardPlate_Tile_v2",
-   "manifest": "manifest_v2.json",
+   "folder": "fixes_v1/chunk_L/SM_Town_Cinderwright_YardPlate_Tile_v3",
+   "manifest": "manifest_v3.json",
    "mode": "none",
    "slots": [],
    "material_slots": [
@@ -708,8 +721,8 @@
   {
    "asset": "SM_Town_Rime_House_Large",
    "path": "/Game/Art/Town/Rime/Homes/SM_Town_Rime_House_Large",
-   "folder": "chunk_H/SM_Town_Rime_House_Large_v2",
-   "manifest": "manifest_v2.json",
+   "folder": "fixes_v1/chunk_H/SM_Town_Rime_House_Large_v2",
+   "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
     1
@@ -724,8 +737,8 @@
   {
    "asset": "SM_Town_Rime_House_Med",
    "path": "/Game/Art/Town/Rime/Homes/SM_Town_Rime_House_Med",
-   "folder": "chunk_H/SM_Town_Rime_House_Med_v2",
-   "manifest": "manifest_v2.json",
+   "folder": "fixes_v1/chunk_H/SM_Town_Rime_House_Med_v2",
+   "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
     1
@@ -740,8 +753,8 @@
   {
    "asset": "SM_Town_Rime_House_Small",
    "path": "/Game/Art/Town/Rime/Homes/SM_Town_Rime_House_Small",
-   "folder": "chunk_H/SM_Town_Rime_House_Small_v2",
-   "manifest": "manifest_v2.json",
+   "folder": "fixes_v1/chunk_H/SM_Town_Rime_House_Small_v2",
+   "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
     1
