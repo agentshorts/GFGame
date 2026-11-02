@@ -24,7 +24,7 @@ namespace GFMagicWorldTest
 		AGFVoxelWorld* Voxel = nullptr;
 		UGFBlockIntegritySubsystem* Magic = nullptr;
 
-		bool Create(FAutomationTestBase& Test, const TCHAR* Name)
+		bool Create(FAutomationTestBase& Test, const TCHAR* Name, FIntVector Plot = FIntVector(16, 16, 8))
 		{
 			World = UWorld::CreateWorld(EWorldType::Game, false, Name);
 			if (!World || !GEngine)
@@ -44,7 +44,7 @@ namespace GFMagicWorldTest
 			Voxel = World->SpawnActor<AGFVoxelWorld>(AGFVoxelWorld::StaticClass(), FTransform::Identity, Params);
 			if (Voxel)
 			{
-				Voxel->PlotSizeInBlocks = FIntVector(16, 16, 8);
+				Voxel->PlotSizeInBlocks = Plot;
 				Voxel->StarterGroundLayers = 0;
 				Voxel->FinishSpawning(FTransform::Identity);
 			}
@@ -286,7 +286,8 @@ bool FGFMagicWorldShapesTest::RunTest(const FString&)
 {
 	using namespace GFMagicWorldTest;
 	FWorld Harness;
-	if (!Harness.Create(*this, TEXT("GFMagicShapes")))
+	// The shared harness is 16 cells across. This pass places rows out to x = 40.
+	if (!Harness.Create(*this, TEXT("GFMagicShapes"), FIntVector(48, 16, 8)))
 	{
 		return false;
 	}
@@ -370,7 +371,8 @@ bool FGFMagicWorldShapesTest::RunTest(const FString&)
 	{
 		Harness.Voxel->ServerApplyEdit(FIntVector(30 + Step, 2, 2), TEXT("Ice"));
 	}
-	Harness.Voxel->ServerApplyEdit(FIntVector(40, 2, 2), TEXT("Lava"));
+	// Lava is not placeable, so ServerApplyEdit refuses it and the cell stays empty.
+	TestTrue(TEXT("Lava is authored into the cell"), Harness.Voxel->ServerAuthorCell(FIntVector(40, 2, 2), TEXT("Lava")));
 	const FVector FrostAt = Harness.Voxel->CellToWorld(FIntVector(30, 2, 2));
 	AGFMagicPlayerState* Frost = Harness.SpawnDigger(TEXT("Frost"), FrostAt);
 	if (!TestNotNull(TEXT("Frost"), Frost))

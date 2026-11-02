@@ -181,6 +181,8 @@ namespace
 		{
 			return 0;
 		}
+		// The ray begins inside this cell. A solid here is the crystal's own cell, not a wall in front of the cone.
+		const FIntVector StartCell = CellOf(Start, VoxelOrigin);
 		const FVector Dir = Delta / Dist;
 		const FVector Local = (Start - VoxelOrigin) / GFBlockSize;
 		int32 X = FMath::FloorToInt(Local.X);
@@ -213,14 +215,17 @@ namespace
 			{
 				return Solids;
 			}
-			if (IsBlocker(Here))
+			if (Here != StartCell)
 			{
-				bBlocked = true;
-				return Solids;
-			}
-			if (IsSolid(Here))
-			{
-				++Solids;
+				if (IsBlocker(Here))
+				{
+					bBlocked = true;
+					return Solids;
+				}
+				if (IsSolid(Here))
+				{
+					++Solids;
+				}
 			}
 			if (MaxX <= MaxY && MaxX <= MaxZ)
 			{
@@ -357,18 +362,22 @@ int32 FGFMagicShapes::ConeRayCount(float RangeCm, float HalfAngleDeg, float Cell
 
 float FGFMagicShapes::SparkFalloff(float DistanceCm, float FalloffStartCm, float RangeCm, float FalloffMin)
 {
+	// A catalog value above 1 is a percent (35), not a multiplier (0.35).
+	const float MinPower = (FalloffMin > 1.f) ? FalloffMin / 100.f : FalloffMin;
 	const float Start = FMath::Max(0.f, FalloffStartCm);
 	const float End = FMath::Max(Start, RangeCm);
 	if (DistanceCm <= Start)
 	{
 		return 1.f;
 	}
-	if (End <= Start)
+	// At the far end, return the catalog minimum itself. Lerp(1, Min, 1) is one
+	// ulp off Min, and the 8 m check uses FMath::IsNearlyEqual's 1e-8 tolerance.
+	if (DistanceCm >= End)
 	{
-		return FalloffMin;
+		return MinPower;
 	}
-	const float T = FMath::Clamp((DistanceCm - Start) / (End - Start), 0.f, 1.f);
-	return FMath::Lerp(1.f, FalloffMin, T);
+	const float T = (DistanceCm - Start) / (End - Start);
+	return FMath::Lerp(1.f, MinPower, T);
 }
 
 TArray<FMagicConeHit> FGFMagicShapes::GatherCone(

@@ -264,6 +264,7 @@ bool FGFNetMagicFrostbindTest::RunTest(const FString&)
 	{
 		UWorld* Server = ServerWorld();
 		UWorld* Client = ClientWorlds()[0];
+		AGFGameState* GS = GameState(Server);
 		AGFPlayerState* Mine = LocalPlayerState(Client);
 		AGFPlayerState* OnServer = Mine ? PlayerStateByKey(Server, Mine->PlayerKey) : nullptr;
 		AGFVoxelWorld* Grid = Voxel(Server);
@@ -272,6 +273,13 @@ bool FGFNetMagicFrostbindTest::RunTest(const FString&)
 			return;
 		}
 		*Key = Mine->PlayerKey;
+		if (GS)
+		{
+			// Same gate as the field test. Plot rules are on by default and would refuse the chain.
+			GS->bFreeBuild = true;
+			GS->bEnforcePlotPermissions = false;
+			GS->MaxEditReach = 0.f;
+		}
 		for (int32 Step = 0; Step < 7; ++Step)
 		{
 			Grid->ServerApplyEdit(FIntVector(8 + Step, 4, 6), TEXT("Ice"));
