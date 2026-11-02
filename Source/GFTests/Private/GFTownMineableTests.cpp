@@ -407,4 +407,161 @@ bool FGFTownMineHitsTest::RunTest(const FString&)
 	return true;
 }
 
+// ---------- towns_v2 (Rime, Cinderwright, homesteads) ----------
+// Same rule: only the Crystal slot (slot 1) on crystal-bearing meshes and whole trees (ash trees, snow pines) can be
+// mined. Lava fields, ground patches, yard plates, smoke plumes, pipes, chimneys, the crane, roads, fences and the
+// rest are refused. Data/Town/towns_v2_mineable.json is built by Tools/gen_towns_v2_mineable.py.
+
+namespace GFTownMineTest
+{
+	static int32 SampleEvery(const UStaticMesh* Mesh)
+	{
+		return FMath::Max(1, LodTris(Mesh) / 400);
+	}
+
+	static bool IsTreeName(const FString& Name)
+	{
+		return Name.Contains(TEXT("Tree")) || Name.Contains(TEXT("Pine"));
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTownsV2MineDataTest, "GFGame.TownMineable.V2Data", GFTownMineTestFlags)
+bool FGFTownsV2MineDataTest::RunTest(const FString&)
+{
+	TArray<FGFMineableEntry> All;
+	FString Err;
+	if (!TestTrue(TEXT("towns_v2 whitelist loads: ") + Err, FGFMineable::LoadTownsV2Whitelist(All, Err)))
+	{
+		return false;
+	}
+	int32 Whole = 0, Slots = 0, None = 0;
+	for (const FGFMineableEntry& E : All)
+	{
+		const FString Name = E.Asset.ToString();
+		(E.Mode == EGFMineableMode::WholeMesh ? Whole : E.Mode == EGFMineableMode::Slots ? Slots : None) += 1;
+		if (E.Mode == EGFMineableMode::WholeMesh)
+		{
+			TestTrue(Name + TEXT(" whole-mesh entry is a tree"), IsTreeName(Name));
+		}
+		else if (IsTreeName(Name))
+		{
+			AddError(Name + TEXT(" is a tree but not whole-mesh mineable"));
+		}
+		if (E.Mode == EGFMineableMode::Slots)
+		{
+			TestTrue(Name + TEXT(" mines slot 1 only"), E.Slots == TArray<int32>{ 1 });
+			TestTrue(Name + TEXT(" slot 1 is Crystal"), E.MaterialSlots.IsValidIndex(1) && E.MaterialSlots[1] == FName(TEXT("Crystal")));
+		}
+		if (E.Mode == EGFMineableMode::None)
+		{
+			TestFalse(Name + TEXT(" refused mesh has no Crystal slot"), E.MaterialSlots.Contains(FName(TEXT("Crystal"))));
+		}
+		UStaticMesh* Mesh = LoadMesh(E.Path);
+		if (!TestNotNull(Name + TEXT(" is imported at ") + E.Path, Mesh))
+		{
+			continue;
+		}
+		const UGFMineableAssetUserData* D = FGFMineable::Find(Mesh);
+		if (TestNotNull(Name + TEXT(" carries mineable data"), D))
+		{
+			TestEqual(Name + TEXT(" mineable mode"), static_cast<int32>(D->Mode), static_cast<int32>(E.Mode));
+			TestTrue(Name + TEXT(" mineable slots"), D->Slots == E.Slots);
+			TestEqual(Name + TEXT(" kit"), D->Kit, FName(TEXT("towns_v2")));
+		}
+		const TArray<FStaticMaterial>& Mats = Mesh->GetStaticMaterials();
+		TestEqual(Name + TEXT(" material slot count"), Mats.Num(), E.MaterialSlots.Num());
+		for (int32 s = 0; s < FMath::Min(Mats.Num(), E.MaterialSlots.Num()); ++s)
+		{
+			TestEqual(FString::Printf(TEXT("%s slot %d name"), *Name, s), Mats[s].MaterialSlotName, E.MaterialSlots[s]);
+		}
+		if (E.Mode == EGFMineableMode::Slots && Mats.IsValidIndex(1))
+		{
+			const FString Want = TEXT("MI_") + Name.RightChop(3) + TEXT("_Crystal");
+			TestTrue(Name + TEXT(" crystal slot uses ") + Want, Mats[1].MaterialInterface && Mats[1].MaterialInterface->GetName() == Want);
+		}
+		TestEqual(Name + TEXT(" tri count (manifest tri_count)"), LodTris(Mesh), E.TriCount);
+		TestTrue(Name + TEXT(" sits on the ground (min z ~ 0)"), FMath::Abs(Mesh->GetBoundingBox().Min.Z) < 0.5);
+	}
+	TestEqual(TEXT("towns_v2 meshes"), All.Num(), 65);
+	TestEqual(TEXT("whole-mesh (ash trees, snow pines)"), Whole, 4);
+	TestEqual(TEXT("crystal-slot meshes"), Slots, 25);
+	TestEqual(TEXT("not mineable"), None, 36);
+	TestEqual(TEXT("mineable list (crystal slots plus trees)"), Whole + Slots, 29);
+	for (const TCHAR* Refused : { TEXT("SM_Town_Cinderwright_LavaField_Pool"), TEXT("SM_Town_Cinderwright_LavaField_Straight"), TEXT("SM_Town_Cinderwright_YardPlate_Tile"), TEXT("SM_Town_Cinderwright_SmokePlume_A"), TEXT("SM_Town_Cinderwright_Chimney"), TEXT("SM_Town_Cinderwright_Crane"), TEXT("SM_Town_Cinderwright_PowerLine_Span"), TEXT("SM_Town_Cinderwright_CharcoalRock_A"), TEXT("SM_Town_Homestead_Glasshouse"), TEXT("SM_Town_Rime_IceGround_Tile"), TEXT("SM_Town_Road_T") })
+	{
+		const FGFMineableEntry* E = FindEntry(All, Refused);
+		TestTrue(FString(Refused) + TEXT(" is listed and not mineable"), E && E->Mode == EGFMineableMode::None);
+	}
+	// town_v1 fix: the fountain is the v7 build (sittable 43.75 cm rim, 5470 tris) and stays refused.
+	TArray<FGFMineableEntry> V1;
+	if (TestTrue(TEXT("town_v1 whitelist loads"), FGFMineable::LoadTownWhitelist(V1, Err)))
+	{
+		const FGFMineableEntry* F = FindEntry(V1, TEXT("SM_Town_Fountain"));
+		TestTrue(TEXT("fountain v7 is listed, refused, 5470 tris"), F && F->Mode == EGFMineableMode::None && F->TriCount == 5470);
+		if (UStaticMesh* Mesh = F ? LoadMesh(F->Path) : nullptr)
+		{
+			TestEqual(TEXT("fountain v7 imported tris"), LodTris(Mesh), 5470);
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTownsV2MineHitsTest, "GFGame.TownMineable.V2Hits", GFTownMineTestFlags)
+bool FGFTownsV2MineHitsTest::RunTest(const FString&)
+{
+	TArray<FGFMineableEntry> All;
+	FString Err;
+	if (!TestTrue(TEXT("towns_v2 whitelist loads"), FGFMineable::LoadTownsV2Whitelist(All, Err)))
+	{
+		return false;
+	}
+	FWorld W;
+	if (!TestTrue(TEXT("test world"), W.Create()))
+	{
+		return false;
+	}
+	const AGFPlayerState* PS = W.World->SpawnActor<AGFPlayerState>();
+	TestNotNull(TEXT("player state"), PS);
+	int32 Slot = 0;
+	for (const FGFMineableEntry& E : All)
+	{
+		const FString Name = E.Asset.ToString();
+		// Smoke plumes have no collision, so mining traces never reach them.
+		if (Name.Contains(TEXT("SmokePlume")))
+		{
+			continue;
+		}
+		UStaticMesh* Mesh = LoadMesh(E.Path);
+		if (!TestNotNull(Name + TEXT(" loads"), Mesh))
+		{
+			continue;
+		}
+		// 120 m apart so traces only find the mesh under test (the largest pieces are about 30 m across).
+		UStaticMeshComponent* C = W.Place(Mesh, FVector(12000.0 * Slot++, 0.0, 0.0));
+		if (!C)
+		{
+			continue;
+		}
+		const int32 Every = SampleEvery(Mesh);
+		if (E.Mode == EGFMineableMode::Slots)
+		{
+			const FTally T = TraceMesh(*this, W, *Name, C, Every, [](int32 S) { return S == 1; }, PS);
+			TestTrue(Name + TEXT(": a crystal-slot hit is allowed"), T.AllowedCrystal > 0);
+			TestTrue(Name + TEXT(": a main-slot hit is refused"), T.RefusedMain > 0);
+		}
+		else if (E.Mode == EGFMineableMode::WholeMesh)
+		{
+			const FTally T = TraceMesh(*this, W, *Name, C, Every, [](int32) { return true; }, PS);
+			TestTrue(Name + TEXT(": a tree hit is allowed"), T.Allowed > 0 && T.Refused == 0);
+		}
+		else
+		{
+			const FTally T = TraceMesh(*this, W, *Name, C, Every, [](int32) { return false; }, PS);
+			TestTrue(Name + TEXT(": hits are refused"), T.Refused > 0 && T.Allowed == 0);
+		}
+	}
+	W.Destroy();
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

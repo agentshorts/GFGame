@@ -1,0 +1,928 @@
+{
+ "schema": "gf.mineable/v1",
+ "kit": "towns_v2",
+ "source": "handoff/inbox/towns_v2/MINEABLE_towns_v2.json",
+ "rule": "Only crystal and trees can be mined. mode whole_mesh: any face; mode slots: only faces of the listed material slots; mode none (and any mesh not listed): never.",
+ "meshes": [
+  {
+   "asset": "SM_Town_Cinderwright_AshDrift_Patch",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/Ground/SM_Town_Cinderwright_AshDrift_Patch",
+   "folder": "chunk_L/SM_Town_Cinderwright_AshDrift_Patch_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 316,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_AshTree_A",
+   "path": "/Game/Art/Town/Nature/Cinderwright/SM_Town_Cinderwright_AshTree_A",
+   "folder": "chunk_K/SM_Town_Cinderwright_AshTree_A_v3",
+   "manifest": "manifest_v3.json",
+   "mode": "whole_mesh",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 258,
+   "reason": "whole_tree"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_AshTree_B",
+   "path": "/Game/Art/Town/Nature/Cinderwright/SM_Town_Cinderwright_AshTree_B",
+   "folder": "chunk_K/SM_Town_Cinderwright_AshTree_B_v3",
+   "manifest": "manifest_v3.json",
+   "mode": "whole_mesh",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 104,
+   "reason": "whole_tree"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_BoardHall",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_BoardHall",
+   "folder": "chunk_I/SM_Town_Cinderwright_BoardHall_v2",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 1284,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_CharcoalRock_A",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/SM_Town_Cinderwright_CharcoalRock_A",
+   "folder": "chunk_K/SM_Town_Cinderwright_CharcoalRock_A_v3",
+   "manifest": "manifest_v3.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 122,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_CharcoalRock_B",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/SM_Town_Cinderwright_CharcoalRock_B",
+   "folder": "chunk_K/SM_Town_Cinderwright_CharcoalRock_B_v3",
+   "manifest": "manifest_v3.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 62,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_Chimney",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Chimney",
+   "folder": "chunk_I/SM_Town_Cinderwright_Chimney_v2",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 1756,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_CinderGravel_Patch",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/Ground/SM_Town_Cinderwright_CinderGravel_Patch",
+   "folder": "chunk_L/SM_Town_Cinderwright_CinderGravel_Patch_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 272,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_CountingHouse",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_CountingHouse",
+   "folder": "chunk_I/SM_Town_Cinderwright_CountingHouse_v2",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 692,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_Crane",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Crane",
+   "folder": "chunk_I/SM_Town_Cinderwright_Crane_v3",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 2742,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_Factory",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Factory",
+   "folder": "chunk_I/SM_Town_Cinderwright_Factory_v2",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 2228,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_House_Large",
+   "path": "/Game/Art/Town/Cinderwright/Homes/SM_Town_Cinderwright_House_Large",
+   "folder": "chunk_H/SM_Town_Cinderwright_House_Large_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 1142,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_House_Med",
+   "path": "/Game/Art/Town/Cinderwright/Homes/SM_Town_Cinderwright_House_Med",
+   "folder": "chunk_H/SM_Town_Cinderwright_House_Med_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 632,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_House_Small",
+   "path": "/Game/Art/Town/Cinderwright/Homes/SM_Town_Cinderwright_House_Small",
+   "folder": "chunk_H/SM_Town_Cinderwright_House_Small_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 424,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_LavaCrackGround_Tile",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/SM_Town_Cinderwright_LavaCrackGround_Tile",
+   "folder": "chunk_K/SM_Town_Cinderwright_LavaCrackGround_Tile_v3",
+   "manifest": "manifest_v3.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 52,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_LavaField_Bend",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/LavaField/SM_Town_Cinderwright_LavaField_Bend",
+   "folder": "chunk_L/SM_Town_Cinderwright_LavaField_Bend_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 42,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_LavaField_Corner",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/LavaField/SM_Town_Cinderwright_LavaField_Corner",
+   "folder": "chunk_L/SM_Town_Cinderwright_LavaField_Corner_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 42,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_LavaField_Pool",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/LavaField/SM_Town_Cinderwright_LavaField_Pool",
+   "folder": "chunk_L/SM_Town_Cinderwright_LavaField_Pool_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 12,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_LavaField_Shore",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/LavaField/SM_Town_Cinderwright_LavaField_Shore",
+   "folder": "chunk_L/SM_Town_Cinderwright_LavaField_Shore_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 42,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_LavaField_ShoreInlet",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/LavaField/SM_Town_Cinderwright_LavaField_ShoreInlet",
+   "folder": "chunk_L/SM_Town_Cinderwright_LavaField_ShoreInlet_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 42,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_LavaField_Straight",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/LavaField/SM_Town_Cinderwright_LavaField_Straight",
+   "folder": "chunk_L/SM_Town_Cinderwright_LavaField_Straight_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 42,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_LavaField_Tee",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/LavaField/SM_Town_Cinderwright_LavaField_Tee",
+   "folder": "chunk_L/SM_Town_Cinderwright_LavaField_Tee_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 42,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_Pipe_Elbow",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Pipe_Elbow",
+   "folder": "chunk_I/SM_Town_Cinderwright_Pipe_Elbow_v2",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 1472,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_Pipe_Straight",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Pipe_Straight",
+   "folder": "chunk_I/SM_Town_Cinderwright_Pipe_Straight_v2",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 316,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_Pipe_Support",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Pipe_Support",
+   "folder": "chunk_I/SM_Town_Cinderwright_Pipe_Support_v2",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 84,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_PowerLine_Span",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_PowerLine_Span",
+   "folder": "chunk_I/SM_Town_Cinderwright_PowerLine_Span_v2",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 12,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_PowerPylon",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_PowerPylon",
+   "folder": "chunk_I/SM_Town_Cinderwright_PowerPylon_v2",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 6152,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_Scorch_Patch",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/Ground/SM_Town_Cinderwright_Scorch_Patch",
+   "folder": "chunk_L/SM_Town_Cinderwright_Scorch_Patch_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 360,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_Smelter",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Smelter",
+   "folder": "chunk_I/SM_Town_Cinderwright_Smelter_v3",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 2622,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_SmokePlume_A",
+   "path": "/Game/Art/Town/FX/Cinderwright/SM_Town_Cinderwright_SmokePlume_A",
+   "folder": "chunk_L/SM_Town_Cinderwright_SmokePlume_A_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 312,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_SmokePlume_B",
+   "path": "/Game/Art/Town/FX/Cinderwright/SM_Town_Cinderwright_SmokePlume_B",
+   "folder": "chunk_L/SM_Town_Cinderwright_SmokePlume_B_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 192,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_Stall_Coilback",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Stall_Coilback",
+   "folder": "chunk_I/SM_Town_Cinderwright_Stall_Coilback_v2",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 1512,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_Stall_Emberhare",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Stall_Emberhare",
+   "folder": "chunk_I/SM_Town_Cinderwright_Stall_Emberhare_v2",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 854,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_Stall_Frosthorn",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Stall_Frosthorn",
+   "folder": "chunk_I/SM_Town_Cinderwright_Stall_Frosthorn_v2",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 758,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_Stall_GlacierWater",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Stall_GlacierWater",
+   "folder": "chunk_I/SM_Town_Cinderwright_Stall_GlacierWater_v2",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 916,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_Theatre",
+   "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Theatre",
+   "folder": "chunk_I/SM_Town_Cinderwright_Theatre_v2",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 1324,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Cinderwright_YardPlate_Tile",
+   "path": "/Game/Art/Town/Terrain/Cinderwright/Ground/SM_Town_Cinderwright_YardPlate_Tile",
+   "folder": "chunk_L/SM_Town_Cinderwright_YardPlate_Tile_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 12,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Homestead_Fence_Gate",
+   "path": "/Game/Art/Town/Homestead/Fence/SM_Town_Homestead_Fence_Gate",
+   "folder": "chunk_K/SM_Town_Homestead_Fence_Gate_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 150,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Homestead_Fence_GateLeaf",
+   "path": "/Game/Art/Town/Homestead/Fence/SM_Town_Homestead_Fence_GateLeaf",
+   "folder": "chunk_K/SM_Town_Homestead_Fence_GateLeaf_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 94,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Homestead_Fence_Post",
+   "path": "/Game/Art/Town/Homestead/Fence/SM_Town_Homestead_Fence_Post",
+   "folder": "chunk_K/SM_Town_Homestead_Fence_Post_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 30,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Homestead_Fence_Straight",
+   "path": "/Game/Art/Town/Homestead/Fence/SM_Town_Homestead_Fence_Straight",
+   "folder": "chunk_K/SM_Town_Homestead_Fence_Straight_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 84,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Homestead_GardenBed_Leafy",
+   "path": "/Game/Art/Town/Homestead/Garden/SM_Town_Homestead_GardenBed_Leafy",
+   "folder": "chunk_K/SM_Town_Homestead_GardenBed_Leafy_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 500,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Homestead_GardenBed_Stalk",
+   "path": "/Game/Art/Town/Homestead/Garden/SM_Town_Homestead_GardenBed_Stalk",
+   "folder": "chunk_K/SM_Town_Homestead_GardenBed_Stalk_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 790,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Homestead_Glasshouse",
+   "path": "/Game/Art/Town/Homestead/Garden/SM_Town_Homestead_Glasshouse",
+   "folder": "chunk_K/SM_Town_Homestead_Glasshouse_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 522,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Homestead_Path_Corner",
+   "path": "/Game/Art/Town/Homestead/Paths/SM_Town_Homestead_Path_Corner",
+   "folder": "chunk_K/SM_Town_Homestead_Path_Corner_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 42,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Homestead_Path_Straight",
+   "path": "/Game/Art/Town/Homestead/Paths/SM_Town_Homestead_Path_Straight",
+   "folder": "chunk_K/SM_Town_Homestead_Path_Straight_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 52,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Homestead_StarterHouse_Cinderwright",
+   "path": "/Game/Art/Town/Homestead/Houses/SM_Town_Homestead_StarterHouse_Cinderwright",
+   "folder": "chunk_K/SM_Town_Homestead_StarterHouse_Cinderwright_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 286,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Homestead_StarterHouse_Rime",
+   "path": "/Game/Art/Town/Homestead/Houses/SM_Town_Homestead_StarterHouse_Rime",
+   "folder": "chunk_K/SM_Town_Homestead_StarterHouse_Rime_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 322,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Homestead_StarterHouse_Verdant",
+   "path": "/Game/Art/Town/Homestead/Houses/SM_Town_Homestead_StarterHouse_Verdant",
+   "folder": "chunk_K/SM_Town_Homestead_StarterHouse_Verdant_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 262,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Rime_GlacierWaterWorks",
+   "path": "/Game/Art/Town/Rime/SM_Town_Rime_GlacierWaterWorks",
+   "folder": "chunk_G/SM_Town_Rime_GlacierWaterWorks_v1",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 492,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Rime_House_Large",
+   "path": "/Game/Art/Town/Rime/Homes/SM_Town_Rime_House_Large",
+   "folder": "chunk_H/SM_Town_Rime_House_Large_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 1576,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Rime_House_Med",
+   "path": "/Game/Art/Town/Rime/Homes/SM_Town_Rime_House_Med",
+   "folder": "chunk_H/SM_Town_Rime_House_Med_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 1156,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Rime_House_Small",
+   "path": "/Game/Art/Town/Rime/Homes/SM_Town_Rime_House_Small",
+   "folder": "chunk_H/SM_Town_Rime_House_Small_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 624,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Rime_IceGround_Tile",
+   "path": "/Game/Art/Town/Terrain/Rime/SM_Town_Rime_IceGround_Tile",
+   "folder": "chunk_K/SM_Town_Rime_IceGround_Tile_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 62,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Rime_IcePaving_Tile",
+   "path": "/Game/Art/Town/Terrain/Rime/SM_Town_Rime_IcePaving_Tile",
+   "folder": "chunk_K/SM_Town_Rime_IcePaving_Tile_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 172,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Rime_SnowPine_A",
+   "path": "/Game/Art/Town/Nature/Rime/SM_Town_Rime_SnowPine_A",
+   "folder": "chunk_K/SM_Town_Rime_SnowPine_A_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "whole_mesh",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 228,
+   "reason": "whole_tree"
+  },
+  {
+   "asset": "SM_Town_Rime_SnowPine_B",
+   "path": "/Game/Art/Town/Nature/Rime/SM_Town_Rime_SnowPine_B",
+   "folder": "chunk_K/SM_Town_Rime_SnowPine_B_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "whole_mesh",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 140,
+   "reason": "whole_tree"
+  },
+  {
+   "asset": "SM_Town_Rime_SovereignCourt",
+   "path": "/Game/Art/Town/Rime/SM_Town_Rime_SovereignCourt",
+   "folder": "chunk_G/SM_Town_Rime_SovereignCourt_v1",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 1644,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Rime_Tower_Watch",
+   "path": "/Game/Art/Town/Rime/SM_Town_Rime_Tower_Watch",
+   "folder": "chunk_G/SM_Town_Rime_Tower_Watch_v1",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 456,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Rime_Wall_Corner",
+   "path": "/Game/Art/Town/Rime/SM_Town_Rime_Wall_Corner",
+   "folder": "chunk_G/SM_Town_Rime_Wall_Corner_v1",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 468,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Rime_Wall_Gate",
+   "path": "/Game/Art/Town/Rime/SM_Town_Rime_Wall_Gate",
+   "folder": "chunk_G/SM_Town_Rime_Wall_Gate_v1",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 408,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Rime_Wall_Straight",
+   "path": "/Game/Art/Town/Rime/SM_Town_Rime_Wall_Straight",
+   "folder": "chunk_G/SM_Town_Rime_Wall_Straight_v1",
+   "manifest": "manifest.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 228,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Road_Corner",
+   "path": "/Game/Art/Town/Roads/SM_Town_Road_Corner",
+   "folder": "chunk_K/SM_Town_Road_Corner_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 182,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Road_Straight",
+   "path": "/Game/Art/Town/Roads/SM_Town_Road_Straight",
+   "folder": "chunk_K/SM_Town_Road_Straight_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 172,
+   "reason": "none"
+  },
+  {
+   "asset": "SM_Town_Road_T",
+   "path": "/Game/Art/Town/Roads/SM_Town_Road_T",
+   "folder": "chunk_K/SM_Town_Road_T_v2",
+   "manifest": "manifest_v2.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 112,
+   "reason": "none"
+  }
+ ]
+}

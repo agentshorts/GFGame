@@ -156,14 +156,14 @@
   {
    "asset": "SM_Town_Fountain",
    "path": "/Game/Art/Town/TownV1/SM_Town_Fountain",
-   "folder": "SM_Town_Fountain_v5",
+   "folder": "../towns_v2/town_v1_fixes/SM_Town_Fountain_v7",
    "manifest": "manifest.json",
    "mode": "none",
    "slots": [],
    "material_slots": [
     "Main"
    ],
-   "tri_count": 5878,
+   "tri_count": 5470,
    "reason": "plaza centrepiece"
   },
   {

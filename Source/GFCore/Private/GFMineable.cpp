@@ -187,15 +187,30 @@ FString FGFMineable::TownWhitelistPath()
 	return FPaths::Combine(FPaths::ProjectDir(), TEXT("Data/Town/town_v1_mineable.json"));
 }
 
-bool FGFMineable::LoadTownWhitelist(TArray<FGFMineableEntry>& Out, FString& OutError)
+bool FGFMineable::LoadWhitelistFile(const FString& Path, TArray<FGFMineableEntry>& Out, FString& OutError)
 {
 	FString Json;
-	if (!FFileHelper::LoadFileToString(Json, *TownWhitelistPath()))
+	if (!FFileHelper::LoadFileToString(Json, *Path))
 	{
-		OutError = TEXT("missing ") + TownWhitelistPath();
+		OutError = TEXT("missing ") + Path;
 		return false;
 	}
 	return ParseWhitelist(Json, Out, OutError);
+}
+
+bool FGFMineable::LoadTownWhitelist(TArray<FGFMineableEntry>& Out, FString& OutError)
+{
+	return LoadWhitelistFile(TownWhitelistPath(), Out, OutError);
+}
+
+FString FGFMineable::TownsV2WhitelistPath()
+{
+	return FPaths::Combine(FPaths::ProjectDir(), TEXT("Data/Town/towns_v2_mineable.json"));
+}
+
+bool FGFMineable::LoadTownsV2Whitelist(TArray<FGFMineableEntry>& Out, FString& OutError)
+{
+	return LoadWhitelistFile(TownsV2WhitelistPath(), Out, OutError);
 }
 
 bool UGFMineableLibrary::SetMeshMineable(UStaticMesh* Mesh, EGFMineableMode Mode, const TArray<int32>& Slots, FName Kit, const FString& Reason)

@@ -2,7 +2,8 @@
 // A static mesh is mineable only when it carries UGFMineableAssetUserData: WholeMesh (trees) allows any face,
 // Slots (the town_v1 crystal-slot meshes) allows only faces of the listed material slots (slot 1 Crystal).
 // A mesh without the data, or with Mode None, is refused. The data is stamped by Tools/import_town_v1.py from
-// Data/Town/town_v1_mineable.json (generated from the handoff's MINEABLE json by Tools/gen_town_mineable.py).
+// Data/Town/town_v1_mineable.json (generated from the handoff's MINEABLE json by Tools/gen_town_mineable.py), and by
+// Tools/import_towns_v2.py from Data/Town/towns_v2_mineable.json (Tools/gen_towns_v2_mineable.py).
 // Voxel blocks keep their own path (FGFMagicRules / AGFPlayerState::CanMineAt); this covers mesh hits.
 #pragma once
 
@@ -49,7 +50,7 @@ public:
 	FString Reason;
 };
 
-/** One whitelist row from Data/Town/town_v1_mineable.json. */
+/** One whitelist row from Data/Town/<kit>_mineable.json. */
 struct GFCORE_API FGFMineableEntry
 {
 	FName Asset;
@@ -90,6 +91,13 @@ struct GFCORE_API FGFMineable
 	/** Loads <ProjectDir>/Data/Town/town_v1_mineable.json. */
 	static bool LoadTownWhitelist(TArray<FGFMineableEntry>& Out, FString& OutError);
 	static FString TownWhitelistPath();
+
+	/** Loads <ProjectDir>/Data/Town/towns_v2_mineable.json (Rime, Cinderwright and homestead kit). */
+	static bool LoadTownsV2Whitelist(TArray<FGFMineableEntry>& Out, FString& OutError);
+	static FString TownsV2WhitelistPath();
+
+	/** Loads and parses one whitelist json file. */
+	static bool LoadWhitelistFile(const FString& Path, TArray<FGFMineableEntry>& Out, FString& OutError);
 
 	static EGFMineableMode ModeFromString(const FString& Mode);
 };

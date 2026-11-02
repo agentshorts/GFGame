@@ -43,6 +43,7 @@ EMISSIVE_STRENGTH = 1.5  # same as the ore crystal
 DIM_TOL = 0.05
 CLIP_LIMIT_Z = -5.0
 BAD_PATH = re.compile(r"[a-z]:[\\/]users[\\/]", re.I)
+KIT_NAME = "town_v1"
 report = {"kit": "town_v1", "meshes": {}, "clips": {}, "log": []}
 
 
@@ -225,7 +226,12 @@ def slot_mi_names(name, man):
     base = "MI_" + name[3:]
     out = []
     for s in man["material_slots"]:
-        out.append((inst or {}).get(s) or (base if s == "Main" else base + "_" + s))
+        hinted = (inst or {}).get(s)
+        if hinted:
+            # hints may carry notes after the asset name, e.g. "MI_X_Main (opaque)"
+            mm = re.match(r"\s*([A-Za-z0-9_]+)", hinted)
+            hinted = mm.group(1) if mm else None
+        out.append(hinted or (base if s == "Main" else base + "_" + s))
     return out
 
 
@@ -268,7 +274,7 @@ def do_mesh(entry, r):
             sm.set_editor_property("material_interface", want[s]); mats[i] = sm
     m.set_editor_property("static_materials", mats)
     mode = {"whole_mesh": unreal.GFMineableMode.WHOLE_MESH, "slots": unreal.GFMineableMode.SLOTS}.get(entry["mode"], unreal.GFMineableMode.NONE)
-    ok_mine = unreal.GFMineableLibrary.set_mesh_mineable(m, mode, entry["slots"], "town_v1", entry["reason"])
+    ok_mine = unreal.GFMineableLibrary.set_mesh_mineable(m, mode, entry["slots"], KIT_NAME, entry["reason"])
     EAL.save_loaded_asset(m)
 
     m = unreal.load_asset(man["unreal_target"])
@@ -293,7 +299,8 @@ def do_mesh(entry, r):
     except Exception as e:
         r["collision_convex_elems"] = None; log("info: agg_geom " + str(e))
     named = set(re.findall(r"UCX_" + re.escape(name) + r"_\d+", json.dumps(man)))
-    if man.get("collision") == "none":
+    no_col = re.search(r"\bno collision\b", str(man.get("qa", {}).get("notes", "")), re.I) is not None
+    if man.get("collision") == "none" or (no_col and not named):
         r["collision_expected"] = 0
         chk["collision"] = r["collision_convex_elems"] == 0
     elif named:
@@ -429,4 +436,6 @@ def main():
     log("summary {}".format(report["summary"]))
 
 
-main()
+# Tools/import_towns_v2.py imports this file as a library (GFTOWN_LIB=1) and reuses do_mesh and the clip helpers.
+if os.environ.get("GFTOWN_LIB") != "1":
+    main()
