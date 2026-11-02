@@ -93,6 +93,13 @@ public:
 	TArray<FString> HudLines() const;
 	static void CaptureShotNames(TArray<FString>& Out);
 
+	/** One overlap per row. Tests read this without walking a pawn into the sign. */
+	int32 DemoTriggerCount() const { return DemoTriggers; }
+	/** Runs that row's gf.Magic commands on the server. */
+	void RunRowDemo(AGFPlayerState* By, const FString& RowId);
+	/** Releases the field when the row's demo was holding one. */
+	void ReleaseRowDemo(AGFPlayerState* By, const FString& RowId);
+
 	/** Tests skip the art props and use the row-file signs. */
 	static bool bTestForceDressingFallback;
 
@@ -101,6 +108,12 @@ public:
 private:
 	UFUNCTION()
 	void OnResetOverlap(UPrimitiveComponent* Overlapped, AActor* Other, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& Sweep);
+
+	UFUNCTION()
+	void OnDemoBegin(UPrimitiveComponent* Overlapped, AActor* Other, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& Sweep);
+
+	UFUNCTION()
+	void OnDemoEnd(UPrimitiveComponent* Overlapped, AActor* Other, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
 	void BuildWorld();
 	void EnsureReturnGate();
@@ -150,6 +163,8 @@ private:
 	TArray<float> ClearAt;
 	bool bArtDressing = false;
 	int32 SignsBuilt = 0;
+	int32 DemoTriggers = 0;
+	TMap<TObjectPtr<UBoxComponent>, FString> DemoByTrigger;
 	int32 BadgesBuilt = 0;
 	int32 TrimsBuilt = 0;
 	int32 TilesBuilt = 0;

@@ -998,7 +998,7 @@
    "protected": false,
    "spell_proof": false,
    "block": "Stone",
-   "note": "#269 Sparkfield 8 m line: a 1-deep Stone wall whose face is exactly 8 m from the lane-side marker at j = 0 (marker at cell [70, 1, 0])",
+   "note": "#269 Sparkcone 8 m line: a 1-deep Stone wall whose face is exactly 8 m from the lane-side marker at j = 0 (marker at cell [70, 1, 0])",
    "sign": {
     "location_cm": [
      7050.0,
@@ -1008,7 +1008,7 @@
     "yaw_deg": 90,
     "faces": "lane",
     "line1": "Stone",
-    "line2": "Sparkfield 8 m",
+    "line2": "Sparkcone 8 m",
     "line3": "",
     "badge": ""
    },
@@ -1294,7 +1294,7 @@
  "notes": [
   "Every row id is unique (Stone appears twice: Common_Stone and Cinderwrights_Stone).",
   "Rows are 2 deep so Clawcall (6x3x2) and conductive chains have something to chew; 30 cells per standard row.",
-  "3-cell gaps between rows keep a 1-cell-radius Sparkfield from touching two rows, so per-row break counts stay clean.",
+  "3-cell gaps between rows keep a 1-cell-radius field from touching two rows, so per-row break counts stay clean.",
   "Ore rows: until DT_Blocks has the ore rows, author them as Stone and place one SM_Block_Ore_* mesh on the sign plinth as a visual stand-in; once the rows exist, swap the block id (cells and tests stay the same).",
   "Signs: block name / Hardness / DropItem from DT_Blocks, read at runtime so they never go stale; SPELL-PROOF badge on Fabric and the built wall."
  ]

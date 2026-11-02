@@ -1,0 +1,24 @@
+# One demo per mining-range row. Commands run in order when a pawn overlaps the sign.
+# A command that holds the field is released when the pawn steps off.
+row_id,commands
+Common_Dirt,gf.Magic.Field
+Common_Stone,gf.Magic.Field
+Common_Fabric,gf.Magic.Field
+Common_PlayerWall,gf.Magic.Field
+Verdant_Log,gf.Magic.Toggle|gf.Magic.Field
+Verdant_Leaves,gf.Magic.Toggle|gf.Magic.Field
+Verdant_WoodPlank,gf.Magic.Toggle|gf.Magic.Field
+Verdant_Grass,gf.Magic.Toggle|gf.Magic.Field
+Verdant_Farmland,gf.Magic.Toggle|gf.Magic.Field
+Verdant_TreePlot,gf.Magic.Toggle|gf.Magic.Field
+Rime_Ice,gf.Magic.Toggle|gf.Magic.Field
+Rime_Glass,gf.Magic.Toggle|gf.Magic.Field
+Rime_RakeLane,gf.Magic.Claw
+Cinderwrights_Lava,gf.Magic.Toggle|gf.Magic.Field
+Cinderwrights_Basalt,gf.Magic.Toggle|gf.Magic.Field
+Cinderwrights_Stone,gf.Magic.Toggle|gf.Magic.Field
+Cinderwrights_SparkStation,gf.Magic.Field Spark
+Ore_ClayBed,gf.Magic.Field
+Ore_CoalnutSeam,gf.Magic.Field
+Ore_OreMetal,gf.Magic.Buy SmelterPlus
+Ore_CrystalVein,gf.Magic.Overcharge

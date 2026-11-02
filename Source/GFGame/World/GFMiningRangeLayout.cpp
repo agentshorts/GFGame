@@ -180,6 +180,83 @@ FString FGFMiningRangeLayout::TreePath()
 	return FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("Data/MiningRange/MiningRange_Tree_Verdant_v1.json"));
 }
 
+FString FGFMiningRangeLayout::DemosPath()
+{
+	return FPaths::ConvertRelativePathToFull(FPaths::ProjectDir() / TEXT("Data/MiningRange/MiningRange_Demos_v1.csv"));
+}
+
+namespace
+{
+	void ApplyDemoFallback(TArray<FGFMiningRow>& Rows)
+	{
+		auto Put = [&Rows](const TCHAR* Id, const TCHAR* Commands)
+		{
+			for (FGFMiningRow& Row : Rows)
+			{
+				if (Row.Id.Equals(Id, ESearchCase::IgnoreCase) && Row.DemoCommands.IsEmpty())
+				{
+					Row.DemoCommands = Commands;
+				}
+			}
+		};
+		Put(TEXT("Common_Dirt"), TEXT("gf.Magic.Field"));
+		Put(TEXT("Common_Stone"), TEXT("gf.Magic.Field"));
+		Put(TEXT("Common_Fabric"), TEXT("gf.Magic.Field"));
+		Put(TEXT("Common_PlayerWall"), TEXT("gf.Magic.Field"));
+		Put(TEXT("Verdant_Log"), TEXT("gf.Magic.Toggle|gf.Magic.Field"));
+		Put(TEXT("Verdant_Leaves"), TEXT("gf.Magic.Toggle|gf.Magic.Field"));
+		Put(TEXT("Verdant_WoodPlank"), TEXT("gf.Magic.Toggle|gf.Magic.Field"));
+		Put(TEXT("Verdant_Grass"), TEXT("gf.Magic.Toggle|gf.Magic.Field"));
+		Put(TEXT("Verdant_Farmland"), TEXT("gf.Magic.Toggle|gf.Magic.Field"));
+		Put(TEXT("Verdant_TreePlot"), TEXT("gf.Magic.Toggle|gf.Magic.Field"));
+		Put(TEXT("Rime_Ice"), TEXT("gf.Magic.Toggle|gf.Magic.Field"));
+		Put(TEXT("Rime_Glass"), TEXT("gf.Magic.Toggle|gf.Magic.Field"));
+		Put(TEXT("Rime_RakeLane"), TEXT("gf.Magic.Claw"));
+		Put(TEXT("Cinderwrights_Lava"), TEXT("gf.Magic.Toggle|gf.Magic.Field"));
+		Put(TEXT("Cinderwrights_Basalt"), TEXT("gf.Magic.Toggle|gf.Magic.Field"));
+		Put(TEXT("Cinderwrights_Stone"), TEXT("gf.Magic.Toggle|gf.Magic.Field"));
+		Put(TEXT("Cinderwrights_SparkStation"), TEXT("gf.Magic.Field Spark"));
+		Put(TEXT("Ore_ClayBed"), TEXT("gf.Magic.Field"));
+		Put(TEXT("Ore_CoalnutSeam"), TEXT("gf.Magic.Field"));
+		Put(TEXT("Ore_OreMetal"), TEXT("gf.Magic.Buy SmelterPlus"));
+		Put(TEXT("Ore_CrystalVein"), TEXT("gf.Magic.Overcharge"));
+	}
+
+	void LoadDemoFile(TArray<FGFMiningRow>& Rows)
+	{
+		FString Text;
+		if (FFileHelper::LoadFileToString(Text, *FGFMiningRangeLayout::DemosPath()))
+		{
+			TArray<FString> Lines;
+			Text.ParseIntoArrayLines(Lines);
+			for (const FString& Raw : Lines)
+			{
+				FString Line = Raw.TrimStartAndEnd();
+				if (Line.IsEmpty() || Line.StartsWith(TEXT("#")) || Line.StartsWith(TEXT("row_id")))
+				{
+					continue;
+				}
+				FString Id;
+				FString Commands;
+				if (!Line.Split(TEXT(","), &Id, &Commands))
+				{
+					continue;
+				}
+				Id.TrimStartAndEndInline();
+				Commands.TrimStartAndEndInline();
+				for (FGFMiningRow& Row : Rows)
+				{
+					if (Row.Id.Equals(Id, ESearchCase::IgnoreCase))
+					{
+						Row.DemoCommands = Commands;
+					}
+				}
+			}
+		}
+		ApplyDemoFallback(Rows);
+	}
+}
+
 FString FGFMiningRangeLayout::DressingPath()
 {
 	const FString Flat = FPaths::ProjectDir() / TEXT("Data/MiningRange/MiningRange_Dressing_v2.json");
@@ -674,6 +751,7 @@ bool FGFMiningRangeLayout::LoadProject()
 		UE_LOG(LogGF, Log, TEXT("Mining range: dressing fallback (%s)"), *DressError);
 		Dressing = FGFMiningDressing();
 	}
+	LoadDemoFile(Rows);
 	bLoaded = true;
 	return true;
 }

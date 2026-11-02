@@ -2,6 +2,7 @@
 // Pure cases share the rules with the server. The world cases prove the voxels, the bag, and the summon.
 #include "Misc/AutomationTest.h"
 #include "GFMagicRules.h"
+#include "GFMagicShapes.h"
 #include "GFMagicTables.h"
 #include "GFMagicTypes.h"
 #include "GFDataTables.h"
@@ -270,22 +271,22 @@ bool FGFMagicUpgradeTest::RunTest(const FString&)
 	State.Path = EGFPath::Delver;
 	State.Bag.Add(TEXT("SpellPage"), 1);
 	State.Bag.Add(TEXT("Crystal"), 1);
-	TestEqual(TEXT("Verdant's pick is the wrong tree"), FGFMagicRules::TryBuy(State, TEXT("RootNetwork")).Code, FName(TEXT("WrongTree")));
+	TestEqual(TEXT("Verdant's pick is the wrong tree"), FGFMagicRules::TryBuy(State, TEXT("BarkAxe")).Code, FName(TEXT("WrongTree")));
 	TestEqual(TEXT("A missing id stays unknown"), FGFMagicRules::TryBuy(State, TEXT("NotASpell")).Code, FName(TEXT("Unknown")));
 	FMagicUpgradeState Broke = State;
 	Broke.Bag.Reset();
-	TestEqual(TEXT("A page and a crystal, or no sale"), FGFMagicRules::TryBuy(Broke, TEXT("LavaLance")).Code, FName(TEXT("CantAfford")));
-	const FMagicUpgradeDecision Bought = FGFMagicRules::TryBuy(State, TEXT("LavaLance"));
-	TestEqual(TEXT("Lava Lance is the tier pick"), Bought.Code, FName(TEXT("Ok")));
+	TestEqual(TEXT("A page and a crystal, or no sale"), FGFMagicRules::TryBuy(Broke, TEXT("SmelterPlus")).Code, FName(TEXT("CantAfford")));
+	const FMagicUpgradeDecision Bought = FGFMagicRules::TryBuy(State, TEXT("SmelterPlus"));
+	TestEqual(TEXT("Smelter Plus is the tier pick"), Bought.Code, FName(TEXT("Ok")));
 	TestTrue(TEXT("The page was spent"), !Bought.Bag.Contains(TEXT("SpellPage")));
 	TestTrue(TEXT("The crystal was spent"), !Bought.Bag.Contains(TEXT("Crystal")));
 	const FGFMagicModifiers Mods = FGFMagicRules::ModifiersFor(Bought.Owned);
-	TestEqual(TEXT("Lava Lance adds 2 m"), Mods.RangeBonusCm, 200.f);
+	TestEqual(TEXT("Smelter Plus adds a 30 percent smelt"), Mods.SmeltChance, 0.3f);
 	FMagicUpgradeState Again = State;
 	Again.Owned = Bought.Owned;
 	Again.Bag.Add(TEXT("SpellPage"), 1);
 	Again.Bag.Add(TEXT("Crystal"), 1);
-	TestEqual(TEXT("The other tier-1 pick is closed"), FGFMagicRules::TryBuy(Again, TEXT("FissureRake")).Code, FName(TEXT("TierPicked")));
+	TestEqual(TEXT("The other tier-1 pick is closed"), FGFMagicRules::TryBuy(Again, TEXT("StickyMagma")).Code, FName(TEXT("TierPicked")));
 	return true;
 }
 
@@ -302,8 +303,229 @@ bool FGFMagicComboTest::RunTest(const FString&)
 	for (const FName& Id : Rows)
 	{
 		const FGFMiningComboRow* Row = Table->FindRow<FGFMiningComboRow>(Id, TEXT("MagicCombo"), false);
-		TestTrue(FString::Printf(TEXT("%s is data only"), *Id.ToString()), Row && !Row->bImplemented);
+		if (!Row)
+		{
+			AddError(FString::Printf(TEXT("%s row is missing"), *Id.ToString()));
+			continue;
+		}
+		if (Id == TEXT("Shatterfrost"))
+		{
+			TestTrue(TEXT("Shatterfrost is played"), Row->bImplemented);
+		}
+		else
+		{
+			TestFalse(FString::Printf(TEXT("%s stays data only"), *Id.ToString()), Row->bImplemented);
+		}
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMagicSparkconeTest, "GFGame.MagicMining.Sparkcone", GFMagicTestFlags)
+bool FGFMagicSparkconeTest::RunTest(const FString&)
+{
+	using namespace GFMagicTest;
+	const FGFMiningSpellRow* Spell = FGFMagicCatalog::Spell(TEXT("Sparkcone"));
+	if (!TestNotNull(TEXT("Sparkcone row"), Spell))
+	{
+		return false;
+	}
+	TestEqual(TEXT("The formula yields 29 rays, not a hand count"), FGFMagicShapes::ConeRayCount(Spell->RangeCm, Spell->ConeHalfAngle, GFBlockSize, Spell->MinRays, Spell->MaxRays), 29);
+	TestEqual(TEXT("Full power inside 3 m"), FGFMagicShapes::SparkFalloff(0.f, Spell->FalloffStartCm, Spell->RangeCm, Spell->FalloffMin), 1.f);
+	TestEqual(TEXT("Full power at the falloff start"), FGFMagicShapes::SparkFalloff(Spell->FalloffStartCm, Spell->FalloffStartCm, Spell->RangeCm, Spell->FalloffMin), 1.f);
+	TestTrue(TEXT("35 percent at 8 m"), FMath::IsNearlyEqual(FGFMagicShapes::SparkFalloff(Spell->RangeCm, Spell->FalloffStartCm, Spell->RangeCm, Spell->FalloffMin), 0.35f));
+	TestEqual(TEXT("The first break does not scale the chain"), FGFMagicRules::ChainScale(1, 20, 0.5f), 1.f);
+	TestTrue(TEXT("Twenty breaks reach the bonus"), FMath::IsNearlyEqual(FGFMagicRules::ChainScale(20, 20, 0.5f), 1.5f));
+
+	const FVector Origin(50.f, 50.f, 150.f);
+	TSet<FIntVector> SolidCells;
+	SolidCells.Add(FIntVector(3, 0, 1));
+	SolidCells.Add(FIntVector(4, 0, 1));
+	SolidCells.Add(FIntVector(5, 0, 1));
+	SolidCells.Add(FIntVector(3, 2, 1));
+	SolidCells.Add(FIntVector(0, 0, 1));
+	auto Solid = [&SolidCells](const FIntVector& Cell) { return SolidCells.Contains(Cell); };
+	auto Blocker = [](const FIntVector&) { return false; };
+	const TArray<FMagicConeHit> Hits = FGFMagicShapes::GatherCone(Origin, FVector::ForwardVector, Spell->RangeCm, Spell->ConeHalfAngle, Spell->Penetration, Spell->CellCap, FVector::ZeroVector, Solid, Blocker);
+	auto Has = [&Hits](const FIntVector& Cell)
+	{
+		return Hits.ContainsByPredicate([&Cell](const FMagicConeHit& Hit) { return Hit.Cell == Cell; });
+	};
+	TestTrue(TEXT("The cone hits the cell on axis"), Has(FIntVector(3, 0, 1)));
+	TestTrue(TEXT("Penetration keeps one cell behind it"), Has(FIntVector(4, 0, 1)));
+	TestFalse(TEXT("A second cell behind is dark"), Has(FIntVector(5, 0, 1)));
+	TestFalse(TEXT("A cell outside the half-angle is dark"), Has(FIntVector(3, 2, 1)));
+	const TArray<FMagicConeHit> Point = FGFMagicShapes::GatherCone(Origin, FVector::ZeroVector, Spell->RangeCm, Spell->ConeHalfAngle, Spell->Penetration, Spell->CellCap, FVector::ZeroVector, Solid, Blocker);
+	TestEqual(TEXT("A zero aim is the one solid under the crystal"), Point.Num(), 1);
+	TestTrue(TEXT("That cell is the origin cell"), Point.Num() == 1 && Point[0].Cell == FIntVector(0, 0, 1));
+
+	FGrid Grid;
+	for (int32 Step = 0; Step < 6; ++Step)
+	{
+		Grid.Blocks.Add(FIntVector(Step, 0, 0), TEXT("OreMetal"));
+	}
+	TMap<FIntVector, FMagicWound> Wounds;
+	FMagicHitRequest Request = Hit({ FIntVector(0, 0, 0) }, EGFMagicElement::Spark, 0.1f);
+	Request.ConductiveCap = 3;
+	const FMagicHitOutput Chain = FGFMagicRules::Apply(Wounds, Request, Grid.View());
+	TestEqual(TEXT("Conductive cap walks three extra cells"), Chain.Spent, 4);
+	TestFalse(TEXT("The fifth neighbour waits for another cast"), Wounds.Contains(FIntVector(4, 0, 0)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMagicMagmaSprayTest, "GFGame.MagicMining.MagmaSpray", GFMagicTestFlags)
+bool FGFMagicMagmaSprayTest::RunTest(const FString&)
+{
+	using namespace GFMagicTest;
+	const FGFMiningSpellRow* Spell = FGFMagicCatalog::Spell(TEXT("MagmaSpray"));
+	if (!TestNotNull(TEXT("Magma spray row"), Spell))
+	{
+		return false;
+	}
+	FGrid Grid;
+	Grid.Blocks.Add(FIntVector(0, 0, 2), TEXT("Stone"));
+	Grid.Blocks.Add(FIntVector(0, 0, 1), TEXT("Stone"));
+	Grid.Blocks.Add(FIntVector(0, 0, 0), TEXT("Stone"));
+	TArray<FMagicPuddle> Puddles;
+	TMap<FIntVector, FMagicWound> Wounds;
+	FGFMagicShapes::FeedPuddle(Puddles, FIntVector(0, 0, 2), 2.5f, { TEXT("Digger") }, FIntVector(0, 0, -1), 1.f, 0.0, *Spell, Grid.View());
+	TestEqual(TEXT("One puddle sits on the top cell"), Puddles.Num(), 1);
+	const FMagicHitOutput First = FGFMagicShapes::TickPuddles(Puddles, Wounds, 0.0, 1.f, *Spell, Grid.View(), 8);
+	TestTrue(TEXT("The top cell dissolves"), Broke(First, FIntVector(0, 0, 2)));
+	TestFalse(TEXT("The dissolve is not a lava write"), First.Breaks.Num() > 0 && !First.Breaks[0].TransformTo.IsNone());
+	TestEqual(TEXT("The puddle sinks"), Puddles.Num(), 1);
+	TestEqual(TEXT("It sinks onto the cell below"), Puddles.Num() == 1 ? Puddles[0].Cell : FIntVector::ZeroValue, FIntVector(0, 0, 1));
+	const FMagicHitOutput Second = FGFMagicShapes::TickPuddles(Puddles, Wounds, 0.1, 1.f, *Spell, Grid.View(), 8);
+	TestTrue(TEXT("The next cell down dissolves"), Broke(Second, FIntVector(0, 0, 1)));
+	TestFalse(TEXT("The floor under a spent puddle stays"), Broke(Second, FIntVector(0, 0, 0)));
+
+	TArray<FMagicSmear> Smears;
+	FMagicSmear Smear;
+	Smear.Cell = FIntVector(0, 0, 0);
+	Smear.Until = 2.0;
+	Smear.PerSecond = 0.5f * Spell->PuddleDissolve;
+	Smear.Owners = { TEXT("Digger") };
+	Smear.Rate = 1.f;
+	Smears.Add(Smear);
+	TMap<FIntVector, FMagicWound> SmearWounds;
+	FGFMagicShapes::TickSmears(Smears, SmearWounds, 0.0, 1.f, Grid.View(), 4);
+	const FMagicWound* Wound = SmearWounds.Find(FIntVector(0, 0, 0));
+	TestTrue(TEXT("A wall smear wounds the cell"), Wound && Wound->Remaining > 0.f && Wound->Remaining < FGFMagicRules::IntegrityOf(1.5f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMagicRootmaulTest, "GFGame.MagicMining.Rootmaul", GFMagicTestFlags)
+bool FGFMagicRootmaulTest::RunTest(const FString&)
+{
+	using namespace GFMagicTest;
+	const FGFRootmaulMoveRow* Swing = FGFMagicShapes::Move(TEXT("Rootmaul"), TEXT("Swing1"));
+	const FGFRootmaulMoveRow* Axe = FGFMagicShapes::Move(TEXT("BarkAxe"), TEXT("Swing1"));
+	if (!TestNotNull(TEXT("Swing1"), Swing) || !TestNotNull(TEXT("Bark axe swing"), Axe))
+	{
+		return false;
+	}
+	TestEqual(TEXT("A light swing is 3 by 2 by 1"), Swing->Width, 3);
+	TestEqual(TEXT("Swing height"), Swing->Height, 2);
+	TestEqual(TEXT("Swing depth"), Swing->Depth, 1);
+	TestEqual(TEXT("Swing power"), Swing->Power, 120.f);
+	TestEqual(TEXT("Bark axe is a narrower chop"), Axe->Width, 1);
+	TestEqual(TEXT("Bark axe reaches two deep"), Axe->Depth, 2);
+	TestEqual(TEXT("Idle light starts at Swing1"), FGFMagicShapes::NextMove(TEXT("Rootmaul"), NAME_None, false), FName(TEXT("Swing1")));
+	TestEqual(TEXT("The second light is Swing2"), FGFMagicShapes::NextMove(TEXT("Rootmaul"), TEXT("Swing1"), false), FName(TEXT("Swing2")));
+	TestEqual(TEXT("Idle heavy is the overhead"), FGFMagicShapes::NextMove(TEXT("Rootmaul"), NAME_None, true), FName(TEXT("HeavyOverhead")));
+	TestTrue(TEXT("A notify inside the slack lands"), FGFMagicShapes::AcceptMeleeTiming(0.0, 0.40, 0.50, 0.15));
+	TestFalse(TEXT("A late notify is dropped"), FGFMagicShapes::AcceptMeleeTiming(0.0, 0.40, 1.0, 0.15));
+
+	const TArray<FIntVector> Cells = FGFMagicShapes::MeleeCells(FIntVector::ZeroValue, FVector::ForwardVector, Swing->Width, Swing->Height, Swing->Depth);
+	TestEqual(TEXT("Six cells in the swing"), Cells.Num(), 6);
+	TestTrue(TEXT("The swing starts one cell forward"), Cells.Contains(FIntVector(1, 0, 0)));
+	TestFalse(TEXT("It does not reach two deep"), Cells.Contains(FIntVector(2, 0, 0)));
+	TestFalse(TEXT("Height grows up, not down"), Cells.Contains(FIntVector(1, 0, -1)));
+
+	FMagicRhythm Rhythm;
+	Rhythm.Window = 0.15f;
+	Rhythm.Step = 0.25f;
+	Rhythm.MaxBonus = 0.75f;
+	TestEqual(TEXT("The first note is free"), Rhythm.Note(0.0, true), 1.f);
+	TestTrue(TEXT("The second note inside the window stacks"), FMath::IsNearlyEqual(Rhythm.Note(0.1, true), 1.25f));
+
+	FGrid Grid;
+	Grid.Blocks.Add(FIntVector(1, 0, 0), TEXT("Dirt"));
+	Grid.Blocks.Add(FIntVector(0, 0, 0), TEXT("Dirt"));
+	TMap<FIntVector, FMagicWound> Wounds;
+	FMagicHitRequest Request = Hit({ FIntVector(1, 0, 0) }, EGFMagicElement::Root, 0.1f);
+	Request.bImpulse = true;
+	Request.ImpulsePower = Swing->Power;
+	const FMagicHitOutput Out = FGFMagicRules::Apply(Wounds, Request, Grid.View());
+	TestTrue(TEXT("One swing breaks the dirt in front"), Broke(Out, FIntVector(1, 0, 0)));
+	TestFalse(TEXT("The cell under the feet was not in the swing"), Broke(Out, FIntVector(0, 0, 0)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMagicFrostbindTest, "GFGame.MagicMining.Frostbind", GFMagicTestFlags)
+bool FGFMagicFrostbindTest::RunTest(const FString&)
+{
+	using namespace GFMagicTest;
+	const FGFMiningSpellRow* Spell = FGFMagicCatalog::Spell(TEXT("Frostbind"));
+	if (!TestNotNull(TEXT("Frostbind row"), Spell))
+	{
+		return false;
+	}
+	FGrid Grid;
+	for (int32 Step = 0; Step < 7; ++Step)
+	{
+		Grid.Blocks.Add(FIntVector(Step, 0, 0), TEXT("Ice"));
+	}
+	Grid.Blocks.Add(FIntVector(0, 2, 0), TEXT("Lava"));
+	Grid.Blocks.Add(FIntVector(0, 4, 0), TEXT("Lava"));
+	TMap<FIntVector, FMagicFreezeCell> Cells;
+	TMap<int32, int32> Chains;
+	int32 NextId = 1;
+	TArray<FString> Who = { TEXT("Digger") };
+	const FMagicHitOutput Quench = FGFMagicShapes::TickFreeze(Cells, Chains, { FIntVector(0, 0, 0) }, {}, FIntVector(0, 0, 0), Who, 0.0, 0.1f, 1.f, Spell->QuenchRadius, 0, *Spell, Grid.View(), NextId);
+	TestTrue(TEXT("Lava inside the quench radius becomes basalt"), Broke(Quench, FIntVector(0, 2, 0)));
+	TestFalse(TEXT("Lava outside the radius stays"), Broke(Quench, FIntVector(0, 4, 0)));
+	if (const FMagicBreak* Basalt = Quench.Breaks.FindByPredicate([](const FMagicBreak& Break) { return Break.Cell == FIntVector(0, 2, 0); }))
+	{
+		TestEqual(TEXT("The quench writes basalt"), Basalt->TransformTo, FName(TEXT("Basalt")));
+		TestEqual(TEXT("The quench pays nothing"), Basalt->DropCount, 0);
+	}
+
+	Cells.Reset();
+	Chains.Reset();
+	FGrid Line;
+	for (int32 Step = 0; Step < 6; ++Step)
+	{
+		Line.Blocks.Add(FIntVector(Step, 0, 0), TEXT("Ice"));
+	}
+	Line.Blocks.Add(FIntVector(1, 0, 0), TEXT("Stone"));
+	FGFMagicShapes::TickFreeze(Cells, Chains, { FIntVector(0, 0, 0) }, {}, FIntVector(0, 0, 0), Who, 0.0, 1.f, 1.f, 0, 0, *Spell, Line.View(), NextId);
+	TestTrue(TEXT("The aimed ice locks"), Cells.Contains(FIntVector(0, 0, 0)) && Cells[FIntVector(0, 0, 0)].bLocked);
+	const FMagicHitOutput Burst = FGFMagicShapes::TickFreeze(Cells, Chains, {}, { FIntVector(0, 0, 0) }, FIntVector(0, 0, 0), Who, 0.0, 0.1f, 1.f, 0, 0, *Spell, Line.View(), NextId);
+	TestTrue(TEXT("Shatterfrost pops the locked cell now"), Broke(Burst, FIntVector(0, 0, 0)));
+	TestTrue(TEXT("Full spread locks the stone neighbour"), Cells.Contains(FIntVector(1, 0, 0)) && Cells[FIntVector(1, 0, 0)].bLocked);
+
+	Cells.Reset();
+	Chains.Reset();
+	FGrid ChainGrid;
+	for (int32 Step = 0; Step < 6; ++Step)
+	{
+		ChainGrid.Blocks.Add(FIntVector(Step, 0, 0), TEXT("Ice"));
+	}
+	double Now = 0.0;
+	FGFMagicShapes::TickFreeze(Cells, Chains, { FIntVector(0, 0, 0) }, {}, FIntVector(0, 0, 0), Who, Now, 1.f, 1.f, -1, 0, *Spell, ChainGrid.View(), NextId);
+	TArray<FIntVector> Broken;
+	for (int32 Gen = 0; Gen < 6; ++Gen)
+	{
+		Now += Spell->ContractionSeconds;
+		const FMagicHitOutput Pop = FGFMagicShapes::TickFreeze(Cells, Chains, {}, {}, FIntVector(0, 0, 0), Who, Now, 0.1f, 1.f, -1, 0, *Spell, ChainGrid.View(), NextId);
+		for (const FMagicBreak& Break : Pop.Breaks)
+		{
+			Broken.Add(Break.Cell);
+		}
+	}
+	TestTrue(TEXT("The chain shatters the aimed cell"), Broken.Contains(FIntVector(0, 0, 0)));
+	TestTrue(TEXT("The chain reaches four cells out"), Broken.Contains(FIntVector(4, 0, 0)));
+	TestFalse(TEXT("The fifth cell past the generation cap stays"), Broken.Contains(FIntVector(5, 0, 0)));
 	return true;
 }
 

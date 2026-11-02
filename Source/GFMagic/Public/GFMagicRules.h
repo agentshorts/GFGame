@@ -27,6 +27,14 @@ struct GFMAGIC_API FMagicHitRequest
 	bool bSoilChain = false;
 	int32 ExtraDrop = 0;
 	bool bJackpot = false;
+	/** One hit, not per second. Still multiplied by the block matrix. */
+	bool bImpulse = false;
+	float ImpulsePower = 0.f;
+	/** Missing cells stay at 1. Sparkcone writes a falloff here. */
+	TMap<FIntVector, float> CellScale;
+	/** 0 keeps the old unlimited conductive walk. The cone passes the spell cap. */
+	int32 ConductiveCap = 0;
+	float SmeltChance = 0.f;
 };
 
 struct GFMAGIC_API FMagicBreak
@@ -72,6 +80,11 @@ struct GFMAGIC_API FGFMagicModifiers
 	bool bBondCall = false;
 	bool bWorkingDinos = false;
 	bool bJackpot = false;
+	float SmeltChance = 0.f;
+	bool bSticky = false;
+	FName MeleeForm = TEXT("Rootmaul");
+	int32 FrostBonus = 0;
+	int32 QuenchRadius = 0;
 };
 
 struct GFMAGIC_API FMagicUpgradeState
@@ -94,6 +107,10 @@ struct GFMAGIC_API FGFMagicRules
 	static float IntegrityOf(float Hardness);
 	static float Multiplier(const FGFBlockAffinityRow& Affinity, EGFMagicElement Element);
 	static FLinearColor ElementColor(EGFMagicElement Element);
+	/** Stable 0..1 roll so a smelt bonus does not depend on the frame. */
+	static bool SmeltProcs(const FIntVector& Cell, float Chance);
+	/** 1 at one break, rising to 1 + Bonus once Count reaches Peak. */
+	static float ChainScale(int32 Count, int32 Peak, float Bonus);
 
 	static FName PathId(EGFPath Path);
 	static EGFMagicElement FactionElement(FName FactionId);

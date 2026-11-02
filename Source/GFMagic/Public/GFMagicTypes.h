@@ -40,9 +40,17 @@ struct GFMAGIC_API FGFBlockAffinityRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") FName FrostTransform;
 	/** Drop used when Magma breaks this. Empty keeps ItemForBlock. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") FName MagmaDrop;
+	/** Fraction of Freeze a shatter pushes into this block. Ice, Glass and Crystal Vein are 1. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float FreezeSpread = 0.3f;
+	/** Clawcall never breaks this, whichever element the summon is wearing. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") bool bClawcallImmune = false;
 };
 
-/** One DT_MiningSpells row. Row name = spell id (Sparkfield, Clawcall, Crystal, ...). */
+/**
+ * One DT_MiningSpells row.
+ * Row name = spell id (Sparkcone, MagmaSpray, Rootmaul, Frostbind, Clawcall, Crystal, ...).
+ * Shape is Cone, Spray, Melee, Freeze, Claw, Storm or Pool. Numbers the shape does not use stay 0.
+ */
 USTRUCT(BlueprintType)
 struct GFMAGIC_API FGFMiningSpellRow : public FTableRowBase
 {
@@ -64,6 +72,73 @@ struct GFMAGIC_API FGFMiningSpellRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float ChargeRegen = 0.f;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float OverchargeSeconds = 0.f;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float OverchargeRate = 1.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") FName Shape;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float CostPerSecond = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float ConeHalfAngle = 15.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float ConePower = 100.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float FalloffStartCm = 300.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float FalloffMin = 0.35f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 Penetration = 1;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 CellCap = 48;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float GlobRate = 12.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float GlobSpeed = 1600.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float GlobGravityScale = 0.5f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float GlobVolume = 0.25f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float PuddleDissolve = 80.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float PuddleMaxVolume = 4.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 PuddleMaxDepth = 3;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float PuddleCoolSeconds = 6.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float PuddleSpill = 2.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float PuddleSlow = 0.3f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 MaxPuddles = 24;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 AreaCap = 128;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 AreaCells = 64;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float SmearSeconds = 2.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float MeleeReachCm = 250.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float HeavyHoldSeconds = 0.5f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float RhythmWindow = 0.15f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float RhythmStep = 0.25f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float RhythmMax = 0.75f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float MeleeSlack = 0.15f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float FreezeRate = 1.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float ContractionSeconds = 1.2f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 ChainGenerations = 4;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 ChainMaxCells = 64;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 QuenchRadius = 2;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float MarkSeconds = 3.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 ConductiveCap = 3;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float LightIntensity = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float RegenDelay = 0.5f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float ChainWindow = 1.5f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 ChainPeak = 20;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float ChainBonus = 0.5f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float OverchargeHalfAngle = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 MinRays = 19;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 MaxRays = 96;
+};
+
+/** One DT_RootmaulMoves row. Row name is Form_MoveId. MoveId is the combo key. */
+USTRUCT(BlueprintType)
+struct GFMAGIC_API FGFRootmaulMoveRow : public FTableRowBase
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") FName Form;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") FName MoveId;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") FName MontageSection;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") FName Input;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 Width = 1;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 Height = 1;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") int32 Depth = 1;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float Power = 120.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float ChargeCost = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float LungeCm = 50.f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") FName NextOnLight;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") FName NextOnHeavy;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") bool bPitch = false;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") bool bRooted = false;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic") float TimeSeconds = 0.4f;
 };
 
 /** One DT_ClawcallForms row. Row name = faction id. */
