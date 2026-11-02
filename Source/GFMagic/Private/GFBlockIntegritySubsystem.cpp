@@ -1,4 +1,5 @@
 #include "GFBlockIntegritySubsystem.h"
+#include "GFTownNodes.h"
 #include "GFMagicActors.h"
 #include "GFMagicShapes.h"
 #include "GFMagicTables.h"
@@ -104,6 +105,13 @@ namespace
 	static FAutoConsoleCommand GBuyCmd(TEXT("gf.Magic.Buy"), TEXT("Buy a tier-1 spell upgrade by id. gf.Magic.Buy SmelterPlus"), FConsoleCommandWithArgsDelegate::CreateStatic(&CmdBuy));
 }
 
+UGFBlockIntegritySubsystem::UGFBlockIntegritySubsystem()
+{
+	TownNodes = MakeUnique<FGFTownNodeField>();
+}
+
+UGFBlockIntegritySubsystem::~UGFBlockIntegritySubsystem() = default;
+
 bool UGFBlockIntegritySubsystem::IsTickable() const
 {
 	const UWorld* World = GetWorld();
@@ -127,6 +135,10 @@ TStatId UGFBlockIntegritySubsystem::GetStatId() const
 
 void UGFBlockIntegritySubsystem::Deinitialize()
 {
+	if (TownNodes)
+	{
+		TownNodes->Reset();
+	}
 	if (UWorld* World = GetWorld())
 	{
 		if (AGFGameState* GS = World->GetGameState<AGFGameState>())
@@ -336,22 +348,41 @@ void UGFBlockIntegritySubsystem::Step()
 			Caster->SyncMarker(Caster->GetAimPoint());
 			continue;
 		}
-		if (!Voxel)
-		{
-			continue;
-		}
 		const float Cost = Caster->FieldCostPerSecond() * GFMagic::TickSeconds;
 		if (Cost > 0.f && Caster->GetCrystalCharge() <= 0.f)
 		{
 			continue;
 		}
-		CastField(Caster, Budget, Voxel, Detonate);
+		if (!Voxel)
+		{
+			PayTownField(Caster);
+			if (const FGFMiningSpellRow* Spell = FGFMagicCatalog::FieldSpell(Caster->GetElement()))
+			{
+				if (Spell->Shape == TEXT("Spray"))
+				{
+					SpawnGlobs(Caster, *Spell, nullptr);
+				}
+			}
+		}
+		// Meshes first. A tree in front of the grid must take the hit before the 64-cell cap is spent on voxels behind it.
+		if (TownNodes)
+		{
+			TownNodes->CastShapes(Caster, Budget, MiningNow);
+		}
+		if (Voxel)
+		{
+			CastField(Caster, Budget, Voxel, Detonate);
+		}
 	}
+	StepGlobs(Voxel);
 	if (Voxel)
 	{
-		StepGlobs(Voxel);
 		StepPuddlesAndSmears(Budget, Voxel);
 		StepFreeze(Budget, Voxel, Detonate, nullptr, {}, FIntVector::ZeroValue);
+	}
+	if (TownNodes)
+	{
+		TownNodes->TickOngoing(GetWorld(), MiningNow, Budget, [this](const FString& Key) { return FindCaster(Key); });
 	}
 }
 
@@ -527,7 +558,7 @@ void UGFBlockIntegritySubsystem::Commit(AGFVoxelWorld* Voxel, const FMagicHitOut
 
 void UGFBlockIntegritySubsystem::ApplySwings(UGFMagicComponent* Caster, int32& Budget, AGFVoxelWorld* Voxel)
 {
-	if (!Caster || !Voxel)
+	if (!Caster)
 	{
 		return;
 	}
@@ -549,30 +580,37 @@ void UGFBlockIntegritySubsystem::ApplySwings(UGFMagicComponent* Caster, int32& B
 		}
 		Facing = Facing.GetSafeNormal();
 		const FVector Origin = Caster->CastOrigin() + Facing * FMath::Max(0.f, Swing.LungeCm);
-		const FIntVector Feet = Voxel->WorldToCell(Origin);
-		FMagicDeferredCast Deferred;
-		Deferred.Cells = FGFMagicShapes::MeleeCells(Feet, Facing, Swing.Width, Swing.Height, Swing.Depth);
-		Deferred.Element = EGFMagicElement::Root;
-		Deferred.bImpulse = true;
-		Deferred.ImpulsePower = Swing.Power * (Swing.Rhythm > 0.f ? Swing.Rhythm : 1.f);
-		Deferred.Rate = Caster->FieldRate();
-		Deferred.bSoilChain = Mods.bSoilChain;
-		Deferred.ExtraDrop = Mods.ExtraDrop;
-		Deferred.bJackpot = Mods.bJackpot;
-		Deferred.bRooted = Swing.bRooted;
-		const FName Key = Caster->ContributorKey();
-		if (!Key.IsNone())
+		if (Voxel)
 		{
-			Deferred.Contributors.Add(Key.ToString());
-		}
-		if (Swing.bRooted)
-		{
-			for (const FIntVector& Cell : Deferred.Cells)
+			const FIntVector Feet = Voxel->WorldToCell(Origin);
+			FMagicDeferredCast Deferred;
+			Deferred.Cells = FGFMagicShapes::MeleeCells(Feet, Facing, Swing.Width, Swing.Height, Swing.Depth);
+			Deferred.Element = EGFMagicElement::Root;
+			Deferred.bImpulse = true;
+			Deferred.ImpulsePower = Swing.Power * (Swing.Rhythm > 0.f ? Swing.Rhythm : 1.f);
+			Deferred.Rate = Caster->FieldRate();
+			Deferred.bSoilChain = Mods.bSoilChain;
+			Deferred.ExtraDrop = Mods.ExtraDrop;
+			Deferred.bJackpot = Mods.bJackpot;
+			Deferred.bRooted = Swing.bRooted;
+			const FName Key = Caster->ContributorKey();
+			if (!Key.IsNone())
 			{
-				RememberMark(Cell, TEXT("Rooted"), MarkFor);
+				Deferred.Contributors.Add(Key.ToString());
 			}
+			if (Swing.bRooted)
+			{
+				for (const FIntVector& Cell : Deferred.Cells)
+				{
+					RememberMark(Cell, TEXT("Rooted"), MarkFor);
+				}
+			}
+			ApplyCast(Caster, MoveTemp(Deferred), Budget, Voxel);
 		}
-		ApplyCast(Caster, MoveTemp(Deferred), Budget, Voxel);
+		if (TownNodes)
+		{
+			TownNodes->HitSwing(Caster, Swing, Budget, MiningNow);
+		}
 	}
 }
 
@@ -681,7 +719,9 @@ void UGFBlockIntegritySubsystem::CastField(UGFMagicComponent* Caster, int32& Bud
 
 void UGFBlockIntegritySubsystem::SpawnGlobs(UGFMagicComponent* Caster, const FGFMiningSpellRow& Spell, AGFVoxelWorld* Voxel)
 {
-	if (!Caster || !Voxel)
+	// Voxel is unused. A town map has no grid, and Magma Spray still has to throw globs at the meshes.
+	(void)Voxel;
+	if (!Caster)
 	{
 		return;
 	}
@@ -714,36 +754,51 @@ void UGFBlockIntegritySubsystem::SpawnGlobs(UGFMagicComponent* Caster, const FGF
 
 void UGFBlockIntegritySubsystem::StepGlobs(AGFVoxelWorld* Voxel)
 {
-	if (!Voxel)
-	{
-		return;
-	}
 	const FGFMiningSpellRow* Spell = FGFMagicCatalog::FieldSpell(EGFMagicElement::Magma);
 	if (!Spell)
 	{
 		Globs.Reset();
 		return;
 	}
-	const UWorld* World = GetWorld();
+	UWorld* World = GetWorld();
 	const double Now = MiningNow;
 	const float Gravity = (World ? World->GetGravityZ() : -980.f) * (Spell->GlobGravityScale > 0.f ? Spell->GlobGravityScale : 0.5f);
 	TArray<FMagicGlob> Kept;
 	for (const FMagicGlob& Glob : Globs)
 	{
-		AGFPlayerState* OwnerState = nullptr;
-		if (UGFMagicComponent* Who = FindCaster(Glob.Owner))
+		UGFMagicComponent* Who = Glob.Owner.IsEmpty() ? nullptr : FindCaster(Glob.Owner);
+		AGFPlayerState* OwnerState = Who ? Cast<AGFPlayerState>(Who->GetOwner()) : nullptr;
+		FVector NextPos = Glob.Pos;
+		FVector NextVel = Glob.Vel;
+		bool bVoxelHit = false;
+		FMagicGlobHit Hit;
+		FMagicWorldView View;
+		if (Voxel)
 		{
-			OwnerState = Cast<AGFPlayerState>(Who->GetOwner());
+			View = MakeView(OwnerState, Voxel);
+			Hit = FGFMagicShapes::IntegrateGlob(Glob.Pos, Glob.Vel, GFMagic::TickSeconds, Gravity, Voxel->GetActorLocation(), View.BlockAt);
+			bVoxelHit = Hit.bHit;
+			NextPos = Hit.Pos;
+			NextVel = Hit.Vel;
 		}
-		FMagicWorldView View = MakeView(OwnerState, Voxel);
-		const FMagicGlobHit Hit = FGFMagicShapes::IntegrateGlob(Glob.Pos, Glob.Vel, GFMagic::TickSeconds, Gravity, Voxel->GetActorLocation(), View.BlockAt);
-		if (!Hit.bHit)
+		else
 		{
-			if (Hit.Pos.Z > -4000.f && Hit.Pos.SizeSquared() < FMath::Square(20000.f))
+			NextVel.Z += Gravity * GFMagic::TickSeconds;
+			NextPos = Glob.Pos + NextVel * GFMagic::TickSeconds;
+		}
+		if (TownNodes && TownNodes->ConsumeGlob(World, Glob, Glob.Pos, NextPos, *Spell, Now, Who))
+		{
+			continue;
+		}
+		if (!Voxel || !bVoxelHit)
+		{
+			const FVector Pos = Voxel ? Hit.Pos : NextPos;
+			const FVector Vel = Voxel ? Hit.Vel : NextVel;
+			if (Pos.Z > -4000.f && Pos.SizeSquared() < FMath::Square(20000.f))
 			{
 				FMagicGlob Next = Glob;
-				Next.Pos = Hit.Pos;
-				Next.Vel = Hit.Vel;
+				Next.Pos = Pos;
+				Next.Vel = Vel;
 				Kept.Add(Next);
 			}
 			continue;
@@ -977,5 +1032,47 @@ void UGFBlockIntegritySubsystem::CastClaw(UGFMagicComponent* Caster)
 		{
 			Claw->Setup(From, To, Caster->GetClawForm(), FGFMagicRules::ElementColor(Deferred.Element));
 		}
+	}
+}
+
+void UGFBlockIntegritySubsystem::PayTownField(UGFMagicComponent* Caster)
+{
+	if (!Caster)
+	{
+		return;
+	}
+	const FGFMiningSpellRow* Spell = FGFMagicCatalog::FieldSpell(Caster->GetElement());
+	if (!Spell)
+	{
+		return;
+	}
+	const float Cost = Spell->CostPerSecond * GFMagic::TickSeconds;
+	if (Cost > 0.f)
+	{
+		Caster->SpendCharge(Cost);
+	}
+	Caster->SyncMarker(Caster->CastOrigin());
+}
+
+float UGFBlockIntegritySubsystem::GetTownNodeRemaining(const UPrimitiveComponent* Component) const
+{
+	return TownNodes ? TownNodes->Remaining(Component) : -1.f;
+}
+
+bool UGFBlockIntegritySubsystem::IsTownNodeDepleted(const UPrimitiveComponent* Component) const
+{
+	return TownNodes && TownNodes->IsDepleted(Component);
+}
+
+float UGFBlockIntegritySubsystem::GetTownRegrowSeconds() const
+{
+	return TownNodes ? TownNodes->GetRegrowSeconds() : FGFTownNodeRules::RegrowSeconds;
+}
+
+void UGFBlockIntegritySubsystem::SetTownRegrowSeconds(float Seconds)
+{
+	if (TownNodes)
+	{
+		TownNodes->SetRegrowSeconds(Seconds);
 	}
 }

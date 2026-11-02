@@ -4,20 +4,35 @@
 //  - Data: every mesh in Data/Town/town_v1_mineable.json is imported with matching mineable data, slots and tri count.
 //  - Hits: complex traces onto real triangles. Crystal-slot faces and trees are allowed; the main slot, walls,
 //    inlay pieces (mosaic, planter, fountain, canal) and the power span are refused.
+//  - Damage, Break, Regrow, Spells: allowed hits spend Log / CrystalVein integrity, drop through the magnet, and regrow.
+// The networked case is GFGame.Net.TownMineable (needs the editor).
 #include "Misc/AutomationTest.h"
 #include "GFMineable.h"
 #include "GFPlayerState.h"
+#include "GFBlockIntegritySubsystem.h"
+#include "GFGameState.h"
+#include "GFInventoryComponent.h"
+#include "GFMagicActors.h"
+#include "GFMagicComponent.h"
+#include "GFMagicPlayerState.h"
+#include "GFTownNodes.h"
+#include "GFVoxelWorld.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "Engine/HitResult.h"
+#include "EngineUtils.h"
 #include "Components/StaticMeshComponent.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/WorldSettings.h"
+#include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
 #include "MeshDescription.h"
 #include "StaticMeshAttributes.h"
 #include "StaticMeshResources.h"
+#include "GFNetTestUtils.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -86,9 +101,9 @@ namespace GFTownMineTest
 	{
 		UWorld* World = nullptr;
 
-		bool Create()
+		bool Create(const TCHAR* Name = TEXT("GFTownMineWorld"))
 		{
-			World = UWorld::CreateWorld(EWorldType::Game, false, TEXT("GFTownMineWorld"));
+			World = UWorld::CreateWorld(EWorldType::Game, false, Name);
 			if (!World)
 			{
 				return false;
@@ -230,6 +245,190 @@ namespace GFTownMineTest
 		// Face -> section -> slot must agree with the slot of the face the ray actually hit.
 		Test.TestTrue(FString::Printf(TEXT("%s: hit slot matches the face's slot (%d of %d, %d overlaps)"), Label, T.OnTarget, T.Traced, T.Overlap), T.SlotMismatch == 0);
 		return T;
+	}
+
+	struct FMineWorld : FWorld
+	{
+		UGFBlockIntegritySubsystem* Magic = nullptr;
+
+		bool Open(FAutomationTestBase& Test, const TCHAR* Name)
+		{
+			if (!Create(Name))
+			{
+				return false;
+			}
+			Magic = World->GetSubsystem<UGFBlockIntegritySubsystem>();
+			return Test.TestNotNull(TEXT("Integrity subsystem"), Magic);
+		}
+
+		~FMineWorld()
+		{
+			Destroy();
+		}
+	};
+
+	struct FStand
+	{
+		FVector Impact = FVector::ZeroVector;
+		FVector At = FVector::ZeroVector;
+		bool bOk = false;
+	};
+
+	/** Stand Distance cm outside the face, and confirm a second trace from there still hits it. */
+	static bool ConfirmStand(UWorld* World, UStaticMeshComponent* Comp, const FHitResult& Hit, float Distance, TFunctionRef<bool(const FHitResult&)> Accept, FStand& Out)
+	{
+		if (Hit.GetComponent() != Comp || !Accept(Hit))
+		{
+			return false;
+		}
+		const FVector Normal = Hit.ImpactNormal.GetSafeNormal();
+		if (Normal.IsNearlyZero())
+		{
+			return false;
+		}
+		const FVector Stand = FVector(Hit.ImpactPoint) + Normal * Distance;
+		FHitResult Check;
+		if (!World->LineTraceSingleByChannel(Check, Stand, FVector(Hit.ImpactPoint), ECC_Visibility, FGFMineable::QueryParams()))
+		{
+			return false;
+		}
+		if (Check.GetComponent() != Comp || !Accept(Check))
+		{
+			return false;
+		}
+		Out.Impact = Check.ImpactPoint;
+		Out.At = Stand;
+		Out.bOk = true;
+		return true;
+	}
+
+	/** A point Distance cm outside a face. Accept chooses which face (any, tree, or crystal slot). */
+	static FStand StandOutside(UWorld* World, UStaticMeshComponent* Comp, float Distance, TFunctionRef<bool(const FHitResult&)> Accept)
+	{
+		FStand Out;
+		if (!World || !Comp)
+		{
+			return Out;
+		}
+		Comp->UpdateBounds();
+		const FVector Center = Comp->Bounds.Origin;
+		const float Reach = Comp->Bounds.SphereRadius + Distance + 100.f;
+		const FVector Dirs[] = {
+			FVector(1, 0, 0), FVector(-1, 0, 0), FVector(0, 1, 0), FVector(0, -1, 0), FVector(0, 0, 1), FVector(0, 0, -1)
+		};
+		for (const FVector& Dir : Dirs)
+		{
+			FHitResult Hit;
+			const FVector Start = Center + Dir * Reach;
+			if (!World->LineTraceSingleByChannel(Hit, Start, Center, ECC_Visibility, FGFMineable::QueryParams()))
+			{
+				continue;
+			}
+			if (ConfirmStand(World, Comp, Hit, Distance, Accept, Out))
+			{
+				return Out;
+			}
+		}
+		// Axis rays miss a crystal inlay that does not face the bounds centre. Walk crystal faces first, then a sample of the body.
+		const TArray<FTri> Tris = Triangles(Comp->GetStaticMesh());
+		const FTransform Xform = Comp->GetComponentTransform();
+		const int32 Step = FMath::Max(1, Tris.Num() / 96);
+		for (int32 Pass = 0; Pass < 2 && !Out.bOk; ++Pass)
+		{
+			int32 Tried = 0;
+			for (int32 Index = 0; Index < Tris.Num() && Tried < 96 && !Out.bOk; ++Index)
+			{
+				const FTri& Tri = Tris[Index];
+				if (Pass == 0)
+				{
+					if (Tri.Slot == 0)
+					{
+						continue;
+					}
+				}
+				else if ((Index % Step) != 0)
+				{
+					continue;
+				}
+				++Tried;
+				const FVector A = Xform.TransformPosition(Tri.A);
+				const FVector B = Xform.TransformPosition(Tri.B);
+				const FVector C = Xform.TransformPosition(Tri.C);
+				const FVector N = FVector::CrossProduct(B - A, C - A).GetSafeNormal();
+				if (N.IsNearlyZero())
+				{
+					continue;
+				}
+				const FVector Mid = (A + B + C) / 3.0;
+				for (const float Side : { 1.f, -1.f })
+				{
+					FHitResult Hit;
+					const FVector Start = Mid + N * (Side * (Distance + 4.f));
+					if (!World->LineTraceSingleByChannel(Hit, Start, Mid - N * (Side * 2.f), ECC_Visibility, FGFMineable::QueryParams()))
+					{
+						continue;
+					}
+					if (ConfirmStand(World, Comp, Hit, Distance, Accept, Out))
+					{
+						return Out;
+					}
+				}
+			}
+		}
+		return Out;
+	}
+
+	static AGFMagicPlayerState* Digger(UWorld* World, const TCHAR* Key, const FVector& At)
+	{
+		AGFMagicPlayerState* PS = World ? World->SpawnActor<AGFMagicPlayerState>() : nullptr;
+		if (!PS || !PS->Magic)
+		{
+			return nullptr;
+		}
+		PS->PlayerKey = Key;
+		PS->Magic->BindAvatar(nullptr);
+		PS->Magic->SetManualOrigin(At);
+		PS->Magic->SetAim(At, At);
+		return PS;
+	}
+
+	static void Hold(AGFMagicPlayerState* PS, UGFBlockIntegritySubsystem* Magic, const FVector& At, const FVector& Aim, float Seconds)
+	{
+		if (!PS || !PS->Magic || !Magic)
+		{
+			return;
+		}
+		PS->Magic->SetManualOrigin(At);
+		PS->Magic->SetAim(At, Aim);
+		PS->Magic->SetFieldHeld(true);
+		Magic->Advance(Seconds);
+	}
+
+	static int32 Ribbons(UWorld* World)
+	{
+		int32 Count = 0;
+		if (!World)
+		{
+			return 0;
+		}
+		for (TActorIterator<AGFMagicDropRibbon> It(World); It; ++It)
+		{
+			++Count;
+		}
+		return Count;
+	}
+
+	static UStaticMeshComponent* PlaceAsset(FWorld& W, const TCHAR* Asset, const FVector& At)
+	{
+		TArray<FGFMineableEntry> All;
+		FString Err;
+		if (!FGFMineable::LoadTownWhitelist(All, Err))
+		{
+			return nullptr;
+		}
+		const FGFMineableEntry* E = FindEntry(All, Asset);
+		UStaticMesh* Mesh = E ? LoadMesh(E->Path) : nullptr;
+		return Mesh ? W.Place(Mesh, At) : nullptr;
 	}
 }
 
@@ -404,6 +603,495 @@ bool FGFTownMineHitsTest::RunTest(const FString&)
 		TestFalse(TEXT("a mesh without mineable data is refused"), FGFMineable::CanMineHit(Hit, Why));
 	}
 	W.Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTownMineDamageTest, "GFGame.TownMineable.Damage", GFTownMineTestFlags)
+bool FGFTownMineDamageTest::RunTest(const FString&)
+{
+	using namespace GFTownMineTest;
+	FMineWorld W;
+	if (!W.Open(*this, TEXT("GFTownMineDamage")))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Regrow default is one crop stage"), W.Magic->GetTownRegrowSeconds(), FGFTownNodeRules::RegrowSeconds);
+
+	UStaticMeshComponent* Tree = PlaceAsset(W, TEXT("SM_Town_ForestTree_A"), FVector::ZeroVector);
+	UStaticMeshComponent* Crystal = PlaceAsset(W, TEXT("SM_Town_LampPost"), FVector(8000, 0, 0));
+	UStaticMeshComponent* Wall = PlaceAsset(W, TEXT("SM_Town_Wall_Straight"), FVector(16000, 0, 0));
+	if (!TestNotNull(TEXT("Tree"), Tree) || !TestNotNull(TEXT("Lamp"), Crystal) || !TestNotNull(TEXT("Wall"), Wall))
+	{
+		return false;
+	}
+	TestEqual(TEXT("A tree starts at log integrity"), W.Magic->GetTownNodeRemaining(Tree), 100.f);
+	TestEqual(TEXT("A crystal slot starts at crystal-vein integrity"), W.Magic->GetTownNodeRemaining(Crystal), 200.f);
+	TestEqual(TEXT("A wall has no node"), W.Magic->GetTownNodeRemaining(Wall), -1.f);
+
+	auto AnyFace = [](const FHitResult&) { return true; };
+	const FStand TreeStand = StandOutside(W.World, Tree, 200.f, AnyFace);
+	const FStand CrystalStand = StandOutside(W.World, Crystal, 200.f, [](const FHitResult& Hit)
+	{
+		FString Why;
+		return FGFMineable::CanMineHit(Hit, Why) && FGFMineable::SlotFromHit(Hit) == 1;
+	});
+	const FStand WallStand = StandOutside(W.World, Wall, 200.f, AnyFace);
+	if (!TestTrue(TEXT("Tree face"), TreeStand.bOk) || !TestTrue(TEXT("Crystal face"), CrystalStand.bOk) || !TestTrue(TEXT("Wall face"), WallStand.bOk))
+	{
+		return false;
+	}
+
+	AGFMagicPlayerState* PS = Digger(W.World, TEXT("Digger"), TreeStand.At);
+	if (!TestNotNull(TEXT("Digger"), PS))
+	{
+		return false;
+	}
+	Hold(PS, W.Magic, TreeStand.At, TreeStand.Impact, 0.1f);
+	PS->Magic->SetFieldHeld(false);
+	const float TreeLeft = W.Magic->GetTownNodeRemaining(Tree);
+	TestTrue(TEXT("One Sparkcone step wounds the tree"), TreeLeft < 100.f && TreeLeft > 80.f);
+	TestFalse(TEXT("One step does not fell the tree"), W.Magic->IsTownNodeDepleted(Tree));
+	TestFalse(TEXT("The tree is still there"), Tree->GetOwner()->IsHidden());
+	TestEqual(TEXT("No drop yet"), PS->Inventory->GetCount(TEXT("WoodPlank")), 0);
+
+	Hold(PS, W.Magic, CrystalStand.At, CrystalStand.Impact, 0.1f);
+	PS->Magic->SetFieldHeld(false);
+	const float CrystalLeft = W.Magic->GetTownNodeRemaining(Crystal);
+	TestTrue(TEXT("One Sparkcone step wounds the crystal"), CrystalLeft < 200.f && CrystalLeft > 160.f);
+	TestFalse(TEXT("The crystal slot is not spent"), W.Magic->IsTownNodeDepleted(Crystal));
+	TestEqual(TEXT("No crystal yet"), PS->Inventory->GetCount(TEXT("Crystal")), 0);
+
+	const int32 Wood = PS->Inventory->GetCount(TEXT("WoodPlank"));
+	Hold(PS, W.Magic, WallStand.At, WallStand.Impact, 0.5f);
+	PS->Magic->SetFieldHeld(false);
+	TestEqual(TEXT("The wall never opens a node"), W.Magic->GetTownNodeRemaining(Wall), -1.f);
+	TestFalse(TEXT("The wall is not spent"), W.Magic->IsTownNodeDepleted(Wall));
+	TestFalse(TEXT("The wall stays visible"), Wall->GetOwner()->IsHidden());
+	TestEqual(TEXT("The wall pays nothing"), PS->Inventory->GetCount(TEXT("WoodPlank")), Wood);
+	TestEqual(TEXT("The wall pays no crystal"), PS->Inventory->GetCount(TEXT("Crystal")), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTownMineBreakTest, "GFGame.TownMineable.Break", GFTownMineTestFlags)
+bool FGFTownMineBreakTest::RunTest(const FString&)
+{
+	using namespace GFTownMineTest;
+	FMineWorld W;
+	if (!W.Open(*this, TEXT("GFTownMineBreak")))
+	{
+		return false;
+	}
+	UStaticMeshComponent* Tree = PlaceAsset(W, TEXT("SM_Town_ForestTree_B"), FVector::ZeroVector);
+	UStaticMeshComponent* Crystal = PlaceAsset(W, TEXT("SM_Town_CaravanPen"), FVector(8000, 0, 0));
+	UStaticMeshComponent* Fountain = PlaceAsset(W, TEXT("SM_Town_Fountain"), FVector(16000, 0, 0));
+	UStaticMeshComponent* Planter = PlaceAsset(W, TEXT("SM_Town_Planter"), FVector(24000, 0, 0));
+	UStaticMeshComponent* Span = PlaceAsset(W, TEXT("SM_Town_PowerLine_Span"), FVector(32000, 0, 0));
+	UStaticMeshComponent* Canal = PlaceAsset(W, TEXT("SM_Town_Canal_Straight"), FVector(40000, 0, 0));
+	if (!TestNotNull(TEXT("Tree"), Tree) || !TestNotNull(TEXT("Pen"), Crystal) || !TestNotNull(TEXT("Fountain"), Fountain) || !TestNotNull(TEXT("Planter"), Planter) || !TestNotNull(TEXT("Span"), Span) || !TestNotNull(TEXT("Canal"), Canal))
+	{
+		return false;
+	}
+	auto AnyFace = [](const FHitResult&) { return true; };
+	const FStand TreeStand = StandOutside(W.World, Tree, 200.f, AnyFace);
+	const FStand CrystalStand = StandOutside(W.World, Crystal, 200.f, [](const FHitResult& Hit)
+	{
+		FString Why;
+		return FGFMineable::CanMineHit(Hit, Why) && FGFMineable::SlotFromHit(Hit) == 1;
+	});
+	if (!TestTrue(TEXT("Tree face"), TreeStand.bOk) || !TestTrue(TEXT("Crystal face"), CrystalStand.bOk))
+	{
+		return false;
+	}
+	AGFMagicPlayerState* PS = Digger(W.World, TEXT("Digger"), TreeStand.At);
+	if (!TestNotNull(TEXT("Digger"), PS))
+	{
+		return false;
+	}
+	UMaterialInterface* Body = Crystal->GetMaterial(0);
+	if (!Body)
+	{
+		Body = UMaterial::GetDefaultMaterial(MD_Surface);
+	}
+	Hold(PS, W.Magic, TreeStand.At, TreeStand.Impact, 1.6f);
+	PS->Magic->SetFieldHeld(false);
+	TestTrue(TEXT("Sparkcone fells the tree"), W.Magic->IsTownNodeDepleted(Tree));
+	TestTrue(TEXT("The tree is hidden"), Tree->GetOwner()->IsHidden());
+	TestFalse(TEXT("The stump does not block"), Tree->GetOwner()->GetActorEnableCollision());
+	TestEqual(TEXT("The bag took a wood plank"), PS->Inventory->GetCount(TEXT("WoodPlank")), 1);
+	TestEqual(TEXT("Granted drops counts the plank"), PS->Magic->GetGrantedDrops(), 1);
+	AGFMagicDropRibbon* Ribbon = nullptr;
+	for (TActorIterator<AGFMagicDropRibbon> It(W.World); It; ++It)
+	{
+		Ribbon = *It;
+		break;
+	}
+	if (!TestNotNull(TEXT("A ribbon spawned"), Ribbon))
+	{
+		return false;
+	}
+	const FVector RibbonFrom = Ribbon->GetActorLocation();
+	const FVector Home = PS->Magic->CastOrigin();
+	Ribbon->Tick(0.15f);
+	TestTrue(TEXT("The ribbon flies toward the digger"), FVector::Dist(Ribbon->GetActorLocation(), Home) < FVector::Dist(RibbonFrom, Home) - 1.f);
+
+	Hold(PS, W.Magic, CrystalStand.At, CrystalStand.Impact, 1.6f);
+	PS->Magic->SetFieldHeld(false);
+	TestTrue(TEXT("Sparkcone spends the crystal slot"), W.Magic->IsTownNodeDepleted(Crystal));
+	TestFalse(TEXT("The pen stays visible"), Crystal->GetOwner()->IsHidden());
+	TestTrue(TEXT("The pen still blocks"), Crystal->GetOwner()->GetActorEnableCollision());
+	TestEqual(TEXT("Slot 1 wears the body material"), Crystal->GetMaterial(1), Body);
+	TestEqual(TEXT("The bag took a crystal"), PS->Inventory->GetCount(TEXT("Crystal")), 1);
+	const int32 CrystalCount = PS->Inventory->GetCount(TEXT("Crystal"));
+	Hold(PS, W.Magic, CrystalStand.At, CrystalStand.Impact, 0.5f);
+	PS->Magic->SetFieldHeld(false);
+	TestEqual(TEXT("A spent slot does not pay twice"), PS->Inventory->GetCount(TEXT("Crystal")), CrystalCount);
+
+	for (UStaticMeshComponent* Prop : { Fountain, Planter, Span, Canal })
+	{
+		const FStand Stand = StandOutside(W.World, Prop, 180.f, AnyFace);
+		if (!TestTrue(TEXT("Prop face"), Stand.bOk))
+		{
+			return false;
+		}
+		const int32 BeforeWood = PS->Inventory->GetCount(TEXT("WoodPlank"));
+		const int32 BeforeCrystal = PS->Inventory->GetCount(TEXT("Crystal"));
+		Hold(PS, W.Magic, Stand.At, Stand.Impact, 0.4f);
+		PS->Magic->SetFieldHeld(false);
+		TestEqual(TEXT("A refused mesh has no node"), W.Magic->GetTownNodeRemaining(Prop), -1.f);
+		TestFalse(TEXT("A refused mesh stays visible"), Prop->GetOwner()->IsHidden());
+		TestEqual(TEXT("A refused mesh pays no wood"), PS->Inventory->GetCount(TEXT("WoodPlank")), BeforeWood);
+		TestEqual(TEXT("A refused mesh pays no crystal"), PS->Inventory->GetCount(TEXT("Crystal")), BeforeCrystal);
+	}
+	TestTrue(TEXT("Ribbons flew"), Ribbons(W.World) >= 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTownMineRegrowTest, "GFGame.TownMineable.Regrow", GFTownMineTestFlags)
+bool FGFTownMineRegrowTest::RunTest(const FString&)
+{
+	using namespace GFTownMineTest;
+	FMineWorld W;
+	if (!W.Open(*this, TEXT("GFTownMineRegrow")))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Regrow starts at 120s"), W.Magic->GetTownRegrowSeconds(), 120.f);
+	W.Magic->SetTownRegrowSeconds(1.f);
+	UStaticMeshComponent* Tree = PlaceAsset(W, TEXT("SM_Town_ForestTree_C"), FVector::ZeroVector);
+	if (!TestNotNull(TEXT("Tree"), Tree))
+	{
+		return false;
+	}
+	const FStand Stand = StandOutside(W.World, Tree, 200.f, [](const FHitResult&) { return true; });
+	if (!TestTrue(TEXT("Tree face"), Stand.bOk))
+	{
+		return false;
+	}
+	AGFMagicPlayerState* PS = Digger(W.World, TEXT("Digger"), Stand.At);
+	if (!TestNotNull(TEXT("Digger"), PS))
+	{
+		return false;
+	}
+	Hold(PS, W.Magic, Stand.At, Stand.Impact, 2.f);
+	PS->Magic->SetFieldHeld(false);
+	TestTrue(TEXT("The tree is down"), W.Magic->IsTownNodeDepleted(Tree));
+	TestTrue(TEXT("The tree is hidden"), Tree->GetOwner()->IsHidden());
+	W.Magic->Advance(0.2f);
+	TestTrue(TEXT("It is still down inside the timer"), W.Magic->IsTownNodeDepleted(Tree));
+	TestTrue(TEXT("It stays hidden inside the timer"), Tree->GetOwner()->IsHidden());
+	W.Magic->Advance(1.f);
+	TestFalse(TEXT("The timer puts the tree back"), W.Magic->IsTownNodeDepleted(Tree));
+	TestFalse(TEXT("The tree is visible again"), Tree->GetOwner()->IsHidden());
+	TestTrue(TEXT("The tree blocks again"), Tree->GetOwner()->GetActorEnableCollision());
+	TestEqual(TEXT("Integrity is full again"), W.Magic->GetTownNodeRemaining(Tree), 100.f);
+	Hold(PS, W.Magic, Stand.At, Stand.Impact, 1.6f);
+	PS->Magic->SetFieldHeld(false);
+	TestTrue(TEXT("It can be felled again"), W.Magic->IsTownNodeDepleted(Tree));
+	TestEqual(TEXT("The second fell pays another plank"), PS->Inventory->GetCount(TEXT("WoodPlank")), 2);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTownMineSpellsTest, "GFGame.TownMineable.Spells", GFTownMineTestFlags)
+bool FGFTownMineSpellsTest::RunTest(const FString&)
+{
+	using namespace GFTownMineTest;
+	auto AnyFace = [](const FHitResult&) { return true; };
+
+	{
+		FMineWorld W;
+		if (!W.Open(*this, TEXT("GFTownMineMaul")))
+		{
+			return false;
+		}
+		UStaticMeshComponent* Tree = PlaceAsset(W, TEXT("SM_Town_ForestTree_A"), FVector::ZeroVector);
+		UStaticMeshComponent* Wall = PlaceAsset(W, TEXT("SM_Town_Wall_Straight"), FVector(8000, 0, 0));
+		if (!TestNotNull(TEXT("Maul tree"), Tree) || !TestNotNull(TEXT("Maul wall"), Wall))
+		{
+			return false;
+		}
+		const FStand TreeStand = StandOutside(W.World, Tree, 80.f, AnyFace);
+		const FStand WallStand = StandOutside(W.World, Wall, 80.f, AnyFace);
+		if (!TestTrue(TEXT("Maul tree face"), TreeStand.bOk) || !TestTrue(TEXT("Maul wall face"), WallStand.bOk))
+		{
+			return false;
+		}
+		AGFMagicPlayerState* PS = Digger(W.World, TEXT("Maul"), TreeStand.At);
+		if (!TestNotNull(TEXT("Maul"), PS))
+		{
+			return false;
+		}
+		PS->FactionId = TEXT("Verdant");
+		TestTrue(TEXT("Verdant takes Rootmaul"), PS->Magic->AuthorityToggle());
+		TestEqual(TEXT("The field is root"), PS->Magic->GetElement(), EGFMagicElement::Root);
+		PS->Magic->SetManualOrigin(TreeStand.At);
+		PS->Magic->SetAim(TreeStand.At, TreeStand.Impact);
+		PS->Magic->SetFieldHeld(true);
+		W.Magic->Advance(0.2f);
+		TestFalse(TEXT("Holding the club has not swung yet"), W.Magic->IsTownNodeDepleted(Tree));
+		PS->Magic->SetFieldHeld(false);
+		W.Magic->Advance(0.1f);
+		TestTrue(TEXT("Swing1 fells the tree"), W.Magic->IsTownNodeDepleted(Tree));
+		TestEqual(TEXT("Rootmaul pays a wood plank"), PS->Inventory->GetCount(TEXT("WoodPlank")), 1);
+		TestTrue(TEXT("The ribbon flew"), Ribbons(W.World) >= 1);
+
+		PS->Magic->SetManualOrigin(WallStand.At);
+		PS->Magic->SetAim(WallStand.At, WallStand.Impact);
+		PS->Magic->SetFieldHeld(true);
+		W.Magic->Advance(0.2f);
+		PS->Magic->SetFieldHeld(false);
+		W.Magic->Advance(0.1f);
+		TestEqual(TEXT("Rootmaul does not open a wall"), W.Magic->GetTownNodeRemaining(Wall), -1.f);
+		TestFalse(TEXT("The wall stays up"), Wall->GetOwner()->IsHidden());
+	}
+
+	{
+		FMineWorld W;
+		if (!W.Open(*this, TEXT("GFTownMineMagma")))
+		{
+			return false;
+		}
+		UStaticMeshComponent* Tree = PlaceAsset(W, TEXT("SM_Town_ForestTree_B"), FVector::ZeroVector);
+		if (!TestNotNull(TEXT("Magma tree"), Tree))
+		{
+			return false;
+		}
+		const FStand Stand = StandOutside(W.World, Tree, 80.f, AnyFace);
+		if (!TestTrue(TEXT("Magma face"), Stand.bOk))
+		{
+			return false;
+		}
+		AGFMagicPlayerState* PS = Digger(W.World, TEXT("Spray"), Stand.At);
+		if (!TestNotNull(TEXT("Spray"), PS))
+		{
+			return false;
+		}
+		PS->FactionId = TEXT("Cinderwrights");
+		TestTrue(TEXT("Cinderwrights take Magma Spray"), PS->Magic->AuthorityToggle());
+		TestEqual(TEXT("The field is magma"), PS->Magic->GetElement(), EGFMagicElement::Magma);
+		Hold(PS, W.Magic, Stand.At, Stand.Impact, 0.2f);
+		TestFalse(TEXT("The first globs wound without felling"), W.Magic->IsTownNodeDepleted(Tree));
+		TestTrue(TEXT("Magma has started the wound"), W.Magic->GetTownNodeRemaining(Tree) < 100.f);
+		Hold(PS, W.Magic, Stand.At, Stand.Impact, 1.5f);
+		PS->Magic->SetFieldHeld(false);
+		TestTrue(TEXT("Magma Spray fells the tree"), W.Magic->IsTownNodeDepleted(Tree));
+		TestEqual(TEXT("Magma pays a wood plank"), PS->Inventory->GetCount(TEXT("WoodPlank")), 1);
+		TestTrue(TEXT("The magma ribbon flew"), Ribbons(W.World) >= 1);
+	}
+
+	{
+		FMineWorld W;
+		if (!W.Open(*this, TEXT("GFTownMineFrost")))
+		{
+			return false;
+		}
+		UStaticMeshComponent* Tree = PlaceAsset(W, TEXT("SM_Town_ForestTree_C"), FVector::ZeroVector);
+		UStaticMeshComponent* Wall = PlaceAsset(W, TEXT("SM_Town_Wall_Corner"), FVector(8000, 0, 0));
+		if (!TestNotNull(TEXT("Frost tree"), Tree) || !TestNotNull(TEXT("Frost wall"), Wall))
+		{
+			return false;
+		}
+		const FStand TreeStand = StandOutside(W.World, Tree, 200.f, AnyFace);
+		const FStand WallStand = StandOutside(W.World, Wall, 200.f, AnyFace);
+		if (!TestTrue(TEXT("Frost face"), TreeStand.bOk) || !TestTrue(TEXT("Frost wall face"), WallStand.bOk))
+		{
+			return false;
+		}
+		AGFMagicPlayerState* PS = Digger(W.World, TEXT("Frost"), TreeStand.At);
+		if (!TestNotNull(TEXT("Frost"), PS))
+		{
+			return false;
+		}
+		PS->FactionId = TEXT("Rime");
+		TestTrue(TEXT("Rime takes Frostbind"), PS->Magic->AuthorityToggle());
+		TestEqual(TEXT("The field is frost"), PS->Magic->GetElement(), EGFMagicElement::Frost);
+		Hold(PS, W.Magic, TreeStand.At, TreeStand.Impact, 0.5f);
+		TestFalse(TEXT("Frostbind has not shattered yet"), W.Magic->IsTownNodeDepleted(Tree));
+		Hold(PS, W.Magic, TreeStand.At, TreeStand.Impact, 2.8f);
+		PS->Magic->SetFieldHeld(false);
+		TestTrue(TEXT("Frostbind shatters the tree"), W.Magic->IsTownNodeDepleted(Tree));
+		TestEqual(TEXT("Frostbind pays a wood plank"), PS->Inventory->GetCount(TEXT("WoodPlank")), 1);
+		TestTrue(TEXT("The frost ribbon flew"), Ribbons(W.World) >= 1);
+		Hold(PS, W.Magic, WallStand.At, WallStand.Impact, 1.f);
+		PS->Magic->SetFieldHeld(false);
+		TestEqual(TEXT("Frostbind does not open a wall"), W.Magic->GetTownNodeRemaining(Wall), -1.f);
+		TestFalse(TEXT("The corner stays visible"), Wall->GetOwner()->IsHidden());
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFNetTownMineTest, "GFGame.Net.TownMineable", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFNetTownMineTest::RunTest(const FString&)
+{
+	using namespace GFNetTest;
+	using namespace GFTownMineTest;
+	FCtxRef Ctx = Start(this, 2);
+	TSharedRef<FString> Key = MakeShared<FString>();
+	TSharedRef<int32> WoodBefore = MakeShared<int32>(0);
+	TSharedRef<bool> SawRibbon = MakeShared<bool>(false);
+
+	Do(Ctx, [this, Key, WoodBefore]()
+	{
+		UWorld* Server = ServerWorld();
+		UWorld* Client = ClientWorlds().Num() > 0 ? ClientWorlds()[0] : nullptr;
+		AGFGameState* GS = GameState(Server);
+		AGFPlayerState* Mine = Client ? LocalPlayerState(Client) : nullptr;
+		AGFPlayerState* OnServer = Mine ? PlayerStateByKey(Server, Mine->PlayerKey) : nullptr;
+		AGFVoxelWorld* Grid = Voxel(Server);
+		if (!TestNotNull(TEXT("Server digger"), OnServer) || !TestNotNull(TEXT("Client digger"), Mine) || !GS || !Grid)
+		{
+			return;
+		}
+		*Key = Mine->PlayerKey;
+		GS->bFreeBuild = true;
+		GS->bEnforcePlotPermissions = false;
+		GS->MaxEditReach = 0.f;
+		OnServer->bCharacterReady = true;
+		APawn* Pawn = OnServer->GetPawn();
+		if (!TestNotNull(TEXT("Pawn"), Pawn))
+		{
+			return;
+		}
+		if (ACharacter* Character = Cast<ACharacter>(Pawn))
+		{
+			if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+			{
+				Move->StopMovementImmediately();
+				Move->Velocity = FVector::ZeroVector;
+				Move->GravityScale = 0.f;
+				Move->DisableMovement();
+				Move->SetComponentTickEnabled(false);
+			}
+		}
+		if (APawn* ClientPawn = Mine->GetPawn())
+		{
+			if (ACharacter* Character = Cast<ACharacter>(ClientPawn))
+			{
+				if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+				{
+					Move->GravityScale = 0.f;
+					Move->DisableMovement();
+				}
+			}
+		}
+		TArray<FGFMineableEntry> All;
+		FString Err;
+		const FGFMineableEntry* Entry = FGFMineable::LoadTownWhitelist(All, Err) ? FindEntry(All, TEXT("SM_Town_ForestTree_A")) : nullptr;
+		UStaticMesh* Mesh = Entry ? LoadMesh(Entry->Path) : nullptr;
+		if (!TestNotNull(TEXT("Tree mesh"), Mesh))
+		{
+			return;
+		}
+		const FVector Plant = Grid->CellToWorld(FIntVector(8, 8, 6)) + FVector(0, 0, 800);
+		FActorSpawnParameters Params;
+		Params.bDeferConstruction = true;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AStaticMeshActor* Actor = Server->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Plant, FRotator::ZeroRotator, Params);
+		if (!TestNotNull(TEXT("Tree actor"), Actor))
+		{
+			return;
+		}
+		Actor->SetReplicates(true);
+		Actor->bAlwaysRelevant = true;
+		Actor->FinishSpawning(FTransform(FRotator::ZeroRotator, Plant));
+		UStaticMeshComponent* Comp = Actor->GetStaticMeshComponent();
+		Comp->SetMobility(EComponentMobility::Movable);
+		Comp->SetStaticMesh(Mesh);
+		Comp->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+		Comp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		Comp->RecreatePhysicsState();
+		const FStand Stand = StandOutside(Server, Comp, 200.f, [](const FHitResult&) { return true; });
+		if (!TestTrue(TEXT("Server can see the tree"), Stand.bOk))
+		{
+			return;
+		}
+		Pawn->SetActorLocation(Stand.At, false, nullptr, ETeleportType::TeleportPhysics);
+		*WoodBefore = OnServer->Inventory ? OnServer->Inventory->GetCount(TEXT("WoodPlank")) : 0;
+		if (UGFMagicComponent* Magic = Mine->FindComponentByClass<UGFMagicComponent>())
+		{
+			Magic->SetAim(Stand.At, Stand.Impact);
+		}
+	});
+	WaitUntil(Ctx, TEXT("the server is aiming at the tree"), 5.f, [Key]()
+	{
+		AGFPlayerState* OnServer = PlayerStateByKey(ServerWorld(), *Key);
+		UGFMagicComponent* Magic = OnServer ? OnServer->FindComponentByClass<UGFMagicComponent>() : nullptr;
+		APawn* Pawn = OnServer ? OnServer->GetPawn() : nullptr;
+		return Magic && Pawn && FVector::Dist(Magic->GetAimPoint(), Pawn->GetActorLocation()) > 50.f && FVector::Dist(Magic->GetAimPoint(), Pawn->GetActorLocation()) < 500.f;
+	});
+	Do(Ctx, []()
+	{
+		if (AGFPlayerState* Mine = LocalPlayerState(ClientWorlds()[0]))
+		{
+			if (UGFMagicComponent* Magic = Mine->FindComponentByClass<UGFMagicComponent>())
+			{
+				Magic->SetFieldHeld(true);
+			}
+		}
+	});
+	WaitUntil(Ctx, TEXT("the tree breaks and the owner receives the plank"), 10.f, [Key, WoodBefore, SawRibbon]()
+	{
+		UWorld* Server = ServerWorld();
+		UWorld* Client = ClientWorlds().Num() > 0 ? ClientWorlds()[0] : nullptr;
+		AGFPlayerState* OnServer = PlayerStateByKey(Server, *Key);
+		AGFPlayerState* Mine = Client ? LocalPlayerState(Client) : nullptr;
+		UGFBlockIntegritySubsystem* Magic = Server ? Server->GetSubsystem<UGFBlockIntegritySubsystem>() : nullptr;
+		bool bDepleted = false;
+		if (Server && Magic)
+		{
+			for (TActorIterator<AStaticMeshActor> It(Server); It; ++It)
+			{
+				if (UStaticMeshComponent* Comp = It->GetStaticMeshComponent())
+				{
+					if (Magic->IsTownNodeDepleted(Comp))
+					{
+						bDepleted = true;
+					}
+				}
+			}
+		}
+		if (Ribbons(Server) > 0 || Ribbons(Client) > 0)
+		{
+			*SawRibbon = true;
+		}
+		bool bClientRelay = false;
+		if (Client)
+		{
+			for (TActorIterator<AGFTownMineRelay> It(Client); It; ++It)
+			{
+				for (const FGFTownNodeRep& Node : It->GetNodes())
+				{
+					bClientRelay = bClientRelay || Node.bDepleted;
+				}
+			}
+		}
+		return OnServer && Mine && OnServer->Inventory && Mine->Inventory
+			&& bDepleted
+			&& OnServer->Inventory->GetCount(TEXT("WoodPlank")) == *WoodBefore + 1
+			&& Mine->Inventory->GetCount(TEXT("WoodPlank")) == *WoodBefore + 1
+			&& bClientRelay
+			&& *SawRibbon;
+	});
+	Stop(Ctx);
 	return true;
 }
 

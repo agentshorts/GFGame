@@ -1,6 +1,7 @@
 #pragma once
 
 // Server mining step. Ten times a second, 64 cells across every caster. Clients watch the voxels move.
+// Town meshes (trees and crystal slots) take the same spells here: see FGFTownNodeField.
 
 #include "CoreMinimal.h"
 #include "GFMagicComponent.h"
@@ -11,6 +12,8 @@
 class AGFVoxelWorld;
 class APawn;
 class AGFPlayerState;
+class UPrimitiveComponent;
+class FGFTownNodeField;
 
 UCLASS()
 class GFMAGIC_API UGFBlockIntegritySubsystem : public UTickableWorldSubsystem
@@ -18,6 +21,9 @@ class GFMAGIC_API UGFBlockIntegritySubsystem : public UTickableWorldSubsystem
 	GENERATED_BODY()
 
 public:
+	UGFBlockIntegritySubsystem();
+	virtual ~UGFBlockIntegritySubsystem();
+
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
 	virtual bool IsTickable() const override;
@@ -40,6 +46,12 @@ public:
 	/** Whole 0.1 s steps covering Seconds. No hitch cap, so a test can mine a dirt cell in one call. */
 	void Advance(float Seconds);
 
+	/** Log integrity (100) or CrystalVein integrity (200) before a hit, the wound after, 0 when spent, -1 if the mesh is not mineable. */
+	float GetTownNodeRemaining(const UPrimitiveComponent* Component) const;
+	bool IsTownNodeDepleted(const UPrimitiveComponent* Component) const;
+	float GetTownRegrowSeconds() const;
+	void SetTownRegrowSeconds(float Seconds);
+
 private:
 	void EnsureBound();
 	void Step();
@@ -57,6 +69,8 @@ private:
 	FMagicWorldView MakeView(AGFPlayerState* PS, AGFVoxelWorld* Voxel) const;
 	void RememberMark(const FIntVector& Cell, FName Mark, float Seconds);
 	FName ActiveShape(const UGFMagicComponent* Caster) const;
+	/** Crystal cost and the beam, used when the world has no voxel grid. With a grid, CastField already paid. */
+	void PayTownField(UGFMagicComponent* Caster);
 
 	TSet<FIntVector> Placed;
 	TMap<FIntVector, FMagicWound> Wounds;
@@ -74,4 +88,5 @@ private:
 	FDelegateHandle EditHandle;
 	FDelegateHandle StampHandle;
 	TFunction<TArray<FIntVector>(const APawn*, const FVector&, const AGFVoxelWorld*)> StairwellFn;
+	TUniquePtr<FGFTownNodeField> TownNodes;
 };

@@ -4,6 +4,7 @@
 // A mesh without the data, or with Mode None, is refused. The data is stamped by Tools/import_town_v1.py from
 // Data/Town/town_v1_mineable.json (generated from the handoff's MINEABLE json by Tools/gen_town_mineable.py).
 // Voxel blocks keep their own path (FGFMagicRules / AGFPlayerState::CanMineAt); this covers mesh hits.
+// Allowed hits are spent by UGFBlockIntegritySubsystem (damage, break, drop, regrow).
 #pragma once
 
 #include "CoreMinimal.h"
