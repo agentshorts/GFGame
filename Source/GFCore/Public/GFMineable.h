@@ -5,6 +5,7 @@
 // Data/Town/town_v1_mineable.json (generated from the handoff's MINEABLE json by Tools/gen_town_mineable.py), and by
 // Tools/import_towns_v2.py from Data/Town/towns_v2_mineable.json (Tools/gen_towns_v2_mineable.py).
 // Voxel blocks keep their own path (FGFMagicRules / AGFPlayerState::CanMineAt); this covers mesh hits.
+// Allowed hits are spent by UGFBlockIntegritySubsystem (damage, break, drop, regrow).
 #pragma once
 
 #include "CoreMinimal.h"
