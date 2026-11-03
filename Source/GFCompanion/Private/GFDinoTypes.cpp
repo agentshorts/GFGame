@@ -231,13 +231,65 @@ void FGFTameMachine::EndVisit()
 	TargetKey.Reset();
 }
 
-void FGFTameMachine::ForceHostile(const FString& Key)
+EGFForceHostile FGFTameMachine::ForceHostile(const FString& Key, bool bHire, float Now)
 {
-	if (State != EGFTameState::Tamed && State != EGFTameState::Fled && State != EGFTameState::Hostile)
+	if (State == EGFTameState::Tamed)
+	{
+		return EGFForceHostile::Refused;
+	}
+	const bool bCalmed = Now > -1.0e8f && IsCalmed(Now);
+	if (!bHire && (bCalmed || State == EGFTameState::Fled))
+	{
+		return EGFForceHostile::Refused;
+	}
+	if (!bHire && State == EGFTameState::Hostile)
+	{
+		if (TargetKey == Key)
+		{
+			return EGFForceHostile::Held;
+		}
+		TargetKey = Key;
+		return EGFForceHostile::Retargeted;
+	}
+
+	const bool bWasHostile = State == EGFTameState::Hostile;
+	const bool bWasFled = State == EGFTameState::Fled;
+	if (bHire && bWasHostile && TargetKey == Key && !bCalmed)
+	{
+		StateTime = 0.f;
+		CalmTime = 0.f;
+		return EGFForceHostile::Held;
+	}
+	if (bCalmed)
+	{
+		CalmUntil = Now;
+	}
+	TargetKey = Key;
+	if (!bWasHostile)
 	{
 		SetState(EGFTameState::Hostile);
-		TargetKey = Key;
 	}
+	else if (bHire)
+	{
+		StateTime = 0.f;
+		CalmTime = 0.f;
+	}
+	if (bWasHostile || bWasFled || bCalmed)
+	{
+		return EGFForceHostile::Retargeted;
+	}
+	return EGFForceHostile::Engaged;
+}
+
+void FGFTameMachine::ReleaseHire()
+{
+	if (State == EGFTameState::Tamed)
+	{
+		return;
+	}
+	EndVisit();
+	CalmUntil = -1000.f;
+	SetState(EGFTameState::Wild);
 }
 
 bool FGFTameMachine::ApplyCalm(float Now, float Seconds)

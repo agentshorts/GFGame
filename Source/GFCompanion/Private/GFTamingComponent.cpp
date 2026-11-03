@@ -193,11 +193,41 @@ bool UGFTamingComponent::ServerCalm(UObject* TamerObj)
 
 void UGFTamingComponent::ServerForceHostile(const FString& Key)
 {
-	if (Machine.IsCalmed(GetWorld()->GetTimeSeconds()))
+	const UWorld* World = GetWorld();
+	const float Now = World ? World->GetTimeSeconds() : -1.0e9f;
+	const EGFForceHostile Code = Machine.ForceHostile(Key, false, Now);
+	if (Code == EGFForceHostile::Engaged || Code == EGFForceHostile::Retargeted)
 	{
-		return; // the mist keeps it out of the pack's charge
+		SyncReplicated();
 	}
-	Machine.ForceHostile(Key);
+}
+
+EGFForceHostile UGFTamingComponent::ServerHire(const FString& Key)
+{
+	const AActor* Owner = GetOwner();
+	const UWorld* World = GetWorld();
+	if (!Owner || !Owner->HasAuthority() || !World)
+	{
+		return EGFForceHostile::Refused;
+	}
+	const EGFForceHostile Code = Machine.ForceHostile(Key, true, World->GetTimeSeconds());
+	CalmedUntil = Machine.CalmUntil;
+	if (Code != EGFForceHostile::Refused)
+	{
+		SyncReplicated();
+	}
+	return Code;
+}
+
+void UGFTamingComponent::ServerReleaseHire()
+{
+	const AActor* Owner = GetOwner();
+	if (!Owner || !Owner->HasAuthority())
+	{
+		return;
+	}
+	Machine.ReleaseHire();
+	CalmedUntil = Machine.CalmUntil;
 	SyncReplicated();
 }
 

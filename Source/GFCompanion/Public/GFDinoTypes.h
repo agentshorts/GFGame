@@ -181,6 +181,21 @@ enum class EGFTameState : uint8
 	Fled
 };
 
+/**
+ * Result of FGFTameMachine::ForceHostile.
+ * Refused: tamed, or a fled or calmed dino that was not hired.
+ * Engaged: entered Hostile from a visit state.
+ * Retargeted: already Hostile, Fled, or calmed, and now aims at the new key.
+ * Held: already Hostile at this same key.
+ */
+enum class EGFForceHostile : uint8
+{
+	Refused,
+	Engaged,
+	Retargeted,
+	Held
+};
+
 /** Companion behaviour states (StateTree later; C++ switch for now). */
 UENUM(BlueprintType)
 enum class EGFDinoState : uint8
@@ -250,8 +265,16 @@ struct GFCOMPANION_API FGFTameMachine
 	EGFOfferResult Offer(const FDinoDietRow& Row, float Now, const FString& Key, FName Food);
 	/** It was hit: resets the calm-down timer (Hostile stays Hostile). */
 	void NotifyHit() { CalmTime = 0.f; }
-	/** Turn hostile at Key (pack call-in). */
-	void ForceHostile(const FString& Key);
+	/**
+	 * Turn hostile at Key.
+	 * A tamed dino refuses. A fled or calmed dino refuses unless bHire is set.
+	 * An already hostile dino takes a new key. A hire also restarts the hostile clock
+	 * so the 20s flee and the calm-down do not drop the chase on that call.
+	 * Now is the server clock for the mist check. A very small Now skips that check.
+	 */
+	EGFForceHostile ForceHostile(const FString& Key, bool bHire = false, float Now = -1.0e9f);
+	/** Drop a hire and return to Wild. A tamed dino stays tamed. */
+	void ReleaseHire();
 	/** Calming Mist: a Threat or Hostile dino settles to Alert and stays calm for Seconds. False if tamed or fled. */
 	bool ApplyCalm(float Now, float Seconds = CalmingMistSeconds);
 	bool IsCalmed(float Now) const { return Now < CalmUntil; }
