@@ -45,6 +45,36 @@ struct FGFWildDinoSlot
 	float DeadAt = -1.f;
 };
 
+/** What FillSlots should do with one ring slot this pass. */
+enum class EGFWildSlotAction : uint8
+{
+	/** The body still owns the slot. */
+	Hold,
+	/** The slot is free, and the respawn wait has not finished. */
+	Wait,
+	/** Spawn a new body into the slot. */
+	Spawn
+};
+
+/**
+ * Ring slot phase. A body holds the slot while it is still on the ring.
+ * Tamed and Fled have left, so the slot detaches and can spawn again after the respawn wait.
+ * Hostile and the other visit states keep the slot.
+ */
+struct GFGAME_API FGFWildSlotRules
+{
+	struct FResult
+	{
+		EGFWildSlotAction Action = EGFWildSlotAction::Hold;
+		/** True when the current body is Tamed or Fled and must be dropped. */
+		bool bDetach = false;
+		float DeadAt = -1.f;
+	};
+
+	static bool LeftRing(EGFTameState State);
+	static FResult Next(bool bHasBody, EGFTameState State, bool bLived, float DeadAt, float Now, float RespawnSeconds);
+};
+
 UCLASS(Config = Game)
 class GFGAME_API AGFWildDinoDirector : public AActor
 {

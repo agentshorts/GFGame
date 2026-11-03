@@ -15,6 +15,7 @@ class UGFWanderComponent;
 class UStaticMeshComponent;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGFTownsfolkInteract, AActor* /*Townsfolk*/, APawn* /*Pawn*/);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnGFVillagerHire, AActor* /*Villager*/);
 
 UCLASS()
 class GFGAME_API AGFVillager : public APawn, public IGFInteractable
@@ -36,8 +37,18 @@ public:
 	/** Server. One call per successful press. The actor is this townsfolk. */
 	FOnGFTownsfolkInteract OnInteract;
 
+	/** Server. A villager reached the elder, or the flee timed out. */
+	static FOnGFVillagerHire& OnHireAsked();
+
 	FString DisplayTitle() const;
 	void InitTownsfolk(const FGFTownsfolkSpawnParams& Params);
+
+	/** Server. Warn, then flee to Elder. False when this townsfolk cannot leave its current state. */
+	bool BeginWarn(const FVector& Thief, const FVector& Elder);
+
+	/** The warn shout while Behavior is Warn. Empty otherwise. */
+	const FString& GetShout() const { return Shout; }
+	const FGFTownsfolkMind& GetMind() const { return Mind; }
 
 	virtual FText GetInteractPrompt() const override;
 	virtual bool CanInteract(APawn* Pawn) const override;
@@ -68,6 +79,9 @@ protected:
 
 	UPROPERTY(Replicated)
 	float ReachCm = 300.f;
+
+	UPROPERTY(Replicated)
+	FString Shout;
 
 	FGFTownsfolkMind Mind;
 	FRandomStream Rng;

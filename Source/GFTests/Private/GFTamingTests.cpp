@@ -415,4 +415,60 @@ bool FGFDataDietValidateTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTameForceHostileRetargetTest, "GFGame.Tame.ForceHostile.Retarget", TameFlags)
+bool FGFTameForceHostileRetargetTest::RunTest(const FString&)
+{
+	FGFTameMachine Wild;
+	TestEqual(TEXT("A wild dino engages"), E(Wild.ForceHostile(TEXT("A"))), E(EGFForceHostile::Engaged));
+	TestEqual(TEXT("Hostile"), E(Wild.State), E(EGFTameState::Hostile));
+	TestEqual(TEXT("First key"), Wild.TargetKey, FString(TEXT("A")));
+	Wild.StateTime = 4.f;
+	TestEqual(TEXT("The same key holds"), E(Wild.ForceHostile(TEXT("A"))), E(EGFForceHostile::Held));
+	TestEqual(TEXT("A hold does not restart the clock"), Wild.StateTime, 4.f);
+	TestEqual(TEXT("A new key retargets"), E(Wild.ForceHostile(TEXT("B"))), E(EGFForceHostile::Retargeted));
+	TestEqual(TEXT("Now at B"), Wild.TargetKey, FString(TEXT("B")));
+	TestEqual(TEXT("A pack retarget keeps the hostile clock"), Wild.StateTime, 4.f);
+
+	Wild.StateTime = 9.f;
+	TestEqual(TEXT("A hire at the same key holds"), E(Wild.ForceHostile(TEXT("B"), true, 1.f)), E(EGFForceHostile::Held));
+	TestEqual(TEXT("A hire restarts the hostile clock"), Wild.StateTime, 0.f);
+	TestEqual(TEXT("A hire at a new key retargets"), E(Wild.ForceHostile(TEXT("C"), true, 1.f)), E(EGFForceHostile::Retargeted));
+	TestEqual(TEXT("Hire key"), Wild.TargetKey, FString(TEXT("C")));
+	TestEqual(TEXT("Still hostile"), E(Wild.State), E(EGFTameState::Hostile));
+
+	Wild.Flee();
+	TestEqual(TEXT("Fled"), E(Wild.State), E(EGFTameState::Fled));
+	TestEqual(TEXT("A pack call does not pull a fled dino"), E(Wild.ForceHostile(TEXT("D"))), E(EGFForceHostile::Refused));
+	TestEqual(TEXT("Still fled"), E(Wild.State), E(EGFTameState::Fled));
+	TestEqual(TEXT("A hire pulls a fled dino"), E(Wild.ForceHostile(TEXT("D"), true, 2.f)), E(EGFForceHostile::Retargeted));
+	TestEqual(TEXT("Hired out of fled"), E(Wild.State), E(EGFTameState::Hostile));
+	TestEqual(TEXT("Hired key"), Wild.TargetKey, FString(TEXT("D")));
+
+	const float Now = 20.f;
+	TestTrue(TEXT("Mist applies"), Wild.ApplyCalm(Now));
+	TestTrue(TEXT("Calmed"), Wild.IsCalmed(Now));
+	TestEqual(TEXT("Mist drops the chase"), E(Wild.State), E(EGFTameState::Alert));
+	TestEqual(TEXT("A pack call respects the mist"), E(Wild.ForceHostile(TEXT("E"), false, Now)), E(EGFForceHostile::Refused));
+	TestEqual(TEXT("Still alert"), E(Wild.State), E(EGFTameState::Alert));
+	TestTrue(TEXT("Still calmed"), Wild.IsCalmed(Now));
+	TestEqual(TEXT("A hire breaks the mist"), E(Wild.ForceHostile(TEXT("E"), true, Now)), E(EGFForceHostile::Retargeted));
+	TestEqual(TEXT("Hired through the mist"), E(Wild.State), E(EGFTameState::Hostile));
+	TestEqual(TEXT("Mist target"), Wild.TargetKey, FString(TEXT("E")));
+	TestFalse(TEXT("The mist is over"), Wild.IsCalmed(Now));
+
+	Wild.ReleaseHire();
+	TestEqual(TEXT("The hire stands down to Wild"), E(Wild.State), E(EGFTameState::Wild));
+	TestTrue(TEXT("The target is dropped"), Wild.TargetKey.IsEmpty());
+
+	FGFTameMachine Tamed;
+	Tamed.State = EGFTameState::Tamed;
+	Tamed.OwnerKey = TEXT("Owner");
+	TestEqual(TEXT("A tamed dino refuses a hire"), E(Tamed.ForceHostile(TEXT("Thief"), true, Now)), E(EGFForceHostile::Refused));
+	TestEqual(TEXT("A tamed dino stays tamed"), E(Tamed.State), E(EGFTameState::Tamed));
+	TestTrue(TEXT("A tamed dino keeps its owner"), Tamed.OwnerKey == TEXT("Owner"));
+	Tamed.ReleaseHire();
+	TestEqual(TEXT("Release does not untame"), E(Tamed.State), E(EGFTameState::Tamed));
+	return true;
+}
+
 #endif

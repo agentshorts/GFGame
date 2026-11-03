@@ -74,6 +74,7 @@ AGFGameMode::AGFGameMode()
 	StartupDirectorClasses.Add(FSoftClassPath(TEXT("/Script/GFSocial.GFSocialDirector")));
 	StartupDirectorClasses.Add(FSoftClassPath(TEXT("/Script/GFGame.GFPaintVolume")));
 	StartupDirectorClasses.Add(FSoftClassPath(TEXT("/Script/GFGame.GFTownsfolkDirector")));
+	StartupDirectorClasses.Add(FSoftClassPath(TEXT("/Script/GFGame.GFTheftDirector")));
 }
 
 void AGFGameMode::InitGameState()

@@ -56,8 +56,12 @@ public:
 	/** Server time the mist wears off (replicated for the UI). */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Taming")
 	float CalmedUntil = -1000.f;
-	/** Server: hostile at Key (pack call-in). */
+	/** Server: hostile at Key (pack call-in). A calmed or fled dino refuses. An already hostile dino takes a new key. */
 	void ServerForceHostile(const FString& Key);
+	/** Server: elder hire. Retargets Hostile, Fled, and calmed dinos onto Key. A tamed dino refuses. */
+	EGFForceHostile ServerHire(const FString& Key);
+	/** Server: a hired dino drops the chase and returns to Wild. A tamed dino stays tamed. */
+	void ServerReleaseHire();
 	/** Server: a player attack connected. Resets the calm-down timer. Hostile stays Hostile. */
 	void ServerNotifyHit();
 

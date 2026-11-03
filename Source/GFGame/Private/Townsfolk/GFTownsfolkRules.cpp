@@ -216,6 +216,11 @@ FString FGFTownsfolkRules::DisplayName(FName TownId, EGFTownsfolkRole Role)
 	return FString::Printf(TEXT("%s %s"), *TownId.ToString(), Word);
 }
 
+const TCHAR* FGFTownsfolkRules::WarnShout()
+{
+	return TEXT("Hey! Leave that crystal alone!");
+}
+
 bool FGFTownsfolkRules::IsFactionsWorld(const FString& MapOrPackage)
 {
 	return MapOrPackage.Contains(TEXT("L_World_Factions_A"), ESearchCase::IgnoreCase);
@@ -230,13 +235,16 @@ bool FGFTownsfolkMind::CanTransition(EGFTownsfolkBehavior From, EGFTownsfolkBeha
 	switch (From)
 	{
 	case EGFTownsfolkBehavior::Idle:
-		return To == EGFTownsfolkBehavior::Wander || To == EGFTownsfolkBehavior::Talk;
+		return To == EGFTownsfolkBehavior::Wander || To == EGFTownsfolkBehavior::Talk || To == EGFTownsfolkBehavior::Warn;
 	case EGFTownsfolkBehavior::Wander:
-		return To == EGFTownsfolkBehavior::Idle || To == EGFTownsfolkBehavior::Talk;
+		return To == EGFTownsfolkBehavior::Idle || To == EGFTownsfolkBehavior::Talk || To == EGFTownsfolkBehavior::Warn;
 	case EGFTownsfolkBehavior::Talk:
+		return To == EGFTownsfolkBehavior::Idle || To == EGFTownsfolkBehavior::Warn;
+	case EGFTownsfolkBehavior::Warn:
+		return To == EGFTownsfolkBehavior::Flee;
+	case EGFTownsfolkBehavior::Flee:
 		return To == EGFTownsfolkBehavior::Idle;
 	default:
-		// Warn and Flee are not states yet. Until they exist, an unknown value does not move.
 		return false;
 	}
 }
@@ -258,6 +266,20 @@ bool FGFTownsfolkMind::BeginTalk(float Seconds)
 	return true;
 }
 
+bool FGFTownsfolkMind::BeginWarn(const FVector& Thief, const FVector& Elder)
+{
+	const EGFTownsfolkBehavior Next = Transition(State, EGFTownsfolkBehavior::Warn);
+	if (Next != EGFTownsfolkBehavior::Warn)
+	{
+		return false;
+	}
+	State = Next;
+	TimeLeft = WarnSeconds;
+	FacePoint = Thief;
+	ElderPoint = Elder;
+	return true;
+}
+
 float FGFTownsfolkMind::PickIdleWait(FRandomStream& Rng) const
 {
 	float Min = IdleMin;
@@ -271,13 +293,13 @@ float FGFTownsfolkMind::PickIdleWait(FRandomStream& Rng) const
 	return (Max > Min) ? Rng.FRandRange(Min, Max) : Min;
 }
 
-void FGFTownsfolkMind::Advance(float DeltaSeconds, FRandomStream& Rng, FVector& Location)
+EGFTownsfolkPulse FGFTownsfolkMind::Advance(float DeltaSeconds, FRandomStream& Rng, FVector& Location)
 {
 	const float Dt = FMath::Max(0.f, DeltaSeconds);
 	Location = FGFTownsfolkRules::ClampToDisc(TownCenter, Location, TownRadius);
 	if (Dt <= 0.f)
 	{
-		return;
+		return EGFTownsfolkPulse::None;
 	}
 
 	if (State == EGFTownsfolkBehavior::Talk)
@@ -288,7 +310,40 @@ void FGFTownsfolkMind::Advance(float DeltaSeconds, FRandomStream& Rng, FVector& 
 			State = Transition(State, EGFTownsfolkBehavior::Idle);
 			TimeLeft = PickIdleWait(Rng);
 		}
-		return;
+		return EGFTownsfolkPulse::None;
+	}
+
+	if (State == EGFTownsfolkBehavior::Warn)
+	{
+		TimeLeft -= Dt;
+		if (TimeLeft > 0.f)
+		{
+			return EGFTownsfolkPulse::None;
+		}
+		State = Transition(State, EGFTownsfolkBehavior::Flee);
+		TimeLeft = FleeSeconds;
+		return EGFTownsfolkPulse::StartedFlee;
+	}
+
+	if (State == EGFTownsfolkBehavior::Flee)
+	{
+		TimeLeft -= Dt;
+		const float Stop = FMath::Max(0.f, StopDistance);
+		const float Dist = FVector::Dist2D(Location, ElderPoint);
+		const FVector Dir = (ElderPoint - Location).GetSafeNormal2D();
+		if (Dist > Stop && WalkSpeed > 0.f && !Dir.IsNearlyZero())
+		{
+			const FVector Stepped = Location + Dir * WalkSpeed * Dt;
+			Location = FGFTownsfolkRules::ClampToDisc(TownCenter, Stepped, TownRadius);
+		}
+		const float After = FVector::Dist2D(Location, ElderPoint);
+		if (After <= Stop || TimeLeft <= 0.f)
+		{
+			State = Transition(State, EGFTownsfolkBehavior::Idle);
+			TimeLeft = PickIdleWait(Rng);
+			return EGFTownsfolkPulse::AskHire;
+		}
+		return EGFTownsfolkPulse::None;
 	}
 
 	if (State == EGFTownsfolkBehavior::Idle)
@@ -296,19 +351,19 @@ void FGFTownsfolkMind::Advance(float DeltaSeconds, FRandomStream& Rng, FVector& 
 		TimeLeft -= Dt;
 		if (TimeLeft > 0.f)
 		{
-			return;
+			return EGFTownsfolkPulse::None;
 		}
 		const EGFTownsfolkBehavior Next = Transition(State, EGFTownsfolkBehavior::Wander);
 		if (Next != EGFTownsfolkBehavior::Wander)
 		{
 			TimeLeft = PickIdleWait(Rng);
-			return;
+			return EGFTownsfolkPulse::None;
 		}
 		State = Next;
 		const FVector Picked = UGFWanderComponent::PickWanderPoint(Home, FMath::Max(0.f, WanderRadius), Rng);
 		WanderTarget = FGFTownsfolkRules::ClampToDisc(TownCenter, Picked, TownRadius);
 		WanderTarget.Z = Location.Z;
-		return;
+		return EGFTownsfolkPulse::None;
 	}
 
 	if (State == EGFTownsfolkBehavior::Wander)
@@ -320,7 +375,7 @@ void FGFTownsfolkMind::Advance(float DeltaSeconds, FRandomStream& Rng, FVector& 
 		{
 			State = Transition(State, EGFTownsfolkBehavior::Idle);
 			TimeLeft = PickIdleWait(Rng);
-			return;
+			return EGFTownsfolkPulse::None;
 		}
 		const FVector Stepped = Location + Dir * WalkSpeed * Dt;
 		const FVector Clamped = FGFTownsfolkRules::ClampToDisc(TownCenter, Stepped, TownRadius);
@@ -331,9 +386,10 @@ void FGFTownsfolkMind::Advance(float DeltaSeconds, FRandomStream& Rng, FVector& 
 			State = Transition(State, EGFTownsfolkBehavior::Idle);
 			TimeLeft = PickIdleWait(Rng);
 		}
-		return;
+		return EGFTownsfolkPulse::None;
 	}
 
 	State = EGFTownsfolkBehavior::Idle;
 	TimeLeft = PickIdleWait(Rng);
+	return EGFTownsfolkPulse::None;
 }
