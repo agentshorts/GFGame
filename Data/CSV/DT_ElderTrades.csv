@@ -1,0 +1,12 @@
+# Elder shop. Three rows per town. Give is what the player hands over. Get is what the player receives.
+# Buy rows cost 5/4 of the goods' unit value, rounded half up. Sell rows pay 4/5, rounded half up. Wood is the payment (value 1).
+---,TownId,Kind,Give,Get
+Rime_Fiber,Rime,Buy,"((ItemId=""Wood"",Count=5))","((ItemId=""Fiber"",Count=4))"
+Rime_Metal,Rime,Buy,"((ItemId=""Wood"",Count=8))","((ItemId=""Metal"",Count=2))"
+Rime_Hide,Rime,Sell,"((ItemId=""Hide"",Count=2))","((ItemId=""Wood"",Count=5))"
+Verdant_Flowers,Verdant,Buy,"((ItemId=""Wood"",Count=5))","((ItemId=""Flowers"",Count=4))"
+Verdant_Berry,Verdant,Buy,"((ItemId=""Wood"",Count=3))","((ItemId=""Berry"",Count=2))"
+Verdant_Scales,Verdant,Sell,"((ItemId=""Scales"",Count=2))","((ItemId=""Wood"",Count=5))"
+Cinder_Coalnut,Cinderwrights,Buy,"((ItemId=""Wood"",Count=5))","((ItemId=""Coalnut"",Count=4))"
+Cinder_Fabric,Cinderwrights,Buy,"((ItemId=""Wood"",Count=4))","((ItemId=""Fabric"",Count=1))"
+Cinder_Bone,Cinderwrights,Sell,"((ItemId=""Bone"",Count=1))","((ItemId=""Wood"",Count=2))"

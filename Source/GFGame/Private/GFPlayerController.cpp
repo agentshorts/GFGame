@@ -1,5 +1,8 @@
 #include "GFPlayerController.h"
 #include "GFDefaultInputKeys.h"
+#include "GFElderShop.h"
+#include "GFInventoryComponent.h"
+#include "GFQuestSubsystem.h"
 #include "GFDino.h"
 #include "GFReturnToHub.h"
 #include "GFSocialDirector.h"
@@ -185,18 +188,7 @@ void AGFPlayerController::HandleCloseChatKey()
 {
 	if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
 	{
-		if (HUD->IsChatOpen())
-		{
-			HUD->CloseChat();
-		}
-		else if (HUD->IsAimSettingsOpen())
-		{
-			HUD->CloseAimSettings();
-		}
-		else
-		{
-			HUD->TogglePauseMenu();
-		}
+		HUD->HandleEscape();
 	}
 }
 
@@ -206,7 +198,7 @@ void AGFPlayerController::HandleReturnKey()
 	{
 		return;
 	}
-	RequestReturnToHub(bReturnConfirmOpen);
+	RequestReturnToHub(IsReturnConfirmOpen());
 }
 
 void AGFPlayerController::SetReturnKey(FKey Key)
@@ -261,8 +253,7 @@ void AGFPlayerController::ServerRequestReturnToHub_Implementation(bool bConfirme
 	}
 	if (Result.bMoved)
 	{
-		bReturnConfirmOpen = false;
-		ReturnPrompt.Reset();
+		ClearReturnPrompt();
 		if (IsLocalController())
 		{
 			if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
@@ -279,8 +270,7 @@ void AGFPlayerController::ServerRequestReturnToHub_Implementation(bool bConfirme
 
 void AGFPlayerController::ClientReturnFinished_Implementation()
 {
-	bReturnConfirmOpen = false;
-	ReturnPrompt.Reset();
+	ClearReturnPrompt();
 	if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
 	{
 		HUD->ClosePauseMenu();
@@ -289,13 +279,15 @@ void AGFPlayerController::ClientReturnFinished_Implementation()
 
 void AGFPlayerController::ShowReturnConfirm(const FString& Prompt)
 {
-	bReturnConfirmOpen = true;
 	ReturnPrompt = Prompt;
-	if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
+	if (IsLocalController())
 	{
-		HUD->OpenPauseMenu();
+		if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
+		{
+			HUD->SetHudModal(EGFHudModalEvent::OpenConfirm);
+		}
 	}
-	if (!IsLocalController())
+	else
 	{
 		ClientPromptReturnConfirm(Prompt);
 	}
@@ -303,18 +295,31 @@ void AGFPlayerController::ShowReturnConfirm(const FString& Prompt)
 
 void AGFPlayerController::ClientPromptReturnConfirm_Implementation(const FString& Prompt)
 {
-	bReturnConfirmOpen = true;
 	ReturnPrompt = Prompt;
 	if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
 	{
-		HUD->OpenPauseMenu();
+		HUD->SetHudModal(EGFHudModalEvent::OpenConfirm);
 	}
 }
 
 void AGFPlayerController::CancelReturnConfirm()
 {
-	bReturnConfirmOpen = false;
+	ClearReturnPrompt();
+	if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
+	{
+		HUD->SetHudModal(EGFHudModalEvent::CancelConfirm);
+	}
+}
+
+void AGFPlayerController::ClearReturnPrompt()
+{
 	ReturnPrompt.Reset();
+}
+
+bool AGFPlayerController::IsReturnConfirmOpen() const
+{
+	const AGFHUD* HUD = Cast<AGFHUD>(GetHUD());
+	return HUD && HUD->GetHudModal() == EGFHudModal::PauseConfirm;
 }
 
 void AGFPlayerController::HandleShardhopKey()
@@ -505,5 +510,215 @@ void AGFPlayerController::OnRep_PlayerState()
 	if (AGFPlayerState* PS = GetPlayerState<AGFPlayerState>())
 	{
 		PS->UploadLocalCharacterIfNeeded();
+	}
+}
+
+void AGFPlayerController::ShowElderToast(const FString& Text)
+{
+	if (Text.IsEmpty())
+	{
+		return;
+	}
+	if (IsLocalController())
+	{
+		if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
+		{
+			HUD->PushToast(Text);
+		}
+	}
+	else
+	{
+		ClientElderToast(Text);
+	}
+}
+
+void AGFPlayerController::ClientElderToast_Implementation(const FString& Text)
+{
+	if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
+	{
+		HUD->PushToast(Text);
+	}
+}
+
+void AGFPlayerController::OpenElderMenu(AGFElder* Elder)
+{
+	if (!HasAuthority() || !Elder)
+	{
+		return;
+	}
+	ElderSession = Elder;
+	ElderPhase = FGFElderSessionRules::Transition(ElderPhase, EGFElderSessionEvent::Opened);
+	if (IsLocalController())
+	{
+		if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
+		{
+			HUD->OpenElderMenu(Elder, Elder->TownId);
+		}
+	}
+	else
+	{
+		ClientOpenElderMenu(Elder, Elder->TownId);
+	}
+}
+
+void AGFPlayerController::ClientOpenElderMenu_Implementation(AGFElder* Elder, FName TownId)
+{
+	if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()))
+	{
+		HUD->OpenElderMenu(Elder, TownId);
+	}
+}
+
+void AGFPlayerController::RequestCloseElderMenu()
+{
+	if (HasAuthority())
+	{
+		ServerCloseElderMenu_Implementation();
+	}
+	else
+	{
+		ServerCloseElderMenu();
+	}
+}
+
+void AGFPlayerController::ServerCloseElderMenu_Implementation()
+{
+	ElderPhase = FGFElderSessionRules::Transition(ElderPhase, EGFElderSessionEvent::Closed);
+	ElderSession.Reset();
+}
+
+bool AGFPlayerController::ElderMenuAllows(FString& OutWhy) const
+{
+	if (!HasAuthority())
+	{
+		OutWhy = TEXT("The elder did not hear that.");
+		return false;
+	}
+	if (ElderPhase != EGFElderSession::Open || !ElderSession.IsValid())
+	{
+		OutWhy = TEXT("The elder is not listening.");
+		return false;
+	}
+	AGFElder* Elder = ElderSession.Get();
+	if (!Elder || !Elder->CanInteract(GetPawn()))
+	{
+		OutWhy = TEXT("Too far from the elder.");
+		return false;
+	}
+	return true;
+}
+
+void AGFPlayerController::RequestElderAccept()
+{
+	if (HasAuthority())
+	{
+		ServerElderAccept_Implementation();
+	}
+	else
+	{
+		ServerElderAccept();
+	}
+}
+
+void AGFPlayerController::RequestElderHandIn()
+{
+	if (HasAuthority())
+	{
+		ServerElderHandIn_Implementation();
+	}
+	else
+	{
+		ServerElderHandIn();
+	}
+}
+
+void AGFPlayerController::RequestElderTrade(FName RowId)
+{
+	const int32 RequestId = ++ElderRequestSerial;
+	if (HasAuthority())
+	{
+		ServerElderTrade_Implementation(RowId, RequestId);
+	}
+	else
+	{
+		ServerElderTrade(RowId, RequestId);
+	}
+}
+
+void AGFPlayerController::ServerElderAccept_Implementation()
+{
+	FString Why;
+	if (!ElderMenuAllows(Why))
+	{
+		ShowElderToast(Why);
+		return;
+	}
+	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	UGFQuestSubsystem* Quest = UGFQuestSubsystem::Get(GetWorld());
+	if (!PS || PS->PlayerKey.IsEmpty() || !Quest)
+	{
+		ShowElderToast(TEXT("The elder cannot take that yet."));
+		return;
+	}
+	Quest->EnsureRegistered();
+	const FGFQuestApplyResult Result = Quest->ApplyEvent(FGFQuestEvents::ElderAccepted(PS->PlayerKey, ElderSession->TownId));
+	if (Result.Result == EGFQuestResult::Refused)
+	{
+		ShowElderToast(FGFElderTalk::RefusalText(Result.Reason, PS->QuestStep));
+	}
+}
+
+void AGFPlayerController::ServerElderHandIn_Implementation()
+{
+	FString Why;
+	if (!ElderMenuAllows(Why))
+	{
+		ShowElderToast(Why);
+		return;
+	}
+	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	UGFQuestSubsystem* Quest = UGFQuestSubsystem::Get(GetWorld());
+	if (!PS || !PS->Inventory || PS->PlayerKey.IsEmpty() || !Quest)
+	{
+		ShowElderToast(TEXT("The elder cannot take that yet."));
+		return;
+	}
+	Quest->EnsureRegistered();
+	const FGFQuestProgress* Progress = Quest->FindProgress(PS->PlayerKey);
+	const FGFQuestProgress Fallback;
+	const FGFQuestProgress& View = Progress ? *Progress : Fallback;
+	const TArray<FGFItemStack> Offer = FGFElderTalk::OfferFromInventory(View, Quest->GetCatalog(), PS->Inventory->GetInventory());
+	const FGFQuestApplyResult Result = Quest->ApplyEvent(FGFQuestEvents::TurnIn(PS->PlayerKey, Offer));
+	if (Result.Result == EGFQuestResult::Refused)
+	{
+		ShowElderToast(FGFElderTalk::RefusalText(Result.Reason, View.Step));
+	}
+	else if (Result.Result == EGFQuestResult::Ignored && FGFElderTalk::ActionFor(View.Step) == FGFElderTalk::EAction::HandIn && Offer.Num() == 0)
+	{
+		ShowElderToast(FGFElderTalk::RefusalText(FGFQuestCodes::Short, View.Step));
+	}
+}
+
+void AGFPlayerController::ServerElderTrade_Implementation(FName RowId, int32 RequestId)
+{
+	FString Why;
+	if (!ElderMenuAllows(Why))
+	{
+		ShowElderToast(Why);
+		return;
+	}
+	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	UGFElderShopSubsystem* Shop = UGFElderShopSubsystem::Get(GetWorld());
+	AGFElder* Elder = ElderSession.Get();
+	if (!PS || PS->PlayerKey.IsEmpty() || !Shop || !Elder)
+	{
+		ShowElderToast(TEXT("The shop is closed."));
+		return;
+	}
+	FString TradeWhy;
+	const EGFTxResult Result = Shop->Trade(PS->PlayerKey, Elder->LedgerKey(), Elder->TownId, RowId, RequestId, TradeWhy);
+	if (Result != EGFTxResult::Applied && Result != EGFTxResult::AlreadyApplied)
+	{
+		ShowElderToast(TradeWhy.IsEmpty() ? FString(TEXT("The trade did not go through.")) : TradeWhy);
 	}
 }

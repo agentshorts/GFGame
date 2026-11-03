@@ -38,6 +38,7 @@ public:
 	/** Server. Applies one event for its player key. Empty keys are ignored. */
 	FGFQuestApplyResult ApplyEvent(const FGFQuestEvent& Event);
 	const FGFQuestProgress* FindProgress(const FString& PlayerKey) const;
+	const FGFQuestCatalog& GetCatalog() const { return Catalog; }
 
 	/**
 	 * Rank Leader was recorded for this player. The faction leader seat is not moved here.

@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "InputCoreTypes.h"
 #include "GameFramework/PlayerController.h"
+#include "GFElder.h"
+#include "GFElderTalk.h"
 #include "GFPlayerController.generated.h"
 
 class UInputAction;
@@ -35,8 +37,19 @@ public:
 	void RequestReturnFromMenu(bool bConfirmed);
 	void ShowReturnConfirm(const FString& Prompt);
 	void CancelReturnConfirm();
-	bool IsReturnConfirmOpen() const { return bReturnConfirmOpen; }
+	/** Clears the prompt text. The modal itself changes only through the HUD setter. */
+	void ClearReturnPrompt();
+	bool IsReturnConfirmOpen() const;
 	const FString& GetReturnConfirmPrompt() const { return ReturnPrompt; }
+
+	/** Server. A validated elder interact. Opens the menu on the owning client. */
+	void OpenElderMenu(AGFElder* Elder);
+	void RequestCloseElderMenu();
+	void RequestElderAccept();
+	void RequestElderHandIn();
+	void RequestElderTrade(FName RowId);
+	bool IsElderMenuSessionOpen() const { return ElderPhase == EGFElderSession::Open; }
+	void ShowElderToast(const FString& Text);
 
 	/** Home, unless someone rebound it. H stays the controls hint. */
 	static FKey DefaultReturnKey() { return EKeys::Home; }
@@ -54,6 +67,24 @@ public:
 
 	UFUNCTION(Client, Reliable)
 	void ClientReturnFinished();
+
+	UFUNCTION(Client, Reliable)
+	void ClientOpenElderMenu(AGFElder* Elder, FName TownId);
+
+	UFUNCTION(Client, Reliable)
+	void ClientElderToast(const FString& Text);
+
+	UFUNCTION(Server, Reliable)
+	void ServerCloseElderMenu();
+
+	UFUNCTION(Server, Reliable)
+	void ServerElderAccept();
+
+	UFUNCTION(Server, Reliable)
+	void ServerElderHandIn();
+
+	UFUNCTION(Server, Reliable)
+	void ServerElderTrade(FName RowId, int32 RequestId);
 
 	UFUNCTION(Server, Reliable)
 	void ServerToggleVillain();
@@ -114,8 +145,12 @@ protected:
 	bool bHudActionsBound = false;
 	bool bHudMappingAdded = false;
 	bool bChatOpenQueued = false;
-	bool bReturnConfirmOpen = false;
 	FString ReturnPrompt;
 
+	EGFElderSession ElderPhase = EGFElderSession::Closed;
+	TWeakObjectPtr<AGFElder> ElderSession;
+	int32 ElderRequestSerial = 0;
+
 	void SubmitReturn(bool bConfirmed, bool bFromMenu);
+	bool ElderMenuAllows(FString& OutWhy) const;
 };

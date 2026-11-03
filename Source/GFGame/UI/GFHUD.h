@@ -9,8 +9,68 @@
 
 class UFont;
 class UTexture2D;
+class AGFElder;
 struct FGHUDChat;
 class SWidget;
+
+/** One panel at a time. PauseConfirm is the hub return prompt. Elder is the town elder menu. */
+UENUM()
+enum class EGFHudModal : uint8
+{
+	Game,
+	Pause,
+	PauseConfirm,
+	Chat,
+	Aim,
+	Elder
+};
+
+/** The only inputs to AGFHUD::SetHudModal. */
+UENUM()
+enum class EGFHudModalEvent : uint8
+{
+	TogglePause,
+	OpenPause,
+	ClosePause,
+	OpenConfirm,
+	CancelConfirm,
+	OpenChat,
+	CloseChat,
+	OpenAim,
+	CloseAim,
+	OpenElder,
+	CloseElder,
+	Escape,
+	/** Teardown. Any modal goes back to the game. */
+	Reset
+};
+
+/** Pages inside the elder menu. Not a second modal. */
+UENUM()
+enum class EGFElderTab : uint8
+{
+	Talk,
+	Trade,
+	Book
+};
+
+/** Pure transition for the HUD modal. Tests drive this with no world. */
+struct GFGAME_API FGFHudModalRules
+{
+	struct FState
+	{
+		EGFHudModal Modal = EGFHudModal::Game;
+		/** Where chat returns. Game for every other modal. */
+		EGFHudModal Restore = EGFHudModal::Game;
+	};
+
+	static FState Transition(EGFHudModal Modal, EGFHudModal Restore, EGFHudModalEvent Event);
+	static bool IsPause(EGFHudModal Modal);
+	/** Pawn look and move stay off while a menu is up, including chat opened over one. */
+	static bool HoldsPawn(EGFHudModal Modal, EGFHudModal Restore);
+	/** Cursor free and clickable. Chat and aim set their own mode. */
+	static bool FreesMouse(EGFHudModal Modal);
+};
 
 struct FGFHUDToast
 {
@@ -34,7 +94,17 @@ public:
 
 	void ToggleControlsHint();
 	void DrawPathsAndVillains();
-	bool IsAimSettingsOpen() const { return bAimSettingsOpen; }
+	bool IsAimSettingsOpen() const { return Modal == EGFHudModal::Aim; }
+
+	EGFHudModal GetHudModal() const { return Modal; }
+	EGFHudModal GetHudRestore() const { return Restore; }
+	/**
+	 * The only writer of the modal. Open, close, Escape, and teardown all come through here.
+	 * A refused event leaves the modal as it was.
+	 */
+	void SetHudModal(EGFHudModalEvent Event);
+	/** Local toast. The server sends the text. Empty text is ignored. */
+	void PushToast(const FString& Text);
 
 	/** How the owning controller's input is set while the pause menu is open or shut. */
 	struct FPauseInput
@@ -48,10 +118,16 @@ public:
 	};
 	static FPauseInput PauseInputFor(bool bMenuOpen);
 
-	bool IsPauseMenuOpen() const { return bPauseMenuOpen; }
+	bool IsPauseMenuOpen() const { return FGFHudModalRules::IsPause(Modal); }
 	void OpenPauseMenu();
 	void ClosePauseMenu();
 	void TogglePauseMenu();
+	/** Escape: close chat, aim, confirm, or the elder menu. From the game it opens pause. */
+	void HandleEscape();
+	/** Server-validated interact. Refused while aim is open so the menus do not stack. */
+	void OpenElderMenu(AGFElder* Elder, FName TownId);
+	EGFElderTab GetElderTab() const { return ElderTab; }
+	void SetElderTab(EGFElderTab Tab);
 	/** 0 Return to hub, 1 Settings, 2 Close, 3 Controls / How to get items. While a confirm is up: 0 Confirm, 1 Cancel. */
 	void ActivatePauseEntry(int32 Index);
 	/** Shows the runway item hint again (the Esc entry). */
@@ -63,7 +139,7 @@ public:
 	/** Clicks on the pause entries (hit boxes GFPause_<index>). */
 	virtual void NotifyHitBoxClick(FName BoxName) override;
 
-	bool IsChatOpen() const { return bChatOpen; }
+	bool IsChatOpen() const { return Modal == EGFHudModal::Chat; }
 	void OpenChat();
 	/** Close without sending. */
 	void CloseChat();
@@ -105,11 +181,17 @@ private:
 	/** Mining range: items gained since reset, cells broken, and time to clear each row. */
 	void DrawMiningRange();
 	void DrawPauseMenu();
+	void DrawElderMenu();
+	void ActivateElderBox(FName BoxName);
 	/**
-	 * Input mode, cursor and pawn input for the pause menu (PauseInputFor). Chat and the aim panel set their own UI-only
-	 * mode while open; when they close this puts back the pause or the game mode.
+	 * Input mode, cursor and pawn input for whichever modal is up (PauseInputFor for pause, confirm, and the elder menu).
+	 * Chat and the aim panel set their own UI-only mode while open; when they close this puts back the menu or the game.
 	 */
 	void ApplyMenuInput();
+	void BuildChatWidget();
+	void FocusChat();
+	void BuildAimWidget();
+	void FocusAim();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);
@@ -121,9 +203,10 @@ private:
 
 	/** Slate entry. Incomplete here so this header does not include widget headers. */
 	FGHUDChat* Chat = nullptr;
-	bool bChatOpen = false;
 	/** Survives the close frame so a second Enter in that frame does not open chat again. */
 	int32 ChatBlockTicks = 0;
+	EGFHudModal Modal = EGFHudModal::Game;
+	EGFHudModal Restore = EGFHudModal::Game;
 
 	double ShownAt = 0.0;
 	bool bShownAtSet = false;
@@ -139,10 +222,12 @@ private:
 	TMap<int32, double> ChatSeenAt;
 	TArray<FGFHUDToast> Toasts;
 	TSharedPtr<SWidget> AimSettingsRoot;
-	bool bAimSettingsOpen = false;
-	bool bPauseMenuOpen = false;
-	/** The pawn whose input the open pause menu holds. */
+	/** The pawn whose input the open menu holds. */
 	TWeakObjectPtr<APawn> HeldPawn;
+	TWeakObjectPtr<AGFElder> ElderActor;
+	FName ElderTownId;
+	/** Talk, Trade, Elder Book. Reset to Talk each time the menu opens. */
+	EGFElderTab ElderTab = EGFElderTab::Talk;
 	/** Item hint on the runway. On until a show ends, and again when the pause menu asks. */
 	bool bShowItemHowTo = true;
 	bool bItemHowToPinned = false;
