@@ -120,7 +120,9 @@ void AGFHUD::BeginPlay()
 void AGFHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	SetHudModal(EGFHudModalEvent::Reset);
-	if (APawn* Held = HeldPawn.Get())
+	// A pawn its controller let go of, as at teardown, has no input to give back.
+	APawn* Held = HeldPawn.Get();
+	if (Held && Held->GetController() == GetOwningPlayerController())
 	{
 		Held->EnableInput(GetOwningPlayerController());
 	}
@@ -437,7 +439,8 @@ void AGFHUD::ApplyMenuInput()
 	APawn* Pawn = PC->GetPawn();
 	if (bHold && Pawn && HeldPawn.Get() != Pawn)
 	{
-		if (APawn* Old = HeldPawn.Get())
+		APawn* Old = HeldPawn.Get();
+		if (Old && Old->GetController() == PC)
 		{
 			Old->EnableInput(PC);
 		}
@@ -446,7 +449,10 @@ void AGFHUD::ApplyMenuInput()
 	}
 	else if (!bHold && HeldPawn.IsValid())
 	{
-		HeldPawn->EnableInput(PC);
+		if (HeldPawn->GetController() == PC)
+		{
+			HeldPawn->EnableInput(PC);
+		}
 		HeldPawn.Reset();
 	}
 	if (Modal == EGFHudModal::Chat || Modal == EGFHudModal::Aim)

@@ -818,7 +818,18 @@ bool AGFPlayerState::CanMineHit(const FHitResult& Hit, FString& OutReason) const
 	const AGFVoxelWorld* Voxel = GetVoxelWorld();
 	const FIntVector Cell = Voxel ? Voxel->WorldToCell(Point) : FIntVector::ZeroValue;
 	const bool bCellInWorld = Voxel && Voxel->GetGrid().IsInBounds(Cell);
-	return PassesMineLandRules(GS, Point, Cell, bCellInWorld, OutReason);
+	if (PassesMineLandRules(GS, Point, Cell, bCellInWorld, OutReason))
+	{
+		return true;
+	}
+	// Taking a town crystal as a visitor is the theft the townsfolk answer, so the visitor rule does not stop it.
+	const UGFMineableAssetUserData* Data = FGFMineable::Find(FGFMineable::MeshOf(Hit.GetComponent()));
+	if (Data && Data->Mode == EGFMineableMode::Slots && OutReason == TEXT("VisitorNoRights"))
+	{
+		OutReason.Reset();
+		return true;
+	}
+	return false;
 }
 
 bool AGFPlayerState::ServerHandleEdit(const FIntVector& Cell, FName BlockId, FString* OutReason, int32* OutChunkRevision)
