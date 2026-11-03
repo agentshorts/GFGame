@@ -453,4 +453,51 @@ bool FGFWildDinoMissingDietTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFWildDinoSlotFreesTest, "GFGame.WildDino.SlotFrees", GFWildDinoTests::Flags)
+bool FGFWildDinoSlotFreesTest::RunTest(const FString&)
+{
+	const float Now = 10.f;
+	const float Respawn = 60.f;
+
+	const FGFWildSlotRules::FResult Wild = FGFWildSlotRules::Next(true, EGFTameState::Wild, true, -1.f, Now, Respawn);
+	TestEqual(TEXT("Wild holds the ring"), static_cast<int32>(Wild.Action), static_cast<int32>(EGFWildSlotAction::Hold));
+	TestFalse(TEXT("Wild stays attached"), Wild.bDetach);
+
+	const FGFWildSlotRules::FResult Hostile = FGFWildSlotRules::Next(true, EGFTameState::Hostile, true, 3.f, Now, Respawn);
+	TestEqual(TEXT("Hostile keeps the slot"), static_cast<int32>(Hostile.Action), static_cast<int32>(EGFWildSlotAction::Hold));
+	TestFalse(TEXT("Hostile stays attached"), Hostile.bDetach);
+	TestEqual(TEXT("Hostile clears a stale wait"), Hostile.DeadAt, -1.f);
+
+	const FGFWildSlotRules::FResult Alert = FGFWildSlotRules::Next(true, EGFTameState::Alert, true, -1.f, Now, Respawn);
+	TestEqual(TEXT("Alert keeps the slot"), static_cast<int32>(Alert.Action), static_cast<int32>(EGFWildSlotAction::Hold));
+
+	const FGFWildSlotRules::FResult Tamed = FGFWildSlotRules::Next(true, EGFTameState::Tamed, true, -1.f, Now, Respawn);
+	TestTrue(TEXT("Tamed detaches"), Tamed.bDetach);
+	TestEqual(TEXT("Tamed starts the wait"), static_cast<int32>(Tamed.Action), static_cast<int32>(EGFWildSlotAction::Wait));
+	TestEqual(TEXT("Tamed stamps the clock"), Tamed.DeadAt, Now);
+
+	const FGFWildSlotRules::FResult Fled = FGFWildSlotRules::Next(true, EGFTameState::Fled, true, -1.f, Now, Respawn);
+	TestTrue(TEXT("Fled detaches"), Fled.bDetach);
+	TestEqual(TEXT("Fled waits"), static_cast<int32>(Fled.Action), static_cast<int32>(EGFWildSlotAction::Wait));
+
+	const FGFWildSlotRules::FResult Waiting = FGFWildSlotRules::Next(false, EGFTameState::Wild, true, Now, Now + 30.f, Respawn);
+	TestEqual(TEXT("The wait holds"), static_cast<int32>(Waiting.Action), static_cast<int32>(EGFWildSlotAction::Wait));
+	TestFalse(TEXT("A detached body is not taken back"), Waiting.bDetach);
+
+	const FGFWildSlotRules::FResult Ready = FGFWildSlotRules::Next(false, EGFTameState::Tamed, true, Now, Now + Respawn, Respawn);
+	TestEqual(TEXT("The slot spawns once the wait ends"), static_cast<int32>(Ready.Action), static_cast<int32>(EGFWildSlotAction::Spawn));
+
+	const FGFWildSlotRules::FResult Immediate = FGFWildSlotRules::Next(true, EGFTameState::Fled, true, -1.f, Now, 0.f);
+	TestTrue(TEXT("A zero wait still detaches"), Immediate.bDetach);
+	TestEqual(TEXT("A zero wait spawns on the same pass"), static_cast<int32>(Immediate.Action), static_cast<int32>(EGFWildSlotAction::Spawn));
+
+	const FGFWildSlotRules::FResult Empty = FGFWildSlotRules::Next(false, EGFTameState::Wild, false, -1.f, Now, Respawn);
+	TestEqual(TEXT("An empty slot spawns"), static_cast<int32>(Empty.Action), static_cast<int32>(EGFWildSlotAction::Spawn));
+
+	const FGFWildSlotRules::FResult Dead = FGFWildSlotRules::Next(false, EGFTameState::Wild, true, -1.f, Now, Respawn);
+	TestEqual(TEXT("A destroyed body waits"), static_cast<int32>(Dead.Action), static_cast<int32>(EGFWildSlotAction::Wait));
+	TestEqual(TEXT("A destroyed body stamps the clock"), Dead.DeadAt, Now);
+	return true;
+}
+
 #endif

@@ -56,6 +56,39 @@ namespace GFWildDinoPrivate
 	}
 }
 
+bool FGFWildSlotRules::LeftRing(EGFTameState State)
+{
+	return State == EGFTameState::Tamed || State == EGFTameState::Fled;
+}
+
+FGFWildSlotRules::FResult FGFWildSlotRules::Next(bool bHasBody, EGFTameState State, bool bLived, float DeadAt, float Now, float RespawnSeconds)
+{
+	FResult Out;
+	Out.DeadAt = DeadAt;
+	if (bHasBody && LeftRing(State))
+	{
+		Out.bDetach = true;
+		bHasBody = false;
+	}
+	if (bHasBody)
+	{
+		Out.Action = EGFWildSlotAction::Hold;
+		Out.DeadAt = -1.f;
+		return Out;
+	}
+	if (!bLived)
+	{
+		Out.Action = EGFWildSlotAction::Spawn;
+		return Out;
+	}
+	if (Out.DeadAt < 0.f)
+	{
+		Out.DeadAt = Now;
+	}
+	Out.Action = (Now - Out.DeadAt < RespawnSeconds) ? EGFWildSlotAction::Wait : EGFWildSlotAction::Spawn;
+	return Out;
+}
+
 AGFWildDinoDirector::AGFWildDinoDirector()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -124,7 +157,12 @@ int32 AGFWildDinoDirector::CountAlive() const
 	int32 Alive = 0;
 	for (const FGFWildDinoSlot& Slot : Slots)
 	{
-		if (GFWildDinoPrivate::OccupiesSlot(Slot.Dino))
+		if (!GFWildDinoPrivate::OccupiesSlot(Slot.Dino))
+		{
+			continue;
+		}
+		const EGFTameState State = Slot.Dino->Taming ? Slot.Dino->Taming->GetTameState() : EGFTameState::Wild;
+		if (!FGFWildSlotRules::LeftRing(State))
 		{
 			++Alive;
 		}
@@ -143,20 +181,17 @@ void AGFWildDinoDirector::FillSlots()
 	const float Now = World->GetTimeSeconds();
 	for (FGFWildDinoSlot& Slot : Slots)
 	{
-		if (GFWildDinoPrivate::OccupiesSlot(Slot.Dino))
+		const bool bBody = GFWildDinoPrivate::OccupiesSlot(Slot.Dino);
+		const EGFTameState State = (bBody && Slot.Dino->Taming) ? Slot.Dino->Taming->GetTameState() : EGFTameState::Wild;
+		const FGFWildSlotRules::FResult Step = FGFWildSlotRules::Next(bBody, State, Slot.bLived, Slot.DeadAt, Now, RespawnSeconds);
+		if (Step.bDetach)
+		{
+			Slot.Dino = nullptr;
+		}
+		Slot.DeadAt = Step.DeadAt;
+		if (Step.Action != EGFWildSlotAction::Spawn)
 		{
 			continue;
-		}
-		if (Slot.bLived)
-		{
-			if (Slot.DeadAt < 0.f)
-			{
-				Slot.DeadAt = Now;
-			}
-			if (Now - Slot.DeadAt < RespawnSeconds)
-			{
-				continue;
-			}
 		}
 		if (Alive >= MaxAlive)
 		{
