@@ -1,5 +1,6 @@
 #include "GFArenaDirector.h"
 #include "GFArenaRules.h"
+#include "GFElderBook.h"
 #include "GFArenaSite.h"
 #include "GFMiniGameCatalog.h"
 #include "GFWager.h"
@@ -18,6 +19,16 @@
 #include "Net/UnrealNetwork.h"
 
 const FName AGFArenaDirector::ModeName(TEXT("Arena"));
+
+namespace GFArenaBook
+{
+	static void Publish(const AActor* Owner, const FGFArenaPost& Arena, const FString& SubjectKey, FName FactionId)
+	{
+		UWorld* World = Owner ? Owner->GetWorld() : nullptr;
+		const double Now = World ? static_cast<double>(World->GetTimeSeconds()) : 0.0;
+		FGFElderBook::Post(World, FGFElderBook::MakeArena(Arena.Kind, Arena.Line, SubjectKey, FactionId, Now));
+	}
+}
 
 namespace GFArenaVerbs
 {
@@ -1216,7 +1227,9 @@ void AGFArenaDirector::FinishFight()
 				++PS->Progress.ArenaRentalsQuit;
 				PS->MarkCharacterChanged();
 			}
-			E.Posts.Add(FGFArenaPost::RentalQuit(Quit.Species).Line);
+			const FGFArenaPost QuitPost = FGFArenaPost::RentalQuit(Quit.Species);
+			E.Posts.Add(QuitPost.Line);
+			GFArenaBook::Publish(this, QuitPost, E.PlayerKey, PS ? PS->FactionId : NAME_None);
 		}
 		if (bWon)
 		{
@@ -1241,13 +1254,17 @@ void AGFArenaDirector::FinishFight()
 				if (FGFArenaRep::Standing(GetFamilyRep(C->Family)) == EGFArenaStanding::Friendly)
 				{
 					Nice.Add(C->Family);
-					E.Posts.Add(FGFArenaPost::ElderNice(C->Family).Line);
+					const FGFArenaPost NicePost = FGFArenaPost::ElderNice(C->Family);
+					E.Posts.Add(NicePost.Line);
+					GFArenaBook::Publish(this, NicePost, E.PlayerKey, PS ? PS->FactionId : NAME_None);
 				}
 			}
 		}
 		if (Stars >= 3)
 		{
-			E.Posts.Add(FGFArenaPost::Brag(Stars).Line);
+			const FGFArenaPost BragPost = FGFArenaPost::Brag(Stars);
+			E.Posts.Add(BragPost.Line);
+			GFArenaBook::Publish(this, BragPost, E.PlayerKey, PS ? PS->FactionId : NAME_None);
 		}
 		E.FedIds.Reset();
 		E.Stake.Reset();

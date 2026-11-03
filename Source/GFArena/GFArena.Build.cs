@@ -6,5 +6,6 @@ public class GFArena : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "NetCore", "GFCore", "GFCompanion", "GFNet" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "GFSocial" });
 	}
 }
