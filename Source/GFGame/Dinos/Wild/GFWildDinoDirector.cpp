@@ -47,6 +47,13 @@ namespace GFWildDinoPrivate
 		}
 		return false;
 	}
+
+	/** A body that is destroying no longer holds its slot. Respawn waits from that moment. */
+	bool OccupiesSlot(const TWeakObjectPtr<AGFDino>& Dino)
+	{
+		const AGFDino* Body = Dino.Get();
+		return Body != nullptr && !Body->IsActorBeingDestroyed();
+	}
 }
 
 AGFWildDinoDirector::AGFWildDinoDirector()
@@ -117,7 +124,7 @@ int32 AGFWildDinoDirector::CountAlive() const
 	int32 Alive = 0;
 	for (const FGFWildDinoSlot& Slot : Slots)
 	{
-		if (Slot.Dino.IsValid())
+		if (GFWildDinoPrivate::OccupiesSlot(Slot.Dino))
 		{
 			++Alive;
 		}
@@ -136,7 +143,7 @@ void AGFWildDinoDirector::FillSlots()
 	const float Now = World->GetTimeSeconds();
 	for (FGFWildDinoSlot& Slot : Slots)
 	{
-		if (Slot.Dino.IsValid())
+		if (GFWildDinoPrivate::OccupiesSlot(Slot.Dino))
 		{
 			continue;
 		}

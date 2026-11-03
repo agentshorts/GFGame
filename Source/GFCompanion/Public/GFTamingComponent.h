@@ -58,6 +58,8 @@ public:
 	float CalmedUntil = -1000.f;
 	/** Server: hostile at Key (pack call-in). */
 	void ServerForceHostile(const FString& Key);
+	/** Server: a player attack connected. Resets the calm-down timer. Hostile stays Hostile. */
+	void ServerNotifyHit();
 
 	/**
 	 * Noise (FGFNoise, e.g. a player emoting outside safety): a wild dino within the noise radius turns on the noise

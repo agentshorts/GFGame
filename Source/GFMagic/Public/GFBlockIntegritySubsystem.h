@@ -43,6 +43,12 @@ public:
 	/** Stairwell Call asks the game for a player-scale dig. Empty until the game mode binds one. */
 	void SetStairwell(TFunction<TArray<FIntVector>(const APawn*, const FVector&, const AGFVoxelWorld*)> InFn);
 
+	/**
+	 * A mining spell that is actually casting. The game turns the cone into ApplyDamage on dinos.
+	 * Empty until the game mode binds one. Voxel damage does not wait on it.
+	 */
+	void SetDinoHit(TFunction<void(UGFMagicComponent* Caster, const FVector& Origin, const FVector& Dir, float Range, float HalfAngleDeg, float Damage)> InFn);
+
 	/** Whole 0.1 s steps covering Seconds. No hitch cap, so a test can mine a dirt cell in one call. */
 	void Advance(float Seconds);
 
@@ -71,6 +77,8 @@ private:
 	FName ActiveShape(const UGFMagicComponent* Caster) const;
 	/** Crystal cost and the beam, used when the world has no voxel grid. With a grid, CastField already paid. */
 	void PayTownField(UGFMagicComponent* Caster);
+	void OfferDinoHit(UGFMagicComponent* Caster, const FVector& Origin, const FVector& Dir, float Range, float HalfAngleDeg, float Damage);
+	void TryFieldDinoHit(UGFMagicComponent* Caster);
 
 	TSet<FIntVector> Placed;
 	TMap<FIntVector, FMagicWound> Wounds;
@@ -88,5 +96,6 @@ private:
 	FDelegateHandle EditHandle;
 	FDelegateHandle StampHandle;
 	TFunction<TArray<FIntVector>(const APawn*, const FVector&, const AGFVoxelWorld*)> StairwellFn;
+	TFunction<void(UGFMagicComponent* Caster, const FVector& Origin, const FVector& Dir, float Range, float HalfAngleDeg, float Damage)> DinoHitFn;
 	TUniquePtr<FGFTownNodeField> TownNodes;
 };
