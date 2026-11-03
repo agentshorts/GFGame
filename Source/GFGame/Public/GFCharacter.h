@@ -27,6 +27,7 @@ struct FInputActionValue;
  * raises the sparkfield. A short tap still punches, or picks up a spell-proof build. Shoulder swap is middle
  * mouse. Q still swings the grapple. C calls the claw, R swaps Spark and the faction element, T overcharges.
  * Shift sprints, Ctrl dashes, E yanks. Space can hop three times before landing. MaxWalkSpeed stays the base run.
+ * X talks to the nearest villager or elder within reach. The server checks that reach again.
  * Input assets are optional: if none are assigned, a default mapping is built in C++ at runtime.
  */
 UCLASS(Config = Game)
@@ -117,6 +118,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GF|Build")
 	void CycleBlock(int32 Direction);
 
+	/** Nearest IGFInteractable within the townsfolk reach, or null. */
+	AActor* FindNearestInteractable() const;
+
+	/** Local press. Sends ServerInteract when this pawn is not the authority. */
+	void RequestInteract();
+
+	/** Same as the press, for a chosen target. The server drops it when the pawn is out of reach. */
+	void RequestInteractWith(AActor* Target);
+
+	UFUNCTION(Server, Reliable)
+	void ServerInteract(AActor* Target);
+
+	/** Builds the default mapping when no input assets are assigned. */
+	void BuildDefaultInput();
+
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
 	// Optional input assets (thin BP / data). Null = built in C++.
@@ -136,6 +152,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> ClawAction;
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> ToggleElementAction;
 	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> OverchargeAction;
+	UPROPERTY(EditAnywhere, Category = "GF|Input") TObjectPtr<UInputAction> InteractAction;
 
 	UFUNCTION(Server, Reliable)
 	void ServerApplyAimDamage(AActor* Target, float Damage, bool bFists);
@@ -149,7 +166,6 @@ protected:
 	virtual void PawnClientRestart() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
-	void BuildDefaultInput();
 	AGFVoxelWorld* FindVoxelWorld() const;
 	UGFMagicComponent* FindMagic() const;
 	void SendMagicAim();
@@ -177,6 +193,7 @@ protected:
 	void OnGrappleSwingStopped(const FInputActionValue& Value);
 	void OnGrappleYank(const FInputActionValue& Value);
 	void OnShoulderSwap(const FInputActionValue& Value);
+	void OnInteractPressed(const FInputActionValue& Value);
 
 	void RefreshAimFromProfile();
 	void CommitAimLook();

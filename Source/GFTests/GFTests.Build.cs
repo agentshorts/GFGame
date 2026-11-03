@@ -11,6 +11,8 @@ public class GFTests : ModuleRules
 		PrivateIncludePaths.Add(System.IO.Path.Combine(ModuleDirectory, "../GFGame/UI"));
 		// GFCharacterMovementComponent.h is in GFGame's private Movement folder.
 		PrivateIncludePaths.Add(System.IO.Path.Combine(ModuleDirectory, "../GFGame/Movement"));
+		// GFTownsfolkRules.h includes GFTerritoryTypes.h, which lives in GFGame's private Territory folder.
+		PrivateIncludePaths.Add(System.IO.Path.Combine(ModuleDirectory, "../GFGame/Territory"));
 
 	}
 }

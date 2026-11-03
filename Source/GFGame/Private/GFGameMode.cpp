@@ -72,6 +72,7 @@ AGFGameMode::AGFGameMode()
 	bDelayedStart = false;
 	StartupDirectorClasses.Add(FSoftClassPath(TEXT("/Script/GFSocial.GFSocialDirector")));
 	StartupDirectorClasses.Add(FSoftClassPath(TEXT("/Script/GFGame.GFPaintVolume")));
+	StartupDirectorClasses.Add(FSoftClassPath(TEXT("/Script/GFGame.GFTownsfolkDirector")));
 }
 
 void AGFGameMode::InitGameState()
