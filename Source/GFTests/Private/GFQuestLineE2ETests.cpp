@@ -182,7 +182,7 @@ namespace GFQuestE2E
 		}
 	};
 
-	struct FScene
+	struct FE2EScene
 	{
 		FTown Town;
 		AGFElder* Elder = nullptr;
@@ -619,7 +619,6 @@ namespace GFQuestE2E
 	{
 		const FVector Right = FVector::CrossProduct(FVector::UpVector, Stand.Normal).GetSafeNormal();
 		const FVector Spots[] = {
-			Stand.At,
 			Stand.Impact + Stand.Normal * 220.f,
 			Stand.Impact + Stand.Normal * 220.f + Right * 140.f,
 			Stand.Impact + Stand.Normal * 180.f + FVector(0.f, 0.f, 160.f),
@@ -812,9 +811,9 @@ namespace GFQuestE2E
 		return Look;
 	}
 
-	static bool BreakTown(FAutomationTestBase& T, FHooks& Hooks, FPlayer& Player, const FTown& Town, bool bSeedNippers, FScene& Scene)
+	static bool BreakTown(FAutomationTestBase& T, FHooks& Hooks, FPlayer& Player, const FTown& Town, bool bSeedNippers, FE2EScene& Scene)
 	{
-		Scene = FScene();
+		Scene = FE2EScene();
 		Scene.Town = Town;
 		FStand Stand;
 		Scene.Crystal = PlaceCrystal(Hooks.World, Town, Stand);
@@ -985,7 +984,7 @@ namespace GFQuestE2E
 		return true;
 	}
 
-	static bool PlayToMember(FAutomationTestBase& T, FHooks& Hooks, FPlayer& Player, const FTown& Town, FScene& Scene)
+	static bool PlayToMember(FAutomationTestBase& T, FHooks& Hooks, FPlayer& Player, const FTown& Town, FE2EScene& Scene)
 	{
 		if (!BreakTown(T, Hooks, Player, Town, true, Scene))
 		{
@@ -1172,7 +1171,7 @@ bool FGFQuestLineE2ETest::RunTest(const FString&)
 		return false;
 	}
 	Link(Player);
-	FScene Scene;
+	FE2EScene Scene;
 	if (!PlayToMember(*this, Hooks, Player, *Town, Scene))
 	{
 		return false;
@@ -1206,7 +1205,7 @@ bool FGFQuestLineSaveE2ETest::RunTest(const FString&)
 		return false;
 	}
 	Link(Player);
-	FScene Scene;
+	FE2EScene Scene;
 	if (!PlayToMember(*this, Live, Player, *Town, Scene))
 	{
 		return false;
@@ -1302,6 +1301,8 @@ bool FGFQuestLineNetE2ETest::RunTest(const FString&)
 			Ctx->bFailed = true;
 			return;
 		}
+		// The session hands every live player a faction on join. The guest starts unaffiliated so its Verdant break is a theft.
+		Guest.PS->FactionId = NAME_None;
 		*HostKey = Host.Key;
 		*GuestKey = Guest.Key;
 
@@ -1326,13 +1327,13 @@ bool FGFQuestLineNetE2ETest::RunTest(const FString&)
 			return;
 		}
 
-		FScene HostScene;
+		FE2EScene HostScene;
 		if (!PlayToMember(*this, Hooks, Host, *RimeTown, HostScene) || !Finish(*this, Hooks, Host, HostScene.Elder))
 		{
 			Ctx->bFailed = true;
 			return;
 		}
-		FScene GuestScene;
+		FE2EScene GuestScene;
 		if (!BreakTown(*this, Hooks, Guest, *VerdantTown, false, GuestScene))
 		{
 			Ctx->bFailed = true;

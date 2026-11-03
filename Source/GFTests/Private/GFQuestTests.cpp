@@ -8,6 +8,7 @@
 #include "GFQuestSubsystem.h"
 #include "GFDataTables.h"
 #include "GFGameState.h"
+#include "GFInventoryComponent.h"
 #include "GFPlayerState.h"
 #include "GFSaveSubsystem.h"
 #include "GFSaveGame.h"

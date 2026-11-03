@@ -4,6 +4,7 @@
 #include "GFNetTestUtils.h"
 #include "GFDino.h"
 #include "GFElderBook.h"
+#include "GFPlayerState.h"
 #include "GFTamingComponent.h"
 #include "GFTheftDirector.h"
 #include "GFTownNodes.h"
@@ -131,9 +132,19 @@ bool FGFNetTheftHostileOnThiefTest::RunTest(const FString&)
 		FGFTownNodeEvents::OnCrystalTaken().Broadcast(World, TEXT("RimeCrystal"), Crystal, Keys);
 	});
 
-	WaitUntil(Ctx, TEXT("a dino is hostile at the thief on the server and the client"), 20.f, [ThiefKey]()
+	// A wild dino can turn on the host by itself, so also wait for the elder's hire post.
+	WaitUntil(Ctx, TEXT("the elder hired and a dino is hostile at the thief on the server and the client"), 20.f, [ThiefKey]()
 	{
-		return AnyHostileAt(ServerWorld(), *ThiefKey)
+		bool bHire = false;
+		if (const UGFElderBookSubsystem* Book = UGFElderBookSubsystem::Get(ServerWorld()))
+		{
+			for (const FGFElderPost& Post : Book->GetBook().ChannelPosts(EGFElderChannel::RimeBook))
+			{
+				bHire |= Post.Kind == EGFElderKind::Hire;
+			}
+		}
+		return bHire
+			&& AnyHostileAt(ServerWorld(), *ThiefKey)
 			&& ClientWorlds().Num() > 0
 			&& AnyHostileAt(ClientWorlds()[0], *ThiefKey);
 	});
