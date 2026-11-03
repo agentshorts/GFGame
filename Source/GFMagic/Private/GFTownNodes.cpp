@@ -501,6 +501,39 @@ void FGFTownNodeField::CommitBreak(FNode& Node, const FMagicBreak& Break, const 
 		FGFTownNodeRules::Grant(Fallback, Break, At, Now);
 	}
 	UE_LOG(LogGF, Log, TEXT("Town node %s broke, drop %s x%d, regrow in %.0fs"), *Node.Key, *Break.DropItem.ToString(), Break.DropCount, RegrowSeconds);
+	if (!Node.bCrystal)
+	{
+		return;
+	}
+	UWorld* World = nullptr;
+	if (const AActor* Actor = Node.Actor.Get())
+	{
+		World = Actor->GetWorld();
+	}
+	if (!World && Fallback)
+	{
+		World = Fallback->GetWorld();
+	}
+	if (!World || World->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	TArray<FString> Keys = Break.Contributors;
+	if (Keys.Num() == 0)
+	{
+		const FString FallbackKey = CasterKey(Fallback);
+		if (!FallbackKey.IsEmpty())
+		{
+			Keys.Add(FallbackKey);
+		}
+	}
+	FGFTownNodeEvents::OnCrystalTaken().Broadcast(World, Node.Key, At, Keys);
+}
+
+FGFOnTownCrystalTaken& FGFTownNodeEvents::OnCrystalTaken()
+{
+	static FGFOnTownCrystalTaken Delegate;
+	return Delegate;
 }
 
 void FGFTownNodeField::Publish(UWorld* World)

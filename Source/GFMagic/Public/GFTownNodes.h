@@ -22,6 +22,18 @@ struct FMagicGlob;
 struct FMagicSwing;
 struct FGFMiningSpellRow;
 
+/** Server only. One crystal break, once. Trees do not broadcast. */
+DECLARE_MULTICAST_DELEGATE_FourParams(FGFOnTownCrystalTaken, UWorld* /*World*/, const FString& /*NodeKey*/, FVector /*Location*/, const TArray<FString>& /*ContributorKeys*/);
+
+/**
+ * The one-shot crystal break. Quest credit listens here and records the player key.
+ * Do not read bDepleted for that credit: regrow clears the flag.
+ */
+struct GFMAGIC_API FGFTownNodeEvents
+{
+	static FGFOnTownCrystalTaken& OnCrystalTaken();
+};
+
 USTRUCT()
 struct GFMAGIC_API FGFTownNodeRep
 {
