@@ -232,3 +232,9 @@ FossilJacket,"NSLOCTEXT(""GFItems"", ""FossilJacket"", ""Fossil Jacket"")",None,
 FossilTrousers,"NSLOCTEXT(""GFItems"", ""FossilTrousers"", ""Fossil Trousers"")",None,Outfit,1,Uncommon,,0,0,None,False,False,None,True,None,Bottom
 FossilHeels,"NSLOCTEXT(""GFItems"", ""FossilHeels"", ""Fossil Heels"")",None,Outfit,1,Uncommon,,0,0,None,False,False,None,True,None,Shoes
 FossilBrooch,"NSLOCTEXT(""GFItems"", ""FossilBrooch"", ""Fossil Brooch"")",None,Outfit,1,Rare,,0,0,None,False,False,None,True,None,Accessory
+Skin_Nipper,"NSLOCTEXT(""GFItems"", ""Skin_Nipper"", ""Nipper Skin"")",None,Material,999,Uncommon,,3,8,Trophy,True,False,None,False,Wrangler,None
+Skin_Raptor,"NSLOCTEXT(""GFItems"", ""Skin_Raptor"", ""Raptor Skin"")",None,Material,999,Uncommon,,3,8,Trophy,True,False,None,False,Wrangler,None
+Skin_Tusksaw,"NSLOCTEXT(""GFItems"", ""Skin_Tusksaw"", ""Tusksaw Skin"")",None,Material,999,Uncommon,,3,8,Trophy,True,False,None,False,Wrangler,None
+Skin_Lanternmaw,"NSLOCTEXT(""GFItems"", ""Skin_Lanternmaw"", ""Lanternmaw Skin"")",None,Material,999,Uncommon,,3,8,Trophy,True,False,None,False,Wrangler,None
+Skin_Scythepaw,"NSLOCTEXT(""GFItems"", ""Skin_Scythepaw"", ""Scythepaw Skin"")",None,Material,999,Uncommon,,3,8,Trophy,True,False,None,False,Wrangler,None
+Skin_Hornback,"NSLOCTEXT(""GFItems"", ""Skin_Hornback"", ""Hornback Skin"")",None,Material,999,Uncommon,,3,8,Trophy,True,False,None,False,Wrangler,None

@@ -9,6 +9,7 @@
 #include "GFPlayerState.h"
 #include "GFMagicPlayerState.h"
 #include "GFBlockIntegritySubsystem.h"
+#include "GFDinoSpellHit.h"
 #include "GFMagicStairwell.h"
 #include "GFSpawnDefaults.h"
 #include "GFTerritorySubsystem.h"
@@ -115,6 +116,7 @@ void AGFGameMode::InitGameState()
 			{
 				return FGFMagicStairwell::Cells(Pawn, Aim, Voxel);
 			});
+			GFBindDinoSpellHits(Magic);
 		}
 	}
 }

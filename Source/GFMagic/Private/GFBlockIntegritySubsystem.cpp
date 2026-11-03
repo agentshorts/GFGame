@@ -229,6 +229,57 @@ void UGFBlockIntegritySubsystem::SetStairwell(TFunction<TArray<FIntVector>(const
 	StairwellFn = MoveTemp(InFn);
 }
 
+void UGFBlockIntegritySubsystem::SetDinoHit(TFunction<void(UGFMagicComponent* Caster, const FVector& Origin, const FVector& Dir, float Range, float HalfAngleDeg, float Damage)> InFn)
+{
+	DinoHitFn = MoveTemp(InFn);
+}
+
+void UGFBlockIntegritySubsystem::OfferDinoHit(UGFMagicComponent* Caster, const FVector& Origin, const FVector& Dir, float Range, float HalfAngleDeg, float Damage)
+{
+	if (!DinoHitFn || !Caster || Damage <= 0.f || Range <= 0.f)
+	{
+		return;
+	}
+	const FVector SafeDir = Dir.IsNearlyZero() ? FVector::ForwardVector : Dir.GetSafeNormal();
+	DinoHitFn(Caster, Origin, SafeDir, Range, HalfAngleDeg, Damage);
+}
+
+void UGFBlockIntegritySubsystem::TryFieldDinoHit(UGFMagicComponent* Caster)
+{
+	if (!Caster)
+	{
+		return;
+	}
+	const FGFMiningSpellRow* Spell = FGFMagicCatalog::FieldSpell(Caster->GetElement());
+	if (!Spell)
+	{
+		return;
+	}
+	const FName Shape = Spell->Shape;
+	if (Shape == TEXT("Melee") || Shape == TEXT("Claw") || Shape == TEXT("Pool") || Shape == TEXT("Storm"))
+	{
+		return;
+	}
+	float Half = 10.f;
+	if (Shape == TEXT("Cone"))
+	{
+		Half = Spell->ConeHalfAngle > 0.f ? Spell->ConeHalfAngle : 15.f;
+	}
+	else if (Shape == TEXT("Spray"))
+	{
+		Half = 12.f;
+	}
+	else if (Shape == TEXT("Freeze"))
+	{
+		Half = 8.f;
+	}
+	const float Power = Spell->ConePower > 0.f ? Spell->ConePower : Spell->IntegrityPerSecond;
+	const float Damage = Power * GFMagic::TickSeconds * FMath::Max(0.f, Caster->FieldRate());
+	const FVector Origin = Caster->CastOrigin();
+	const FVector Dir = Caster->GetAimPoint() - Origin;
+	OfferDinoHit(Caster, Origin, Dir, Caster->FieldRange(), Half, Damage);
+}
+
 AGFVoxelWorld* UGFBlockIntegritySubsystem::FindVoxel() const
 {
 	UWorld* World = GetWorld();
@@ -373,6 +424,7 @@ void UGFBlockIntegritySubsystem::Step()
 		{
 			CastField(Caster, Budget, Voxel, Detonate);
 		}
+		TryFieldDinoHit(Caster);
 	}
 	StepGlobs(Voxel);
 	if (Voxel)
@@ -580,6 +632,9 @@ void UGFBlockIntegritySubsystem::ApplySwings(UGFMagicComponent* Caster, int32& B
 		}
 		Facing = Facing.GetSafeNormal();
 		const FVector Origin = Caster->CastOrigin() + Facing * FMath::Max(0.f, Swing.LungeCm);
+		const float Reach = Spell && Spell->MeleeReachCm > 0.f ? Spell->MeleeReachCm : 250.f;
+		const float SwingDamage = Swing.Power * (Swing.Rhythm > 0.f ? Swing.Rhythm : 1.f);
+		OfferDinoHit(Caster, Origin, Facing, Reach, 50.f, SwingDamage);
 		if (Voxel)
 		{
 			const FIntVector Feet = Voxel->WorldToCell(Origin);
@@ -983,6 +1038,9 @@ void UGFBlockIntegritySubsystem::CastClaw(UGFMagicComponent* Caster)
 	{
 		Dir = FVector::ForwardVector;
 	}
+	const float ClawDamage = Spell ? Spell->FlatIntegrity : 250.f;
+	const float ClawRange = Spell && Spell->RangeCm > 0.f ? Spell->RangeCm : 800.f;
+	OfferDinoHit(Caster, Origin, Dir, ClawRange, 20.f, ClawDamage);
 	const FIntVector Start = FGFMagicRules::ResolveCenter(Origin, Aim, Voxel->GetActorLocation(), [Voxel](const FIntVector& Cell)
 	{
 		return Voxel->GetBlock(Cell);

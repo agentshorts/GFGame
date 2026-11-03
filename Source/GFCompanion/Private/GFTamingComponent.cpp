@@ -201,6 +201,16 @@ void UGFTamingComponent::ServerForceHostile(const FString& Key)
 	SyncReplicated();
 }
 
+void UGFTamingComponent::ServerNotifyHit()
+{
+	const AActor* Owner = GetOwner();
+	if (!Owner || !Owner->HasAuthority())
+	{
+		return;
+	}
+	Machine.NotifyHit();
+}
+
 void UGFTamingComponent::BeginPlay()
 {
 	Super::BeginPlay();
