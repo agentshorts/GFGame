@@ -29,6 +29,8 @@ private:
 	void Refresh(float DeltaSeconds);
 	void StandDown(int32 CaseIndex);
 	void ClearPlayer(const FString& PlayerKey, FName TownId);
+	/** Push each heat snapshot to that player's controller. The rules stay on this actor. */
+	void PublishHeats();
 
 	struct FCase
 	{

@@ -5,6 +5,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GFElder.h"
 #include "GFElderTalk.h"
+#include "GFTheftRules.h"
 #include "GFPlayerController.generated.h"
 
 class UInputAction;
@@ -42,6 +43,14 @@ public:
 	bool IsReturnConfirmOpen() const;
 	const FString& GetReturnConfirmPrompt() const { return ReturnPrompt; }
 
+	/**
+	 * Server. Copies this player's theft heat for the spotted banner.
+	 * The director remains the clock. A remote client receives the snapshot.
+	 */
+	void NotifyTheftHeat(EGFTheftHeat State, float HuntLeft);
+	EGFTheftHeat GetShownHeat() const { return ShownHeat; }
+	float GetShownHuntLeft() const { return ShownHuntLeft; }
+
 	/** Server. A validated elder interact. Opens the menu on the owning client. */
 	void OpenElderMenu(AGFElder* Elder);
 	void RequestCloseElderMenu();
@@ -64,6 +73,9 @@ public:
 
 	UFUNCTION(Client, Reliable)
 	void ClientPromptReturnConfirm(const FString& Prompt);
+
+	UFUNCTION(Client, Reliable)
+	void ClientSetTheftHeat(uint8 State, float HuntLeft);
 
 	UFUNCTION(Client, Reliable)
 	void ClientReturnFinished();
@@ -153,4 +165,9 @@ protected:
 
 	void SubmitReturn(bool bConfirmed, bool bFromMenu);
 	bool ElderMenuAllows(FString& OutWhy) const;
+	void ApplyShownHeat(EGFTheftHeat State, float HuntLeft);
+
+	/** Display copy of FGFTheftHeat. Not a second clock. */
+	EGFTheftHeat ShownHeat = EGFTheftHeat::Clear;
+	float ShownHuntLeft = 0.f;
 };

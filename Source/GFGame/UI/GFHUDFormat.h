@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "GFTerritoryTypes.h"
 #include "GFPathRules.h"
+#include "GFQuestLine.h"
+#include "GFTheftRules.h"
 
 namespace GFHUD
 {
@@ -33,6 +35,23 @@ namespace GFHUD
 
 	/** Villain skull and title hide past this. The class icon stays. */
 	constexpr float VillainSightCm = 6000.f;
+
+	/** Field HUD (tracker, spotted banner, interact prompt). Shared by the canvas and the overlap tests. */
+	constexpr float FieldMargin = 16.f;
+	constexpr float FieldTop = 48.f;
+	constexpr float TrackerWidth = 360.f;
+	constexpr float TrackerLineH = 18.f;
+	constexpr float TrackerPad = 8.f;
+	constexpr float SpottedWidth = 420.f;
+	constexpr float SpottedHeight = 52.f;
+	constexpr float InteractWidth = 300.f;
+	constexpr float InteractHeight = 24.f;
+	/** Top of the interact prompt sits this far below the screen center, clear of the crosshair and the stamina arc. */
+	constexpr float InteractBelowCenter = 32.f;
+	/** Half-size of the stamina keep-out. The arc is a 16 radius stroke with thickness 2. */
+	constexpr float StaminaKeepHalf = 20.f;
+	/** Half-size of the default crosshair keep-out (gap 4 plus size 10, plus the stroke). */
+	constexpr float CrosshairKeepHalf = 18.f;
 
 	inline const TCHAR* ControlsHint()
 	{
@@ -99,3 +118,92 @@ GFGAME_API FString GFFormatVillainBadge(bool bOn, float LockSecondsLeft);
 
 /** One line per class card, for the first-spawn pick. */
 GFGAME_API TArray<FString> GFFormatPathCards(const TArray<FGFPathCard>& Cards);
+
+/** Canvas box. An empty box (W or H at or below 0) never overlaps and counts as inside the canvas. */
+struct GFGAME_API FGFHudRect
+{
+	float X = 0.f;
+	float Y = 0.f;
+	float W = 0.f;
+	float H = 0.f;
+
+	bool IsEmpty() const { return W <= 0.f || H <= 0.f; }
+	float Right() const { return X + W; }
+	float Bottom() const { return Y + H; }
+};
+
+/** True when the boxes share interior area. Shared edges do not count. */
+GFGAME_API bool GFHudRectsOverlap(const FGFHudRect& A, const FGFHudRect& B);
+
+/** True when Rect sits inside the canvas. An empty rect does. */
+GFGAME_API bool GFHudRectInside(const FGFHudRect& Rect, float CanvasW, float CanvasH);
+
+/** Bottom strip the hotbar row occupies, full canvas width. */
+GFGAME_API FGFHudRect GFHudHotbarBounds(float CanvasW, float CanvasH);
+
+/** Square around the screen center that covers the stamina arc. */
+GFGAME_API FGFHudRect GFHudStaminaBounds(float CanvasW, float CanvasH);
+
+/** Square around the screen center that covers the default crosshair. */
+GFGAME_API FGFHudRect GFHudCrosshairBounds(float CanvasW, float CanvasH);
+
+/**
+ * Quest tracker (top right), spotted banner (top center), interact prompt (under the crosshair).
+ * A zero line count or a false flag leaves that box empty.
+ */
+struct GFGAME_API FGFFieldHudLayout
+{
+	FGFHudRect Tracker;
+	FGFHudRect Spotted;
+	FGFHudRect Interact;
+};
+
+GFGAME_API FGFFieldHudLayout GFLayoutFieldHud(float CanvasW, float CanvasH, int32 TrackerLines, bool bSpotted, bool bInteract);
+
+/** Short step name. The CSV title is the line title, not this. Done is empty. */
+GFGAME_API FString GFQuestStepTitle(EGFQuestStep Step);
+
+/** Outsider, Initiate, Member, Champion, Leader. */
+GFGAME_API FString GFFormatRankBadge(EGFFactionRank Rank);
+
+/** Nameplate line plus the rank badge. */
+GFGAME_API FString GFFormatNameplateWithRank(const FString& NameplateLine, EGFFactionRank Rank);
+
+/**
+ * Top-right tracker. bVisible is the quest body. Done collapses that body and leaves the rank badge.
+ * bAllow false (pause, confirm, or the elder menu) hides both.
+ */
+struct GFGAME_API FGFQuestTrackerView
+{
+	bool bVisible = false;
+	FString LineTitle;
+	FString StepTitle;
+	FString Progress;
+	FString Hint;
+	FString Rank;
+	TArray<FString> Lines;
+};
+
+GFGAME_API FGFQuestTrackerView GFFormatQuestTracker(const FGFQuestCatalog& Catalog, EGFQuestStep Step, int32 Count, EGFFactionRank Rank, bool bAllow);
+
+/**
+ * Spotted, then the hire banner with the heat countdown. Clear, or bAllow false, hides it.
+ * The theft rules own the clock. This only formats the snapshot.
+ */
+struct GFGAME_API FGFSpottedAlert
+{
+	bool bVisible = false;
+	FString Headline;
+	FString Detail;
+};
+
+GFGAME_API FGFSpottedAlert GFFormatSpottedAlert(EGFTheftHeat State, float SecondsLeft, bool bAllow);
+
+/** "[X] Talk to Rime Elder" while an interactable is in reach and the field HUD is allowed. */
+struct GFGAME_API FGFInteractPrompt
+{
+	bool bVisible = false;
+	FString Line;
+};
+
+GFGAME_API FGFInteractPrompt GFFormatInteractPrompt(bool bInReach, const FString& KeyLabel, const FString& Verb, bool bAllow);
