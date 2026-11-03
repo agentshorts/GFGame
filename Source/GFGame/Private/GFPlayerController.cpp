@@ -1,4 +1,5 @@
 #include "GFPlayerController.h"
+#include "GFDefaultInputKeys.h"
 #include "GFDino.h"
 #include "GFReturnToHub.h"
 #include "GFSocialDirector.h"
@@ -72,7 +73,6 @@ void AGFPlayerController::EnsureHudInput()
 		ShardhopAction = Make(TEXT("IA_GFShardhop"));
 		VillainAction = Make(TEXT("IA_GFVillain"));
 		ReturnAction = Make(TEXT("IA_GFReturn"));
-		const FKey PathKeys[] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five };
 		PathActions.Reset();
 		for (int32 Slot = 0; Slot < 5; ++Slot)
 		{
@@ -80,15 +80,29 @@ void AGFPlayerController::EnsureHudInput()
 			PathActions.Add(Action);
 		}
 		HudMapping = NewObject<UInputMappingContext>(this, TEXT("IMC_GFHUD"));
-		HudMapping->MapKey(ChatAction, EKeys::Enter);
-		HudMapping->MapKey(HintAction, EKeys::H);
-		HudMapping->MapKey(CloseChatAction, EKeys::Escape);
-		HudMapping->MapKey(ShardhopAction, EKeys::F);
-		HudMapping->MapKey(VillainAction, EKeys::G);
-		HudMapping->MapKey(ReturnAction, GetReturnKey());
-		for (int32 Slot = 0; Slot < PathActions.Num() && Slot < UE_ARRAY_COUNT(PathKeys); ++Slot)
+		TArray<FGFMappedKey> Binds;
+		FGFDefaultInputKeys::HudKeys(Binds, GetReturnKey());
+		auto HudAction = [this](FName Name) -> UInputAction*
 		{
-			HudMapping->MapKey(PathActions[Slot], PathKeys[Slot]);
+			if (Name == TEXT("Chat")) return ChatAction;
+			if (Name == TEXT("Hint")) return HintAction;
+			if (Name == TEXT("CloseChat")) return CloseChatAction;
+			if (Name == TEXT("Shardhop")) return ShardhopAction;
+			if (Name == TEXT("Villain")) return VillainAction;
+			if (Name == TEXT("Return")) return ReturnAction;
+			if (Name == TEXT("Path1") && PathActions.IsValidIndex(0)) return PathActions[0];
+			if (Name == TEXT("Path2") && PathActions.IsValidIndex(1)) return PathActions[1];
+			if (Name == TEXT("Path3") && PathActions.IsValidIndex(2)) return PathActions[2];
+			if (Name == TEXT("Path4") && PathActions.IsValidIndex(3)) return PathActions[3];
+			if (Name == TEXT("Path5") && PathActions.IsValidIndex(4)) return PathActions[4];
+			return nullptr;
+		};
+		for (const FGFMappedKey& Bind : Binds)
+		{
+			if (UInputAction* Action = HudAction(Bind.Action))
+			{
+				HudMapping->MapKey(Action, Bind.Key);
+			}
 		}
 	}
 	if (!bHudMappingAdded)

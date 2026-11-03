@@ -1,5 +1,9 @@
 #include "GFCharacter.h"
 #include "GFCharacterMovementComponent.h"
+#include "GFDefaultInputKeys.h"
+#include "GFInteractable.h"
+#include "GFTownsfolkDirector.h"
+#include "GFTownsfolkRules.h"
 #include "GFFerryRiderComponent.h"
 #include "GFPlayerState.h"
 #include "GFGameState.h"
@@ -23,7 +27,11 @@
 #include "GFArenaDirector.h"
 #include "Aim/GFAimSim.h"
 #include "Animation/AnimSequenceBase.h"
+#include "CollisionQueryParams.h"
+#include "CollisionShape.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/OverlapResult.h"
+#include "Engine/World.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "EngineUtils.h"
@@ -231,6 +239,7 @@ void AGFCharacter::BuildDefaultInput()
 	MakeAction(ClawAction, TEXT("IA_Clawcall"), EInputActionValueType::Boolean);
 	MakeAction(ToggleElementAction, TEXT("IA_ToggleElement"), EInputActionValueType::Boolean);
 	MakeAction(OverchargeAction, TEXT("IA_Overcharge"), EInputActionValueType::Boolean);
+	MakeAction(InteractAction, TEXT("IA_Interact"), EInputActionValueType::Boolean);
 	if (!bBuildContext)
 	{
 		return;
@@ -245,28 +254,46 @@ void AGFCharacter::BuildDefaultInput()
 	{
 		M.Modifiers.Add(NewObject<UInputModifierNegate>(this));
 	};
-	// Move: X = right, Y = forward.
-	{ FEnhancedActionKeyMapping& M = MappingContext->MapKey(MoveAction, EKeys::W); Swizzle(M); }
-	{ FEnhancedActionKeyMapping& M = MappingContext->MapKey(MoveAction, EKeys::S); Swizzle(M); Negate(M); }
-	MappingContext->MapKey(MoveAction, EKeys::D);
-	{ FEnhancedActionKeyMapping& M = MappingContext->MapKey(MoveAction, EKeys::A); Negate(M); }
-	MappingContext->MapKey(LookAction, EKeys::Mouse2D);
-	MappingContext->MapKey(JumpAction, EKeys::SpaceBar);
-	MappingContext->MapKey(PlaceAction, EKeys::RightMouseButton);
-	MappingContext->MapKey(RemoveAction, EKeys::LeftMouseButton);
-	MappingContext->MapKey(RemoveAction, EKeys::Gamepad_RightTrigger);
-	MappingContext->MapKey(ToggleViewAction, EKeys::V);
-	MappingContext->MapKey(HotbarAction, EKeys::MouseWheelAxis);
-	MappingContext->MapKey(SprintAction, EKeys::LeftShift);
-	MappingContext->MapKey(DashAction, EKeys::LeftControl);
-	MappingContext->MapKey(GrappleSwingAction, EKeys::Q);
-	MappingContext->MapKey(GrappleYankAction, EKeys::E);
-	MappingContext->MapKey(ShoulderSwapAction, DefaultShoulderSwapKey());
-	MappingContext->MapKey(ClawAction, EKeys::C);
-	MappingContext->MapKey(ClawAction, EKeys::Gamepad_RightShoulder);
-	MappingContext->MapKey(ToggleElementAction, EKeys::R);
-	MappingContext->MapKey(ToggleElementAction, EKeys::Gamepad_DPad_Right);
-	MappingContext->MapKey(OverchargeAction, EKeys::T);
+	auto ActionFor = [this](FName Name) -> UInputAction*
+	{
+		if (Name == TEXT("Move")) return MoveAction;
+		if (Name == TEXT("Look")) return LookAction;
+		if (Name == TEXT("Jump")) return JumpAction;
+		if (Name == TEXT("Place")) return PlaceAction;
+		if (Name == TEXT("Remove")) return RemoveAction;
+		if (Name == TEXT("ToggleView")) return ToggleViewAction;
+		if (Name == TEXT("Hotbar")) return HotbarAction;
+		if (Name == TEXT("Sprint")) return SprintAction;
+		if (Name == TEXT("Dash")) return DashAction;
+		if (Name == TEXT("GrappleSwing")) return GrappleSwingAction;
+		if (Name == TEXT("GrappleYank")) return GrappleYankAction;
+		if (Name == TEXT("ShoulderSwap")) return ShoulderSwapAction;
+		if (Name == TEXT("Claw")) return ClawAction;
+		if (Name == TEXT("ToggleElement")) return ToggleElementAction;
+		if (Name == TEXT("Overcharge")) return OverchargeAction;
+		if (Name == TEXT("Interact")) return InteractAction;
+		return nullptr;
+	};
+	TArray<FGFMappedKey> Binds;
+	FGFDefaultInputKeys::CharacterKeys(Binds);
+	for (const FGFMappedKey& Bind : Binds)
+	{
+		UInputAction* Action = ActionFor(Bind.Action);
+		if (!Action)
+		{
+			continue;
+		}
+		const FKey Key = (Bind.Action == TEXT("ShoulderSwap")) ? DefaultShoulderSwapKey() : Bind.Key;
+		FEnhancedActionKeyMapping& M = MappingContext->MapKey(Action, Key);
+		if (Bind.bSwizzle)
+		{
+			Swizzle(M);
+		}
+		if (Bind.bNegate)
+		{
+			Negate(M);
+		}
+	}
 }
 
 void AGFCharacter::PawnClientRestart()
@@ -316,6 +343,7 @@ void AGFCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	EIC->BindAction(GrappleSwingAction, ETriggerEvent::Canceled, this, &AGFCharacter::OnGrappleSwingStopped);
 	EIC->BindAction(GrappleYankAction, ETriggerEvent::Started, this, &AGFCharacter::OnGrappleYank);
 	EIC->BindAction(ShoulderSwapAction, ETriggerEvent::Started, this, &AGFCharacter::OnShoulderSwap);
+	EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &AGFCharacter::OnInteractPressed);
 }
 
 void AGFCharacter::OnMove(const FInputActionValue& Value)
@@ -574,6 +602,136 @@ void AGFCharacter::OnHotbar(const FInputActionValue& Value)
 void AGFCharacter::OnShoulderSwap(const FInputActionValue&)
 {
 	PushAim(EGFAimEvent::ShoulderSwap);
+}
+
+namespace GFCharacterInteract
+{
+	float ReachCm()
+	{
+		const AGFTownsfolkDirector* Defaults = GetDefault<AGFTownsfolkDirector>();
+		if (Defaults && Defaults->InteractReach > 0.f)
+		{
+			return Defaults->InteractReach;
+		}
+		return FGFTownsfolkRules::InteractReachCm;
+	}
+}
+
+void AGFCharacter::OnInteractPressed(const FInputActionValue&)
+{
+	RequestInteract();
+}
+
+AActor* AGFCharacter::FindNearestInteractable() const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+	const float Reach = GFCharacterInteract::ReachCm();
+	const FVector From = GetActorLocation();
+	TArray<AActor*> Candidates;
+
+	TArray<FOverlapResult> Overlaps;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GFInteract), false, this);
+	FCollisionObjectQueryParams Objects;
+	Objects.AddObjectTypesToQuery(ECC_Pawn);
+	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
+	World->OverlapMultiByObjectType(Overlaps, From, FQuat::Identity, Objects, FCollisionShape::MakeSphere(Reach), Params);
+	for (const FOverlapResult& Hit : Overlaps)
+	{
+		if (AActor* Actor = Hit.GetActor())
+		{
+			Candidates.AddUnique(Actor);
+		}
+	}
+
+	const FVector Forward = GetActorForwardVector();
+	FHitResult Trace;
+	FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(GFInteractTrace), false, this);
+	if (World->LineTraceSingleByChannel(Trace, From, From + Forward * Reach, ECC_Visibility, TraceParams))
+	{
+		if (AActor* Actor = Trace.GetActor())
+		{
+			Candidates.AddUnique(Actor);
+		}
+	}
+
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* Actor = *It;
+		if (Actor && Actor != this && Actor->GetClass()->ImplementsInterface(UGFInteractable::StaticClass()))
+		{
+			Candidates.AddUnique(Actor);
+		}
+	}
+
+	AActor* Best = nullptr;
+	float BestDist = 0.f;
+	for (AActor* Actor : Candidates)
+	{
+		if (!Actor || Actor == this || !Actor->GetClass()->ImplementsInterface(UGFInteractable::StaticClass()))
+		{
+			continue;
+		}
+		if (!FGFTownsfolkRules::InReach(From, Actor->GetActorLocation(), Reach))
+		{
+			continue;
+		}
+		IGFInteractable* Interactable = Cast<IGFInteractable>(Actor);
+		if (!Interactable || !Interactable->CanInteract(const_cast<AGFCharacter*>(this)))
+		{
+			continue;
+		}
+		const float Dist = FVector::Dist(From, Actor->GetActorLocation());
+		if (!Best || Dist < BestDist)
+		{
+			Best = Actor;
+			BestDist = Dist;
+		}
+	}
+	return Best;
+}
+
+void AGFCharacter::RequestInteract()
+{
+	RequestInteractWith(FindNearestInteractable());
+}
+
+void AGFCharacter::RequestInteractWith(AActor* Target)
+{
+	if (!Target)
+	{
+		return;
+	}
+	if (HasAuthority())
+	{
+		ServerInteract_Implementation(Target);
+	}
+	else
+	{
+		ServerInteract(Target);
+	}
+}
+
+void AGFCharacter::ServerInteract_Implementation(AActor* Target)
+{
+	if (!Target || Target == this)
+	{
+		return;
+	}
+	if (!FGFTownsfolkRules::InReach(GetActorLocation(), Target->GetActorLocation(), GFCharacterInteract::ReachCm()))
+	{
+		return;
+	}
+	if (IGFInteractable* Interactable = Cast<IGFInteractable>(Target))
+	{
+		if (Interactable->CanInteract(this))
+		{
+			Interactable->Interact(this);
+		}
+	}
 }
 
 AGFVoxelWorld* AGFCharacter::FindVoxelWorld() const
