@@ -1,0 +1,14 @@
+# The Elder's Errand. One row per quest step (row name matches EGFQuestStep), then one row per town's skins.
+# TownId set means a skin row. Items on HuntHide are Hide and Scales. HuntSkins reads the joined town's row.
+---,Title,Hint,Goal,Items,RankOnComplete,TownId
+TakeCrystal,The Elder's Errand,Break 1 town crystal slot. Any town counts.,1,,Outsider,
+Escape,The Elder's Errand,Get clear of the hired dinos.,1,,Outsider,
+TalkToElder,The Elder's Errand,Talk to any elder and accept.,1,,Initiate,
+HuntHide,The Elder's Errand,"Hand the elder 6 Hide or Scales, in any mix.",6,"(""Hide"",""Scales"")",Member,
+HuntSkins,The Elder's Errand,Hand the elder 2 skins of your town's dinos.,2,,Champion,
+CraftLook,The Elder's Errand,"Craft 1 Atelier piece that uses Hide or Scales, and wear it.",1,,Champion,
+WinShow,The Elder's Errand,Enter a fashion show and place 1st at tier A or better.,1,,Leader,
+Done,The Elder's Errand,The errand is finished.,0,,Leader,
+Rime,Rime Elder,"Nipper, Raptor",2,"(""Skin_Nipper"",""Skin_Raptor"")",Outsider,Rime
+Verdant,Verdant Elder,"Tusksaw, Lanternmaw",2,"(""Skin_Tusksaw"",""Skin_Lanternmaw"")",Outsider,Verdant
+Cinderwrights,Cinderwrights Elder,"Scythepaw, Hornback",2,"(""Skin_Scythepaw"",""Skin_Hornback"")",Outsider,Cinderwrights

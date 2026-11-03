@@ -30,6 +30,9 @@ void AGFPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(AGFPlayerState, bIsHost);
 	DOREPLIFETIME(AGFPlayerState, ColorIndex);
 	DOREPLIFETIME(AGFPlayerState, FactionId);
+	DOREPLIFETIME(AGFPlayerState, QuestStep);
+	DOREPLIFETIME(AGFPlayerState, QuestCount);
+	DOREPLIFETIME(AGFPlayerState, FactionRank);
 	DOREPLIFETIME(AGFPlayerState, LastDrag);
 	DOREPLIFETIME(AGFPlayerState, HeldItem);
 	DOREPLIFETIME(AGFPlayerState, bCharacterReady);
@@ -354,6 +357,18 @@ void AGFPlayerState::MarkCharacterChanged()
 void AGFPlayerState::ClientLandResult_Implementation(int32 RequestId, EGFLandResult Result)
 {
 	LandResults.Add(RequestId, Result);
+}
+
+void AGFPlayerState::SetQuestReplicated(EGFQuestStep Step, int32 Count, EGFFactionRank Rank)
+{
+	if (!HasAuthority() || (QuestStep == Step && QuestCount == Count && FactionRank == Rank))
+	{
+		return;
+	}
+	QuestStep = Step;
+	QuestCount = Count;
+	FactionRank = Rank;
+	ForceNetUpdate();
 }
 
 void AGFPlayerState::SetCurrentZoneId(FName NewId)
