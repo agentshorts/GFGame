@@ -1,4 +1,5 @@
 #include "GFVillainSession.h"
+#include "GFElderBook.h"
 #include "GFInventoryComponent.h"
 #include "GFPlayerState.h"
 #include "Math/RandomStream.h"
@@ -126,6 +127,7 @@ FGFVillainHit FGFVillainSession::Resolve(AGFPlayerState& Attacker, AGFPlayerStat
 
 	VictimStatus.Health = FMath::Max(0.f, VictimStatus.Health - Landed.Damage);
 	FGFVillainRules::NoteHit(AttackerStatus, VictimStatus, Landed, Now);
+	bool bFainted = false;
 	if (VictimStatus.Health <= 0.f)
 	{
 		const FGFInventory Bag = Victim.Inventory ? Victim.Inventory->GetInventory() : FGFInventory();
@@ -139,8 +141,16 @@ FGFVillainHit FGFVillainSession::Resolve(AGFPlayerState& Attacker, AGFPlayerStat
 			Victim.VillainDropped.Add(Stack);
 		}
 		FGFVillainRules::NoteFaint(VictimStatus, AttackerStatus, Now);
+		bFainted = true;
 	}
 	Write(Attacker, AttackerStatus);
 	Write(Victim, VictimStatus);
+	if (bFainted)
+	{
+		if (UWorld* World = Attacker.GetWorld())
+		{
+			FGFElderBook::Post(World, FGFElderBook::MakeVillain(Attacker.VillainWinStreak, Attacker.PlayerKey, Attacker.FactionId, Now));
+		}
+	}
 	return Landed;
 }
