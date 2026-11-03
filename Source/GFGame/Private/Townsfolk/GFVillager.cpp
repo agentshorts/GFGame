@@ -66,6 +66,13 @@ void AGFVillager::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	DOREPLIFETIME(AGFVillager, TownsfolkRole);
 	DOREPLIFETIME(AGFVillager, Behavior);
 	DOREPLIFETIME(AGFVillager, ReachCm);
+	DOREPLIFETIME(AGFVillager, Shout);
+}
+
+FOnGFVillagerHire& AGFVillager::OnHireAsked()
+{
+	static FOnGFVillagerHire Delegate;
+	return Delegate;
 }
 
 FString AGFVillager::DisplayTitle() const
@@ -141,6 +148,26 @@ void AGFVillager::Interact(APawn* Pawn)
 	OnInteract.Broadcast(this, Pawn);
 }
 
+bool AGFVillager::BeginWarn(const FVector& Thief, const FVector& Elder)
+{
+	if (!HasAuthority())
+	{
+		return false;
+	}
+	if (!Mind.BeginWarn(Thief, Elder))
+	{
+		return false;
+	}
+	Behavior = Mind.State;
+	Shout = FGFTownsfolkRules::WarnShout();
+	const FVector Dir = (Thief - GetActorLocation()).GetSafeNormal2D();
+	if (!Dir.IsNearlyZero())
+	{
+		SetActorRotation(Dir.Rotation());
+	}
+	return true;
+}
+
 void AGFVillager::BeginPlay()
 {
 	Super::BeginPlay();
@@ -155,14 +182,34 @@ void AGFVillager::Tick(float DeltaSeconds)
 		return;
 	}
 	FVector Location = GetActorLocation();
-	Mind.Advance(DeltaSeconds, Rng, Location);
+	const EGFTownsfolkPulse Pulse = Mind.Advance(DeltaSeconds, Rng, Location);
 	if (!Location.Equals(GetActorLocation(), 0.1f))
 	{
 		SetActorLocation(Location);
 	}
+	if (Mind.State == EGFTownsfolkBehavior::Warn)
+	{
+		const FVector Dir = (Mind.FacePoint - GetActorLocation()).GetSafeNormal2D();
+		if (!Dir.IsNearlyZero())
+		{
+			SetActorRotation(Dir.Rotation());
+		}
+		if (Shout.IsEmpty())
+		{
+			Shout = FGFTownsfolkRules::WarnShout();
+		}
+	}
+	else if (!Shout.IsEmpty())
+	{
+		Shout.Reset();
+	}
 	if (Behavior != Mind.State)
 	{
 		Behavior = Mind.State;
+	}
+	if (Pulse == EGFTownsfolkPulse::AskHire && TownsfolkRole == EGFTownsfolkRole::Villager)
+	{
+		OnHireAsked().Broadcast(this);
 	}
 }
 

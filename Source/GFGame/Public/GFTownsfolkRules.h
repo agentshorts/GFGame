@@ -74,16 +74,23 @@ struct GFGAME_API FGFTownsfolkRules
 	/** Role title only. "Rime Elder", "Verdant Villager". No personal name. */
 	static FString DisplayName(FName TownId, EGFTownsfolkRole Role);
 
+	/** The shout a villager uses for the whole Warn. */
+	static const TCHAR* WarnShout();
+
 	/** L_World_Factions_A, including a PIE prefix on the map name. */
 	static bool IsFactionsWorld(const FString& MapOrPackage);
 };
 
 /**
- * Idle, wander, and talk. Advance moves Location and keeps it inside the town disc.
+ * Idle, wander, talk, warn, and flee. Advance moves Location and keeps it inside the town disc.
  * Talk returns to Idle. Talk does not go straight to Wander.
+ * Warn lasts WarnSeconds, then Flee. Flee asks for a hire on arrival or after FleeSeconds.
  */
 struct GFGAME_API FGFTownsfolkMind
 {
+	static constexpr float WarnSeconds = 3.f;
+	static constexpr float FleeSeconds = 10.f;
+
 	EGFTownsfolkBehavior State = EGFTownsfolkBehavior::Idle;
 	float TimeLeft = 0.f;
 	FVector Home = FVector::ZeroVector;
@@ -95,6 +102,10 @@ struct GFGAME_API FGFTownsfolkMind
 	float IdleMin = 4.f;
 	float IdleMax = 9.f;
 	FVector WanderTarget = FVector::ZeroVector;
+	/** Who to face while warning. */
+	FVector FacePoint = FVector::ZeroVector;
+	/** Where Flee walks. */
+	FVector ElderPoint = FVector::ZeroVector;
 
 	static bool CanTransition(EGFTownsfolkBehavior From, EGFTownsfolkBehavior To);
 	/** To when the move is allowed, otherwise From. */
@@ -103,7 +114,10 @@ struct GFGAME_API FGFTownsfolkMind
 	/** Enters Talk, or refreshes the timer when already talking. False when Talk is refused. */
 	bool BeginTalk(float Seconds);
 
-	void Advance(float DeltaSeconds, FRandomStream& Rng, FVector& Location);
+	/** Enters Warn. False when Warn is refused (already warning, fleeing, or an unknown state). */
+	bool BeginWarn(const FVector& Thief, const FVector& Elder);
+
+	EGFTownsfolkPulse Advance(float DeltaSeconds, FRandomStream& Rng, FVector& Location);
 
 	float PickIdleWait(FRandomStream& Rng) const;
 };
