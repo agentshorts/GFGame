@@ -28,6 +28,8 @@ enum class EGFOverworldEdit : uint8
 DECLARE_DELEGATE_RetVal_TwoParams(EGFOverworldEdit, FGFOverworldEditQuery, FName /*FactionId*/, const FVector& /*World*/);
 /** Server: ServerClaimFaction succeeded (FactionId None means they left). Social records jail claim order from this. */
 DECLARE_MULTICAST_DELEGATE_TwoParams(FGFOnFactionChanged, AGFPlayerState* /*Player*/, FName /*FactionId*/);
+/** Server: ServerSetFactionLeader accepted a new seat. PreviousKey is empty when the seat was empty. */
+DECLARE_MULTICAST_DELEGATE_FourParams(FGFOnFactionLeaderSet, FName /*FactionId*/, const FString& /*PlayerKey*/, const FString& /*PreviousKey*/, FName /*Reason*/);
 /** A player place or remove made it into the grid. Magic treats a non-empty BlockId as spell-proof. */
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FGFOnPlayerVoxelEdit, AGFPlayerState* /*By*/, FIntVector /*Cell*/, FName /*BlockId*/);
 /** A blueprint landed. Min and Max are both inclusive. */
@@ -221,7 +223,7 @@ public:
 	static const struct FGFRecipeRow* FindRecipe(FName RecipeId);
 
 	// ---------------- Factions (opaque ids; server) ----------------
-	/** Leader per faction: the first player to claim it this session. Replicated to everyone. */
+	/** Leader per faction. Replicated to everyone. Empty seats go to the first claimer. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Faction")
 	TArray<FGFFactionLeader> FactionLeaders;
 	/** Seats per faction (default 4; 0 = no cap). A world holds up to 10 players (GameSession MaxPlayers in
@@ -235,8 +237,22 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, Category = "GF|Faction")
 	FName StarterFaction;
-	/** Server: PS joins FactionId (None = leaves). "Ok", "Full", "Same". The first claimer becomes its leader. */
+	/** Server: PS joins FactionId (None = leaves). "Ok", "Full", "Same". An empty seat goes to the first claimer. */
 	FName ServerClaimFaction(AGFPlayerState* PS, FName FactionId);
+	/**
+	 * Server. Moves FactionId's seat to PlayerKey. Replicated with FactionLeaders.
+	 * Only a Champion of that faction is accepted. The first claimer rule is unchanged for an empty seat.
+	 * Reason is logged. LeaderReasonShowWin tells the quest listener to post ShowWin on the Elder Book.
+	 * "Ok", "Same", "NotChampion", "WrongFaction", "Missing", "NotAuthority".
+	 */
+	FName ServerSetFactionLeader(FName FactionId, const FString& PlayerKey, FName Reason);
+	/**
+	 * Server. Puts seats and session factions back after a map trip.
+	 * Players do not have to be online. This does not post to the Elder Book.
+	 */
+	void ServerRestoreFactionTravel(const TArray<FGFFactionLeader>& Leaders, const TMap<FString, FName>& Sessions);
+	/** Logged as Reason when a show win moves the seat. */
+	static const FName LeaderReasonShowWin;
 	FString FactionLeaderOf(FName FactionId) const;
 	bool IsFactionLeader(const AGFPlayerState* PS) const;
 	int32 FactionCount(FName FactionId) const;
@@ -244,6 +260,8 @@ public:
 	TMap<FString, FName> SessionFactions;
 	/** Server only. Fired after a successful claim, including leaving (None). */
 	FGFOnFactionChanged OnFactionChanged;
+	/** Server only. Fired after ServerSetFactionLeader changes a seat. */
+	FGFOnFactionLeaderSet OnFactionLeaderSet;
 	/** Server only. A player edit landed. Magic listens so built cells stay spell-proof. */
 	FGFOnPlayerVoxelEdit OnPlayerVoxelEdit;
 	/** Server only. ApplyBlueprint wrote a region. */

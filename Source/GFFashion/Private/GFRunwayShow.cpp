@@ -8,6 +8,7 @@ bool FGFRunwayShow::Start(const FGuid& InShowId, FName InThemeId, int32 InSeed, 
 	{
 		return false;
 	}
+	// One contestant is a full show. An empty list is not.
 	if (!FGFFashionCatalog::FindTheme(InThemeId) || PlayerKeys.Num() == 0 || !InShowId.IsValid())
 	{
 		return false;

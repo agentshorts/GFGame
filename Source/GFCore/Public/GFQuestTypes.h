@@ -21,7 +21,7 @@ enum class EGFQuestStep : uint8
 	Done
 };
 
-/** Faction standing. Leader is recorded when the show is won. The seat change is a later step. */
+/** Faction standing. Leader is recorded when the show is won. The seat moves through ServerSetFactionLeader. */
 UENUM(BlueprintType)
 enum class EGFFactionRank : uint8
 {

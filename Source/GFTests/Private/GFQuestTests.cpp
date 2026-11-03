@@ -829,7 +829,8 @@ bool FGFQuestSaveRoundTripTest::RunTest(const FString&)
 	TestEqual(TEXT("Note names B"), LeaderKey, FString(TEXT("B")));
 	TestEqual(TEXT("Note names Verdant"), LeaderFaction, Verdant);
 	TestTrue(TEXT("B rank Leader"), B->FactionRank == EGFFactionRank::Leader);
-	TestEqual(TEXT("Seat stays with C"), World.GS->FactionLeaderOf(Verdant), FString(TEXT("C")));
+	// B is a Champion of Verdant and placed first at tier A, so the seat moves off the first claimer.
+	TestEqual(TEXT("B takes the Verdant seat"), World.GS->FactionLeaderOf(Verdant), FString(TEXT("B")));
 	TestTrue(TEXT("A still on skins"), A->QuestStep == EGFQuestStep::HuntSkins);
 	TestTrue(TEXT("A still a member"), A->FactionRank == EGFFactionRank::Member);
 	TestTrue(TEXT("C quest untouched"), C->QuestStep == EGFQuestStep::TakeCrystal);

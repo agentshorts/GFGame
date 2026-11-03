@@ -2,7 +2,10 @@
 #include "GFGameState.h"
 #include "GFPlayerState.h"
 #include "GFInventoryComponent.h"
+#include "GFFashionQuestTravel.h"
+#include "GFElderBook.h"
 #include "GFLog.h"
+#include "Engine/GameInstance.h"
 #include "Engine/World.h"
 
 const FName UGFQuestSubsystem::ModeName(TEXT("Quest"));
@@ -26,9 +29,14 @@ void UGFQuestSubsystem::Deinitialize()
 	{
 		if (AGFGameState* GS = World->GetGameState<AGFGameState>())
 		{
+			if (LeaderHandle.IsValid())
+			{
+				GS->OnFactionLeaderSet.Remove(LeaderHandle);
+			}
 			GS->UnregisterModeHandler(this);
 		}
 	}
+	LeaderHandle.Reset();
 	if (EventHandle.IsValid())
 	{
 		FGFQuestEvents::OnRaised().Remove(EventHandle);
@@ -51,11 +59,22 @@ void UGFQuestSubsystem::EnsureRegistered()
 	{
 		return;
 	}
-	if (GS->FindModeHandler(ModeName) == static_cast<IGFModeHandler*>(this))
+	if (GS->FindModeHandler(ModeName) != static_cast<IGFModeHandler*>(this))
 	{
-		return;
+		GS->RegisterModeHandler(this);
 	}
-	GS->RegisterModeHandler(this);
+	if (!LeaderHandle.IsValid())
+	{
+		LeaderHandle = GS->OnFactionLeaderSet.AddUObject(this, &UGFQuestSubsystem::OnFactionLeaderSet);
+	}
+	if (UGameInstance* GI = World->GetGameInstance())
+	{
+		if (UGFFashionQuestTravel* Travel = GI->GetSubsystem<UGFFashionQuestTravel>())
+		{
+			Travel->TryBind();
+			Travel->RestoreHere(World);
+		}
+	}
 }
 
 FGFModeResult UGFQuestSubsystem::HandleModeRequest(AGFPlayerState* By, const FGFModeRequest& Request)
@@ -237,6 +256,15 @@ FGFQuestApplyResult UGFQuestSubsystem::ApplyEvent(const FGFQuestEvent& Event)
 		}
 		return Result;
 	}
+	if (Result.bBecameLeader && GS)
+	{
+		// Rank on the player is still Champion. PushPlayer below stores Leader.
+		const FName Code = GS->ServerSetFactionLeader(Line.Progress.FactionId, Event.PlayerKey, AGFGameState::LeaderReasonShowWin);
+		if (Code != FName(TEXT("Ok")) && Code != FName(TEXT("Same")))
+		{
+			UE_LOG(LogGF, Log, TEXT("Quest: %s won the show but did not take %s (%s)."), *Event.PlayerKey, *Line.Progress.FactionId.ToString(), *Code.ToString());
+		}
+	}
 	if (PS)
 	{
 		PushPlayer(PS);
@@ -246,4 +274,26 @@ FGFQuestApplyResult UGFQuestSubsystem::ApplyEvent(const FGFQuestEvent& Event)
 		OnQuestLeader.Broadcast(Event.PlayerKey, Line.Progress.FactionId);
 	}
 	return Result;
+}
+
+void UGFQuestSubsystem::OnFactionLeaderSet(FName FactionId, const FString& PlayerKey, const FString& PreviousKey, FName Reason)
+{
+	(void)PreviousKey;
+	if (Reason != AGFGameState::LeaderReasonShowWin)
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	if (!World || World->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	const AGFGameState* GS = World->GetGameState<AGFGameState>();
+	const AGFPlayerState* PS = GS ? GS->FindPlayerByKey(PlayerKey) : nullptr;
+	const FString Name = PS ? PS->GetPlayerName() : FString();
+	const bool bPosted = FGFElderBook::Post(World, FGFElderBook::TownChannel(FactionId), EGFElderKind::ShowWin, Name, PlayerKey, FactionId, World->GetTimeSeconds());
+	if (!bPosted)
+	{
+		UE_LOG(LogGF, Log, TEXT("Quest: show win for %s did not reach the Elder Book."), *PlayerKey);
+	}
 }

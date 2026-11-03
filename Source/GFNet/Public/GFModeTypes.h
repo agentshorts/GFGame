@@ -66,8 +66,9 @@ struct GFNET_API FGFModeBlob
 };
 
 /**
- * Factions are opaque ids (FName) in code; names, colours and lore live in data and art. A faction's leader is the
- * first player to claim it this session (GFSocial's jail permissions read this).
+ * Factions are opaque ids (FName) in code; names, colours and lore live in data and art. An empty seat goes to the
+ * first player to claim it this session. ServerSetFactionLeader moves a seat that is already taken.
+ * GFSocial's jail permissions read the current seat.
  */
 USTRUCT(BlueprintType)
 struct GFNET_API FGFFactionLeader

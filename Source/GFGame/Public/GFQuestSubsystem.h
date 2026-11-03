@@ -41,12 +41,14 @@ public:
 	const FGFQuestCatalog& GetCatalog() const { return Catalog; }
 
 	/**
-	 * Rank Leader was recorded for this player. The faction leader seat is not moved here.
+	 * Rank Leader was recorded for this player.
+	 * ServerSetFactionLeader has already run for this win. A player who is not a Champion of the faction does not take the seat.
 	 */
 	FGFOnQuestLeader OnQuestLeader;
 
 private:
 	void OnQuestEvent(UWorld* World, const FGFQuestEvent& Event);
+	void OnFactionLeaderSet(FName FactionId, const FString& PlayerKey, const FString& PreviousKey, FName Reason);
 	FGFQuestLine& LineFor(const FString& PlayerKey);
 	void PushPlayer(AGFPlayerState* PS) const;
 	void PushAllPlayers() const;
@@ -54,4 +56,5 @@ private:
 	FGFQuestCatalog Catalog;
 	TMap<FString, FGFQuestLine> Lines;
 	FDelegateHandle EventHandle;
+	FDelegateHandle LeaderHandle;
 };

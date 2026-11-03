@@ -1,5 +1,7 @@
 #include "GFRunwaySite.h"
 
+#include "GFFashionGateSubsystem.h"
+#include "GFFashionQuest.h"
 #include "GFFashionTypes.h"
 #include "GFInventoryComponent.h"
 #include "GFLog.h"
@@ -7,8 +9,10 @@
 #include "GFWardrobe.h"
 #include "GFMiniGameCatalog.h"
 #include "GFPlayerState.h"
+#include "GFQuestLine.h"
 #include "GFRunwayJudge.h"
 #include "GFRunwayStage.h"
+#include "Engine/GameInstance.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
@@ -670,6 +674,11 @@ bool AGFRunwaySite::TryEquipPiece(APawn* Pawn, FName PieceId)
 		LastPrompt = TEXT("Piece: refused");
 		return false;
 	}
+	const FName WornId = FGFFashionQuest::WornEventItem(true, PieceId);
+	if (!WornId.IsNone() && !PS->PlayerKey.IsEmpty())
+	{
+		FGFQuestEvents::Raise(GetWorld(), FGFQuestEvents::OutfitWorn(PS->PlayerKey, WornId));
+	}
 	AGFRunwayStage* Stage = AGFRunwayStage::Find(GetWorld());
 	if (Stage && Stage->GetPhase() == EGFRunwayPhase::Dressing)
 	{
@@ -835,6 +844,13 @@ void AGFRunwaySite::TravelToHub()
 		return;
 	}
 	UWorld* World = GetWorld();
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UGFFashionGateSubsystem* Gate = GI->GetSubsystem<UGFFashionGateSubsystem>())
+		{
+			Gate->NotifyMapTravel(World);
+		}
+	}
 	if (!World || !World->IsGameWorld())
 	{
 		return;
