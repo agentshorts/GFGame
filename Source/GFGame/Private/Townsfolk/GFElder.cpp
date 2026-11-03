@@ -2,5 +2,5 @@
 
 AGFElder::AGFElder()
 {
-	Role = EGFTownsfolkRole::Elder;
+	TownsfolkRole = EGFTownsfolkRole::Elder;
 }

@@ -27,7 +27,7 @@ namespace
 		TWeakObjectPtr<AGFDino> Dino;
 	};
 
-	void ClearWildDinos(UWorld* World)
+	void ClearKillTestDinos(UWorld* World)
 	{
 		if (!World)
 		{
@@ -84,7 +84,7 @@ bool FGFNetDinoKillDropTest::RunTest(const FString&)
 			return;
 		}
 		Run->KillerKey = Killer->PlayerKey;
-		ClearWildDinos(Server);
+		ClearKillTestDinos(Server);
 		const APawn* Pawn = Killer->GetPawn();
 		const FVector At = Pawn ? Pawn->GetActorLocation() + FVector(180.f, 0.f, 0.f) : FVector(400.f, 0.f, 200.f);
 		FActorSpawnParameters Params;

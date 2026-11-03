@@ -7,6 +7,7 @@
 #include "GFDataTables.h"
 #include "GFEconomy.h"
 #include "GFRewards.h"
+#include "GFTamingComponent.h"
 #include "GFWildDinoDirector.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -365,7 +366,7 @@ bool FGFDinoKillRespawnTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	const int32 FirstId = First->GetUniqueID();
+	const int32 FirstId = static_cast<int32>(First->GetUniqueID());
 	TestEqual(TEXT("It is a Raptor"), First->Taming->Species, FName(TEXT("Raptor")));
 	TestEqual(TEXT("It starts alive"), static_cast<int32>(First->GetLife()), static_cast<int32>(EGFDinoLife::Alive));
 	if (UCharacterMovementComponent* Move = First->GetCharacterMovement())
@@ -391,7 +392,7 @@ bool FGFDinoKillRespawnTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	TestNotEqual(TEXT("The replacement is a new body"), Next->GetUniqueID(), FirstId);
+	TestNotEqual(TEXT("The replacement is a new body"), static_cast<int32>(Next->GetUniqueID()), FirstId);
 	TestEqual(TEXT("The replacement is the same species"), Next->Taming->Species, FName(TEXT("Raptor")));
 	TestEqual(TEXT("The replacement is alive"), static_cast<int32>(Next->GetLife()), static_cast<int32>(EGFDinoLife::Alive));
 	TestEqual(TEXT("The replacement has a full pool"), Next->GetHitPoints(), AGFDino::HitPointsFor(TEXT("Raptor")));

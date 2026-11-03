@@ -63,20 +63,20 @@ void AGFVillager::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AGFVillager, TownId);
-	DOREPLIFETIME(AGFVillager, Role);
+	DOREPLIFETIME(AGFVillager, TownsfolkRole);
 	DOREPLIFETIME(AGFVillager, Behavior);
 	DOREPLIFETIME(AGFVillager, ReachCm);
 }
 
 FString AGFVillager::DisplayTitle() const
 {
-	return FGFTownsfolkRules::DisplayName(TownId, Role);
+	return FGFTownsfolkRules::DisplayName(TownId, TownsfolkRole);
 }
 
 void AGFVillager::InitTownsfolk(const FGFTownsfolkSpawnParams& Params)
 {
 	TownId = Params.TownId;
-	Role = Params.Role;
+	TownsfolkRole = Params.Role;
 	ReachCm = Params.Reach > 0.f ? Params.Reach : FGFTownsfolkRules::InteractReachCm;
 	TalkSeconds = FMath::Max(0.f, Params.TalkSeconds);
 	Mind.Home = GetActorLocation();
@@ -182,7 +182,7 @@ void AGFVillager::ApplyVisuals()
 		{
 			Body->SetStaticMesh(Mesh);
 		}
-		const bool bElder = Role == EGFTownsfolkRole::Elder;
+		const bool bElder = TownsfolkRole == EGFTownsfolkRole::Elder;
 		const float Width = bElder ? 0.62f : 0.5f;
 		const float Height = bElder ? 1.7f : 1.35f;
 		Body->SetRelativeScale3D(FVector(Width, Width, Height));
@@ -191,8 +191,8 @@ void AGFVillager::ApplyVisuals()
 	}
 	if (SimpleAnim)
 	{
-		const FName IdleKey = GFVillagerPrivate::AnimKey(Role, TEXT("Idle"));
-		const FName MoveKey = GFVillagerPrivate::AnimKey(Role, TEXT("Move"));
+		const FName IdleKey = GFVillagerPrivate::AnimKey(TownsfolkRole, TEXT("Idle"));
+		const FName MoveKey = GFVillagerPrivate::AnimKey(TownsfolkRole, TEXT("Move"));
 		if (FGFAnimMap::Find(IdleKey))
 		{
 			SimpleAnim->SetAnims(IdleKey, FGFAnimMap::Find(MoveKey) ? MoveKey : NAME_None);
@@ -206,7 +206,7 @@ void AGFVillager::PlayTalkClip()
 	{
 		return;
 	}
-	const FName Key = GFVillagerPrivate::AnimKey(Role, TEXT("Talk"));
+	const FName Key = GFVillagerPrivate::AnimKey(TownsfolkRole, TEXT("Talk"));
 	if (!FGFAnimMap::Find(Key))
 	{
 		return;

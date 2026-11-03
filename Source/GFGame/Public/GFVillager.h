@@ -28,7 +28,7 @@ public:
 	FName TownId;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Townsfolk")
-	EGFTownsfolkRole Role = EGFTownsfolkRole::Villager;
+	EGFTownsfolkRole TownsfolkRole = EGFTownsfolkRole::Villager;
 
 	UPROPERTY(ReplicatedUsing = OnRep_Behavior, BlueprintReadOnly, Category = "GF|Townsfolk")
 	EGFTownsfolkBehavior Behavior = EGFTownsfolkBehavior::Idle;
