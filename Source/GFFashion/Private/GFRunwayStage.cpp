@@ -1,7 +1,9 @@
 #include "GFRunwayStage.h"
 #include "GFRunwaySite.h"
+#include "GFFashionQuest.h"
 #include "GFGameState.h"
 #include "GFPlayerState.h"
+#include "GFQuestLine.h"
 #include "GFWardrobe.h"
 #include "GFLog.h"
 #include "Engine/World.h"
@@ -14,6 +16,29 @@ namespace GFRunwayStage
 	static bool Paid(EGFTxResult R)
 	{
 		return R == EGFTxResult::Applied || R == EGFTxResult::AlreadyApplied;
+	}
+
+	static void RaiseForContestants(UWorld* World, const FGFRunwayShow& Show, bool bPlaced)
+	{
+		if (!World)
+		{
+			return;
+		}
+		for (const FGFRunwayContestant& Contestant : Show.GetContestants())
+		{
+			if (Contestant.PlayerKey.IsEmpty())
+			{
+				continue;
+			}
+			if (bPlaced)
+			{
+				FGFQuestEvents::Raise(World, FGFQuestEvents::ShowPlaced(Contestant.PlayerKey, Contestant.Rank, FGFFashionQuest::TierValue(Contestant.Score.Tier)));
+			}
+			else
+			{
+				FGFQuestEvents::Raise(World, FGFQuestEvents::ShowEntered(Contestant.PlayerKey));
+			}
+		}
 	}
 }
 
@@ -273,6 +298,7 @@ EGFRunwayRequestResult AGFRunwayStage::StartShowFor(FName ThemeId, const TArray<
 		}
 	}
 	bPaid = false;
+	GFRunwayStage::RaiseForContestants(GetWorld(), Show, false);
 	SyncState();
 	return EGFRunwayRequestResult::Ok;
 }
@@ -420,6 +446,8 @@ void AGFRunwayStage::Step(float DeltaSeconds)
 void AGFRunwayStage::PayOut()
 {
 	bPaid = true;
+	// Results are up, including a show with one contestant. Rank and tier go to the quest once.
+	GFRunwayStage::RaiseForContestants(GetWorld(), Show, true);
 	for (const FGFRunwayContestant& C : Show.GetContestants())
 	{
 		Looks.FindOrAdd(C.PlayerKey).Add(C.Outfit);

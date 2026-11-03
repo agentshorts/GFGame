@@ -1,8 +1,10 @@
 #include "GFAtelierStation.h"
 
 #include "GFDataTables.h"
+#include "GFFashionQuest.h"
 #include "GFInventoryComponent.h"
 #include "GFPlayerState.h"
+#include "GFQuestLine.h"
 #include "GFRecipeTypes.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -222,7 +224,22 @@ EGFCraftResult AGFAtelierStation::TryCraft(APawn* Pawn, FName RecipeId)
 		return Note(EGFCraftResult::UnknownRecipe);
 	}
 	// Station is this bench. A Lab Bench or Cookpot row comes back WrongStation and spends nothing.
-	return Note(Crafting->Craft(RecipeId, StationId, Inventory));
+	const EGFCraftResult Result = Crafting->Craft(RecipeId, StationId, Inventory);
+	if (Result == EGFCraftResult::Crafted)
+	{
+		const FGFRecipeRow* Recipe = Crafting->RecipeTable ? Crafting->RecipeTable->FindRow<FGFRecipeRow>(RecipeId, TEXT("AtelierQuest"), false) : nullptr;
+		const TArray<FGFItemStack> NoInputs;
+		const FName Item = FGFFashionQuest::CraftEventItem(
+			true,
+			StationId,
+			Recipe ? Recipe->Inputs : NoInputs,
+			Recipe ? Recipe->Output.ItemId : NAME_None);
+		if (!Item.IsNone() && !PS->PlayerKey.IsEmpty())
+		{
+			FGFQuestEvents::Raise(GetWorld(), FGFQuestEvents::OutfitCrafted(PS->PlayerKey, Item));
+		}
+	}
+	return Note(Result);
 }
 
 void AGFAtelierStation::PollBench()

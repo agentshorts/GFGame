@@ -1,4 +1,5 @@
 #include "GFGameState.h"
+#include "GFFactionLead.h"
 #include "GFRecipeTypes.h"
 #include "GFDataTables.h"
 #include "GFPlayerState.h"
@@ -418,7 +419,8 @@ FName AGFGameState::ServerClaimFaction(AGFPlayerState* PS, FName FactionId)
 	{
 		SessionFactions.Add(PS->PlayerKey, FactionId);
 	}
-	// Leadership stays with the first claimer for the whole session (even if they switch away or log out).
+	// An empty seat goes to the first claimer and stays with them if they leave.
+	// ServerSetFactionLeader is what moves a seat that is already taken.
 	if (!FactionId.IsNone() && FactionLeaderOf(FactionId).IsEmpty())
 	{
 		FGFFactionLeader L;
@@ -429,6 +431,74 @@ FName AGFGameState::ServerClaimFaction(AGFPlayerState* PS, FName FactionId)
 	ForceNetUpdate();
 	OnFactionChanged.Broadcast(PS, FactionId);
 	return TEXT("Ok");
+}
+
+const FName AGFGameState::LeaderReasonShowWin(TEXT("ShowWin"));
+
+FName AGFGameState::ServerSetFactionLeader(FName FactionId, const FString& PlayerKey, FName Reason)
+{
+	if (!HasAuthority())
+	{
+		return TEXT("NotAuthority");
+	}
+	const AGFPlayerState* PS = FindPlayerByKey(PlayerKey);
+	const FString Current = FactionLeaderOf(FactionId);
+	const FGFFactionLead::EResult Decision = FGFFactionLead::Decide(
+		PS != nullptr,
+		PS ? PS->FactionRank : EGFFactionRank::Outsider,
+		PS ? PS->FactionId : NAME_None,
+		FactionId,
+		PlayerKey,
+		Current);
+	if (Decision != FGFFactionLead::EResult::Ok)
+	{
+		return FGFFactionLead::Code(Decision);
+	}
+	FGFFactionLeader* Seat = FactionLeaders.FindByPredicate([&](const FGFFactionLeader& Row) { return Row.FactionId == FactionId; });
+	if (Seat)
+	{
+		Seat->LeaderKey = PlayerKey;
+	}
+	else
+	{
+		FGFFactionLeader Row;
+		Row.FactionId = FactionId;
+		Row.LeaderKey = PlayerKey;
+		FactionLeaders.Add(Row);
+	}
+	ForceNetUpdate();
+	const TCHAR* Was = Current.IsEmpty() ? TEXT("nobody") : *Current;
+	UE_LOG(LogGF, Log, TEXT("Faction: %s leads %s (%s), was %s."), *PlayerKey, *FactionId.ToString(), *Reason.ToString(), Was);
+	OnFactionLeaderSet.Broadcast(FactionId, PlayerKey, Current, Reason);
+	return FGFFactionLead::Code(Decision);
+}
+
+void AGFGameState::ServerRestoreFactionTravel(const TArray<FGFFactionLeader>& InLeaders, const TMap<FString, FName>& InSessions)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	TArray<FGFFactionLeader> Next;
+	for (const FGFFactionLeader& Row : InLeaders)
+	{
+		if (Row.FactionId.IsNone() || Row.LeaderKey.IsEmpty())
+		{
+			continue;
+		}
+		if (FGFFactionLeader* Existing = Next.FindByPredicate([&](const FGFFactionLeader& Held) { return Held.FactionId == Row.FactionId; }))
+		{
+			Existing->LeaderKey = Row.LeaderKey;
+		}
+		else
+		{
+			Next.Add(Row);
+		}
+	}
+	FactionLeaders = MoveTemp(Next);
+	SessionFactions = InSessions;
+	ForceNetUpdate();
+	UE_LOG(LogGF, Log, TEXT("Faction: restored %d leader seats and %d session factions."), FactionLeaders.Num(), SessionFactions.Num());
 }
 
 // --- Chat ---
