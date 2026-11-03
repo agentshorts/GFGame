@@ -36,3 +36,4 @@ FossilJacket,"Fossil Jacket",Top,FossilFormal,Rare,Elegant|Dino,"0.35,0.28,0.22"
 FossilTrousers,"Fossil Trousers",Bottom,FossilFormal,Uncommon,Elegant|Dino,"0.25,0.22,0.20",True,0,False,"Craft: 6 Clay + 2 Coalnut",Craft,None,Clay:6|Coalnut:2
 FossilHeels,"Fossil Heels",Feet,FossilFormal,Uncommon,Elegant|Dino,"0.55,0.45,0.32",True,0,False,"Craft: 4 Clay + 1 Crystal",Craft,None,Clay:4|Crystal:1
 FossilBrooch,"Fossil Brooch",Accessory,FossilFormal,Rare,Elegant|Dino,"0.80,0.70,0.40",True,0,False,"Craft: 2 Crystal + 2 Coalnut",Craft,None,Crystal:2|Coalnut:2
+dirtachi_01,"Double-D Mud Loafers",Feet,Dirtachi,Common,Practical,"0.40,0.28,0.16",True,0,False,"Sewn at the Atelier.",Craft,None,Scales:3|Clay:2|Crystal:1

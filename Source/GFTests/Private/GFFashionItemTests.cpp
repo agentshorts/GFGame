@@ -161,7 +161,16 @@ bool FGFFashionItemRowsTest::RunTest(const FString&)
 		}
 	});
 	// Six Skin_* rows are new non-brand materials, so this count is 6 above the previous table.
-	TestEqual(TEXT("The rows that were already in DT_Items are still there"), Other, 88 + FGFFashionCatalog::Pieces().Num());
+	// A brand outfit that is also a wardrobe piece is already inside FashionIds, so it is not part of Other.
+	int32 CatalogOutsideBrands = 0;
+	for (const FGFFashionPiece& Piece : FGFFashionCatalog::Pieces())
+	{
+		if (!FashionIds.Contains(Piece.Id))
+		{
+			++CatalogOutsideBrands;
+		}
+	}
+	TestEqual(TEXT("The rows that were already in DT_Items are still there"), Other, 88 + CatalogOutsideBrands);
 
 	const FGFItemRow* Coat = Items->FindRow<FGFItemRow>(TEXT("LabCoat"), TEXT("FashionItems"), false);
 	const FGFItemRow* Goggles = Items->FindRow<FGFItemRow>(TEXT("SafetyGoggles"), TEXT("FashionItems"), false);
