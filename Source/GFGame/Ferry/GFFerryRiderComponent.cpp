@@ -15,9 +15,6 @@
 
 namespace GFFerryRiderPrivate
 {
-	// Longer than a trip. EndSeat releases it. A looping sit is not left alone by UGFSimpleAnimComponent.
-	constexpr float SeatHoldSeconds = 1.0e6f;
-
 	float CapsuleHalfHeight(const APawn* Rider)
 	{
 		const ACharacter* Character = Cast<ACharacter>(Rider);
@@ -257,20 +254,26 @@ void UGFFerryRiderComponent::ApplySeatPose()
 	{
 		if (Simple)
 		{
-			// PauseFor(0) does nothing. A tiny hold expires on the next tick and locomotion starts again.
-			Simple->PauseFor(KINDA_SMALL_NUMBER);
+			// Standing up: whoever is below the seat (fist scope, emote, Beat Hop or locomotion) gets the mesh back.
+			Simple->ReleaseClaim(EGFAnimOwner::FerrySeat);
 		}
 		return;
 	}
 
 	USkeletalMeshComponent* Mesh = Character->GetMesh();
-	if (UAnimSequenceBase* Clip = Mesh ? FGFAnimMap::Load(SeatAnim) : nullptr)
+	UAnimSequenceBase* Clip = Mesh ? FGFAnimMap::Load(SeatAnim) : nullptr;
+	if (Simple)
+	{
+		// Top of the owner stack, held until EndSeat. Emotes and fist scope can't replace the sit.
+		if (Clip)
+		{
+			Simple->ClaimClip(EGFAnimOwner::FerrySeat, SeatAnim, true);
+		}
+		return;
+	}
+	if (Clip)
 	{
 		Mesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 		Mesh->PlayAnimation(Clip, true);
-	}
-	if (Simple)
-	{
-		Simple->PauseFor(GFFerryRiderPrivate::SeatHoldSeconds);
 	}
 }

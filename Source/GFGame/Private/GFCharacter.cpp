@@ -1135,18 +1135,12 @@ void AGFCharacter::UpdateFistPose()
 		return;
 	}
 	bFistPose = AimState.bFistScope;
-	USkeletalMeshComponent* MeshComp = GetMesh();
 	if (bFistPose)
 	{
-		if (UAnimSequenceBase* Clip = FGFAnimMap::Load(GFAim::FistScopeAnim()))
+		// Held until unscoped. A ferry seat above it keeps the sit; an emote below it waits (or expires) underneath.
+		if (FGFAnimMap::Load(GFAim::FistScopeAnim()))
 		{
-			if (MeshComp)
-			{
-				MeshComp->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-				MeshComp->PlayAnimation(Clip, true);
-				MeshComp->SetPlayRate(1.f);
-			}
-			SimpleAnim->PauseFor(10000.f);
+			SimpleAnim->ClaimClip(EGFAnimOwner::FistScope, GFAim::FistScopeAnim(), true);
 			bFistClipHeld = true;
 		}
 		return;
@@ -1154,7 +1148,7 @@ void AGFCharacter::UpdateFistPose()
 	if (bFistClipHeld)
 	{
 		bFistClipHeld = false;
-		SimpleAnim->PauseFor(0.01f);
+		SimpleAnim->ReleaseClaim(EGFAnimOwner::FistScope);
 	}
 }
 

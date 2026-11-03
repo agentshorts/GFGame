@@ -10,19 +10,97 @@ UGFSimpleAnimComponent::UGFSimpleAnimComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = true;
-	// After gameplay events (an emote played earlier this frame) so PauseFor is already set.
+	// After gameplay events (an emote claimed earlier this frame) so expiries and restores land the same frame.
 	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
 }
 
-void UGFSimpleAnimComponent::PauseFor(float Seconds)
+void UGFSimpleAnimComponent::ClaimClip(EGFAnimOwner Owner, FName Key, bool bLoop, float Seconds, float PlayRate)
 {
-	if (Seconds <= 0.f)
+	if (Claims.Claim(Owner, Key, bLoop, Seconds, PlayRate))
+	{
+		ApplyTopClaim();
+	}
+}
+
+void UGFSimpleAnimComponent::ReleaseClaim(EGFAnimOwner Owner)
+{
+	const bool bWasTop = Claims.TopOwner() == Owner;
+	if (Claims.Release(Owner) && bWasTop)
+	{
+		ApplyTopClaim();
+	}
+}
+
+bool UGFSimpleAnimComponent::RenewClaim(EGFAnimOwner Owner, float Seconds)
+{
+	return Claims.Renew(Owner, Seconds);
+}
+
+void UGFSimpleAnimComponent::SetClaimPlayRate(EGFAnimOwner Owner, float PlayRate)
+{
+	if (!Claims.SetPlayRate(Owner, PlayRate) || Claims.TopOwner() != Owner)
 	{
 		return;
 	}
-	PauseRemaining = Seconds;
-	// The one-shot replaced the clip. Forget the locomotion key so it restarts when the pause ends.
+	if (USkeletalMeshComponent* Mesh = FindArtMesh())
+	{
+		if (AppliedSerial != 0 && !FMath::IsNearlyEqual(Mesh->GetPlayRate(), PlayRate, 0.01f))
+		{
+			Mesh->SetPlayRate(PlayRate);
+		}
+	}
+}
+
+FName UGFSimpleAnimComponent::GetTopKey() const
+{
+	const FGFAnimClaim* Top = Claims.Top();
+	return Top ? Top->Key : NAME_None;
+}
+
+void UGFSimpleAnimComponent::ApplyTopClaim()
+{
+	const FGFAnimClaim* Top = Claims.Top();
+	if (!Top)
+	{
+		if (AppliedSerial != 0)
+		{
+			// Back to locomotion: forget the key so idle or move starts again even if the speed didn't change.
+			AppliedSerial = 0;
+			CurrentKey = NAME_None;
+		}
+		return;
+	}
+	if (Top->Serial == AppliedSerial)
+	{
+		return;
+	}
+	if (const UWorld* World = GetWorld())
+	{
+		if (World->GetNetMode() == NM_DedicatedServer)
+		{
+			return;
+		}
+	}
+	USkeletalMeshComponent* Mesh = FindArtMesh();
+	if (!Mesh)
+	{
+		return; // tried again on the next tick
+	}
+	AppliedSerial = Top->Serial;
 	CurrentKey = NAME_None;
+	UAnimSequenceBase* Clip = FGFAnimMap::Load(Top->Key);
+	if (!Clip)
+	{
+		if (!MissingClips.Contains(Top->Key))
+		{
+			MissingClips.Add(Top->Key);
+			UE_LOG(LogGF, Warning, TEXT("GFSimpleAnim: no clip for %s"), *Top->Key.ToString());
+		}
+		return;
+	}
+	Mesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+	Mesh->PlayAnimation(Clip, Top->bLoop);
+	Mesh->SetPlayRate(Top->PlayRate);
 }
 
 void UGFSimpleAnimComponent::SetAnims(FName InIdle, FName InMove)
@@ -67,6 +145,8 @@ USkeletalMeshComponent* UGFSimpleAnimComponent::FindArtMesh() const
 void UGFSimpleAnimComponent::TickComponent(float DeltaSeconds, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaSeconds, TickType, ThisTickFunction);
+	// Timed claims run out on servers too, so nothing piles up there.
+	Claims.Tick(DeltaSeconds);
 	AActor* Owner = GetOwner();
 	if (!Owner)
 	{
@@ -95,21 +175,21 @@ void UGFSimpleAnimComponent::TickComponent(float DeltaSeconds, ELevelTick TickTy
 	LastLocation = Now;
 	bHasLastLocation = true;
 
-	if (PauseRemaining > 0.f)
+	if (Claims.Top())
 	{
-		PauseRemaining = FMath::Max(0.f, PauseRemaining - DeltaSeconds);
-		if (PauseRemaining > 0.f)
-		{
-			return;
-		}
+		// Someone above locomotion owns the mesh. Plays it if it's new (a restore after a release, or a claim that
+		// arrived before the mesh had an asset).
+		ApplyTopClaim();
+		return;
 	}
+	ApplyTopClaim();
 
 	USkeletalMeshComponent* Mesh = FindArtMesh();
 	if (!Mesh)
 	{
 		return;
 	}
-	// A non-looping clip someone else started (or that PauseFor is shorter than) plays out. Ours are always loops.
+	// A non-looping clip left on the mesh (a released one-shot, or one played without a claim) plays out. Ours are loops.
 	if (Mesh->IsPlaying() && !Mesh->AnimationData.bSavedLooping && Mesh->AnimationData.AnimToPlay)
 	{
 		const float Len = Mesh->AnimationData.AnimToPlay->GetPlayLength();

@@ -1051,17 +1051,20 @@ void UGFSocialComponent::ShowEmote(const FGFEmoteEvent& E)
 		USkeletalMeshComponent* Mesh = GFSocialArtMesh(Pawn);
 		if (Clip && Mesh)
 		{
-			// Single-node locomotion has no montage slot. Play the clip and hold idle/move off until it finishes.
+			// Single-node locomotion has no montage slot. Claim the mesh as the emote owner for the emote's time.
 			// A looping emote (sit, dance) is held for the emote's own time; a one-shot is held for at least the clip.
+			// A ferry seat or fist scope above it keeps its pose; the emote then waits underneath until it expires.
 			if (UGFSimpleAnimComponent* Simple = Pawn->FindComponentByClass<UGFSimpleAnimComponent>())
 			{
 				const FGFAnimMapRow* Row = FGFAnimMap::Find(E.AnimKey);
 				const bool bLoop = Row && Row->bLoop;
-				Mesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-				Mesh->PlayAnimation(Clip, bLoop);
 				const float ClipLen = Clip->GetPlayLength();
 				const float Hold = (!bLoop && ClipLen > 0.f) ? FMath::Max(E.Seconds, ClipLen) : E.Seconds;
-				Simple->PauseFor(Hold);
+				if (Hold > 0.f)
+				{
+					// Zero would mean "held until released", and nothing releases an emote. No time, no clip.
+					Simple->ClaimClip(EGFAnimOwner::Emote, E.AnimKey, bLoop, Hold);
+				}
 				return;
 			}
 			if (UAnimInstance* Anim = Mesh->GetAnimInstance())
