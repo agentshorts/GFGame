@@ -32,6 +32,8 @@ struct GFCORE_API FGFQuestStepRule
 	int32 Goal = 0;
 	EGFFactionRank Rank = EGFFactionRank::Outsider;
 	TArray<FName> Items;
+	FString Title;
+	FString Hint;
 };
 
 struct GFCORE_API FGFQuestTownSkins
@@ -56,6 +58,8 @@ struct GFCORE_API FGFQuestCatalog
 	int32 GoalFor(EGFQuestStep Step) const;
 	TArray<FName> ItemsFor(EGFQuestStep Step) const;
 	EGFFactionRank RankAfter(EGFQuestStep Step) const;
+	FString TitleFor(EGFQuestStep Step) const;
+	FString HintFor(EGFQuestStep Step) const;
 	TArray<FName> SkinsFor(FName TownId) const;
 	const FGFQuestStepRule* FindStep(EGFQuestStep Step) const;
 	const FGFQuestTownSkins* FindTown(FName TownId) const;

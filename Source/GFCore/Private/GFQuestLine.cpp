@@ -155,26 +155,28 @@ const FGFQuestCatalog& FGFQuestCatalog::Builtin()
 	static const FGFQuestCatalog Catalog = []()
 	{
 		FGFQuestCatalog Built;
-		auto Add = [&Built](EGFQuestStep Step, int32 Goal, EGFFactionRank Rank, std::initializer_list<const TCHAR*> Items)
+		auto Add = [&Built](EGFQuestStep Step, int32 Goal, EGFFactionRank Rank, const TCHAR* Hint, std::initializer_list<const TCHAR*> Items)
 		{
 			FGFQuestStepRule Rule;
 			Rule.Step = Step;
 			Rule.Goal = Goal;
 			Rule.Rank = Rank;
+			Rule.Title = TEXT("The Elder's Errand");
+			Rule.Hint = Hint;
 			for (const TCHAR* Item : Items)
 			{
 				Rule.Items.Add(Item);
 			}
 			Built.Steps.Add(Rule);
 		};
-		Add(EGFQuestStep::TakeCrystal, 1, EGFFactionRank::Outsider, {});
-		Add(EGFQuestStep::Escape, 1, EGFFactionRank::Outsider, {});
-		Add(EGFQuestStep::TalkToElder, 1, EGFFactionRank::Initiate, {});
-		Add(EGFQuestStep::HuntHide, 6, EGFFactionRank::Member, { TEXT("Hide"), TEXT("Scales") });
-		Add(EGFQuestStep::HuntSkins, 2, EGFFactionRank::Champion, {});
-		Add(EGFQuestStep::CraftLook, 1, EGFFactionRank::Champion, {});
-		Add(EGFQuestStep::WinShow, 1, EGFFactionRank::Leader, {});
-		Add(EGFQuestStep::Done, 0, EGFFactionRank::Leader, {});
+		Add(EGFQuestStep::TakeCrystal, 1, EGFFactionRank::Outsider, TEXT("Break 1 town crystal slot. Any town counts."), {});
+		Add(EGFQuestStep::Escape, 1, EGFFactionRank::Outsider, TEXT("Get clear of the hired dinos."), {});
+		Add(EGFQuestStep::TalkToElder, 1, EGFFactionRank::Initiate, TEXT("Talk to any elder and accept."), {});
+		Add(EGFQuestStep::HuntHide, 6, EGFFactionRank::Member, TEXT("Hand the elder 6 Hide or Scales, in any mix."), { TEXT("Hide"), TEXT("Scales") });
+		Add(EGFQuestStep::HuntSkins, 2, EGFFactionRank::Champion, TEXT("Hand the elder 2 skins of your town's dinos."), {});
+		Add(EGFQuestStep::CraftLook, 1, EGFFactionRank::Champion, TEXT("Craft 1 Atelier piece that uses Hide or Scales, and wear it."), {});
+		Add(EGFQuestStep::WinShow, 1, EGFFactionRank::Leader, TEXT("Enter a fashion show and place 1st at tier A or better."), {});
+		Add(EGFQuestStep::Done, 0, EGFFactionRank::Leader, TEXT("The errand is finished."), {});
 
 		auto Town = [&Built](const TCHAR* TownId, std::initializer_list<const TCHAR*> Skins)
 		{
@@ -214,6 +216,8 @@ FGFQuestCatalog FGFQuestCatalog::FromTable(const UDataTable* Table)
 					Rule.Goal = Row.Goal;
 					Rule.Items = Row.Items;
 					Rule.Rank = Row.RankOnComplete;
+					Rule.Title = Row.Title;
+					Rule.Hint = Row.Hint;
 					break;
 				}
 			}
@@ -286,6 +290,18 @@ EGFFactionRank FGFQuestCatalog::RankAfter(EGFQuestStep Step) const
 {
 	const FGFQuestStepRule* Rule = FindStep(Step);
 	return Rule ? Rule->Rank : EGFFactionRank::Outsider;
+}
+
+FString FGFQuestCatalog::TitleFor(EGFQuestStep Step) const
+{
+	const FGFQuestStepRule* Rule = FindStep(Step);
+	return Rule ? Rule->Title : FString();
+}
+
+FString FGFQuestCatalog::HintFor(EGFQuestStep Step) const
+{
+	const FGFQuestStepRule* Rule = FindStep(Step);
+	return Rule ? Rule->Hint : FString();
 }
 
 TArray<FName> FGFQuestCatalog::SkinsFor(FName TownId) const

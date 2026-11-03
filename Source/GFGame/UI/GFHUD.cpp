@@ -1,5 +1,10 @@
 #include "GFHUD.h"
 #include "GFPlayerController.h"
+#include "GFElder.h"
+#include "GFElderBook.h"
+#include "GFElderTalk.h"
+#include "GFElderTrade.h"
+#include "GFQuestSubsystem.h"
 #include "GFCrosshairPanel.h"
 #include "Aim/GFAimSim.h"
 #include "GFBeatHopCourse.h"
@@ -111,15 +116,7 @@ void AGFHUD::BeginPlay()
 
 void AGFHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (bChatOpen || bAimSettingsOpen || bPauseMenuOpen)
-	{
-		if (APlayerController* PC = GetOwningPlayerController())
-		{
-			PC->SetInputMode(FInputModeGameOnly());
-			PC->bShowMouseCursor = false;
-			PC->bEnableClickEvents = false;
-		}
-	}
+	SetHudModal(EGFHudModalEvent::Reset);
 	if (APawn* Held = HeldPawn.Get())
 	{
 		Held->EnableInput(GetOwningPlayerController());
@@ -153,7 +150,7 @@ bool AGFHUD::ConsumeChatBlock()
 
 void AGFHUD::ToggleControlsHint()
 {
-	if (bChatOpen)
+	if (IsChatOpen())
 	{
 		return;
 	}
@@ -264,6 +261,7 @@ void AGFHUD::DrawHUD()
 	DrawHint();
 	DrawPathsAndVillains();
 	DrawPauseMenu();
+	DrawElderMenu();
 }
 
 void AGFHUD::DrawMiningRange()
@@ -377,7 +375,7 @@ FString AGFHUD::GetPauseEntry(int32 Index) const
 {
 	if (const AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController()))
 	{
-		if (PC->IsReturnConfirmOpen())
+		if (Modal == EGFHudModal::PauseConfirm)
 		{
 			if (Index == 0)
 			{
@@ -405,20 +403,22 @@ AGFHUD::FPauseInput AGFHUD::PauseInputFor(bool bMenuOpen)
 
 void AGFHUD::OpenPauseMenu()
 {
-	bPauseMenuOpen = true;
-	ApplyMenuInput();
+	SetHudModal(EGFHudModalEvent::OpenPause);
 }
 
 void AGFHUD::ClosePauseMenu()
 {
-	bPauseMenuOpen = false;
-	ApplyMenuInput();
+	SetHudModal(EGFHudModalEvent::ClosePause);
 }
 
 void AGFHUD::TogglePauseMenu()
 {
-	bPauseMenuOpen = !bPauseMenuOpen;
-	ApplyMenuInput();
+	SetHudModal(EGFHudModalEvent::TogglePause);
+}
+
+void AGFHUD::HandleEscape()
+{
+	SetHudModal(EGFHudModalEvent::Escape);
 }
 
 void AGFHUD::ApplyMenuInput()
@@ -428,9 +428,9 @@ void AGFHUD::ApplyMenuInput()
 	{
 		return;
 	}
-	const FPauseInput Want = PauseInputFor(bPauseMenuOpen);
+	const bool bHold = FGFHudModalRules::HoldsPawn(Modal, Restore);
 	APawn* Pawn = PC->GetPawn();
-	if (!Want.bPawnInput && Pawn && HeldPawn.Get() != Pawn)
+	if (bHold && Pawn && HeldPawn.Get() != Pawn)
 	{
 		if (APawn* Old = HeldPawn.Get())
 		{
@@ -439,15 +439,16 @@ void AGFHUD::ApplyMenuInput()
 		Pawn->DisableInput(PC);
 		HeldPawn = Pawn;
 	}
-	else if (Want.bPawnInput && HeldPawn.IsValid())
+	else if (!bHold && HeldPawn.IsValid())
 	{
 		HeldPawn->EnableInput(PC);
 		HeldPawn.Reset();
 	}
-	if (bChatOpen || bAimSettingsOpen)
+	if (Modal == EGFHudModal::Chat || Modal == EGFHudModal::Aim)
 	{
 		return;
 	}
+	const FPauseInput Want = PauseInputFor(FGFHudModalRules::FreesMouse(Modal));
 	if (Want.bGameAndUI)
 	{
 		// Frees the mouse: the viewport only captures while a button is down, and the cursor stays visible then too.
@@ -468,17 +469,26 @@ void AGFHUD::NotifyHitBoxClick(FName BoxName)
 {
 	Super::NotifyHitBoxClick(BoxName);
 	FString Name = BoxName.ToString();
-	if (bPauseMenuOpen && Name.RemoveFromStart(TEXT("GFPause_")) && Name.IsNumeric())
+	if (IsPauseMenuOpen() && Name.RemoveFromStart(TEXT("GFPause_")) && Name.IsNumeric())
 	{
 		ActivatePauseEntry(FCString::Atoi(*Name));
+		return;
+	}
+	if (Modal == EGFHudModal::Elder && BoxName.ToString().StartsWith(TEXT("GFElder_")))
+	{
+		ActivateElderBox(BoxName);
 	}
 }
 
 void AGFHUD::ActivatePauseEntry(int32 Index)
 {
 	AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController());
-	if (PC && PC->IsReturnConfirmOpen())
+	if (Modal == EGFHudModal::PauseConfirm)
 	{
+		if (!PC)
+		{
+			return;
+		}
 		if (Index == 0)
 		{
 			PC->RequestReturnFromMenu(true);
@@ -521,13 +531,13 @@ void AGFHUD::ShowItemHowTo()
 
 void AGFHUD::DrawPauseMenu()
 {
-	if (!bPauseMenuOpen || !Canvas)
+	if (!IsPauseMenuOpen() || !Canvas)
 	{
 		return;
 	}
 	UFont* Font = HudFont();
 	const AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController());
-	const bool bConfirm = PC && PC->IsReturnConfirmOpen();
+	const bool bConfirm = Modal == EGFHudModal::PauseConfirm;
 	const FString Title = bConfirm && PC ? PC->GetReturnConfirmPrompt() : FString(TEXT("Paused"));
 	DrawRect(FLinearColor(0.05f, 0.08f, 0.12f, 0.88f), 24.f, 24.f, 420.f, bConfirm ? 148.f : 188.f);
 	DrawText(Title, FLinearColor(0.93f, 0.96f, 1.f), 40.f, 36.f, Font, 1.f, false);
@@ -541,23 +551,43 @@ void AGFHUD::DrawPauseMenu()
 
 void AGFHUD::ToggleAimSettings()
 {
-	if (bAimSettingsOpen)
+	SetHudModal(Modal == EGFHudModal::Aim ? EGFHudModalEvent::CloseAim : EGFHudModalEvent::OpenAim);
+}
+
+void AGFHUD::CloseAimSettings()
+{
+	SetHudModal(EGFHudModalEvent::CloseAim);
+}
+
+void AGFHUD::RemoveAimSettings()
+{
+	if (AimSettingsRoot.IsValid() && GEngine && GEngine->GameViewport)
 	{
-		CloseAimSettings();
-		return;
+		GEngine->GameViewport->RemoveViewportWidgetContent(AimSettingsRoot.ToSharedRef());
 	}
-	if (bChatOpen || !GEngine || !GEngine->GameViewport)
-	{
-		return;
-	}
+	AimSettingsRoot.Reset();
+}
+
+void AGFHUD::BuildAimWidget()
+{
 	AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn());
 	if (Character)
 	{
 		Character->SetAimPanelOpen(true);
 	}
 	AimSettingsRoot = GFMakeAimSettingsPanel(Character, [this]() { CloseAimSettings(); });
-	GEngine->GameViewport->AddViewportWidgetContent(AimSettingsRoot.ToSharedRef());
-	bAimSettingsOpen = true;
+	if (GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->AddViewportWidgetContent(AimSettingsRoot.ToSharedRef());
+	}
+}
+
+void AGFHUD::FocusAim()
+{
+	if (!AimSettingsRoot.IsValid())
+	{
+		return;
+	}
 	if (APlayerController* PC = GetOwningPlayerController())
 	{
 		// UI-only so Escape is handled by the panel and does not also toggle it from the game mapping.
@@ -571,34 +601,6 @@ void AGFHUD::ToggleAimSettings()
 	{
 		FSlateApplication::Get().SetKeyboardFocus(AimSettingsRoot, EFocusCause::SetDirectly);
 	}
-}
-
-void AGFHUD::CloseAimSettings()
-{
-	if (AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn()))
-	{
-		Character->SetAimPanelOpen(false);
-	}
-	RemoveAimSettings();
-	if (APlayerController* PC = GetOwningPlayerController())
-	{
-		if (!bChatOpen)
-		{
-			PC->SetInputMode(FInputModeGameOnly());
-			PC->bShowMouseCursor = false;
-		}
-	}
-	ApplyMenuInput();
-}
-
-void AGFHUD::RemoveAimSettings()
-{
-	bAimSettingsOpen = false;
-	if (AimSettingsRoot.IsValid() && GEngine && GEngine->GameViewport)
-	{
-		GEngine->GameViewport->RemoveViewportWidgetContent(AimSettingsRoot.ToSharedRef());
-	}
-	AimSettingsRoot.Reset();
 }
 
 void AGFHUD::DrawCompass()
@@ -990,14 +992,77 @@ void AGFHUD::DrawHint()
 
 void AGFHUD::OpenChat()
 {
-	if (bChatOpen || !GEngine || !GEngine->GameViewport)
+	SetHudModal(EGFHudModalEvent::OpenChat);
+}
+
+void AGFHUD::CloseChat()
+{
+	DismissChat();
+}
+
+void AGFHUD::SubmitChat()
+{
+	if (!IsChatOpen())
 	{
 		return;
 	}
+	FString Line;
+	if (Chat)
+	{
+		if (TSharedPtr<SEditableText> Text = Chat->Text.Pin())
+		{
+			Line = Text->GetText().ToString().TrimStartAndEnd();
+		}
+	}
+	DismissChat();
+	if (!Line.IsEmpty())
+	{
+		SendChat(Line);
+	}
+}
+
+void AGFHUD::SendChat(const FString& Line)
+{
+	APlayerController* PC = GetOwningPlayerController();
+	AGFPlayerState* PS = PC ? PC->GetPlayerState<AGFPlayerState>() : nullptr;
+	if (PS)
+	{
+		PS->RequestChat(Line);
+	}
+}
+
+void AGFHUD::DismissChat()
+{
+	if (!IsChatOpen() && !Chat)
+	{
+		return;
+	}
+	if (IsChatOpen())
+	{
+		SetHudModal(EGFHudModalEvent::CloseChat);
+		return;
+	}
+	RemoveChatWidget();
+}
+
+void AGFHUD::RemoveChatWidget()
+{
+	// Modal is already off Chat. Focus loss commits OnUserMovedFocus, and that must not re-enter.
+	FGHUDChat* Dying = Chat;
+	Chat = nullptr;
+	if (Dying && Dying->Root.IsValid() && GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->RemoveViewportWidgetContent(Dying->Root.ToSharedRef());
+	}
+	delete Dying;
+}
+
+void AGFHUD::BuildChatWidget()
+{
 	TSharedRef<SGFChatText> Text = SNew(SGFChatText)
 		.OnTextCommitted(FOnTextCommitted::CreateLambda([this](const FText& Committed, ETextCommit::Type Method)
 		{
-			if (!bChatOpen)
+			if (!IsChatOpen())
 			{
 				return;
 			}
@@ -1034,87 +1099,316 @@ void AGFHUD::OpenChat()
 				]
 			]
 		];
-	GEngine->GameViewport->AddViewportWidgetContent(Chat->Root.ToSharedRef());
-	bChatOpen = true;
+	if (GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->AddViewportWidgetContent(Chat->Root.ToSharedRef());
+	}
+}
 
+void AGFHUD::FocusChat()
+{
+	if (!Chat)
+	{
+		return;
+	}
+	TSharedPtr<SEditableText> Text = Chat->Text.Pin();
 	if (APlayerController* PC = GetOwningPlayerController())
 	{
 		FInputModeUIOnly Mode;
-		Mode.SetWidgetToFocus(Text);
+		if (Text.IsValid())
+		{
+			Mode.SetWidgetToFocus(Text);
+		}
 		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 		PC->SetInputMode(Mode);
 		PC->bShowMouseCursor = false;
 	}
-	if (FSlateApplication::IsInitialized())
+	if (Text.IsValid() && FSlateApplication::IsInitialized())
 	{
 		FSlateApplication::Get().SetKeyboardFocus(Text, EFocusCause::SetDirectly);
 	}
 }
 
-void AGFHUD::CloseChat()
+void AGFHUD::SetHudModal(EGFHudModalEvent Event)
 {
-	DismissChat();
-}
-
-void AGFHUD::SubmitChat()
-{
-	if (!bChatOpen)
+	const FGFHudModalRules::FState Next = FGFHudModalRules::Transition(Modal, Restore, Event);
+	if (Next.Modal == Modal && Next.Restore == Restore)
 	{
 		return;
 	}
-	FString Line;
-	if (Chat)
+	const bool bEnterChat = Next.Modal == EGFHudModal::Chat && Modal != EGFHudModal::Chat;
+	const bool bEnterAim = Next.Modal == EGFHudModal::Aim && Modal != EGFHudModal::Aim;
+	if ((bEnterChat || bEnterAim) && (!GEngine || !GEngine->GameViewport))
 	{
-		if (TSharedPtr<SEditableText> Text = Chat->Text.Pin())
+		return;
+	}
+
+	const EGFHudModal Prev = Modal;
+	Modal = Next.Modal;
+	Restore = Next.Restore;
+
+	if (Prev == EGFHudModal::Chat && Modal != EGFHudModal::Chat)
+	{
+		ChatBlockTicks = 2;
+		RemoveChatWidget();
+	}
+	if (Prev == EGFHudModal::Aim && Modal != EGFHudModal::Aim)
+	{
+		if (AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn()))
 		{
-			Line = Text->GetText().ToString().TrimStartAndEnd();
+			Character->SetAimPanelOpen(false);
+		}
+		RemoveAimSettings();
+	}
+	if (Prev == EGFHudModal::PauseConfirm && Modal != EGFHudModal::PauseConfirm)
+	{
+		if (AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController()))
+		{
+			PC->ClearReturnPrompt();
 		}
 	}
-	DismissChat();
-	if (!Line.IsEmpty())
+	if (Prev == EGFHudModal::Elder && Modal != EGFHudModal::Elder && Modal != EGFHudModal::Chat)
 	{
-		SendChat(Line);
+		if (AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController()))
+		{
+			PC->RequestCloseElderMenu();
+		}
+	}
+	if (bEnterChat)
+	{
+		BuildChatWidget();
+	}
+	if (bEnterAim)
+	{
+		BuildAimWidget();
+	}
+	ApplyMenuInput();
+	if (bEnterChat && Modal == EGFHudModal::Chat)
+	{
+		FocusChat();
+	}
+	if (bEnterAim && Modal == EGFHudModal::Aim)
+	{
+		FocusAim();
 	}
 }
 
-void AGFHUD::SendChat(const FString& Line)
+void AGFHUD::PushToast(const FString& Text)
 {
-	APlayerController* PC = GetOwningPlayerController();
-	AGFPlayerState* PS = PC ? PC->GetPlayerState<AGFPlayerState>() : nullptr;
-	if (PS)
-	{
-		PS->RequestChat(Line);
-	}
-}
-
-void AGFHUD::DismissChat()
-{
-	if (!bChatOpen && !Chat)
+	if (Text.IsEmpty())
 	{
 		return;
 	}
-	bChatOpen = false;
-	ChatBlockTicks = 2;
-	if (APlayerController* PC = GetOwningPlayerController())
-	{
-		PC->SetInputMode(FInputModeGameOnly());
-		PC->bShowMouseCursor = false;
-	}
-	RemoveChatWidget();
-	ApplyMenuInput();
+	FGFHUDToast& Toast = Toasts.AddDefaulted_GetRef();
+	Toast.Text = Text;
+	const UWorld* World = GetWorld();
+	Toast.ShownAt = World ? World->GetTimeSeconds() : 0.0;
 }
 
-void AGFHUD::RemoveChatWidget()
+void AGFHUD::SetElderTab(EGFElderTab Tab)
 {
-	// Drop the flag before removing the widget. Focus loss commits OnUserMovedFocus, and that must not re-enter.
-	bChatOpen = false;
-	FGHUDChat* Dying = Chat;
-	Chat = nullptr;
-	if (Dying && Dying->Root.IsValid() && GEngine && GEngine->GameViewport)
+	ElderTab = Tab;
+}
+
+void AGFHUD::OpenElderMenu(AGFElder* Elder, FName TownId)
+{
+	if (Elder)
 	{
-		GEngine->GameViewport->RemoveViewportWidgetContent(Dying->Root.ToSharedRef());
+		ElderActor = Elder;
+		if (!Elder->TownId.IsNone())
+		{
+			TownId = Elder->TownId;
+		}
 	}
-	delete Dying;
+	ElderTownId = TownId;
+	SetElderTab(EGFElderTab::Talk);
+	SetHudModal(EGFHudModalEvent::OpenElder);
+	// Aim refuses the panel. Drop the server session so a hidden menu cannot still trade.
+	if (Modal != EGFHudModal::Elder && Restore != EGFHudModal::Elder)
+	{
+		if (AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController()))
+		{
+			PC->RequestCloseElderMenu();
+		}
+	}
+}
+
+namespace
+{
+	FString FormatTradeStacks(const TArray<FGFItemStack>& Stacks)
+	{
+		TArray<FString> Parts;
+		for (const FGFItemStack& Stack : Stacks)
+		{
+			Parts.Add(FString::Printf(TEXT("%s x%d"), *Stack.ItemId.ToString(), Stack.Count));
+		}
+		return Parts.Num() > 0 ? FString::Join(Parts, TEXT(", ")) : FString(TEXT("nothing"));
+	}
+
+	const FGFElderTradeCatalog& ElderTradeRows()
+	{
+		static const FGFElderTradeCatalog Catalog = FGFElderTradeCatalog::Load();
+		return Catalog;
+	}
+
+	const FGFQuestCatalog& ElderQuestRows()
+	{
+		static const FGFQuestCatalog Catalog = FGFQuestCatalog::Load();
+		return Catalog;
+	}
+}
+
+void AGFHUD::ActivateElderBox(FName BoxName)
+{
+	const FString Name = BoxName.ToString();
+	AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController());
+	if (Name == TEXT("GFElder_Close"))
+	{
+		SetHudModal(EGFHudModalEvent::CloseElder);
+		return;
+	}
+	if (Name == TEXT("GFElder_Tab_0"))
+	{
+		SetElderTab(EGFElderTab::Talk);
+		return;
+	}
+	if (Name == TEXT("GFElder_Tab_1"))
+	{
+		SetElderTab(EGFElderTab::Trade);
+		return;
+	}
+	if (Name == TEXT("GFElder_Tab_2"))
+	{
+		SetElderTab(EGFElderTab::Book);
+		return;
+	}
+	if (!PC)
+	{
+		return;
+	}
+	if (Name == TEXT("GFElder_Accept"))
+	{
+		PC->RequestElderAccept();
+		return;
+	}
+	if (Name == TEXT("GFElder_HandIn"))
+	{
+		PC->RequestElderHandIn();
+		return;
+	}
+	FString Trade = Name;
+	if (Trade.RemoveFromStart(TEXT("GFElder_Trade_")) && Trade.IsNumeric())
+	{
+		const int32 Index = FCString::Atoi(*Trade);
+		const TArray<const FGFElderTradeListing*> Rows = ElderTradeRows().ForTown(ElderTownId);
+		if (Rows.IsValidIndex(Index) && Rows[Index])
+		{
+			PC->RequestElderTrade(Rows[Index]->RowId);
+		}
+	}
+}
+
+void AGFHUD::DrawElderMenu()
+{
+	if (Modal != EGFHudModal::Elder || !Canvas)
+	{
+		return;
+	}
+	UFont* Font = HudFont();
+	DrawRect(FLinearColor(0.06f, 0.07f, 0.10f, 0.92f), 24.f, 24.f, 560.f, 400.f);
+
+	FString Title = TEXT("Elder");
+	if (const AGFElder* Elder = ElderActor.Get())
+	{
+		Title = Elder->DisplayTitle();
+	}
+	else if (!ElderTownId.IsNone())
+	{
+		Title = ElderTownId.ToString() + TEXT(" Elder");
+	}
+	DrawText(Title, FLinearColor(0.93f, 0.96f, 1.f), 40.f, 36.f, Font, 1.f, false);
+
+	const TCHAR* TabLabels[] = { TEXT("Talk"), TEXT("Trade"), TEXT("Elder Book") };
+	const EGFElderTab Tabs[] = { EGFElderTab::Talk, EGFElderTab::Trade, EGFElderTab::Book };
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		const bool bOn = ElderTab == Tabs[Index];
+		const FLinearColor Color = bOn ? FLinearColor(0.98f, 0.86f, 0.45f) : FLinearColor(0.75f, 0.78f, 0.82f);
+		DrawText(TabLabels[Index], Color, 40.f + Index * 150.f, 68.f, Font, 1.f, false);
+		AddHitBox(FVector2D(32.f + Index * 150.f, 64.f), FVector2D(140.f, 26.f), FName(*FString::Printf(TEXT("GFElder_Tab_%d"), Index)), true);
+	}
+
+	const AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController());
+	const AGFPlayerState* PS = PC ? PC->GetPlayerState<AGFPlayerState>() : nullptr;
+	float Y = 108.f;
+	if (ElderTab == EGFElderTab::Talk)
+	{
+		const EGFQuestStep Step = PS ? PS->QuestStep : EGFQuestStep::TakeCrystal;
+		const FGFQuestCatalog& Quests = ElderQuestRows();
+		const FString QuestTitle = Quests.TitleFor(Step);
+		const FString Hint = Quests.HintFor(Step);
+		DrawText(QuestTitle.IsEmpty() ? FString(TEXT("The Elder's Errand")) : QuestTitle, FLinearColor::White, 40.f, Y, Font, 1.f, false);
+		Y += 28.f;
+		DrawText(Hint, FLinearColor(0.88f, 0.90f, 0.84f), 40.f, Y, Font, 0.9f, false);
+		Y += 36.f;
+		const FGFElderTalk::EAction Action = FGFElderTalk::ActionFor(Step);
+		if (Action == FGFElderTalk::EAction::Accept)
+		{
+			DrawText(TEXT("Accept"), FLinearColor(0.98f, 0.86f, 0.45f), 40.f, Y, Font, 1.f, false);
+			AddHitBox(FVector2D(32.f, Y - 4.f), FVector2D(200.f, 26.f), TEXT("GFElder_Accept"), true);
+		}
+		else if (Action == FGFElderTalk::EAction::HandIn)
+		{
+			DrawText(TEXT("Hand in"), FLinearColor(0.98f, 0.86f, 0.45f), 40.f, Y, Font, 1.f, false);
+			AddHitBox(FVector2D(32.f, Y - 4.f), FVector2D(200.f, 26.f), TEXT("GFElder_HandIn"), true);
+		}
+	}
+	else if (ElderTab == EGFElderTab::Trade)
+	{
+		const TArray<const FGFElderTradeListing*> Rows = ElderTradeRows().ForTown(ElderTownId);
+		if (Rows.Num() == 0)
+		{
+			DrawText(TEXT("This elder has nothing on the table."), FLinearColor(0.88f, 0.90f, 0.84f), 40.f, Y, Font, 0.9f, false);
+		}
+		for (int32 Index = 0; Index < Rows.Num(); ++Index)
+		{
+			const FGFElderTradeListing* Row = Rows[Index];
+			if (!Row)
+			{
+				continue;
+			}
+			const FString Line = FString::Printf(TEXT("Give %s. Get %s."), *FormatTradeStacks(Row->Give), *FormatTradeStacks(Row->Get));
+			DrawText(Line, FLinearColor(0.98f, 0.86f, 0.45f), 40.f, Y, Font, 0.85f, false);
+			AddHitBox(FVector2D(32.f, Y - 4.f), FVector2D(520.f, 24.f), FName(*FString::Printf(TEXT("GFElder_Trade_%d"), Index)), true);
+			Y += 28.f;
+		}
+	}
+	else
+	{
+		TArray<FGFElderPost> Posts;
+		if (const UGFElderBookSubsystem* Book = UGFElderBookSubsystem::Get(GetWorld()))
+		{
+			Posts = Book->GetBook().Feed(FGFElderBook::ElderViewId());
+		}
+		int32 Shown = 0;
+		for (int32 Index = Posts.Num() - 1; Index >= 0 && Shown < 8; --Index)
+		{
+			if (Posts[Index].Line.IsEmpty())
+			{
+				continue;
+			}
+			DrawText(Posts[Index].Line, FLinearColor(0.90f, 0.92f, 0.86f), 40.f, Y, Font, 0.8f, false);
+			Y += 22.f;
+			++Shown;
+		}
+		if (Shown == 0)
+		{
+			DrawText(TEXT("The Elder Book is empty."), FLinearColor(0.88f, 0.90f, 0.84f), 40.f, Y, Font, 0.9f, false);
+		}
+	}
+
+	DrawText(TEXT("Close"), FLinearColor(0.98f, 0.86f, 0.45f), 40.f, 384.f, Font, 1.f, false);
+	AddHitBox(FVector2D(32.f, 378.f), FVector2D(160.f, 28.f), TEXT("GFElder_Close"), true);
 }
 
 void AGFHUD::DrawBeatHopPops()
