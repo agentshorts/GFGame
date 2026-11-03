@@ -142,7 +142,16 @@ bool FGFWardrobeCatalogTest::RunTest(const FString&)
 		TestEqual(*(P.Id.ToString() + TEXT(" tier 0")), Row->Tier, 0);
 		TestEqual(*(P.Id.ToString() + TEXT(" value 0")), Row->Value, 0);
 		TestFalse(*(P.Id.ToString() + TEXT(" is not wagerable")), Row->bWagerable);
-		TestTrue(*(P.Id.ToString() + TEXT(" stays on the account")), Row->bAccountBound);
+		// Brand outfits stay tradable. The closet can still list one so the runway rack can wear it.
+		// Every other catalog piece stays on the account.
+		if (P.Id == FName(TEXT("dirtachi_01")))
+		{
+			TestFalse(*(P.Id.ToString() + TEXT(" stays tradable like the other brand outfits")), Row->bAccountBound);
+		}
+		else
+		{
+			TestTrue(*(P.Id.ToString() + TEXT(" stays on the account")), Row->bAccountBound);
+		}
 		TestEqual(*(P.Id.ToString() + TEXT(" item slot")), Row->OutfitSlot, FGFFashionItems::RowNameForSlot(P.Slot));
 		for (const FGFItemStack& Cost : P.CraftCost)
 		{

@@ -259,8 +259,14 @@ FGFQuestApplyResult UGFQuestSubsystem::ApplyEvent(const FGFQuestEvent& Event)
 	if (Result.bBecameLeader && GS)
 	{
 		// Rank on the player is still Champion. PushPlayer below stores Leader.
+		// An empty seat already names the first claimer, so this call returns Same and does not broadcast.
+		// The show was still won, and the Elder Book still gets the ShowWin post.
 		const FName Code = GS->ServerSetFactionLeader(Line.Progress.FactionId, Event.PlayerKey, AGFGameState::LeaderReasonShowWin);
-		if (Code != FName(TEXT("Ok")) && Code != FName(TEXT("Same")))
+		if (Code == FName(TEXT("Same")))
+		{
+			OnFactionLeaderSet(Line.Progress.FactionId, Event.PlayerKey, Event.PlayerKey, AGFGameState::LeaderReasonShowWin);
+		}
+		else if (Code != FName(TEXT("Ok")))
 		{
 			UE_LOG(LogGF, Log, TEXT("Quest: %s won the show but did not take %s (%s)."), *Event.PlayerKey, *Line.Progress.FactionId.ToString(), *Code.ToString());
 		}
