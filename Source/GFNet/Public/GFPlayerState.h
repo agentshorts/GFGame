@@ -5,6 +5,7 @@
 #include "GFNetTypes.h"
 #include "GFEconomy.h"
 #include "GFTamer.h"
+#include "GFQuestTypes.h"
 #include "GFPlayerState.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGFOnZoneChanged, FName, OldZoneId, FName, NewZoneId);
@@ -55,6 +56,18 @@ public:
 	/** Faction (opaque id; None = not in one). Set by the server through AGFGameState::ServerClaimFaction. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Faction")
 	FName FactionId;
+
+	/** Elder's Errand step. The server writes it. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
+	EGFQuestStep QuestStep = EGFQuestStep::TakeCrystal;
+
+	/** Beat inside the step (outfit crafted, show entered). Turn-ins stay at 0 until the goal is met. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
+	int32 QuestCount = 0;
+
+	/** Outsider until an elder accepts. Leader is stored here when the show is won. The faction seat is not moved here. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
+	EGFFactionRank FactionRank = EGFFactionRank::Outsider;
 
 	/** Who last turned this player's visitor protection off, and when (server sets it; session only). {Dragger} in lines. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Faction")
@@ -203,6 +216,8 @@ public:
 
 	/** Server. Broadcasts OnZoneChanged. The first write from None does not toast; the zone subsystem decides that. */
 	void SetCurrentZoneId(FName NewId);
+	/** Server. Copies the quest step, the step count, and the rank onto the replicated fields. */
+	void SetQuestReplicated(EGFQuestStep Step, int32 Count, EGFFactionRank Rank);
 	/** Server. Raw flag. Villain rules go through UGFSocialComponent; this only stores the result. */
 	void SetVillainMode(bool bOn);
 	/**
