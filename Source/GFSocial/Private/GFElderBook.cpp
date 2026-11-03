@@ -38,7 +38,7 @@ namespace
 
 AGFElderBookRelay::AGFElderBookRelay()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
 	bAlwaysRelevant = true;
 	SetReplicateMovement(false);
@@ -50,6 +50,17 @@ AGFElderBookRelay::AGFElderBookRelay()
 void AGFElderBookRelay::BeginPlay()
 {
 	Super::BeginPlay();
+	SetActorTickEnabled(!HasAuthority());
+	NotifyOwner();
+}
+
+void AGFElderBookRelay::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (HasAuthority())
+	{
+		return;
+	}
 	NotifyOwner();
 }
 
