@@ -653,3 +653,51 @@ FName FGFFerryRouteSpawnRules::PickSpecies(const TArray<FName>& Species, FRandom
 	}
 	return Species[Rng.RandRange(0, Species.Num() - 1)];
 }
+
+FName FGFFerryPlacedStops::StopIdFromTags(const TArray<FName>& Tags)
+{
+	const int32 At = Tags.IndexOfByKey(Tag());
+	return (At != INDEX_NONE && Tags.IsValidIndex(At + 1)) ? Tags[At + 1] : NAME_None;
+}
+
+bool FGFFerryPlacedStops::Apply(const TArray<FGFFerryStop>& Placed, TArray<FGFFerryStop>& Stops, TArray<FGFFerryRoute>& Routes, TArray<FGFFerryMobBox>& MobBoxes)
+{
+	if (Placed.Num() == 0)
+	{
+		return false;
+	}
+	TArray<FGFFerryStop> NewStops;
+	for (const FGFFerryStop& Stop : Placed)
+	{
+		if (Stop.Id.IsNone() || FGFFerryRules::FindStop(NewStops, Stop.Id))
+		{
+			continue;
+		}
+		FGFFerryStop Out = Stop;
+		if (Out.AnchorId.IsNone())
+		{
+			if (const FGFFerryStop* Config = FGFFerryRules::FindStop(Stops, Stop.Id))
+			{
+				Out.AnchorId = Config->AnchorId;
+			}
+		}
+		NewStops.Add(Out);
+	}
+	TArray<FGFFerryRoute> NewRoutes;
+	TSet<FName> Hazards;
+	for (const FGFFerryRoute& Route : Routes)
+	{
+		if (FGFFerryRules::FindStop(NewStops, Route.StopA) && FGFFerryRules::FindStop(NewStops, Route.StopB))
+		{
+			NewRoutes.Add(Route);
+			if (!Route.LandRouteHazardId.IsNone())
+			{
+				Hazards.Add(Route.LandRouteHazardId);
+			}
+		}
+	}
+	MobBoxes.RemoveAll([&Hazards](const FGFFerryMobBox& Box) { return !Hazards.Contains(Box.HazardId); });
+	Stops = MoveTemp(NewStops);
+	Routes = MoveTemp(NewRoutes);
+	return true;
+}

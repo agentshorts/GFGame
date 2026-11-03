@@ -59,6 +59,12 @@ public:
 	/** Test hook. The next StartFlight returns false and mints the fare back. Cleared when it trips. */
 	bool bFailNextFlight = false;
 
+	/**
+	 * Swaps the config stops for the ones placed in this map (FGFFerryPlacedStops), if there are any.
+	 * BeginPlay calls it before the stop dinos and stands go up. True when the map had placed stops.
+	 */
+	bool UsePlacedStops();
+
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaSeconds) override;

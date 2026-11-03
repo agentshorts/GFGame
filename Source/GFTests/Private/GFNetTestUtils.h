@@ -23,6 +23,8 @@ namespace GFNetTest
 
 	/** Loads the test map and starts PIE with NumPlayers (host + clients), then waits until everyone is in. */
 	FCtxRef Start(FAutomationTestBase* Test, int32 NumPlayers, float TimeoutSeconds = 60.f);
+	/** Same as Start on another map. A missing map is an error, not a fallback. */
+	FCtxRef StartOnMap(FAutomationTestBase* Test, const TCHAR* Map, int32 NumPlayers, float TimeoutSeconds = 60.f);
 	/** Latent: Fn runs once. */
 	void Do(const FCtxRef& Ctx, TFunction<void()> Fn);
 	/** Latent: Fn(i) for i in [0, Count), one call every IntervalSeconds (keeps reliable RPC queues sane). */

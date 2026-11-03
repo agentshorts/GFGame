@@ -9,6 +9,8 @@ public class GFTests : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd", "NetCore", "AssetRegistry", "Json", "MeshDescription", "StaticMeshDescription" });
 		// GFHUD.h lives in GFGame's private UI folder. Private include paths are not exported with the module.
 		PrivateIncludePaths.Add(System.IO.Path.Combine(ModuleDirectory, "../GFGame/UI"));
+		// GFCharacterMovementComponent.h is in GFGame's private Movement folder.
+		PrivateIncludePaths.Add(System.IO.Path.Combine(ModuleDirectory, "../GFGame/Movement"));
 
 	}
 }

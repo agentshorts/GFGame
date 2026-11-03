@@ -613,6 +613,10 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 		CharacterOwner->JumpCurrentCount = 0;
 		CharacterOwner->JumpMaxCount = FMath::Max(JumpCap, 1);
 		JumpZVelocity = Sim.JumpZSpeed;
+		// The engine checks jump input before PerformMovement, so before this step accepted the press,
+		// and Super clears the press before the next check. The accepted hop has to run here.
+		TGuardValue<bool> StepJump(bJumpFromStep, true);
+		CharacterOwner->CheckJumpInput(DeltaTime);
 	}
 	else if (bJump)
 	{
@@ -647,7 +651,7 @@ bool UGFCharacterMovementComponent::DoJump(bool bReplayingMoves, float DeltaTime
 	{
 		return Super::DoJump(bReplayingMoves, DeltaTime);
 	}
-	if (!Sim.bJumpAccepted || !CharacterOwner)
+	if (!bJumpFromStep || !Sim.bJumpAccepted || !CharacterOwner)
 	{
 		return false;
 	}

@@ -173,6 +173,8 @@ private:
 	bool bWantsGrappleSwing = false;
 	bool bDashThisMove = false;
 	bool bDashRecorded = false;
+	/** True only while PerformMovement runs the hop its stamina step accepted. The engine's own early jump check is refused. */
+	bool bJumpFromStep = false;
 	bool bYankThisMove = false;
 	bool bYankRecorded = false;
 	bool bJumpUsedThisMove = false;

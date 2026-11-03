@@ -104,6 +104,8 @@ AGFFerryDirector::AGFFerryDirector()
 void AGFFerryDirector::BeginPlay()
 {
 	Super::BeginPlay();
+	// Every machine reads the placed stops, so a client's stand prompt names the same stops the server flies.
+	UsePlacedStops();
 	if (!HasAuthority())
 	{
 		return;
@@ -116,6 +118,31 @@ void AGFFerryDirector::BeginPlay()
 	MobRng.GenerateNewSeed();
 	SpawnStopDinos();
 	SpawnStands();
+}
+
+bool AGFFerryDirector::UsePlacedStops()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+	TArray<FGFFerryStop> Placed;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		const FName Id = FGFFerryPlacedStops::StopIdFromTags(It->Tags);
+		if (Id.IsNone())
+		{
+			continue;
+		}
+		FGFFerryStop Stop;
+		Stop.Id = Id;
+		Stop.Location = It->GetActorLocation();
+		Placed.Add(Stop);
+	}
+	// Same order on every machine, whatever order the level lists its actors in.
+	Placed.Sort([](const FGFFerryStop& A, const FGFFerryStop& B) { return A.Id.LexicalLess(B.Id); });
+	return FGFFerryPlacedStops::Apply(Placed, Stops, Routes, MobBoxes);
 }
 
 void AGFFerryDirector::EndPlay(const EEndPlayReason::Type EndPlayReason)

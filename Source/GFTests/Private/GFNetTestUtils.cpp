@@ -61,21 +61,39 @@ namespace GFNetTest
 		FAutomationTestFramework::Get().EnqueueLatentCommand(MakeShareable(new FStepCommand(Ctx, What, Timeout, MoveTemp(Pred), bAlwaysRun)));
 	}
 
+	static FCtxRef StartMap(FAutomationTestBase* Test, const FString& Map, bool bRequired, int32 NumPlayers, float TimeoutSeconds);
+
 	FCtxRef Start(FAutomationTestBase* Test, int32 NumPlayers, float TimeoutSeconds)
+	{
+		return StartMap(Test, NetTestMap, false, NumPlayers, TimeoutSeconds);
+	}
+
+	FCtxRef StartOnMap(FAutomationTestBase* Test, const TCHAR* Map, int32 NumPlayers, float TimeoutSeconds)
+	{
+		return StartMap(Test, Map, true, NumPlayers, TimeoutSeconds);
+	}
+
+	FCtxRef StartMap(FAutomationTestBase* Test, const FString& Map, bool bRequired, int32 NumPlayers, float TimeoutSeconds)
 	{
 		FCtxRef Ctx = MakeShared<FCtx>();
 		Ctx->Test = Test;
 		Ctx->Players = NumPlayers;
-		Do(Ctx, [Ctx, NumPlayers]()
+		Do(Ctx, [Ctx, NumPlayers, Map, bRequired]()
 		{
 			FString MapFile;
-			if (FPackageName::TryConvertLongPackageNameToFilename(NetTestMap, MapFile, FPackageName::GetMapPackageExtension()) && FPaths::FileExists(MapFile))
+			if (FPackageName::TryConvertLongPackageNameToFilename(Map, MapFile, FPackageName::GetMapPackageExtension()) && FPaths::FileExists(MapFile))
 			{
 				FEditorFileUtils::LoadMap(MapFile, /*bLoadAsTemplate*/ false, /*bShowProgress*/ false);
 			}
+			else if (bRequired)
+			{
+				Ctx->Test->AddError(FString::Printf(TEXT("%s not found"), *Map));
+				Ctx->bFailed = true;
+				return;
+			}
 			else
 			{
-				Ctx->Test->AddWarning(FString::Printf(TEXT("%s not found; playing the current editor world"), NetTestMap));
+				Ctx->Test->AddWarning(FString::Printf(TEXT("%s not found; playing the current editor world"), *Map));
 			}
 			// CommonUI complains at Error verbosity about PIE's plain viewport client; that is not a test failure.
 			GEngine->Exec(nullptr, TEXT("log LogUIActionRouter off"));

@@ -23,6 +23,8 @@
 #include "Engine/Engine.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/Level.h"
+#include "Engine/TargetPoint.h"
 #include "Materials/MaterialInterface.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -825,6 +827,8 @@ namespace GFFerryTests
 		AGFFerryDirector* Director = nullptr;
 		AGFPlayerState* PS = nullptr;
 		AGFCharacter* Pawn = nullptr;
+		/** Placed stop markers (FGFFerryPlacedStops) spawned before the director, like a map that has them. */
+		TArray<FGFFerryStop> Markers;
 
 		bool Open(const TCHAR* Name, int32 FareMultiplier)
 		{
@@ -852,6 +856,15 @@ namespace GFFerryTests
 			}
 			FActorSpawnParameters Params;
 			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			for (const FGFFerryStop& Marker : Markers)
+			{
+				ATargetPoint* Point = World->SpawnActor<ATargetPoint>(ATargetPoint::StaticClass(), FTransform(Marker.Location), Params);
+				if (!Point)
+				{
+					return false;
+				}
+				Point->Tags = {FGFFerryPlacedStops::Tag(), Marker.Id};
+			}
 			Director = World->SpawnActor<AGFFerryDirector>(AGFFerryDirector::StaticClass(), FTransform::Identity, Params);
 			PS = World->SpawnActor<AGFPlayerState>(AGFPlayerState::StaticClass(), FTransform::Identity, Params);
 			if (!GS || !Director || !PS || !PS->Inventory || Director->Stops.Num() == 0)
@@ -1213,6 +1226,175 @@ bool FGFFerryReceiptTest::RunTest(const FString&)
 	TestEqual(TEXT("Unreadable account"), Unread.Code, FGFFerryCodes::NotAuthority);
 	const FGFFerryResult UnreadFare = FGFFerryRules::ApplyFare(Closed, ClosedLedger, Request, RiderKey, true, false, Home, Home->Location, Tuning);
 	TestEqual(TEXT("Unreadable fare account"), UnreadFare.Code, FGFFerryCodes::NotAuthority);
+	return true;
+}
+
+namespace GFFerryWorldMap
+{
+	static const TCHAR* WorldObject = TEXT("/Game/Maps/L_World_Factions_A.L_World_Factions_A");
+	static const FName Verdant(TEXT("VerdantLanding"));
+	static const FName RimeStop(TEXT("RimeLanding"));
+	// Town wall boxes on the world map (x0, x1, y0, y1), from World_Factions_Layout_v3 flattened.
+	static const FBox2D VerdantWalls(FVector2D(-3200.0, -3200.0), FVector2D(3200.0, 3200.0));
+	static const FBox2D RimeWalls(FVector2D(-3400.0, 16200.0), FVector2D(3400.0, 23400.0));
+	static constexpr double NearWallCm = 2000.0;
+
+	static double OutsideBy(const FBox2D& Box, const FVector& Point)
+	{
+		const FVector2D P(Point.X, Point.Y);
+		return Box.IsInside(P) ? -1.0 : FMath::Sqrt(Box.ComputeSquaredDistanceToPoint(P));
+	}
+
+	/** Every placed ferry stop marker in the saved world map. */
+	static bool LoadMarkers(FAutomationTestBase& Test, TArray<FGFFerryStop>& Out)
+	{
+		UWorld* World = LoadObject<UWorld>(nullptr, WorldObject);
+		if (!Test.TestNotNull(TEXT("World map loads"), World) || !Test.TestNotNull(TEXT("Persistent level"), World->PersistentLevel.Get()))
+		{
+			return false;
+		}
+		for (AActor* Actor : World->PersistentLevel->Actors)
+		{
+			const FName Id = Actor ? FGFFerryPlacedStops::StopIdFromTags(Actor->Tags) : NAME_None;
+			if (!Id.IsNone())
+			{
+				FGFFerryStop Stop;
+				Stop.Id = Id;
+				Stop.Location = Actor->GetActorLocation();
+				Out.Add(Stop);
+			}
+		}
+		return true;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFFerryPlacedStopsTest, "GFGame.Ferry.PlacedStops", GFFerryTests::Flags)
+bool FGFFerryPlacedStopsTest::RunTest(const FString&)
+{
+	using namespace GFFerryWorldMap;
+	const AGFFerryDirector* Director = nullptr;
+	if (!TestTrue(TEXT("Shipped ferry config"), GFFerryTests::LoadFerry(Director)))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Tag then id"), FGFFerryPlacedStops::StopIdFromTags({TEXT("Other"), FGFFerryPlacedStops::Tag(), Verdant}), Verdant);
+	TestTrue(TEXT("Tag alone is no stop"), FGFFerryPlacedStops::StopIdFromTags({FGFFerryPlacedStops::Tag()}).IsNone());
+	TestTrue(TEXT("Untagged is no stop"), FGFFerryPlacedStops::StopIdFromTags({Verdant}).IsNone());
+
+	TArray<FGFFerryStop> Stops = Director->Stops;
+	TArray<FGFFerryRoute> Routes = Director->Routes;
+	TArray<FGFFerryMobBox> Boxes = Director->MobBoxes;
+	TestFalse(TEXT("No placed stops keeps the config"), FGFFerryPlacedStops::Apply({}, Stops, Routes, Boxes));
+	TestEqual(TEXT("Config stops kept"), Stops.Num(), Director->Stops.Num());
+	TestEqual(TEXT("Config routes kept"), Routes.Num(), Director->Routes.Num());
+	TestEqual(TEXT("Config boxes kept"), Boxes.Num(), Director->MobBoxes.Num());
+
+	FGFFerryStop A;
+	A.Id = Verdant;
+	A.Location = FVector(-800.0, 4400.0, 0.0);
+	FGFFerryStop B;
+	B.Id = RimeStop;
+	B.Location = FVector(-800.0, 15000.0, 0.0);
+	TestTrue(TEXT("Placed stops apply"), FGFFerryPlacedStops::Apply({A, B, A}, Stops, Routes, Boxes));
+	TestEqual(TEXT("Only the placed stops, once each"), Stops.Num(), 2);
+	const FGFFerryStop* PlacedRime = FGFFerryRules::FindStop(Stops, RimeStop);
+	const FGFFerryStop* ConfigRime = FGFFerryRules::FindStop(Director->Stops, RimeStop);
+	if (TestNotNull(TEXT("Rime placed"), PlacedRime) && TestNotNull(TEXT("Rime in config"), ConfigRime))
+	{
+		TestEqual(TEXT("Placed location wins"), PlacedRime->Location, B.Location);
+		TestEqual(TEXT("Anchor comes from the config"), PlacedRime->AnchorId, ConfigRime->AnchorId);
+	}
+	TestEqual(TEXT("One route left"), Routes.Num(), 1);
+	TestNotNull(TEXT("Rime-Verdant route kept"), FGFFerryRules::FindRouteBetween(Routes, Verdant, RimeStop));
+	for (const FGFFerryMobBox& Box : Boxes)
+	{
+		TestEqual(*FString::Printf(TEXT("%s is on the kept route"), *Box.Id.ToString()), Box.HazardId, Routes[0].LandRouteHazardId);
+	}
+	TestFalse(TEXT("Lava boxes leave with the lava route"), Boxes.ContainsByPredicate([](const FGFFerryMobBox& Box) { return Box.HazardId == GFFerryTests::LavaBridge; }));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFFerryWorldMapStopsTest, "GFGame.Ferry.WorldMap.Stops", GFFerryTests::Flags)
+bool FGFFerryWorldMapStopsTest::RunTest(const FString&)
+{
+	using namespace GFFerryWorldMap;
+	TArray<FGFFerryStop> Markers;
+	if (!LoadMarkers(*this, Markers))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Two ferry stations on the world map"), Markers.Num(), 2);
+	const FGFFerryStop* V = FGFFerryRules::FindStop(Markers, Verdant);
+	const FGFFerryStop* R = FGFFerryRules::FindStop(Markers, RimeStop);
+	if (!TestNotNull(TEXT("Verdant station"), V) || !TestNotNull(TEXT("Rime station"), R))
+	{
+		return false;
+	}
+	const double VOut = OutsideBy(VerdantWalls, V->Location);
+	const double ROut = OutsideBy(RimeWalls, R->Location);
+	AddInfo(FString::Printf(TEXT("Verdant station %s, %.0f cm outside the wall; Rime station %s, %.0f cm outside"), *V->Location.ToCompactString(), VOut, *R->Location.ToCompactString(), ROut));
+	TestTrue(TEXT("Verdant station is outside the Verdant walls"), VOut > 0.0);
+	TestTrue(TEXT("Verdant station is just outside them"), VOut <= NearWallCm);
+	TestTrue(TEXT("Rime station is outside the Rime walls"), ROut > 0.0);
+	TestTrue(TEXT("Rime station is just outside them"), ROut <= NearWallCm);
+	TestTrue(TEXT("Verdant station is not inside Rime"), OutsideBy(RimeWalls, V->Location) > 0.0);
+	TestTrue(TEXT("Rime station is not inside Verdant"), OutsideBy(VerdantWalls, R->Location) > 0.0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFFerryWorldMapTripTest, "GFGame.Ferry.WorldMap.Trip", GFFerryTests::Flags)
+bool FGFFerryWorldMapTripTest::RunTest(const FString&)
+{
+	using namespace GFFerryTests;
+	using namespace GFFerryWorldMap;
+	FTripWorld Trip;
+	if (!LoadMarkers(*this, Trip.Markers) || !TestTrue(TEXT("World"), Trip.Open(TEXT("GFFerryWorldMapTrip"), 2)))
+	{
+		return false;
+	}
+	AGFFerryDirector& Director = *Trip.Director;
+	TestEqual(TEXT("Director flies the placed stops"), Director.Stops.Num(), 2);
+	TestEqual(TEXT("One route"), Director.Routes.Num(), 1);
+	const FGFFerryStop* V = FGFFerryRules::FindStop(Director.Stops, Verdant);
+	const FGFFerryStop* R = FGFFerryRules::FindStop(Director.Stops, RimeStop);
+	if (!TestNotNull(TEXT("Verdant stop"), V) || !TestNotNull(TEXT("Rime stop"), R))
+	{
+		return false;
+	}
+	TestTrue(TEXT("No mob box sits inside a town"), !Director.MobBoxes.ContainsByPredicate([](const FGFFerryMobBox& Box)
+	{
+		return VerdantWalls.IsInside(FVector2D(Box.Center.X, Box.Center.Y)) || RimeWalls.IsInside(FVector2D(Box.Center.X, Box.Center.Y));
+	}));
+	int32 Stands = 0;
+	for (TActorIterator<AActor> It(Trip.World); It; ++It)
+	{
+		Stands += It->GetClass()->GetName().Contains(TEXT("FerryStand")) ? 1 : 0;
+	}
+	TestEqual(TEXT("A stand at each station"), Stands, 2);
+
+	const float Radius = Director.Tuning.BoardRadius;
+	struct FLeg { const FGFFerryStop* From; const FGFFerryStop* To; FGuid Id; };
+	const FLeg Legs[] = {
+		{R, V, FGuid(0xF3270101, 0xF3270102, 0xF3270103, 0xF3270104)},
+		{V, R, FGuid(0xF3270201, 0xF3270202, 0xF3270203, 0xF3270204)},
+	};
+	for (const FLeg& Leg : Legs)
+	{
+		const FString Name = Leg.From->Id.ToString() + TEXT(" to ") + Leg.To->Id.ToString();
+		Trip.Pawn->SetActorLocation(Leg.From->Location + FVector(0.0, 0.0, 100.0));
+		const FGFFerryResult Result = Director.RequestTripTo(Trip.Pawn, Leg.From->Id, Leg.To->Id, Leg.Id);
+		if (!TestTrue(*(Name + TEXT(" boards")), Result.bOk))
+		{
+			AddInfo(Result.Code.ToString());
+			return false;
+		}
+		TestTrue(*(Name + TEXT(" is flying")), Trip.Pawn->FerryRider->IsInFlight());
+		Director.Tick(Director.Tuning.FlightSeconds);
+		TestFalse(*(Name + TEXT(" landed")), Trip.Pawn->FerryRider->IsInFlight());
+		const double Off = FVector::Dist2D(Trip.Pawn->GetActorLocation(), Leg.To->Location);
+		AddInfo(FString::Printf(TEXT("%s drops %.0f cm from the station"), *Name, Off));
+		TestTrue(*(Name + TEXT(" drops at the station")), Off <= Radius);
+	}
 	return true;
 }
 

@@ -256,6 +256,25 @@ struct GFGAME_API FGFFerryRules
 	static void CollectDestinations(const TArray<FGFFerryStop>& Stops, const TArray<FGFFerryRoute>& Routes, FName FromStopId, TArray<FName>& OutStopIds);
 };
 
+/**
+ * Stops placed in a map by Tools/place_towns_v2.py. Each is an actor tagged Tag() and then the stop id.
+ * A map with placed stops flies only between them; a map without any keeps the config stops.
+ */
+struct GFGAME_API FGFFerryPlacedStops
+{
+	static FName Tag() { return TEXT("GFFerryStop"); }
+
+	/** The stop id: the first tag after Tag(). None when the tags do not mark a stop. */
+	static FName StopIdFromTags(const TArray<FName>& Tags);
+
+	/**
+	 * Placed stops replace Stops. AnchorId comes from the config stop with the same id when the placed one has none.
+	 * Routes keep the ones with both ends placed. MobBoxes keep the ones whose hazard is a kept route's land route.
+	 * Returns false and changes nothing when Placed is empty.
+	 */
+	static bool Apply(const TArray<FGFFerryStop>& Placed, TArray<FGFFerryStop>& Stops, TArray<FGFFerryRoute>& Routes, TArray<FGFFerryMobBox>& MobBoxes);
+};
+
 struct GFGAME_API FGFFerryRouteSpawnRules
 {
 	/** How many uniform samples inside the box one spawn attempt may try. */

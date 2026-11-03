@@ -137,6 +137,48 @@ def world_region(placements):
     return (min(xs), split_x, min(ys), split_y)
 
 
+FERRY_OUT_CM = 1200.0    # a basket ferry station stands this far outside its town wall
+FERRY_SIDE_CM = 800.0    # and this far to -X of the gate, off the link road
+FERRY_CLEAR_CM = 500.0   # Verdant trees whose footprint reaches this close to a station are left out
+FERRY_TOWNS = (("VerdantLanding", "Town_Verdant_A_Layout_v2"), ("RimeLanding", "Town_Rime_Layout_v1"))
+
+
+def ferry_stations(placements):
+    """{stop id: [x, y, z]} for the world-map basket ferry (AGFFerryDirector stop ids), one station per town.
+
+    placements: flatten() output. Each town's wall box comes from its "walls" group. The towns sit apart along Y, so a
+    station stands FERRY_OUT_CM outside the wall that faces the other town, FERRY_SIDE_CM to -X of that wall's gate.
+    """
+    boxes, gates = {}, {}
+    for stop, src in FERRY_TOWNS:
+        walls = [(a, l) for a, g, l, sc, s in placements if s == src and g == "walls"]
+        if not walls:
+            raise ValueError("no walls for " + src)
+        boxes[stop] = (min(l[0] for a, l in walls), max(l[0] for a, l in walls),
+                       min(l[1] for a, l in walls), max(l[1] for a, l in walls))
+        gates[stop] = [l for a, l in walls if "Gate" in a]
+    (sa, a), (sb, b) = [(stop, boxes[stop]) for stop, src in FERRY_TOWNS]
+    if not (a[3] < b[2] or b[3] < a[2]):
+        raise ValueError("the ferry towns overlap in Y")
+    out = {}
+    for stop, box, other in ((sa, a, b), (sb, b, a)):
+        north = other[2] > box[3]
+        wall_y = box[3] if north else box[2]
+        on_wall = [g for g in gates[stop] if abs(g[1] - wall_y) < 1.0]
+        gate_x = on_wall[0][0] if on_wall else (box[0] + box[1]) / 2
+        y = wall_y + FERRY_OUT_CM if north else wall_y - FERRY_OUT_CM
+        out[stop] = [round(gate_x - FERRY_SIDE_CM, 1), round(y, 1), 0.0]
+    return out
+
+
+def ferry_cuts(asset, loc, scale, radii, stations):
+    """True for a Verdant tree whose footprint reaches within FERRY_CLEAR_CM of a ferry station (the placer leaves it out)."""
+    if not stations or not TREE.search(asset):
+        return False
+    r = _radius(radii, asset, scale)
+    return any(math.hypot(loc[0] - p[0], loc[1] - p[1]) - r < FERRY_CLEAR_CM for p in stations.values())
+
+
 VOXEL_PLOT = (-3400.0, 3400.0, -3400.0, 3400.0)  # AGFGameMode::EnsureVoxelWorld starter plot plus 2 m
 
 
@@ -161,3 +203,4 @@ if __name__ == "__main__":
     kit = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "handoff", "inbox", "towns_v2")
     print(json.dumps(world_clearing(default_layouts(kit), "World_Factions_Layout_v3", kit,
                                     os.path.join(os.path.dirname(kit), "town_v1")), indent=1))
+    print(json.dumps(ferry_stations(flatten(default_layouts(kit), "World_Factions_Layout_v3"))))

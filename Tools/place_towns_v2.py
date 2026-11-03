@@ -14,8 +14,9 @@ atmosphere or fog so the game environment director lights the map exactly like t
 "placed" keeps the editor-placed lights and adds the same manual exposure volume and fog the director would use).
 Each map is rebuilt from scratch: flat ground with the top at Z = 0 (the kits have no landscape; Cinderwright charcoal is
 tiled with the 64 m GroundSlab mesh), lights only with GFTOWN_LIGHTS=placed, a player start at the +X entry (the world:
-PlayerStart_Clearing in the Verdant woods clearing from Tools/town_clearing.py, with the trees inside it left out), and
-one StaticMeshActor per placement in outliner folders by group. Writes Saved/ArtImport/towns_v2_layout_report.json.
+PlayerStart_Clearing in the Verdant woods clearing from Tools/town_clearing.py, with the trees inside it left out; also
+the basket ferry stations just outside the Verdant and Rime walls, TargetPoints tagged GFFerryStop + stop id that
+AGFFerryDirector flies between), and one StaticMeshActor per placement in outliner folders by group. Writes Saved/ArtImport/towns_v2_layout_report.json.
 """
 import collections, json, math, os, sys
 import unreal
@@ -189,7 +190,7 @@ def build(map_name, layout_name, ground, paths):
         rep["ground"].append(slab("Ground_Snow", X0, split_x, split_y, Y1, "snow"))
         rep["ground"].append(tile_ground("Ground_Charcoal", split_x, X1, Y0, Y1, "charcoal", paths, anchor_x0=True))  # FIXES_V1
     rep["lights"] = lights()  # FIXES_V1 (was: sun, sky light, atmosphere and fog always placed)
-    clearing, radii, cut = None, {}, 0
+    clearing, radii, cut, stations = None, {}, 0, {}
     if layout_name.startswith("World"):
         # START: the world (the game's default map) starts in a clearing in the Verdant woods. The trees whose footprint
         # reaches into it are left out below; the player faces the Verdant town at the origin, and the hub gate
@@ -205,6 +206,15 @@ def build(map_name, layout_name, ground, paths):
         rep["player_start"] = [cx_, cy_, 120]
         rep["player_start_yaw"] = round(face, 2)
         rep["start_clearing"] = clearing
+        # FERRY: the basket ferry runs between Rime and Verdant outside both towns. AGFFerryDirector swaps its config
+        # stops for these markers (FGFFerryPlacedStops) and keeps only the Rime-Verdant route.
+        stations = town_clearing.ferry_stations(town_clearing.flatten(LAYOUTS, layout_name))
+        for stop, loc in sorted(stations.items()):
+            marker = spawn(unreal.TargetPoint, unreal.Vector(*loc))
+            marker.tags = [unreal.Name("GFFerryStop"), unreal.Name(stop)]
+            marker.set_actor_label("FerryStop_" + stop)
+            marker.set_folder_path("Town/Ferry")
+        rep["ferry_stations"] = stations
     else:
         # Player start on the +X entry road (every town's entry is on local +X).
         near = [p[2][0] for p in P if abs(p[2][1]) < 1500]
@@ -214,7 +224,7 @@ def build(map_name, layout_name, ground, paths):
         rep["player_start"] = [sx, 0, 120]
     meshes, counts = {}, collections.Counter()
     for i, (name, group, l, yaw, pitch, roll, s, _) in enumerate(P):
-        if town_clearing.cuts(name, l, s, radii, clearing):
+        if town_clearing.cuts(name, l, s, radii, clearing) or town_clearing.ferry_cuts(name, l, s, radii, stations):
             cut += 1
             continue
         if name not in meshes:
