@@ -13,16 +13,19 @@ GFTOWN_MAPS (comma list of map names, default all), GFTOWN_LIGHTS (FIXES_V1: "di
 atmosphere or fog so the game environment director lights the map exactly like the hub (fixed manual exposure, fog 0.005);
 "placed" keeps the editor-placed lights and adds the same manual exposure volume and fog the director would use).
 Each map is rebuilt from scratch: flat ground with the top at Z = 0 (the kits have no landscape; Cinderwright charcoal is
-tiled with the 64 m GroundSlab mesh), lights only with GFTOWN_LIGHTS=placed, a player start at the +X entry, and one
-StaticMeshActor per placement in outliner folders by group. Writes Saved/ArtImport/towns_v2_layout_report.json.
+tiled with the 64 m GroundSlab mesh), lights only with GFTOWN_LIGHTS=placed, a player start at the +X entry (the world:
+PlayerStart_Clearing in the Verdant woods clearing from Tools/town_clearing.py, with the trees inside it left out), and
+one StaticMeshActor per placement in outliner folders by group. Writes Saved/ArtImport/towns_v2_layout_report.json.
 """
-import collections, json, math, os
+import collections, json, math, os, sys
 import unreal
 
 PROJ = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
 KIT = os.environ.get("GFTOWN_KIT", "").strip() or os.path.join(PROJ, "handoff", "inbox", "towns_v2")
 V1_KIT = os.environ.get("GFTOWN_V1_KIT", "").strip() or os.path.join(os.path.dirname(KIT), "town_v1")
 OUT = os.path.join(PROJ, "Saved", "ArtImport")
+sys.path.insert(0, os.path.join(PROJ, "Tools"))
+import town_clearing  # START: the woodland clearing the world map spawns in (pure Python, runs without the editor)
 EAL = unreal.EditorAssetLibrary
 les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 eas = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
@@ -186,17 +189,34 @@ def build(map_name, layout_name, ground, paths):
         rep["ground"].append(slab("Ground_Snow", X0, split_x, split_y, Y1, "snow"))
         rep["ground"].append(tile_ground("Ground_Charcoal", split_x, X1, Y0, Y1, "charcoal", paths, anchor_x0=True))  # FIXES_V1
     rep["lights"] = lights()  # FIXES_V1 (was: sun, sky light, atmosphere and fog always placed)
-    # Player start on the +X entry road (every town's entry is on local +X; the world starts at Verdant's gate).
+    clearing, radii, cut = None, {}, 0
     if layout_name.startswith("World"):
-        sx = 3600.0
+        # START: the world (the game's default map) starts in a clearing in the Verdant woods. The trees whose footprint
+        # reaches into it are left out below; the player faces the Verdant town at the origin, and the hub gate
+        # director puts the way home behind them (AGFReturnGate::AreaLocation).
+        radii = town_clearing.footprints(KIT, V1_KIT)
+        clearing = town_clearing.world_clearing(LAYOUTS, layout_name, KIT, V1_KIT)
+        if not clearing:
+            raise RuntimeError("no start clearing in " + layout_name)
+        cx_, cy_ = clearing["location_cm"]
+        face = math.degrees(math.atan2(-cy_, -cx_))
+        start = spawn(unreal.PlayerStart, unreal.Vector(cx_, cy_, 120), unreal.Rotator(0, 0, face))
+        start.set_actor_label("PlayerStart_Clearing")
+        rep["player_start"] = [cx_, cy_, 120]
+        rep["player_start_yaw"] = round(face, 2)
+        rep["start_clearing"] = clearing
     else:
+        # Player start on the +X entry road (every town's entry is on local +X).
         near = [p[2][0] for p in P if abs(p[2][1]) < 1500]
         sx = (max(near) if near else x1) + 600.0
-    start = spawn(unreal.PlayerStart, unreal.Vector(sx, 0, 120), unreal.Rotator(0, 0, 180))
-    start.set_actor_label("PlayerStart_Entry")
-    rep["player_start"] = [sx, 0, 120]
+        start = spawn(unreal.PlayerStart, unreal.Vector(sx, 0, 120), unreal.Rotator(0, 0, 180))
+        start.set_actor_label("PlayerStart_Entry")
+        rep["player_start"] = [sx, 0, 120]
     meshes, counts = {}, collections.Counter()
     for i, (name, group, l, yaw, pitch, roll, s, _) in enumerate(P):
+        if town_clearing.cuts(name, l, s, radii, clearing):
+            cut += 1
+            continue
         if name not in meshes:
             ap = paths.get(name)
             meshes[name] = unreal.load_asset(ap) if ap and EAL.does_asset_exist(ap) else None
@@ -214,7 +234,8 @@ def build(map_name, layout_name, ground, paths):
     rep["expected"] = layout.get("flattened_instances") or layout["total_instances"]
     if not layout.get("layout_refs"):
         rep["counts_match"] = dict(counts) == layout["counts"]
-    rep["placed_matches_expected"] = rep["placed"] == rep["expected"]
+    rep["cleared_trees"] = cut
+    rep["placed_matches_expected"] = rep["placed"] + cut == rep["expected"]
     rep["extent_cm"] = [x0, x1, y0, y1]
     les.save_current_level()
     report["maps"][map_name] = rep
@@ -235,6 +256,7 @@ def main():
         except Exception as e:
             report["maps"][map_name] = {"error": str(e)}
             log("{} failed: {}".format(map_name, e))
+    os.makedirs(OUT, exist_ok=True)
     with open(os.path.join(OUT, "towns_v2_layout_report.json"), "w", encoding="utf-8") as fh:
         json.dump(report, fh, indent=1)
 

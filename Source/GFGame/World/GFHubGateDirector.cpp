@@ -13,6 +13,7 @@
 #include "GFTerritorySubsystem.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/PlayerStart.h"
 #include "UObject/SoftObjectPath.h"
 
 AGFHubGateDirector::AGFHubGateDirector()
@@ -214,5 +215,18 @@ void AGFHubGateDirector::Place(const FString& WorldPackage, const FVector& InRim
 				GFBeatHopMapGates::Refresh(BeatCourse);
 			}
 		}
+	}
+
+	// Every open area has a way home: the world map (the default map, you start in its woodland clearing) and the
+	// towns get a map-travel gate behind their player start.
+	if (!bHub && FGFReturnToHub::IsAreaMap(WorldPackage))
+	{
+		FVector At = AGFReturnGate::MapLocation();
+		for (TActorIterator<APlayerStart> It(World); It; ++It)
+		{
+			At = AGFReturnGate::AreaLocation(It->GetActorTransform());
+			break;
+		}
+		EnsureReturn(World, AGFReturnGate::AreaModeId(), At, InRimeCenter, true);
 	}
 }

@@ -46,6 +46,10 @@ struct GFGAME_API FGFReturnToHub
 	static constexpr float NearGateCm = 800.f;
 
 	static FVector HubStand(const FVector& RimeCenter);
+
+	/** Open areas you start or walk in (the world map, the towns). Their gate and fallback key travel to the hub map. */
+	static const TArray<FName>& AreaMaps();
+	static bool IsAreaMap(const FString& WorldPackage);
 	static EGFReturnRoute RouteFor(bool bMapTravel, EGFReturnSeat Seat);
 	static EGFReturnSeat SeatOf(const APawn* Pawn);
 
@@ -88,7 +92,13 @@ public:
 	static FVector MapLocation();
 	static FVector PadLocation(const FGFMiniGameEntry& Entry, const FVector& RimeCenter);
 
+	/** Area maps: AreaBehindCm behind the player start on the ground, so a fresh spawn walks away from it, not into it. */
+	static FVector AreaLocation(const FTransform& PlayerStart);
+	static FName AreaModeId() { return TEXT("Area"); }
+
 	static constexpr float BesideCm = 400.f;
+	static constexpr float AreaBehindCm = 800.f;
+	static constexpr float StartHeightCm = 120.f;
 
 private:
 	UFUNCTION()

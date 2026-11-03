@@ -206,6 +206,10 @@ namespace
 		{
 			return false;
 		}
+		if (FGFReturnToHub::IsAreaMap(Package))
+		{
+			return true;
+		}
 		for (const FGFMiniGameEntry& Entry : FGFMiniGameCatalog::All())
 		{
 			if (Entry.HasMap() && FGFMiniGameCatalog::WorldIs(Package, Entry.Map))
@@ -466,6 +470,38 @@ void AGFReturnGate::ApplyVisuals()
 		Mesh->SetRelativeLocation(FVector(0.f, 0.f, 150.f));
 		Mesh->SetMaterial(0, FGFAssetMap::MakeTint(Mesh, FLinearColor(0.93f, 0.96f, 1.f)));
 	}
+}
+
+const TArray<FName>& FGFReturnToHub::AreaMaps()
+{
+	static const TArray<FName> Maps = {
+		TEXT("/Game/Maps/L_World_Factions_A"),
+		TEXT("/Game/Maps/L_Town_Verdant_A"),
+		TEXT("/Game/Maps/L_Town_Cinderwright_A"),
+		TEXT("/Game/Maps/L_Town_Rime_A"),
+		TEXT("/Game/Maps/L_Homestead_Verdant_A"),
+	};
+	return Maps;
+}
+
+bool FGFReturnToHub::IsAreaMap(const FString& WorldPackage)
+{
+	for (const FName& Map : AreaMaps())
+	{
+		if (FGFMiniGameCatalog::WorldIs(WorldPackage, Map))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+FVector AGFReturnGate::AreaLocation(const FTransform& PlayerStart)
+{
+	const FVector Forward = PlayerStart.GetRotation().Rotator().Vector().GetSafeNormal2D();
+	FVector At = PlayerStart.GetLocation() - (Forward.IsNearlyZero() ? FVector::ForwardVector : Forward) * AreaBehindCm;
+	At.Z = PlayerStart.GetLocation().Z - StartHeightCm;
+	return At;
 }
 
 FVector AGFReturnGate::MapLocation()
