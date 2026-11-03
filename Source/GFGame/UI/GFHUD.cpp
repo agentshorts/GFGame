@@ -111,14 +111,20 @@ void AGFHUD::BeginPlay()
 
 void AGFHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (bChatOpen || bAimSettingsOpen)
+	if (bChatOpen || bAimSettingsOpen || bPauseMenuOpen)
 	{
 		if (APlayerController* PC = GetOwningPlayerController())
 		{
 			PC->SetInputMode(FInputModeGameOnly());
 			PC->bShowMouseCursor = false;
+			PC->bEnableClickEvents = false;
 		}
 	}
+	if (APawn* Held = HeldPawn.Get())
+	{
+		Held->EnableInput(GetOwningPlayerController());
+	}
+	HeldPawn.Reset();
 	RemoveAimSettings();
 	RemoveChatWidget();
 	ChatBlockTicks = 2;
@@ -387,19 +393,85 @@ FString AGFHUD::GetPauseEntry(int32 Index) const
 	return PauseEntryLabel(Index);
 }
 
+AGFHUD::FPauseInput AGFHUD::PauseInputFor(bool bMenuOpen)
+{
+	FPauseInput Out;
+	Out.bGameAndUI = bMenuOpen;
+	Out.bShowCursor = bMenuOpen;
+	Out.bClickEvents = bMenuOpen;
+	Out.bPawnInput = !bMenuOpen;
+	return Out;
+}
+
 void AGFHUD::OpenPauseMenu()
 {
 	bPauseMenuOpen = true;
+	ApplyMenuInput();
 }
 
 void AGFHUD::ClosePauseMenu()
 {
 	bPauseMenuOpen = false;
+	ApplyMenuInput();
 }
 
 void AGFHUD::TogglePauseMenu()
 {
 	bPauseMenuOpen = !bPauseMenuOpen;
+	ApplyMenuInput();
+}
+
+void AGFHUD::ApplyMenuInput()
+{
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC || !PC->IsLocalController())
+	{
+		return;
+	}
+	const FPauseInput Want = PauseInputFor(bPauseMenuOpen);
+	APawn* Pawn = PC->GetPawn();
+	if (!Want.bPawnInput && Pawn && HeldPawn.Get() != Pawn)
+	{
+		if (APawn* Old = HeldPawn.Get())
+		{
+			Old->EnableInput(PC);
+		}
+		Pawn->DisableInput(PC);
+		HeldPawn = Pawn;
+	}
+	else if (Want.bPawnInput && HeldPawn.IsValid())
+	{
+		HeldPawn->EnableInput(PC);
+		HeldPawn.Reset();
+	}
+	if (bChatOpen || bAimSettingsOpen)
+	{
+		return;
+	}
+	if (Want.bGameAndUI)
+	{
+		// Frees the mouse: the viewport only captures while a button is down, and the cursor stays visible then too.
+		FInputModeGameAndUI Mode;
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		Mode.SetHideCursorDuringCapture(false);
+		PC->SetInputMode(Mode);
+	}
+	else
+	{
+		PC->SetInputMode(FInputModeGameOnly());
+	}
+	PC->bShowMouseCursor = Want.bShowCursor;
+	PC->bEnableClickEvents = Want.bClickEvents;
+}
+
+void AGFHUD::NotifyHitBoxClick(FName BoxName)
+{
+	Super::NotifyHitBoxClick(BoxName);
+	FString Name = BoxName.ToString();
+	if (bPauseMenuOpen && Name.RemoveFromStart(TEXT("GFPause_")) && Name.IsNumeric())
+	{
+		ActivatePauseEntry(FCString::Atoi(*Name));
+	}
 }
 
 void AGFHUD::ActivatePauseEntry(int32 Index)
@@ -463,6 +535,7 @@ void AGFHUD::DrawPauseMenu()
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
 		DrawText(GetPauseEntry(Index), FLinearColor(0.98f, 0.86f, 0.45f), 40.f, 68.f + Index * 28.f, Font, 1.f, false);
+		AddHitBox(FVector2D(32.f, 64.f + Index * 28.f), FVector2D(400.f, 28.f), FName(*FString::Printf(TEXT("GFPause_%d"), Index)), true);
 	}
 }
 
@@ -515,6 +588,7 @@ void AGFHUD::CloseAimSettings()
 			PC->bShowMouseCursor = false;
 		}
 	}
+	ApplyMenuInput();
 }
 
 void AGFHUD::RemoveAimSettings()
@@ -1027,6 +1101,7 @@ void AGFHUD::DismissChat()
 		PC->bShowMouseCursor = false;
 	}
 	RemoveChatWidget();
+	ApplyMenuInput();
 }
 
 void AGFHUD::RemoveChatWidget()

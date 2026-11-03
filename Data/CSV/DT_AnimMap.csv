@@ -37,6 +37,15 @@ Player.Fall,/Game/Art/Characters/Player/Anims/A_Player_Base_Fall.A_Player_Base_F
 Player.Land_Catch,/Game/Art/Characters/Player/Anims/A_Player_Base_Land_Catch.A_Player_Base_Land_Catch,False,False,0.0,0.0
 Player.Run_Fast,/Game/Art/Characters/Player/Anims/A_Player_Base_Run_Fast.A_Player_Base_Run_Fast,True,False,0.0,600.0
 Player.Victory,/Game/Art/Characters/Player/Anims/A_Player_Base_Victory.A_Player_Base_Victory,False,True,0.0,0.0
+Player.Mine_Punch,/Game/Art/Characters/Player/Anims/A_Player_Base_Mine_Punch.A_Player_Base_Mine_Punch,False,False,0.0,0.0
+Player.Mine_Dig,/Game/Art/Characters/Player/Anims/A_Player_Base_Mine_Dig.A_Player_Base_Mine_Dig,False,False,0.0,0.0
+Player.Mine_Claw,/Game/Art/Characters/Player/Anims/A_Player_Base_Mine_Claw.A_Player_Base_Mine_Claw,False,False,0.0,0.0
+Player.Mine_Overcharge,/Game/Art/Characters/Player/Anims/A_Player_Base_Mine_Overcharge.A_Player_Base_Mine_Overcharge,False,False,0.0,0.0
+Player.Cast_Element_Swap,/Game/Art/Characters/Player/Anims/A_Player_Base_Cast_Element_Swap.A_Player_Base_Cast_Element_Swap,False,False,0.0,0.0
+Player.Mine_Field_Start,/Game/Art/Characters/Player/Anims/A_Player_Base_Mine_Field_Start.A_Player_Base_Mine_Field_Start,False,False,0.0,0.0
+Player.Mine_Field_Loop,/Game/Art/Characters/Player/Anims/A_Player_Base_Mine_Field_Loop.A_Player_Base_Mine_Field_Loop,True,False,0.0,0.0
+Player.Mine_Field_End,/Game/Art/Characters/Player/Anims/A_Player_Base_Mine_Field_End.A_Player_Base_Mine_Field_End,False,False,0.0,0.0
+Player.FistScope,/Game/Art/Characters/Player/Anims/A_Player_Base_FistScope.A_Player_Base_FistScope,True,False,0.0,0.0
 Tusksaw.Idle,/Game/Art/Dinos/Tusksaw/Anims/A_Dino_Tusksaw_Idle.A_Dino_Tusksaw_Idle,True,False,0.0,0.0
 Tusksaw.Walk,/Game/Art/Dinos/Tusksaw/Anims/A_Dino_Tusksaw_Walk.A_Dino_Tusksaw_Walk,True,False,0.0,0.0
 Tusksaw.Run,/Game/Art/Dinos/Tusksaw/Anims/A_Dino_Tusksaw_Run.A_Dino_Tusksaw_Run,True,False,0.0,0.0

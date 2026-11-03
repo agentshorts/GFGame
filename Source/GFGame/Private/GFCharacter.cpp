@@ -19,6 +19,7 @@
 #include "GFMagicComponent.h"
 #include "GFMagicTables.h"
 #include "GFMagicTypes.h"
+#include "GFMiningAnim.h"
 #include "GFArenaDirector.h"
 #include "Aim/GFAimSim.h"
 #include "Animation/AnimSequenceBase.h"
@@ -168,6 +169,7 @@ void AGFCharacter::Tick(float DeltaSeconds)
 			SendMagicAim();
 		}
 	}
+	UpdateMiningField(DeltaSeconds);
 	if (SpringArm && !bFirstPerson)
 	{
 		if (const UGFCharacterMovementComponent* Move = GetGFMovement())
@@ -370,6 +372,7 @@ void AGFCharacter::OnRemove(const FInputActionValue&)
 	if (UGFMagicComponent* Magic = FindMagic())
 	{
 		bMagicHeld = true;
+		bMiningFieldTried = false;
 		MagicPressSeconds = 0.f;
 		MagicAimElapsed = 0.f;
 		Magic->SetFieldHeld(true);
@@ -379,7 +382,10 @@ void AGFCharacter::OnRemove(const FInputActionValue&)
 	}
 	if (GFResolvePrimaryUse(AimState.Held, AimState.bSnoutZoom) == EGFTriggerUse::PlaceBlock)
 	{
-		TryRemoveBlock();
+		if (TryRemoveBlock())
+		{
+			PlayMineTap();
+		}
 		return;
 	}
 	PushAim(EGFAimEvent::FirePressed);
@@ -397,6 +403,7 @@ void AGFCharacter::OnRemoveReleased(const FInputActionValue&)
 		Magic->ReleaseAbility(GFMagic::InputField);
 		Magic->SetFieldHeld(false);
 	}
+	EndMiningField();
 	if (MagicPressSeconds >= GFMagic::TapSeconds)
 	{
 		return;
@@ -404,11 +411,12 @@ void AGFCharacter::OnRemoveReleased(const FInputActionValue&)
 	if (AimState.Held == EGFAimHeldKind::Fists)
 	{
 		PushAim(EGFAimEvent::FirePressed);
+		PlayMiningClip(GFMiningAnim::Punch(), false);
 		return;
 	}
-	if (AimedCellNeedsHands())
+	if (AimedCellNeedsHands() && TryRemoveBlock())
 	{
-		TryRemoveBlock();
+		PlayMineTap();
 	}
 }
 
@@ -421,6 +429,7 @@ void AGFCharacter::OnClaw(const FInputActionValue&)
 		{
 			Magic->RequestClaw();
 		}
+		PlayMiningClip(GFMiningAnim::Claw(), false);
 	}
 }
 
@@ -432,6 +441,7 @@ void AGFCharacter::OnToggleElement(const FInputActionValue&)
 		{
 			Magic->RequestToggle();
 		}
+		PlayMiningClip(GFMiningAnim::ElementSwap(), false);
 	}
 }
 
@@ -443,6 +453,7 @@ void AGFCharacter::OnOvercharge(const FInputActionValue&)
 		{
 			Magic->RequestOvercharge();
 		}
+		PlayMiningClip(GFMiningAnim::Overcharge(), false);
 	}
 }
 
@@ -985,6 +996,78 @@ void AGFCharacter::UpdateFistPose()
 	if (bFistClipHeld)
 	{
 		bFistClipHeld = false;
+		SimpleAnim->PauseFor(0.01f);
+	}
+}
+
+bool AGFCharacter::PlayMiningClip(FName Key, bool bLoop)
+{
+	const bool bSeat = FerryRider && (FerryRider->IsInFlight() || !FerryRider->GetSeatAnim().IsNone());
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (!SimpleAnim || !MeshComp || !GFMiningAnim::MayPlay(bSeat, bFistClipHeld))
+	{
+		return false;
+	}
+	UAnimSequenceBase* Clip = FGFAnimMap::Load(Key);
+	if (!Clip)
+	{
+		return false;
+	}
+	MeshComp->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+	MeshComp->PlayAnimation(Clip, bLoop);
+	MeshComp->SetPlayRate(1.f);
+	// Last writer wins: a newer clip (or the fist scope) replaces this hold.
+	SimpleAnim->PauseFor(bLoop ? 10000.f : Clip->GetPlayLength());
+	MiningPoseSeconds = bLoop ? 0.f : Clip->GetPlayLength();
+	return true;
+}
+
+void AGFCharacter::PlayMineTap()
+{
+	FHitResult Hit;
+	const UCapsuleComponent* Capsule = GetCapsuleComponent();
+	const float FeetZ = GetActorLocation().Z - (Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 0.f);
+	const FName Key = TraceBlock(Hit)
+		? GFMiningAnim::TapAnim(Hit.ImpactPoint.Z, Hit.ImpactNormal.Z, FeetZ)
+		: GFMiningAnim::Punch();
+	MiningPose = EGFMiningPose::None;
+	PlayMiningClip(Key, false);
+}
+
+void AGFCharacter::UpdateMiningField(float DeltaSeconds)
+{
+	if (bFistClipHeld)
+	{
+		MiningPose = EGFMiningPose::None;
+		return;
+	}
+	if (bMagicHeld && !bMiningFieldTried && MagicPressSeconds >= GFMagic::TapSeconds)
+	{
+		bMiningFieldTried = true;
+		if (PlayMiningClip(GFMiningAnim::FieldStart(), false))
+		{
+			MiningPose = EGFMiningPose::FieldStart;
+		}
+	}
+	if (MiningPose == EGFMiningPose::FieldStart)
+	{
+		MiningPoseSeconds -= DeltaSeconds;
+		if (MiningPoseSeconds <= 0.f)
+		{
+			MiningPose = PlayMiningClip(GFMiningAnim::FieldLoop(), true) ? EGFMiningPose::FieldLoop : EGFMiningPose::None;
+		}
+	}
+}
+
+void AGFCharacter::EndMiningField()
+{
+	if (MiningPose == EGFMiningPose::None)
+	{
+		return;
+	}
+	MiningPose = EGFMiningPose::None;
+	if (!PlayMiningClip(GFMiningAnim::FieldEnd(), false) && SimpleAnim && !bFistClipHeld)
+	{
 		SimpleAnim->PauseFor(0.01f);
 	}
 }

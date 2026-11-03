@@ -72,6 +72,16 @@ bool FGFArtAnimMapTest::RunTest(const FString&)
 		{ TEXT("Player.Land_Catch"), TEXT("A_Player_Base_Land_Catch"), false, false },
 		{ TEXT("Player.Run_Fast"), TEXT("A_Player_Base_Run_Fast"), true, false },
 		{ TEXT("Player.Victory"), TEXT("A_Player_Base_Victory"), false, true },
+		// mining_anims_v1 (GFMiningAnim keys and GFAim::FistScopeAnim).
+		{ TEXT("Player.Mine_Punch"), TEXT("A_Player_Base_Mine_Punch"), false, false },
+		{ TEXT("Player.Mine_Dig"), TEXT("A_Player_Base_Mine_Dig"), false, false },
+		{ TEXT("Player.Mine_Claw"), TEXT("A_Player_Base_Mine_Claw"), false, false },
+		{ TEXT("Player.Mine_Overcharge"), TEXT("A_Player_Base_Mine_Overcharge"), false, false },
+		{ TEXT("Player.Cast_Element_Swap"), TEXT("A_Player_Base_Cast_Element_Swap"), false, false },
+		{ TEXT("Player.Mine_Field_Start"), TEXT("A_Player_Base_Mine_Field_Start"), false, false },
+		{ TEXT("Player.Mine_Field_Loop"), TEXT("A_Player_Base_Mine_Field_Loop"), true, false },
+		{ TEXT("Player.Mine_Field_End"), TEXT("A_Player_Base_Mine_Field_End"), false, false },
+		{ TEXT("Player.FistScope"), TEXT("A_Player_Base_FistScope"), true, false },
 	};
 	USkeleton* Skel = LoadObject<USkeleton>(nullptr, TEXT("/Game/Art/Characters/Player/SKEL_GF_Humanoid.SKEL_GF_Humanoid"));
 	TestNotNull(TEXT("SKEL_GF_Humanoid loads"), Skel);
@@ -423,7 +433,7 @@ bool FGFArtBatch7Test::RunTest(const FString&)
 	USkeleton* Human = LoadObject<USkeleton>(nullptr, TEXT("/Game/Art/Characters/Player/SKEL_GF_Humanoid.SKEL_GF_Humanoid"));
 	USkeleton* Raptor = LoadObject<USkeleton>(nullptr, TEXT("/Game/Art/Dinos/Raptor/SKEL_Dino_Raptor.SKEL_Dino_Raptor"));
 	TestNotNull(TEXT("SKEL_Dino_Raptor loads"), Raptor);
-	TestEqual(TEXT("SK_Player_Base v6: 38 clips"), GFArtCountAnims(TEXT("/Game/Art/Characters/Player/Anims"), Human), 38);
+	TestEqual(TEXT("SK_Player_Base v6 + mining_anims_v1: 47 clips"), GFArtCountAnims(TEXT("/Game/Art/Characters/Player/Anims"), Human), 47);
 	TestEqual(TEXT("SK_Dino_Raptor v5: 17 clips"), GFArtCountAnims(TEXT("/Game/Art/Dinos/Raptor/Anims"), Raptor), 17);
 	for (const TCHAR* Clip : { TEXT("Attack_Pounce"), TEXT("Attack_Rake"), TEXT("Call"), TEXT("Stunned"), TEXT("Cheer"), TEXT("Refuse") })
 	{

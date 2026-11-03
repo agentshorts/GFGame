@@ -186,6 +186,14 @@ protected:
 	void ApplyShoulderOffset();
 	void UpdateCameraFade();
 	void UpdateFistPose();
+	/** Plays a mining clip (GFMiningAnim keys) on the local body; false when the ferry seat or fist scope owns it or the clip is missing. */
+	bool PlayMiningClip(FName Key, bool bLoop);
+	/** Tap to mine: Mine_Dig or Mine_Punch from where the block trace lands. */
+	void PlayMineTap();
+	/** LMB hold: Mine_Field_Start once past the tap time, then Mine_Field_Loop until release. */
+	void UpdateMiningField(float DeltaSeconds);
+	/** Release: Mine_Field_End when the field pose is up. */
+	void EndMiningField();
 	void PlayFistScopeCue();
 	bool IsAimingDownASnout() const;
 
@@ -197,6 +205,12 @@ protected:
 	/** True only after Fist_Scope actually replaced locomotion, so a missing clip does not pause the walk. */
 	bool bFistClipHeld = false;
 	bool bMagicHeld = false;
+	enum class EGFMiningPose : uint8 { None, FieldStart, FieldLoop };
+	EGFMiningPose MiningPose = EGFMiningPose::None;
+	/** Time left on Mine_Field_Start before the loop takes over. */
+	float MiningPoseSeconds = 0.f;
+	/** The field clip was tried for this press (so a blocked or missing clip is not retried every frame). */
+	bool bMiningFieldTried = false;
 	float MagicPressSeconds = 0.f;
 	float MagicAimElapsed = 0.f;
 	bool bFistScopeSoundSearched = false;

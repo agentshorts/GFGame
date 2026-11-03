@@ -36,6 +36,18 @@ public:
 	void DrawPathsAndVillains();
 	bool IsAimSettingsOpen() const { return bAimSettingsOpen; }
 
+	/** How the owning controller's input is set while the pause menu is open or shut. */
+	struct FPauseInput
+	{
+		/** Game and UI with the cursor free, so Escape still reaches the game mapping and the mouse can click entries. */
+		bool bGameAndUI = false;
+		bool bShowCursor = false;
+		bool bClickEvents = false;
+		/** False holds the pawn's input (look, move, mine, jump) while the menu is up. */
+		bool bPawnInput = true;
+	};
+	static FPauseInput PauseInputFor(bool bMenuOpen);
+
 	bool IsPauseMenuOpen() const { return bPauseMenuOpen; }
 	void OpenPauseMenu();
 	void ClosePauseMenu();
@@ -48,6 +60,8 @@ public:
 	FString GetPauseEntry(int32 Index) const;
 	void ToggleAimSettings();
 	void CloseAimSettings();
+	/** Clicks on the pause entries (hit boxes GFPause_<index>). */
+	virtual void NotifyHitBoxClick(FName BoxName) override;
 
 	bool IsChatOpen() const { return bChatOpen; }
 	void OpenChat();
@@ -91,6 +105,11 @@ private:
 	/** Mining range: items gained since reset, cells broken, and time to clear each row. */
 	void DrawMiningRange();
 	void DrawPauseMenu();
+	/**
+	 * Input mode, cursor and pawn input for the pause menu (PauseInputFor). Chat and the aim panel set their own UI-only
+	 * mode while open; when they close this puts back the pause or the game mode.
+	 */
+	void ApplyMenuInput();
 
 	void PollToasts();
 	void NoteChatLine(int32 Seq, double Now);
@@ -122,6 +141,8 @@ private:
 	TSharedPtr<SWidget> AimSettingsRoot;
 	bool bAimSettingsOpen = false;
 	bool bPauseMenuOpen = false;
+	/** The pawn whose input the open pause menu holds. */
+	TWeakObjectPtr<APawn> HeldPawn;
 	/** Item hint on the runway. On until a show ends, and again when the pause menu asks. */
 	bool bShowItemHowTo = true;
 	bool bItemHowToPinned = false;
