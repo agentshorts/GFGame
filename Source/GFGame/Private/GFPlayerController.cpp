@@ -319,7 +319,40 @@ void AGFPlayerController::ClearReturnPrompt()
 bool AGFPlayerController::IsReturnConfirmOpen() const
 {
 	const AGFHUD* HUD = Cast<AGFHUD>(GetHUD());
-	return HUD && HUD->GetHudModal() == EGFHudModal::PauseConfirm;
+	return HUD && FGFHudModalRules::ConfirmsReturn(HUD->GetHudModal());
+}
+
+void AGFPlayerController::ApplyShownHeat(EGFTheftHeat State, float HuntLeft)
+{
+	ShownHeat = State;
+	ShownHuntLeft = FMath::Max(0.f, HuntLeft);
+}
+
+void AGFPlayerController::NotifyTheftHeat(EGFTheftHeat State, float HuntLeft)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	const float Seconds = FMath::Max(0.f, HuntLeft);
+	const int32 NextSecond = FMath::CeilToInt(Seconds);
+	const int32 HaveSecond = FMath::CeilToInt(FMath::Max(0.f, ShownHuntLeft));
+	if (ShownHeat == State && NextSecond == HaveSecond)
+	{
+		return;
+	}
+	ApplyShownHeat(State, Seconds);
+	if (!IsLocalController())
+	{
+		ClientSetTheftHeat(static_cast<uint8>(State), Seconds);
+	}
+}
+
+void AGFPlayerController::ClientSetTheftHeat_Implementation(uint8 State, float HuntLeft)
+{
+	const uint8 Max = static_cast<uint8>(EGFTheftHeat::Hunted);
+	const EGFTheftHeat Decoded = State <= Max ? static_cast<EGFTheftHeat>(State) : EGFTheftHeat::Clear;
+	ApplyShownHeat(Decoded, HuntLeft);
 }
 
 void AGFPlayerController::HandleShardhopKey()

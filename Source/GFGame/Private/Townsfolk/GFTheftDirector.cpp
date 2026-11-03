@@ -1,4 +1,5 @@
 #include "GFTheftDirector.h"
+#include "GFPlayerController.h"
 #include "GFDino.h"
 #include "GFElderBook.h"
 #include "GFLog.h"
@@ -348,6 +349,7 @@ void AGFTheftDirector::HandleCrystal(UWorld* World, const FString& NodeKey, FVec
 				ClearPlayer(Key, TownId);
 			}
 		}
+		PublishHeats();
 		return;
 	}
 	if (Open.Num() == 0)
@@ -375,6 +377,7 @@ void AGFTheftDirector::HandleCrystal(UWorld* World, const FString& NodeKey, FVec
 	{
 		FGFTheftRules::NoteWitness(Heats.FindOrAdd(Key), TownId);
 	}
+	PublishHeats();
 	UE_LOG(LogGF, Log, TEXT("Theft: %s crystal %s seen by %d"), *TownId.ToString(), *NodeKey, Witnesses.Num());
 }
 
@@ -492,6 +495,7 @@ void AGFTheftDirector::CommitHire(int32 CaseIndex)
 		}
 		Case.bClosed = true;
 	}
+	PublishHeats();
 }
 
 void AGFTheftDirector::Refresh(float DeltaSeconds)
@@ -567,6 +571,7 @@ void AGFTheftDirector::Refresh(float DeltaSeconds)
 			Case.bClosed = true;
 		}
 	}
+	PublishHeats();
 }
 
 void AGFTheftDirector::StandDown(int32 CaseIndex)
@@ -598,4 +603,31 @@ void AGFTheftDirector::ClearPlayer(const FString& PlayerKey, FName TownId)
 		Heat.bReportedClear = true;
 	}
 	FGFQuestEvents::Raise(GetWorld(), FGFQuestEvents::HeatCleared(PlayerKey, TownId));
+}
+
+void AGFTheftDirector::PublishHeats()
+{
+	UWorld* World = GetWorld();
+	if (!World || !HasAuthority())
+	{
+		return;
+	}
+	for (const TPair<FString, FGFTheftHeat>& Pair : Heats)
+	{
+		AGFPlayerController* Found = nullptr;
+		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+		{
+			AGFPlayerController* Candidate = Cast<AGFPlayerController>(It->Get());
+			const AGFPlayerState* PS = Candidate ? Candidate->GetPlayerState<AGFPlayerState>() : nullptr;
+			if (PS && PS->PlayerKey == Pair.Key)
+			{
+				Found = Candidate;
+				break;
+			}
+		}
+		if (Found)
+		{
+			Found->NotifyTheftHeat(Pair.Value.State, Pair.Value.HuntLeft);
+		}
+	}
 }

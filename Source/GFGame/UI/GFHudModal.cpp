@@ -23,6 +23,20 @@ bool FGFHudModalRules::FreesMouse(EGFHudModal Modal)
 	return Modal == EGFHudModal::Pause || Modal == EGFHudModal::PauseConfirm || Modal == EGFHudModal::Elder;
 }
 
+bool FGFHudModalRules::ShowsFieldHud(EGFHudModal Modal, EGFHudModal Restore)
+{
+	auto Blocks = [](EGFHudModal Value)
+	{
+		return Value == EGFHudModal::Pause || Value == EGFHudModal::PauseConfirm || Value == EGFHudModal::Elder;
+	};
+	return !Blocks(Modal) && !Blocks(Restore);
+}
+
+bool FGFHudModalRules::ConfirmsReturn(EGFHudModal Modal)
+{
+	return Modal == EGFHudModal::PauseConfirm;
+}
+
 FGFHudModalRules::FState FGFHudModalRules::Transition(EGFHudModal Modal, EGFHudModal Restore, EGFHudModalEvent Event)
 {
 	FState Out;

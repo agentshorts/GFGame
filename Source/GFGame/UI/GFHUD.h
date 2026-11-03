@@ -1,6 +1,6 @@
 #pragma once
 
-// Canvas HUD (crosshair, hotbar, zone, chat, toasts, Beat Hop judgement pops). No UMG. A one-line Slate text box is the chat entry.
+// Canvas HUD (crosshair, hotbar, zone, chat, toasts, quest tracker, spotted alert, interact prompt, Beat Hop judgement pops). No UMG. A one-line Slate text box is the chat entry.
 // Common UI replaces this later.
 
 #include "CoreMinimal.h"
@@ -70,6 +70,16 @@ struct GFGAME_API FGFHudModalRules
 	static bool HoldsPawn(EGFHudModal Modal, EGFHudModal Restore);
 	/** Cursor free and clickable. Chat and aim set their own mode. */
 	static bool FreesMouse(EGFHudModal Modal);
+	/**
+	 * Quest tracker, spotted banner, interact prompt, and the rank badge.
+	 * Off while pause or the elder menu is up, including when chat is open over one of them.
+	 */
+	static bool ShowsFieldHud(EGFHudModal Modal, EGFHudModal Restore);
+	/**
+	 * The hub key confirms a return only while the confirm modal is up.
+	 * Escape leaves that modal, so the next press asks again.
+	 */
+	static bool ConfirmsReturn(EGFHudModal Modal);
 };
 
 struct FGFHUDToast
@@ -181,6 +191,7 @@ private:
 	/** Mining range: items gained since reset, cells broken, and time to clear each row. */
 	void DrawMiningRange();
 	void DrawPauseMenu();
+	void DrawFieldHud();
 	void DrawElderMenu();
 	void ActivateElderBox(FName BoxName);
 	/**

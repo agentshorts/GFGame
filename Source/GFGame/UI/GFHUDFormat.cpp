@@ -192,3 +192,222 @@ TArray<FString> GFFormatPathCards(const TArray<FGFPathCard>& Cards)
 	}
 	return Lines;
 }
+
+bool GFHudRectsOverlap(const FGFHudRect& A, const FGFHudRect& B)
+{
+	if (A.IsEmpty() || B.IsEmpty())
+	{
+		return false;
+	}
+	return A.X < B.Right() && B.X < A.Right() && A.Y < B.Bottom() && B.Y < A.Bottom();
+}
+
+bool GFHudRectInside(const FGFHudRect& Rect, float CanvasW, float CanvasH)
+{
+	if (Rect.IsEmpty())
+	{
+		return true;
+	}
+	return Rect.X >= -0.01f && Rect.Y >= -0.01f && Rect.Right() <= CanvasW + 0.01f && Rect.Bottom() <= CanvasH + 0.01f;
+}
+
+FGFHudRect GFHudHotbarBounds(float CanvasW, float CanvasH)
+{
+	FGFHudRect Rect;
+	if (CanvasW <= 1.f || CanvasH <= 1.f)
+	{
+		return Rect;
+	}
+	Rect.X = 0.f;
+	Rect.H = GFHUD::HotbarBottomMargin + GFHUD::HotbarSlotH;
+	Rect.W = CanvasW;
+	Rect.Y = CanvasH - Rect.H;
+	return Rect;
+}
+
+namespace
+{
+	FGFHudRect CenterKeep(float CanvasW, float CanvasH, float Half)
+	{
+		FGFHudRect Rect;
+		if (CanvasW <= 1.f || CanvasH <= 1.f || Half <= 0.f)
+		{
+			return Rect;
+		}
+		Rect.W = Half * 2.f;
+		Rect.H = Half * 2.f;
+		Rect.X = CanvasW * 0.5f - Half;
+		Rect.Y = CanvasH * 0.5f - Half;
+		return Rect;
+	}
+}
+
+FGFHudRect GFHudStaminaBounds(float CanvasW, float CanvasH)
+{
+	return CenterKeep(CanvasW, CanvasH, GFHUD::StaminaKeepHalf);
+}
+
+FGFHudRect GFHudCrosshairBounds(float CanvasW, float CanvasH)
+{
+	return CenterKeep(CanvasW, CanvasH, GFHUD::CrosshairKeepHalf);
+}
+
+FGFFieldHudLayout GFLayoutFieldHud(float CanvasW, float CanvasH, int32 TrackerLines, bool bSpotted, bool bInteract)
+{
+	FGFFieldHudLayout Out;
+	if (CanvasW <= 1.f || CanvasH <= 1.f)
+	{
+		return Out;
+	}
+	if (TrackerLines > 0)
+	{
+		const float Height = GFHUD::TrackerPad * 2.f + static_cast<float>(TrackerLines) * GFHUD::TrackerLineH;
+		Out.Tracker.W = GFHUD::TrackerWidth;
+		Out.Tracker.H = Height;
+		Out.Tracker.X = CanvasW - GFHUD::FieldMargin - Out.Tracker.W;
+		Out.Tracker.Y = GFHUD::FieldTop;
+		const float Limit = CanvasH * 0.5f - GFHUD::StaminaKeepHalf - 8.f;
+		if (Out.Tracker.Bottom() > Limit)
+		{
+			Out.Tracker.H = FMath::Max(0.f, Limit - Out.Tracker.Y);
+		}
+	}
+	if (bSpotted)
+	{
+		Out.Spotted.W = GFHUD::SpottedWidth;
+		Out.Spotted.H = GFHUD::SpottedHeight;
+		Out.Spotted.X = (CanvasW - Out.Spotted.W) * 0.5f;
+		Out.Spotted.Y = GFHUD::FieldTop;
+	}
+	if (bInteract)
+	{
+		Out.Interact.W = GFHUD::InteractWidth;
+		Out.Interact.H = GFHUD::InteractHeight;
+		Out.Interact.X = (CanvasW - Out.Interact.W) * 0.5f;
+		Out.Interact.Y = CanvasH * 0.5f + GFHUD::InteractBelowCenter;
+		const float HotbarTop = CanvasH - (GFHUD::HotbarBottomMargin + GFHUD::HotbarSlotH);
+		if (Out.Interact.Bottom() > HotbarTop)
+		{
+			Out.Interact.Y = HotbarTop - Out.Interact.H - 8.f;
+		}
+		const float BelowKeep = CanvasH * 0.5f + GFHUD::StaminaKeepHalf + 8.f;
+		if (Out.Interact.Y < BelowKeep)
+		{
+			Out.Interact.Y = BelowKeep;
+		}
+	}
+	return Out;
+}
+
+FString GFQuestStepTitle(EGFQuestStep Step)
+{
+	switch (Step)
+	{
+	case EGFQuestStep::TakeCrystal: return TEXT("Take crystal");
+	case EGFQuestStep::Escape: return TEXT("Get clear");
+	case EGFQuestStep::TalkToElder: return TEXT("Talk to an elder");
+	case EGFQuestStep::HuntHide: return TEXT("Hand in hide");
+	case EGFQuestStep::HuntSkins: return TEXT("Hand in skins");
+	case EGFQuestStep::CraftLook: return TEXT("Craft a look");
+	case EGFQuestStep::WinShow: return TEXT("Win the show");
+	default: return FString();
+	}
+}
+
+FString GFFormatRankBadge(EGFFactionRank Rank)
+{
+	switch (Rank)
+	{
+	case EGFFactionRank::Initiate: return TEXT("Initiate");
+	case EGFFactionRank::Member: return TEXT("Member");
+	case EGFFactionRank::Champion: return TEXT("Champion");
+	case EGFFactionRank::Leader: return TEXT("Leader");
+	default: return TEXT("Outsider");
+	}
+}
+
+FString GFFormatNameplateWithRank(const FString& NameplateLine, EGFFactionRank Rank)
+{
+	const FString Badge = GFFormatRankBadge(Rank);
+	if (NameplateLine.IsEmpty())
+	{
+		return Badge;
+	}
+	return NameplateLine + TEXT(" \u00B7 ") + Badge;
+}
+
+FGFQuestTrackerView GFFormatQuestTracker(const FGFQuestCatalog& Catalog, EGFQuestStep Step, int32 Count, EGFFactionRank Rank, bool bAllow)
+{
+	FGFQuestTrackerView Out;
+	Out.Rank = GFFormatRankBadge(Rank);
+	if (!bAllow)
+	{
+		return Out;
+	}
+	if (Step == EGFQuestStep::Done)
+	{
+		Out.Lines.Add(Out.Rank);
+		return Out;
+	}
+	Out.bVisible = true;
+	Out.LineTitle = Catalog.TitleFor(Step);
+	if (Out.LineTitle.IsEmpty())
+	{
+		Out.LineTitle = TEXT("The Elder's Errand");
+	}
+	Out.StepTitle = GFQuestStepTitle(Step);
+	const int32 Goal = Catalog.GoalFor(Step);
+	if (Goal > 0)
+	{
+		Out.Progress = FString::Printf(TEXT("%d/%d"), FMath::Max(0, Count), Goal);
+	}
+	Out.Hint = Catalog.HintFor(Step);
+	Out.Lines.Add(Out.Rank);
+	if (!Out.LineTitle.IsEmpty())
+	{
+		Out.Lines.Add(Out.LineTitle);
+	}
+	if (!Out.StepTitle.IsEmpty())
+	{
+		Out.Lines.Add(Out.StepTitle);
+	}
+	if (!Out.Progress.IsEmpty())
+	{
+		Out.Lines.Add(Out.Progress);
+	}
+	if (!Out.Hint.IsEmpty())
+	{
+		Out.Lines.Add(Out.Hint);
+	}
+	return Out;
+}
+
+FGFSpottedAlert GFFormatSpottedAlert(EGFTheftHeat State, float SecondsLeft, bool bAllow)
+{
+	FGFSpottedAlert Out;
+	if (!bAllow || State == EGFTheftHeat::Clear)
+	{
+		return Out;
+	}
+	Out.bVisible = true;
+	if (State == EGFTheftHeat::Hunted)
+	{
+		Out.Headline = TEXT("The elder hired dinos");
+		Out.Detail = FString::Printf(TEXT("%ds"), FMath::Max(0, FMath::CeilToInt(SecondsLeft)));
+		return Out;
+	}
+	Out.Headline = TEXT("Spotted! A villager saw you take crystal");
+	return Out;
+}
+
+FGFInteractPrompt GFFormatInteractPrompt(bool bInReach, const FString& KeyLabel, const FString& Verb, bool bAllow)
+{
+	FGFInteractPrompt Out;
+	if (!bAllow || !bInReach || KeyLabel.IsEmpty() || Verb.IsEmpty())
+	{
+		return Out;
+	}
+	Out.bVisible = true;
+	Out.Line = FString::Printf(TEXT("[%s] %s"), *KeyLabel, *Verb);
+	return Out;
+}

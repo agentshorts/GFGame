@@ -16,6 +16,9 @@
 #include "GFZoneLayout.h"
 #include "GFZoneSubsystem.h"
 #include "GFHUDFormat.h"
+#include "GFDefaultInputKeys.h"
+#include "GFInteractable.h"
+#include "GFQuestLine.h"
 #include "GFVillainRules.h"
 #include "GFCharacter.h"
 #include "GFCharacterMovementComponent.h"
@@ -217,13 +220,14 @@ void AGFHUD::DrawPathsAndVillains()
 		const float Distance = FVector::Dist(MyPawn->GetActorLocation(), Pawn->GetActorLocation());
 		const FGFNameplateText Plate = GFFormatNameplate(Other->GetPlayerName(), Other->ChosenPath, Other->IsVillainMode(),
 			FGFVillainRules::TitleAt(Other->VillainTitle), Distance <= GFHUD::VillainSightCm);
+		const FString Line = GFFormatNameplateWithRank(Plate.Line, Other->FactionRank);
 		FVector2D Screen;
 		if (!PC->ProjectWorldLocationToScreen(Pawn->GetActorLocation() + FVector(0.f, 0.f, 120.f), Screen, true))
 		{
 			continue;
 		}
 		const FLinearColor Tint = Plate.bShowVillain ? FLinearColor(0.78f, 0.45f, 0.95f) : FLinearColor::White;
-		DrawText(Plate.Line, Tint, Screen.X, Screen.Y, Font, 0.7f * Scale, true);
+		DrawText(Line, Tint, Screen.X, Screen.Y, Font, 0.7f * Scale, true);
 	}
 }
 
@@ -260,6 +264,7 @@ void AGFHUD::DrawHUD()
 	DrawHotbar();
 	DrawHint();
 	DrawPathsAndVillains();
+	DrawFieldHud();
 	DrawPauseMenu();
 	DrawElderMenu();
 }
@@ -527,6 +532,80 @@ void AGFHUD::ShowItemHowTo()
 {
 	bShowItemHowTo = true;
 	bItemHowToPinned = true;
+}
+
+void AGFHUD::DrawFieldHud()
+{
+	if (!Canvas || !FGFHudModalRules::ShowsFieldHud(Modal, Restore))
+	{
+		return;
+	}
+	static const FGFQuestCatalog Catalog = FGFQuestCatalog::Load();
+	EGFQuestStep Step = EGFQuestStep::TakeCrystal;
+	int32 Count = 0;
+	EGFFactionRank Rank = EGFFactionRank::Outsider;
+	EGFTheftHeat Heat = EGFTheftHeat::Clear;
+	float SecondsLeft = 0.f;
+	const APlayerController* Owning = GetOwningPlayerController();
+	if (const AGFPlayerState* PS = Owning ? Owning->GetPlayerState<AGFPlayerState>() : nullptr)
+	{
+		Step = PS->QuestStep;
+		Count = PS->QuestCount;
+		Rank = PS->FactionRank;
+	}
+	if (const AGFPlayerController* GPC = Cast<AGFPlayerController>(Owning))
+	{
+		Heat = GPC->GetShownHeat();
+		SecondsLeft = GPC->GetShownHuntLeft();
+	}
+
+	FString Verb;
+	bool bReach = false;
+	if (AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn()))
+	{
+		if (AActor* Target = Character->FindNearestInteractable())
+		{
+			if (IGFInteractable* Interactable = Cast<IGFInteractable>(Target))
+			{
+				Verb = Interactable->GetInteractPrompt().ToString();
+				bReach = !Verb.IsEmpty();
+			}
+		}
+	}
+
+	const FString Key = FGFDefaultInputKeys::InteractKey().GetFName().ToString();
+	const FGFQuestTrackerView Tracker = GFFormatQuestTracker(Catalog, Step, Count, Rank, true);
+	const FGFSpottedAlert Spotted = GFFormatSpottedAlert(Heat, SecondsLeft, true);
+	const FGFInteractPrompt Prompt = GFFormatInteractPrompt(bReach, Key, Verb, true);
+	const FGFFieldHudLayout Layout = GFLayoutFieldHud(Canvas->ClipX, Canvas->ClipY, Tracker.Lines.Num(), Spotted.bVisible, Prompt.bVisible);
+	UFont* Font = HudFont();
+
+	if (!Layout.Tracker.IsEmpty())
+	{
+		DrawRect(FLinearColor(0.05f, 0.07f, 0.10f, 0.78f), Layout.Tracker.X, Layout.Tracker.Y, Layout.Tracker.W, Layout.Tracker.H);
+		float Y = Layout.Tracker.Y + GFHUD::TrackerPad;
+		for (int32 Index = 0; Index < Tracker.Lines.Num(); ++Index)
+		{
+			const bool bRank = Index == 0;
+			const FLinearColor Color = bRank ? FLinearColor(0.98f, 0.86f, 0.45f) : FLinearColor(0.93f, 0.96f, 1.f);
+			DrawText(Tracker.Lines[Index], Color, Layout.Tracker.X + GFHUD::TrackerPad, Y, Font, 1.f, false);
+			Y += GFHUD::TrackerLineH;
+		}
+	}
+	if (!Layout.Spotted.IsEmpty())
+	{
+		DrawRect(FLinearColor(0.55f, 0.08f, 0.08f, 0.92f), Layout.Spotted.X, Layout.Spotted.Y, Layout.Spotted.W, Layout.Spotted.H);
+		DrawText(Spotted.Headline, FLinearColor::White, Layout.Spotted.X + GFHUD::TrackerPad, Layout.Spotted.Y + GFHUD::TrackerPad, Font, 1.f, false);
+		if (!Spotted.Detail.IsEmpty())
+		{
+			DrawText(Spotted.Detail, FLinearColor(1.f, 0.85f, 0.85f), Layout.Spotted.X + GFHUD::TrackerPad, Layout.Spotted.Y + GFHUD::TrackerPad + GFHUD::TrackerLineH, Font, 1.f, false);
+		}
+	}
+	if (!Layout.Interact.IsEmpty())
+	{
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.55f), Layout.Interact.X, Layout.Interact.Y, Layout.Interact.W, Layout.Interact.H);
+		DrawText(Prompt.Line, FLinearColor(0.98f, 0.86f, 0.45f), Layout.Interact.X + GFHUD::TrackerPad, Layout.Interact.Y + 4.f, Font, 1.f, false);
+	}
 }
 
 void AGFHUD::DrawPauseMenu()
