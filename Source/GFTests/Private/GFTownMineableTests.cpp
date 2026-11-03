@@ -546,7 +546,7 @@ bool FGFTownMineHitsTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FWorld W;
+	GFTownMineTest::FWorld W;
 	if (!TestTrue(TEXT("test world"), W.Create()))
 	{
 		return false;
@@ -1185,7 +1185,7 @@ bool FGFTownsV2MineHitsTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FWorld W;
+	GFTownMineTest::FWorld W;
 	if (!TestTrue(TEXT("test world"), W.Create()))
 	{
 		return false;

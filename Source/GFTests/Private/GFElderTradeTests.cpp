@@ -103,7 +103,7 @@ bool FGFElderTradePricesTest::RunTest(const FString&)
 	{
 		const FGFElderTradeListing& Row = Loaded.Rows[Index];
 		const FGFElderTradeListing* Built = Builtin.Find(Row.RowId);
-		if (!TestNotNull(*FString::Printf(TEXT("Builtin %s"), *Row.RowId.ToString()), Built)))
+		if (!TestNotNull(*FString::Printf(TEXT("Builtin %s"), *Row.RowId.ToString()), Built))
 		{
 			continue;
 		}
