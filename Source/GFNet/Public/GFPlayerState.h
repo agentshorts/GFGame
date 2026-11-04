@@ -258,8 +258,9 @@ public:
 	 */
 	bool CanMineAt(const FVector& WorldPoint, const FIntVector& Cell, FString& OutReason) const;
 	/**
-	 * Mesh mining gate (town meshes, trees). The FGFMineable whitelist first (only crystal slots and trees), then the
-	 * same character, land and plot gates as CanMineAt. True for a whitelisted hit when there is no game state.
+	 * Mesh mining gate (town meshes, trees). The FGFMineable whitelist first (only crystal slots and trees).
+	 * A hit that passes it skips overworld Deny and VisitorNoRights. Character and plot gates still apply.
+	 * True for a whitelisted hit when there is no game state.
 	 * Trace with FGFMineable::QueryParams() so the hit carries its face index.
 	 */
 	bool CanMineHit(const FHitResult& Hit, FString& OutReason) const;
@@ -343,8 +344,11 @@ public:
 	bool bLoggedOut = false;
 
 protected:
-	/** Land, mode and plot gates shared by CanMineAt and CanMineHit. */
-	bool PassesMineLandRules(const AGFGameState* GS, const FVector& WorldPoint, const FIntVector& Cell, bool bCellInWorld, FString& OutReason) const;
+	/**
+	 * Land, mode and plot gates shared by CanMineAt and CanMineHit.
+	 * bWhitelistedMesh skips overworld Deny and VisitorNoRights (trees, crystal linings, crystal pieces).
+	 */
+	bool PassesMineLandRules(const AGFGameState* GS, const FVector& WorldPoint, const FIntVector& Cell, bool bCellInWorld, FString& OutReason, bool bWhitelistedMesh) const;
 	UFUNCTION()
 	void HandleInventoryChanged(FName ItemId, int32 NewCount);
 	UFUNCTION()
