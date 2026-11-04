@@ -54,10 +54,13 @@ bool FGFNetHotbarSelectTest::RunTest(const FString&)
 		OnServer->Inventory->AddItem(TEXT("Dirt"), 7);
 		OnServer->Inventory->AddItem(TEXT("Stone"), 1200);
 	});
-	WaitUntil(Ctx, TEXT("client bar shows the new blocks"), 10.f, []()
+	// Wait for the counts, not just the ids: the player can already hold Dirt and Stone before the bag is reset.
+	WaitUntil(Ctx, TEXT("client bar shows the new bag"), 10.f, []()
 	{
 		const AGFCharacter* C = ClientCharacter();
-		return C && C->GetHotbarIds().Contains(FName(TEXT("Stone")));
+		const AGFPlayerState* PS = C ? C->GetPlayerState<AGFPlayerState>() : nullptr;
+		return PS && PS->GetHotbarCount(TEXT("Dirt")) == 7 && PS->GetHotbarCount(TEXT("Stone")) == 1200
+			&& C->GetHotbarIds().Contains(FName(TEXT("Stone")));
 	});
 	Do(Ctx, [Ctx]()
 	{
