@@ -134,6 +134,12 @@ struct GFCORE_API FGFHotbarRules
 	/** The bar to show: the arranged slots (padded to SlotCount), or Default while nothing was arranged. */
 	static TArray<FName> Resolve(const FGFHotbarLayout& Layout, const TArray<FName>& Default);
 
+	/**
+	 * An item ran out: every slot holding it, or a block that spends it (ItemFor), goes empty. None and Fists stay,
+	 * and so does any slot Keep says to keep (free build blocks). True when a slot changed.
+	 */
+	static bool ClearSpent(TArray<FName>& Slots, FName SpentItem, TFunctionRef<FName(FName)> ItemFor, TFunctionRef<bool(FName)> Keep);
+
 	/** Applies Move to Slots (padded to SlotCount first). Ownership is not checked here; see CheckId. */
 	static EGFHotbarMoveResult Apply(TArray<FName>& Slots, const FGFHotbarMove& Move);
 

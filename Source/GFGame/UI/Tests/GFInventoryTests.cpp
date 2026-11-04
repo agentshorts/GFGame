@@ -152,6 +152,20 @@ bool FGFHotbarMoveRulesTest::RunTest(const FString&)
 	TestTrue(TEXT("Unowned items are refused"), FGFHotbarRules::CheckId(TEXT("Amber"), true, false, 0, false) == EGFHotbarMoveResult::NotOwned);
 	TestTrue(TEXT("Free build does not hand out items"), FGFHotbarRules::CheckId(TEXT("Amber"), true, false, 0, true) == EGFHotbarMoveResult::NotOwned);
 	TestTrue(TEXT("Free build lets any block through"), FGFHotbarRules::CheckId(TEXT("Grass"), true, true, 0, true) == EGFHotbarMoveResult::Ok);
+
+	// Running out of an item empties its slots: the item, and a block that spends it (Grass spends Dirt).
+	const auto ItemFor = [](FName Id) { return Id == FName(TEXT("Grass")) ? FName(TEXT("Dirt")) : Id; };
+	const auto KeepNone = [](FName) { return false; };
+	TArray<FName> Bar = { TEXT("Grass"), TEXT("Dirt"), NAME_None, TEXT("Amber"), NAME_None, NAME_None, NAME_None, NAME_None, FGFHotbarRules::FistsId() };
+	TestTrue(TEXT("Spending the dirt changes the bar"), FGFHotbarRules::ClearSpent(Bar, TEXT("Dirt"), ItemFor, KeepNone));
+	TestTrue(TEXT("Grass and Dirt both clear"), Bar[0].IsNone() && Bar[1].IsNone());
+	TestEqual(TEXT("Amber stays"), Bar[3], FName(TEXT("Amber")));
+	TestEqual(TEXT("Fists stay"), Bar[8], FGFHotbarRules::FistsId());
+	TestTrue(TEXT("Spending the amber clears it"), FGFHotbarRules::ClearSpent(Bar, TEXT("Amber"), ItemFor, KeepNone) && Bar[3].IsNone());
+	TestFalse(TEXT("Nothing left to clear"), FGFHotbarRules::ClearSpent(Bar, TEXT("Amber"), ItemFor, KeepNone));
+	TestFalse(TEXT("A None item clears nothing"), FGFHotbarRules::ClearSpent(Bar, NAME_None, ItemFor, KeepNone));
+	TArray<FName> Free = { TEXT("Grass"), TEXT("Dirt") };
+	TestFalse(TEXT("Free build keeps its blocks"), FGFHotbarRules::ClearSpent(Free, TEXT("Dirt"), ItemFor, [](FName) { return true; }));
 	return true;
 }
 
