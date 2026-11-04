@@ -509,7 +509,7 @@ bool FGFMiningFXTableTest::RunTest(const FString&)
 	}
 
 	static const TCHAR* const Systems[] = {
-		TEXT("NS_Mine_Hit"), TEXT("NS_Mine_Break_Wood"), TEXT("NS_Mine_Break_Crystal"), TEXT("NS_Sparkcone"),
+		TEXT("NS_Mine_Hit"), TEXT("NS_Mine_Break_Wood"), TEXT("NS_Mine_Break_Crystal"), TEXT("NS_Sparkcone"), TEXT("NS_Sparkcone_v2"),
 		TEXT("NS_MagmaSpray"), TEXT("NS_Frostbind_Beam"), TEXT("NS_Rootmaul_Hit"), TEXT("NS_Frost_Shatter")};
 	for (const TCHAR* System : Systems)
 	{
