@@ -28,6 +28,7 @@
 #include "Misc/PackageName.h"
 #include "StaticMeshAttributes.h"
 #include "StaticMeshResources.h"
+#include "UObject/UObjectHash.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -436,6 +437,45 @@ bool FGFMineableTagAuditTest::RunTest(const FString&)
 	return true;
 }
 
+namespace GFMiningFXTableTest
+{
+	/** Loop behavior of each lightweight emitter, read through reflection because UNiagaraSystem::IsLooping skips them. */
+	TArray<FString> LoopBehaviors(const UNiagaraSystem* System)
+	{
+		TArray<FString> Out;
+		TArray<UObject*> Inner;
+		GetObjectsWithOuter(System, Inner, true);
+		for (const UObject* Object : Inner)
+		{
+			if (Object->GetClass()->GetName() != TEXT("NiagaraStatelessEmitter"))
+			{
+				continue;
+			}
+			const FStructProperty* State = FindFProperty<FStructProperty>(Object->GetClass(), TEXT("EmitterState"));
+			const FProperty* Loop = State ? State->Struct->FindPropertyByName(TEXT("LoopBehavior")) : nullptr;
+			if (!Loop)
+			{
+				continue;
+			}
+			FString Text;
+			Loop->ExportTextItem_InContainer(Text, State->ContainerPtrToValuePtr<void>(Object), nullptr, nullptr, PPF_None);
+			Out.Add(Text);
+		}
+		return Out;
+	}
+
+	bool OneShot(const UNiagaraSystem* System)
+	{
+		const TArray<FString> Loops = LoopBehaviors(System);
+		return !System->IsLooping() && Loops.Num() > 0 && !Loops.Contains(TEXT("Infinite"));
+	}
+
+	bool LoopsForever(const UNiagaraSystem* System)
+	{
+		return System->IsLooping() || LoopBehaviors(System).Contains(TEXT("Infinite"));
+	}
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMiningFXTableTest, "GFGame.MagicMining.FXTable", GFMiningLandFXFlags)
 bool FGFMiningFXTableTest::RunTest(const FString&)
 {
@@ -464,7 +504,7 @@ bool FGFMiningFXTableTest::RunTest(const FString&)
 		}
 		if (Row->Kind != EGFMiningFXKind::Beam)
 		{
-			TestFalse(*FString::Printf(TEXT("%s is one-shot"), *Name.ToString()), System->IsLooping());
+			TestTrue(*FString::Printf(TEXT("%s is one-shot"), *Name.ToString()), GFMiningFXTableTest::OneShot(System));
 		}
 	}
 
@@ -483,7 +523,7 @@ bool FGFMiningFXTableTest::RunTest(const FString&)
 		TestNotNull(*FString::Printf(TEXT("%s beam has a Niagara system"), *FGFMiningFX::ElementName(Element).ToString()), FGFMiningFX::LoadFor(EGFMiningFXKind::Beam, Element, EGFMiningFXKit::Any));
 	}
 	const UNiagaraSystem* SparkBeam = FGFMiningFX::LoadFor(EGFMiningFXKind::Beam, EGFMagicElement::Spark, EGFMiningFXKit::Any);
-	TestTrue(TEXT("The spark beam loops while the field is up"), SparkBeam && SparkBeam->IsLooping());
+	TestTrue(TEXT("The spark beam loops while the field is up"), SparkBeam && GFMiningFXTableTest::LoopsForever(SparkBeam));
 	TestTrue(TEXT("A second load returns the same system"), SparkBeam == FGFMiningFX::LoadFor(EGFMiningFXKind::Beam, EGFMagicElement::Spark, EGFMiningFXKit::Any));
 
 	const FVector At(1.f, 2.f, 3.f);
