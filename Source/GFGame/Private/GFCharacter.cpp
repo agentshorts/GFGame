@@ -402,7 +402,7 @@ void AGFCharacter::OnRemove(const FInputActionValue&)
 	if (UGFMagicComponent* Magic = FindMagic())
 	{
 		bMagicHeld = true;
-		bMiningFieldTried = false;
+		MiningField.Press();
 		MagicPressSeconds = 0.f;
 		MagicAimElapsed = 0.f;
 		Magic->SetFieldHeld(true);
@@ -1181,11 +1181,9 @@ void AGFCharacter::UpdateFistPose()
 	}
 }
 
-bool AGFCharacter::PlayMiningClip(FName Key, bool bLoop)
+bool AGFCharacter::PlayMiningClip(FName Key, bool bLoop, float* OutSeconds)
 {
-	const bool bSeat = FerryRider && (FerryRider->IsInFlight() || !FerryRider->GetSeatAnim().IsNone());
-	USkeletalMeshComponent* MeshComp = GetMesh();
-	if (!SimpleAnim || !MeshComp || !GFMiningAnim::MayPlay(bSeat, bFistClipHeld))
+	if (!SimpleAnim || !GetMesh())
 	{
 		return false;
 	}
@@ -1194,10 +1192,14 @@ bool AGFCharacter::PlayMiningClip(FName Key, bool bLoop)
 	{
 		return false;
 	}
-	// Mining clips claim the emote slot: a newer mining clip or emote replaces it, and the fist scope or a ferry seat sits above it.
-	// A loop is held until EndMiningField; a one-shot expires with the clip.
-	SimpleAnim->ClaimClip(EGFAnimOwner::Emote, Key, bLoop, bLoop ? 0.f : Clip->GetPlayLength());
-	MiningPoseSeconds = bLoop ? 0.f : Clip->GetPlayLength();
+	// Mining clips have their own owner: an emote, the fist scope or a ferry seat above it keeps the body, and a newer
+	// mining clip replaces this one. A loop is held until the field ends; a one-shot expires with the clip.
+	const float Seconds = bLoop ? 0.f : Clip->GetPlayLength();
+	SimpleAnim->ClaimClip(EGFAnimOwner::Mining, Key, bLoop, Seconds);
+	if (OutSeconds)
+	{
+		*OutSeconds = Seconds;
+	}
 	return true;
 }
 
@@ -1209,47 +1211,52 @@ void AGFCharacter::PlayMineTap()
 	const FName Key = TraceBlock(Hit)
 		? GFMiningAnim::TapAnim(Hit.ImpactPoint.Z, Hit.ImpactNormal.Z, FeetZ)
 		: GFMiningAnim::Punch();
-	MiningPose = EGFMiningPose::None;
 	PlayMiningClip(Key, false);
+}
+
+void AGFCharacter::ApplyMiningCue(EGFMiningFieldCue Cue)
+{
+	auto ReleaseField = [this]()
+	{
+		if (SimpleAnim)
+		{
+			SimpleAnim->ReleaseClaimKey(EGFAnimOwner::Mining, GFMiningAnim::FieldStart());
+			SimpleAnim->ReleaseClaimKey(EGFAnimOwner::Mining, GFMiningAnim::FieldLoop());
+		}
+	};
+	float Seconds = 0.f;
+	switch (Cue)
+	{
+	case EGFMiningFieldCue::PlayStart:
+		MiningField.Played(Cue, PlayMiningClip(GFMiningAnim::FieldStart(), false, &Seconds), Seconds);
+		break;
+	case EGFMiningFieldCue::PlayLoop:
+		MiningField.Played(Cue, PlayMiningClip(GFMiningAnim::FieldLoop(), true), 0.f);
+		break;
+	case EGFMiningFieldCue::PlayEnd:
+		if (!PlayMiningClip(GFMiningAnim::FieldEnd(), false))
+		{
+			// No end clip: drop the field claim so the loop can't outlive the press.
+			ReleaseField();
+		}
+		break;
+	case EGFMiningFieldCue::ReleaseField:
+		ReleaseField();
+		break;
+	default:
+		break;
+	}
 }
 
 void AGFCharacter::UpdateMiningField(float DeltaSeconds)
 {
-	if (bFistClipHeld)
-	{
-		MiningPose = EGFMiningPose::None;
-		return;
-	}
-	if (bMagicHeld && !bMiningFieldTried && MagicPressSeconds >= GFMagic::TapSeconds)
-	{
-		bMiningFieldTried = true;
-		if (PlayMiningClip(GFMiningAnim::FieldStart(), false))
-		{
-			MiningPose = EGFMiningPose::FieldStart;
-		}
-	}
-	if (MiningPose == EGFMiningPose::FieldStart)
-	{
-		MiningPoseSeconds -= DeltaSeconds;
-		if (MiningPoseSeconds <= 0.f)
-		{
-			MiningPose = PlayMiningClip(GFMiningAnim::FieldLoop(), true) ? EGFMiningPose::FieldLoop : EGFMiningPose::None;
-		}
-	}
+	const FName MiningKey = SimpleAnim ? SimpleAnim->GetClaimKey(EGFAnimOwner::Mining) : NAME_None;
+	ApplyMiningCue(MiningField.Tick(DeltaSeconds, bMagicHeld, MagicPressSeconds, GFMagic::TapSeconds, bFistClipHeld, MiningKey));
 }
 
 void AGFCharacter::EndMiningField()
 {
-	if (MiningPose == EGFMiningPose::None)
-	{
-		return;
-	}
-	MiningPose = EGFMiningPose::None;
-	if (!PlayMiningClip(GFMiningAnim::FieldEnd(), false) && SimpleAnim)
-	{
-		// Drop the held loop even under a fist scope, so it does not come back when the scope ends.
-		SimpleAnim->ReleaseClaim(EGFAnimOwner::Emote);
-	}
+	ApplyMiningCue(MiningField.End());
 }
 
 void AGFCharacter::PlayFistScopeCue()

@@ -1,4 +1,4 @@
-// Animation ownership: the priority stack in UGFSimpleAnimComponent (ferry seat > fist scope > emote > Beat Hop >
+// Animation ownership: the priority stack in UGFSimpleAnimComponent (ferry seat > fist scope > emote > mining > Beat Hop >
 // locomotion). Pure data plus the component's claim API, no world or mesh needed.
 // Run: UnrealEditor-Cmd GFGame.uproject -ExecCmds="Automation RunTests GFGame.Visuals.AnimOwner;Quit" -unattended -nullrhi
 #include "Misc/AutomationTest.h"
@@ -39,7 +39,8 @@ bool FGFAnimOwnerPriorityOrderTest::RunTest(const FString&)
 {
 	TestTrue(TEXT("ferry seat above fist scope"), EGFAnimOwner::FerrySeat > EGFAnimOwner::FistScope);
 	TestTrue(TEXT("fist scope above emote"), EGFAnimOwner::FistScope > EGFAnimOwner::Emote);
-	TestTrue(TEXT("emote above Beat Hop"), EGFAnimOwner::Emote > EGFAnimOwner::BeatHop);
+	TestTrue(TEXT("emote above mining"), EGFAnimOwner::Emote > EGFAnimOwner::Mining);
+	TestTrue(TEXT("mining above Beat Hop"), EGFAnimOwner::Mining > EGFAnimOwner::BeatHop);
 	TestTrue(TEXT("Beat Hop above locomotion"), EGFAnimOwner::BeatHop > EGFAnimOwner::Locomotion);
 	return true;
 }
@@ -206,6 +207,31 @@ bool FGFAnimOwnerComponentApiTest::RunTest(const FString&)
 	Anim->ReleaseClaim(EGFAnimOwner::Emote);
 	TestEqual(TEXT("all released -> locomotion"), Own(Anim->GetTopOwner()), Own(EGFAnimOwner::Locomotion));
 	TestFalse(TEXT("renew with nothing held"), Anim->RenewClaim(EGFAnimOwner::BeatHop, 0.2f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFAnimOwnerReleaseKeyTest, "GFGame.Visuals.AnimOwner.ReleaseKey", GFAnimOwnerTestsPrivate::Flags)
+bool FGFAnimOwnerReleaseKeyTest::RunTest(const FString&)
+{
+	using namespace GFAnimOwnerTestsPrivate;
+	FGFAnimOwnerStack S;
+	S.Claim(EGFAnimOwner::Emote, Wave, false, 2.f);
+	TestFalse(TEXT("wrong key leaves the claim"), S.ReleaseKey(EGFAnimOwner::Emote, Hop));
+	TestTrue(TEXT("still there"), S.Has(EGFAnimOwner::Emote));
+	TestFalse(TEXT("right key, wrong owner"), S.ReleaseKey(EGFAnimOwner::Mining, Wave));
+	TestTrue(TEXT("right key and owner"), S.ReleaseKey(EGFAnimOwner::Emote, Wave));
+	TestNull(TEXT("released"), S.Top());
+
+	UGFSimpleAnimComponent* Anim = NewObject<UGFSimpleAnimComponent>(GetTransientPackage());
+	if (!TestNotNull(TEXT("component"), Anim))
+	{
+		return false;
+	}
+	Anim->ClaimClip(EGFAnimOwner::Mining, Hop, true);
+	TestEqual(TEXT("component reports the buried key"), Anim->GetClaimKey(EGFAnimOwner::Mining), Hop);
+	TestFalse(TEXT("component ignores another key"), Anim->ReleaseClaimKey(EGFAnimOwner::Mining, Wave));
+	TestTrue(TEXT("component releases the matching key"), Anim->ReleaseClaimKey(EGFAnimOwner::Mining, Hop));
+	TestEqual(TEXT("back to locomotion"), Own(Anim->GetTopOwner()), Own(EGFAnimOwner::Locomotion));
 	return true;
 }
 

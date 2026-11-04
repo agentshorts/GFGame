@@ -33,6 +33,11 @@ bool FGFAnimOwnerStack::Release(EGFAnimOwner Owner)
 	return Claims.RemoveAll([Owner](const FGFAnimClaim& C) { return C.Owner == Owner; }) > 0;
 }
 
+bool FGFAnimOwnerStack::ReleaseKey(EGFAnimOwner Owner, FName Key)
+{
+	return Claims.RemoveAll([Owner, Key](const FGFAnimClaim& C) { return C.Owner == Owner && C.Key == Key; }) > 0;
+}
+
 bool FGFAnimOwnerStack::Renew(EGFAnimOwner Owner, float Seconds)
 {
 	for (FGFAnimClaim& C : Claims)

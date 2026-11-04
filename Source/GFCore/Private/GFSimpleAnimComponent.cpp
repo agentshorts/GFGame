@@ -31,6 +31,20 @@ void UGFSimpleAnimComponent::ReleaseClaim(EGFAnimOwner Owner)
 	}
 }
 
+bool UGFSimpleAnimComponent::ReleaseClaimKey(EGFAnimOwner Owner, FName Key)
+{
+	const bool bWasTop = Claims.TopOwner() == Owner;
+	if (!Claims.ReleaseKey(Owner, Key))
+	{
+		return false;
+	}
+	if (bWasTop)
+	{
+		ApplyTopClaim();
+	}
+	return true;
+}
+
 bool UGFSimpleAnimComponent::RenewClaim(EGFAnimOwner Owner, float Seconds)
 {
 	return Claims.Renew(Owner, Seconds);

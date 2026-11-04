@@ -5,15 +5,18 @@
 /**
  * Who is driving a single-node art mesh. Higher value wins. Locomotion is the implicit fallback (idle / move picked
  * by UGFSimpleAnimComponent) and is never claimed.
- * Order: ferry seat > fist scope > emote > Beat Hop clip > locomotion.
+ * Order: ferry seat > fist scope > emote > mining > Beat Hop clip > locomotion.
+ * Mining has its own owner so an emote over a held mining loop restores the loop when it ends, and ending the
+ * mining field never cuts an emote.
  */
 enum class EGFAnimOwner : uint8
 {
 	Locomotion = 0,
 	BeatHop = 1,
-	Emote = 2,
-	FistScope = 3,
-	FerrySeat = 4,
+	Mining = 2,
+	Emote = 3,
+	FistScope = 4,
+	FerrySeat = 5,
 };
 
 /** One owner's clip request. */
@@ -46,6 +49,9 @@ struct GFCORE_API FGFAnimOwnerStack
 
 	/** Removes Owner's claim. Returns true when it had one. */
 	bool Release(EGFAnimOwner Owner);
+
+	/** Removes Owner's claim only while it is playing Key, so a caller can't drop a clip someone else put there. */
+	bool ReleaseKey(EGFAnimOwner Owner, FName Key);
 
 	/** Resets a timed claim's time left (a lease). Untimed claims stay untimed. Returns false when Owner has no claim. */
 	bool Renew(EGFAnimOwner Owner, float Seconds);

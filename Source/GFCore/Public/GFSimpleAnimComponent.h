@@ -14,7 +14,7 @@ class USkeletalMeshComponent;
  * row's NaturalSpeedCms (DT_AnimMap) when it has one, so Walk and Run don't skate; everything else plays at 1.0.
  *
  * Other clips (ferry seat, fist scope, emotes, Beat Hop) go through ClaimClip / ReleaseClaim instead of playing on the
- * mesh themselves. Claims sit in a priority stack keyed by owner (ferry seat > fist scope > emote > Beat Hop > locomotion):
+ * mesh themselves. Claims sit in a priority stack keyed by owner (ferry seat > fist scope > emote > mining > Beat Hop > locomotion):
  * only the top claim plays, a lower claim waits underneath, and releasing the top restores the next one (or locomotion).
  * A non-looping clip left on the mesh with no claim still plays out before idle or move starts again.
  */
@@ -49,6 +49,16 @@ public:
 
 	/** Drops Owner's claim. When it was on top, the next owner's clip plays again (or idle / move on the next tick). */
 	void ReleaseClaim(EGFAnimOwner Owner);
+
+	/** Drops Owner's claim only while it plays Key. Returns true when it did. */
+	bool ReleaseClaimKey(EGFAnimOwner Owner, FName Key);
+
+	/** The key Owner is claiming, on top or buried, or None. */
+	FName GetClaimKey(EGFAnimOwner Owner) const
+	{
+		const FGFAnimClaim* C = Claims.Find(Owner);
+		return C ? C->Key : NAME_None;
+	}
 
 	/** Keeps a timed claim alive for Seconds more. Returns false when Owner holds nothing. */
 	bool RenewClaim(EGFAnimOwner Owner, float Seconds);
