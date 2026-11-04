@@ -24,6 +24,7 @@
 #include "Engine/World.h"
 #include "GameFramework/WorldSettings.h"
 #include "MeshDescription.h"
+#include "NiagaraSystem.h"
 #include "Misc/PackageName.h"
 #include "StaticMeshAttributes.h"
 #include "StaticMeshResources.h"
@@ -443,10 +444,6 @@ bool FGFMiningFXTableTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	bool bSparkle = false;
-	bool bLava = false;
-	bool bFrost = false;
-	bool bPulse = false;
 	const TArray<FName> Names = Table->GetRowNames();
 	TestTrue(TEXT("FX table has rows"), Names.Num() >= 4);
 	for (const FName& Name : Names)
@@ -456,29 +453,38 @@ bool FGFMiningFXTableTest::RunTest(const FString&)
 		{
 			continue;
 		}
-		TestTrue(*FString::Printf(TEXT("%s resolves to a file"), *Name.ToString()), FGFMiningFX::RowResolves(*Row));
-		const FString File = FGFMiningFX::ResolveFile(Row->SystemPath);
+		TestTrue(*FString::Printf(TEXT("%s resolves to a package"), *Name.ToString()), FGFMiningFX::RowResolves(*Row));
 		const FSoftObjectPath Soft = FGFMiningFX::SoftPathFor(Row->SystemPath);
 		TestFalse(*FString::Printf(TEXT("%s has a soft path"), *Name.ToString()), Soft.IsNull());
-		if (File.Contains(TEXT("fx_sparkle")))
+		TestTrue(*FString::Printf(TEXT("%s lives in /Game/FX/Mining"), *Name.ToString()), Soft.GetLongPackageName().StartsWith(TEXT("/Game/FX/Mining/")));
+		const UNiagaraSystem* System = FGFMiningFX::LoadSystem(Row->SystemPath);
+		if (!TestNotNull(*FString::Printf(TEXT("%s loads a Niagara system"), *Name.ToString()), System))
 		{
-			bSparkle = true;
-			TestTrue(TEXT("Sparkle soft path"), Soft.ToString().Contains(TEXT("/VoxelFinish/Effects/Starter/fx_sparkle_rev2.fx_sparkle_rev2")));
+			continue;
 		}
-		bLava |= File.Contains(TEXT("fx_lava_embers"));
-		bFrost |= File.Contains(TEXT("fx_frosted_sparkle"));
-		bPulse |= File.Contains(TEXT("fx_pulse_glow"));
+		if (Row->Kind != EGFMiningFXKind::Beam)
+		{
+			TestFalse(*FString::Printf(TEXT("%s is one-shot"), *Name.ToString()), System->IsLooping());
+		}
 	}
-	TestTrue(TEXT("fx_sparkle"), bSparkle);
-	TestTrue(TEXT("fx_lava_embers"), bLava);
-	TestTrue(TEXT("fx_frosted_sparkle"), bFrost);
-	TestTrue(TEXT("fx_pulse_glow"), bPulse);
 
-	TestNull(TEXT("Spark beam has no Niagara asset yet"), FGFMiningFX::LoadFor(EGFMiningFXKind::Beam, EGFMagicElement::Spark, EGFMiningFXKit::Any));
-	TestNull(TEXT("Magma beam has no Niagara asset yet"), FGFMiningFX::LoadFor(EGFMiningFXKind::Beam, EGFMagicElement::Magma, EGFMiningFXKit::Any));
-	TestNull(TEXT("Frost beam has no Niagara asset yet"), FGFMiningFX::LoadFor(EGFMiningFXKind::Beam, EGFMagicElement::Frost, EGFMiningFXKit::Any));
-	TestNull(TEXT("Root beam has no Niagara asset yet"), FGFMiningFX::LoadFor(EGFMiningFXKind::Beam, EGFMagicElement::Root, EGFMiningFXKit::Any));
-	TestNull(TEXT("A second load still returns null"), FGFMiningFX::LoadFor(EGFMiningFXKind::Beam, EGFMagicElement::Spark, EGFMiningFXKit::Any));
+	static const TCHAR* const Systems[] = {
+		TEXT("NS_Mine_Hit"), TEXT("NS_Mine_Break_Wood"), TEXT("NS_Mine_Break_Crystal"), TEXT("NS_Sparkcone"),
+		TEXT("NS_MagmaSpray"), TEXT("NS_Frostbind_Beam"), TEXT("NS_Rootmaul_Hit"), TEXT("NS_Frost_Shatter")};
+	for (const TCHAR* System : Systems)
+	{
+		const FString Path = FString::Printf(TEXT("/Game/FX/Mining/%s.%s"), System, System);
+		TestNotNull(*FString::Printf(TEXT("%s loads"), System), FGFMiningFX::LoadSystem(Path));
+	}
+
+	static const EGFMagicElement Elements[] = {EGFMagicElement::Spark, EGFMagicElement::Magma, EGFMagicElement::Frost, EGFMagicElement::Root};
+	for (const EGFMagicElement Element : Elements)
+	{
+		TestNotNull(*FString::Printf(TEXT("%s beam has a Niagara system"), *FGFMiningFX::ElementName(Element).ToString()), FGFMiningFX::LoadFor(EGFMiningFXKind::Beam, Element, EGFMiningFXKit::Any));
+	}
+	const UNiagaraSystem* SparkBeam = FGFMiningFX::LoadFor(EGFMiningFXKind::Beam, EGFMagicElement::Spark, EGFMiningFXKit::Any);
+	TestTrue(TEXT("The spark beam loops while the field is up"), SparkBeam && SparkBeam->IsLooping());
+	TestTrue(TEXT("A second load returns the same system"), SparkBeam == FGFMiningFX::LoadFor(EGFMiningFXKind::Beam, EGFMagicElement::Spark, EGFMiningFXKit::Any));
 
 	const FVector At(1.f, 2.f, 3.f);
 	TArray<FGFMiningFXEvent> Events;

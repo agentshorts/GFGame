@@ -153,6 +153,15 @@ FString FGFMiningFX::ResolveFile(const FString& SystemPath)
 	{
 		return FString();
 	}
+	if (SystemPath.StartsWith(TEXT("/")))
+	{
+		const FString Package = SoftPathFor(SystemPath).GetLongPackageName();
+		FString PackageFile;
+		if (!Package.IsEmpty() && FPackageName::DoesPackageExist(Package, &PackageFile))
+		{
+			return FPaths::ConvertRelativePathToFull(PackageFile);
+		}
+	}
 	if (FPaths::FileExists(SystemPath))
 	{
 		return FPaths::ConvertRelativePathToFull(SystemPath);

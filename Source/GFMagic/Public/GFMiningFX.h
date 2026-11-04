@@ -3,7 +3,7 @@
 // Mining FX v1 (magic mining v3, section 8.10).
 // One cosmetic event covers a hit, a crack stage, and a break. The server always raises
 // OnPlayed. Clients hear the same event through an unreliable multicast and spawn Niagara
-// from DT_MiningFX. Rows point at VoxelFinish starter graphs until bespoke systems exist.
+// from DT_MiningFX. Rows point at the Niagara systems in /Game/FX/Mining.
 // A missing system logs once and leaves the previous mesh in place.
 
 #include "CoreMinimal.h"
@@ -49,7 +49,7 @@ struct GFMAGIC_API FGFMiningFXRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic")
 	EGFMiningFXKit Kit = EGFMiningFXKit::Any;
 
-	/** Project-relative file, or a /Plugin soft object path. */
+	/** A /Game or /Plugin soft object path, or a project-relative file. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Magic")
 	FString SystemPath;
 };

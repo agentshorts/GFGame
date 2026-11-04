@@ -1,17 +1,17 @@
-# Mining FX v1. Paths are the VoxelFinish starter graphs. Niagara loads the matching soft path and keeps the mesh when that asset is missing.
-# Kind: Hit, Crack, Break, Beam. Element: Spark, Magma, Root, Frost, or Any. Kit: Tree, Crystal, or Any.
+# Mining FX v1. Paths are the Niagara systems in Content/FX/Mining, built from engine lightweight templates by Tools/FX/make_mining_fx_v1.py.
+# Kind: Hit, Crack, Break, Beam. Element: Spark, Magma, Root, Frost, or Any. Kit: Tree, Crystal, or Any. Hit, Crack and Break rows must be one-shot systems; only Beam rows may loop.
 ---,Kind,Element,Kit,SystemPath
-Hit_Spark,Hit,Spark,Any,Plugins/VoxelFinish/Content/Effects/Starter/fx_sparkle_rev2.json
-Hit_Magma,Hit,Magma,Any,Plugins/VoxelFinish/Content/Effects/Starter/fx_lava_embers_v1.json
-Hit_Root,Hit,Root,Any,Plugins/VoxelFinish/Content/Effects/Starter/fx_pulse_glow_rev2.json
-Hit_Frost,Hit,Frost,Any,Plugins/VoxelFinish/Content/Effects/Starter/fx_frosted_sparkle_v1.json
-Hit_Tree,Hit,Any,Tree,Plugins/VoxelFinish/Content/Effects/Starter/fx_pulse_glow_rev2.json
-Hit_Crystal,Hit,Any,Crystal,Plugins/VoxelFinish/Content/Effects/Starter/fx_frosted_sparkle_v1.json
-Crack_Any,Crack,Any,Any,Plugins/VoxelFinish/Content/Effects/Starter/fx_sparkle_rev2.json
-Break_Any,Break,Any,Any,Plugins/VoxelFinish/Content/Effects/Starter/fx_sparkle_rev2.json
-Break_Tree,Break,Any,Tree,Plugins/VoxelFinish/Content/Effects/Starter/fx_pulse_glow_rev2.json
-Break_Crystal,Break,Any,Crystal,Plugins/VoxelFinish/Content/Effects/Starter/fx_frosted_sparkle_v1.json
-Beam_Spark,Beam,Spark,Any,Plugins/VoxelFinish/Content/Effects/Starter/fx_sparkle_rev2.json
-Beam_Magma,Beam,Magma,Any,Plugins/VoxelFinish/Content/Effects/Starter/fx_lava_embers_v1.json
-Beam_Frost,Beam,Frost,Any,Plugins/VoxelFinish/Content/Effects/Starter/fx_frosted_sparkle_v1.json
-Beam_Root,Beam,Root,Any,Plugins/VoxelFinish/Content/Effects/Starter/fx_pulse_glow_rev2.json
+Hit_Spark,Hit,Spark,Any,/Game/FX/Mining/NS_Mine_Hit.NS_Mine_Hit
+Hit_Magma,Hit,Magma,Any,/Game/FX/Mining/NS_Mine_Hit.NS_Mine_Hit
+Hit_Root,Hit,Root,Any,/Game/FX/Mining/NS_Rootmaul_Hit.NS_Rootmaul_Hit
+Hit_Frost,Hit,Frost,Any,/Game/FX/Mining/NS_Frost_Shatter.NS_Frost_Shatter
+Hit_Tree,Hit,Any,Tree,/Game/FX/Mining/NS_Mine_Break_Wood.NS_Mine_Break_Wood
+Hit_Crystal,Hit,Any,Crystal,/Game/FX/Mining/NS_Mine_Break_Crystal.NS_Mine_Break_Crystal
+Crack_Any,Crack,Any,Any,/Game/FX/Mining/NS_Mine_Hit.NS_Mine_Hit
+Break_Any,Break,Any,Any,/Game/FX/Mining/NS_Mine_Hit.NS_Mine_Hit
+Break_Tree,Break,Any,Tree,/Game/FX/Mining/NS_Mine_Break_Wood.NS_Mine_Break_Wood
+Break_Crystal,Break,Any,Crystal,/Game/FX/Mining/NS_Mine_Break_Crystal.NS_Mine_Break_Crystal
+Beam_Spark,Beam,Spark,Any,/Game/FX/Mining/NS_Sparkcone.NS_Sparkcone
+Beam_Magma,Beam,Magma,Any,/Game/FX/Mining/NS_MagmaSpray.NS_MagmaSpray
+Beam_Frost,Beam,Frost,Any,/Game/FX/Mining/NS_Frostbind_Beam.NS_Frostbind_Beam
+Beam_Root,Beam,Root,Any,/Game/FX/Mining/NS_Rootmaul_Hit.NS_Rootmaul_Hit
