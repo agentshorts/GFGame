@@ -1165,11 +1165,9 @@ bool AGFCharacter::PlayMiningClip(FName Key, bool bLoop)
 	{
 		return false;
 	}
-	MeshComp->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-	MeshComp->PlayAnimation(Clip, bLoop);
-	MeshComp->SetPlayRate(1.f);
-	// Last writer wins: a newer clip (or the fist scope) replaces this hold.
-	SimpleAnim->PauseFor(bLoop ? 10000.f : Clip->GetPlayLength());
+	// Mining clips claim the emote slot: a newer mining clip or emote replaces it, and the fist scope or a ferry seat sits above it.
+	// A loop is held until EndMiningField; a one-shot expires with the clip.
+	SimpleAnim->ClaimClip(EGFAnimOwner::Emote, Key, bLoop, bLoop ? 0.f : Clip->GetPlayLength());
 	MiningPoseSeconds = bLoop ? 0.f : Clip->GetPlayLength();
 	return true;
 }
@@ -1218,9 +1216,10 @@ void AGFCharacter::EndMiningField()
 		return;
 	}
 	MiningPose = EGFMiningPose::None;
-	if (!PlayMiningClip(GFMiningAnim::FieldEnd(), false) && SimpleAnim && !bFistClipHeld)
+	if (!PlayMiningClip(GFMiningAnim::FieldEnd(), false) && SimpleAnim)
 	{
-		SimpleAnim->PauseFor(0.01f);
+		// Drop the held loop even under a fist scope, so it does not come back when the scope ends.
+		SimpleAnim->ReleaseClaim(EGFAnimOwner::Emote);
 	}
 }
 

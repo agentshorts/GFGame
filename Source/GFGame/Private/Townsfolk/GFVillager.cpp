@@ -264,6 +264,6 @@ void AGFVillager::PlayTalkClip()
 	{
 		return;
 	}
-	Mesh->PlayAnimation(Clip, false);
-	SimpleAnim->PauseFor(TalkSeconds);
+	// The talk clip claims the emote slot for the talk, or for the clip when there is no talk time.
+	SimpleAnim->ClaimClip(EGFAnimOwner::Emote, Key, false, TalkSeconds > 0.f ? TalkSeconds : Clip->GetPlayLength());
 }

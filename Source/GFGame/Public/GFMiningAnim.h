@@ -1,7 +1,7 @@
 #pragma once
 
 // Mining clips (mining_anims_v1): DT_AnimMap keys and the small choices AGFCharacter makes before playing one.
-// The clips play on the local body through UGFSimpleAnimComponent::PauseFor, under the ferry seat and the fist scope.
+// The clips play on the local body through UGFSimpleAnimComponent::ClaimClip (emote slot), under the ferry seat and the fist scope.
 
 #include "CoreMinimal.h"
 
