@@ -4,6 +4,7 @@
 // One break seen by several villagers hires once. An unseen break hires nobody.
 
 #include "CoreMinimal.h"
+#include "GFDinoTypes.h"
 #include "GFTerritoryTypes.h"
 #include "GFTownsfolkTypes.h"
 
@@ -24,6 +25,42 @@ struct GFGAME_API FGFTheftHeat
 	float Away = 0.f;
 	/** Set when this record has already reported a clear, so a second tick does not report it again. */
 	bool bReportedClear = false;
+};
+
+/**
+ * Every heat record the server holds, one per player and town. A theft in a second town while the first one
+ * is still hunting gets its own record, so it gets its own case and its own hire.
+ */
+struct GFGAME_API FGFTheftHeatBook
+{
+	struct FEntry
+	{
+		FString Player;
+		FGFTheftHeat Heat;
+	};
+
+	FGFTheftHeat& FindOrAdd(const FString& Player, FName Town);
+	FGFTheftHeat* Find(const FString& Player, FName Town);
+	const FGFTheftHeat* Find(const FString& Player, FName Town) const;
+	/** True while any of Player's records is Spotted or Hunted. */
+	bool IsHot(const FString& Player) const;
+	/** What Player sees: a Hunted record before a Spotted one before a Clear one. Null when Player has none. */
+	const FGFTheftHeat* Hottest(const FString& Player) const;
+	/** Each player with at least one record, once. */
+	TArray<FString> Players() const;
+
+	TArray<FEntry> Entries;
+};
+
+/** What a case does with one hired dino when it lets go of it. */
+enum class EGFHireRelease : uint8
+{
+	/** A ring or roaming dino the hire borrowed: drop the hire, it stays in the world. */
+	Release,
+	/** A body the hire spawned: nothing else owns it, so it goes. */
+	Despawn,
+	/** A player tamed it during the chase. It is theirs now. */
+	Keep
 };
 
 /** A wild dino the hire may take. Distance is from the break. bInRange is the town ring. */
@@ -83,4 +120,13 @@ struct GFGAME_API FGFTheftRules
 	 * True on the tick that clears.
 	 */
 	static bool AdvanceHeat(FGFTheftHeat& Heat, float Dt, bool bInTown, int32 AliveHired);
+
+	/** A hired dino counts toward the hunt only while it is alive, Hostile, and aimed at the thief. Fled does not. */
+	static bool IsChasing(bool bAlive, EGFTameState State, const FString& TargetKey, const FString& ThiefKey);
+
+	/** The case keeps re-aiming a hire each tick, but never a tamed dino or one that fled. */
+	static bool ShouldRehire(EGFTameState State);
+
+	/** On stand down, or when a hire flees: release a borrowed dino, despawn a hire spawn, keep a tame. */
+	static EGFHireRelease ReleaseFor(bool bSpawnedByHire, EGFTameState State);
 };

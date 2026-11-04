@@ -131,3 +131,80 @@ bool FGFTheftRules::AdvanceHeat(FGFTheftHeat& Heat, float Dt, bool bInTown, int3
 	Heat.bReportedClear = true;
 	return true;
 }
+
+bool FGFTheftRules::IsChasing(bool bAlive, EGFTameState State, const FString& TargetKey, const FString& ThiefKey)
+{
+	return bAlive && State == EGFTameState::Hostile && !ThiefKey.IsEmpty() && TargetKey == ThiefKey;
+}
+
+bool FGFTheftRules::ShouldRehire(EGFTameState State)
+{
+	return State != EGFTameState::Tamed && State != EGFTameState::Fled;
+}
+
+EGFHireRelease FGFTheftRules::ReleaseFor(bool bSpawnedByHire, EGFTameState State)
+{
+	if (State == EGFTameState::Tamed)
+	{
+		return EGFHireRelease::Keep;
+	}
+	return bSpawnedByHire ? EGFHireRelease::Despawn : EGFHireRelease::Release;
+}
+
+FGFTheftHeat& FGFTheftHeatBook::FindOrAdd(const FString& Player, FName Town)
+{
+	if (FGFTheftHeat* Found = Find(Player, Town))
+	{
+		return *Found;
+	}
+	FEntry& Entry = Entries.AddDefaulted_GetRef();
+	Entry.Player = Player;
+	Entry.Heat.TownId = Town;
+	return Entry.Heat;
+}
+
+FGFTheftHeat* FGFTheftHeatBook::Find(const FString& Player, FName Town)
+{
+	for (FEntry& Entry : Entries)
+	{
+		if (Entry.Player == Player && Entry.Heat.TownId == Town)
+		{
+			return &Entry.Heat;
+		}
+	}
+	return nullptr;
+}
+
+const FGFTheftHeat* FGFTheftHeatBook::Find(const FString& Player, FName Town) const
+{
+	return const_cast<FGFTheftHeatBook*>(this)->Find(Player, Town);
+}
+
+bool FGFTheftHeatBook::IsHot(const FString& Player) const
+{
+	const FGFTheftHeat* Top = Hottest(Player);
+	return Top && Top->State != EGFTheftHeat::Clear;
+}
+
+const FGFTheftHeat* FGFTheftHeatBook::Hottest(const FString& Player) const
+{
+	const FGFTheftHeat* Best = nullptr;
+	for (const FEntry& Entry : Entries)
+	{
+		if (Entry.Player == Player && (!Best || static_cast<uint8>(Entry.Heat.State) > static_cast<uint8>(Best->State)))
+		{
+			Best = &Entry.Heat;
+		}
+	}
+	return Best;
+}
+
+TArray<FString> FGFTheftHeatBook::Players() const
+{
+	TArray<FString> Out;
+	for (const FEntry& Entry : Entries)
+	{
+		Out.AddUnique(Entry.Player);
+	}
+	return Out;
+}

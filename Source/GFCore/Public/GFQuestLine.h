@@ -76,6 +76,13 @@ struct GFCORE_API FGFQuestLine
 
 	FGFQuestApplyResult Apply(const FGFQuestEvent& Event);
 
+	/**
+	 * True when Progress waits at Escape but the server holds no live heat for that player, for example after a
+	 * reload or restart dropped the theft director's state. Nothing would ever raise HeatCleared for it, so the
+	 * caller should raise HeatCleared with no town to let the player go back to the elder.
+	 */
+	static bool IsStrandedAtEscape(const FGFQuestProgress& Progress, bool bHasLiveHeat);
+
 private:
 	const FGFQuestCatalog& ActiveRules() const;
 	FGFQuestApplyResult ApplyCrystal(const FGFQuestEvent& Event);

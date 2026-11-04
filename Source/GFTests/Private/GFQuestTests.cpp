@@ -463,6 +463,20 @@ bool FGFQuestLineTransitionsTest::RunTest(const FString&)
 		TestTrue(TEXT("Last heat"), Clear.Apply(FGFQuestEvents::HeatCleared(TEXT("P"), Verdant)).Result == EGFQuestResult::Ok);
 		TestTrue(TEXT("Now they can talk"), Clear.Progress.Step == EGFQuestStep::TalkToElder);
 
+		// A restart or reload can leave Escape with no heat on the server. The director settles it.
+		FGFQuestLine Stranded;
+		Stranded.Progress.Step = EGFQuestStep::Escape;
+		Stranded.Progress.HeatFactions = { Rime, Verdant };
+		TestFalse(TEXT("Live heat is not stranded"), FGFQuestLine::IsStrandedAtEscape(Stranded.Progress, true));
+		TestTrue(TEXT("No live heat at Escape is stranded"), FGFQuestLine::IsStrandedAtEscape(Stranded.Progress, false));
+		TestTrue(TEXT("A townless clear settles it"), Stranded.Apply(FGFQuestEvents::HeatCleared(TEXT("P"))).Result == EGFQuestResult::Ok);
+		TestTrue(TEXT("Back to the elder"), Stranded.Progress.Step == EGFQuestStep::TalkToElder);
+		TestEqual(TEXT("Every town dropped"), Stranded.Progress.HeatFactions.Num(), 0);
+		TestFalse(TEXT("Not stranded once settled"), FGFQuestLine::IsStrandedAtEscape(Stranded.Progress, false));
+		FGFQuestProgress Later;
+		Later.Step = EGFQuestStep::HuntHide;
+		TestFalse(TEXT("Only Escape can be stranded"), FGFQuestLine::IsStrandedAtEscape(Later, false));
+
 		FGFQuestLine None;
 		None.Progress.HeatFactions.Add(Rime);
 		TestEqual(TEXT("Heat at the first step"), None.Apply(FGFQuestEvents::ElderAccepted(TEXT("P"), Rime)).Reason, FGFQuestCodes::Heat);

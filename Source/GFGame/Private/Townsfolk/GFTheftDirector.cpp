@@ -5,6 +5,7 @@
 #include "GFLog.h"
 #include "GFPlayerState.h"
 #include "GFQuestLine.h"
+#include "GFQuestSubsystem.h"
 #include "GFTamingComponent.h"
 #include "GFTerritorySubsystem.h"
 #include "GFTownNodes.h"
@@ -196,21 +197,23 @@ namespace GFTheftPrivate
 		}
 	}
 
-	int32 CountChasing(const TArray<TWeakObjectPtr<AGFDino>>& Hired)
+	template <typename HireT>
+	int32 CountChasing(const TArray<HireT>& Hired, const FString& ThiefKey)
 	{
 		int32 Alive = 0;
-		for (const TWeakObjectPtr<AGFDino>& Ptr : Hired)
+		for (const HireT& Hire : Hired)
 		{
-			const AGFDino* Dino = Ptr.Get();
-			if (!Dino || Dino->IsActorBeingDestroyed() || Dino->GetLife() != EGFDinoLife::Alive)
+			const AGFDino* Dino = Hire.Dino.Get();
+			if (!Dino || !Dino->Taming)
 			{
 				continue;
 			}
-			if (!Dino->Taming || Dino->Taming->GetTameState() == EGFTameState::Tamed)
+			const bool bAlive = !Dino->IsActorBeingDestroyed() && Dino->GetLife() == EGFDinoLife::Alive;
+			const FGFTameMachine& Machine = Dino->Taming->GetMachine();
+			if (FGFTheftRules::IsChasing(bAlive, Machine.State, Machine.TargetKey, ThiefKey))
 			{
-				continue;
+				++Alive;
 			}
-			++Alive;
 		}
 		return Alive;
 	}
@@ -314,7 +317,8 @@ void AGFTheftDirector::HandleCrystal(UWorld* World, const FString& NodeKey, FVec
 	TArray<FString> Open;
 	for (const FString& Key : Players)
 	{
-		const FGFTheftHeat* Heat = Heats.Find(Key);
+		// Heat is per town: already hunted in another town still opens a case here.
+		const FGFTheftHeat* Heat = Heats.Find(Key, TownId);
 		if (!Heat || Heat->State == EGFTheftHeat::Clear)
 		{
 			Open.Add(Key);
@@ -375,7 +379,7 @@ void AGFTheftDirector::HandleCrystal(UWorld* World, const FString& NodeKey, FVec
 	}
 	for (const FString& Key : Open)
 	{
-		FGFTheftRules::NoteWitness(Heats.FindOrAdd(Key), TownId);
+		FGFTheftRules::NoteWitness(Heats.FindOrAdd(Key, TownId), TownId);
 	}
 	PublishHeats();
 	UE_LOG(LogGF, Log, TEXT("Theft: %s crystal %s seen by %d"), *TownId.ToString(), *NodeKey, Witnesses.Num());
@@ -458,26 +462,31 @@ void AGFTheftDirector::CommitHire(int32 CaseIndex)
 		}
 		if (Dino->Taming->ServerHire(Case.ThiefKey) != EGFForceHostile::Refused)
 		{
-			Case.Hired.Add(Dino);
+			Case.Hired.Add(FCase::FHire{ Dino, false });
 		}
 	}
 	for (int32 SpawnIndex = 0; SpawnIndex < Plan.SpawnCount; ++SpawnIndex)
 	{
 		const FName SpeciesId = Species[SpawnIndex % Species.Num()];
 		AGFDino* Dino = GFTheftPrivate::SpawnHired(World, Center, SpeciesId, Range);
-		if (!Dino || !Dino->Taming)
+		if (!Dino)
 		{
 			continue;
 		}
-		if (Dino->Taming->ServerHire(Case.ThiefKey) != EGFForceHostile::Refused)
+		if (Dino->Taming && Dino->Taming->ServerHire(Case.ThiefKey) != EGFForceHostile::Refused)
 		{
-			Case.Hired.Add(Dino);
+			Case.Hired.Add(FCase::FHire{ Dino, true });
+		}
+		else
+		{
+			// Nobody else owns a hire spawn. One the hire could not take must not stay behind.
+			Dino->Destroy();
 		}
 	}
 
 	for (const FString& Key : Case.Players)
 	{
-		FGFTheftRules::NoteHire(Heats.FindOrAdd(Key));
+		FGFTheftRules::NoteHire(Heats.FindOrAdd(Key, Case.TownId));
 	}
 
 	const FString Name = GFTheftPrivate::DisplayNameFor(World, Case.ThiefKey);
@@ -487,8 +496,9 @@ void AGFTheftDirector::CommitHire(int32 CaseIndex)
 	FGFElderBook::Post(World, Channel, EGFElderKind::Hire, Name, Case.ThiefKey, Case.TownId, Now);
 	UE_LOG(LogGF, Log, TEXT("Theft: hired %d against %s in %s"), Case.Hired.Num(), *Case.ThiefKey, *Case.TownId.ToString());
 
-	if (GFTheftPrivate::CountChasing(Case.Hired) <= 0)
+	if (GFTheftPrivate::CountChasing(Case.Hired, Case.ThiefKey) <= 0)
 	{
+		LetGoAll(CaseIndex);
 		for (const FString& Key : Case.Players)
 		{
 			ClearPlayer(Key, Case.TownId);
@@ -521,25 +531,40 @@ void AGFTheftDirector::Refresh(float DeltaSeconds)
 			}
 			continue;
 		}
-		for (const TWeakObjectPtr<AGFDino>& Ptr : Case.Hired)
+		for (int32 HireIndex = Case.Hired.Num() - 1; HireIndex >= 0; --HireIndex)
 		{
-			AGFDino* Dino = Ptr.Get();
+			const FCase::FHire Hire = Case.Hired[HireIndex];
+			AGFDino* Dino = Hire.Dino.Get();
 			if (!Dino || !Dino->Taming || Dino->GetLife() != EGFDinoLife::Alive)
 			{
 				continue;
 			}
-			if (Dino->Taming->GetTameState() == EGFTameState::Tamed)
+			const EGFTameState State = Dino->Taming->GetTameState();
+			if (State == EGFTameState::Fled)
 			{
+				// It ran. The ring has already let go of it, so the case lets go too instead of hiring it back.
+				Case.Hired.RemoveAt(HireIndex);
+				if (FGFTheftRules::ReleaseFor(Hire.bSpawned, State) == EGFHireRelease::Despawn)
+				{
+					Dino->Destroy();
+				}
+				else
+				{
+					Dino->Taming->ServerReleaseHire();
+				}
 				continue;
 			}
-			Dino->Taming->ServerHire(Case.ThiefKey);
+			if (FGFTheftRules::ShouldRehire(State))
+			{
+				Dino->Taming->ServerHire(Case.ThiefKey);
+			}
 		}
 
-		const int32 Alive = GFTheftPrivate::CountChasing(Case.Hired);
+		const int32 Alive = GFTheftPrivate::CountChasing(Case.Hired, Case.ThiefKey);
 		bool bThiefClear = false;
 		for (const FString& Key : Case.Players)
 		{
-			FGFTheftHeat* Heat = Heats.Find(Key);
+			FGFTheftHeat* Heat = Heats.Find(Key, Case.TownId);
 			if (!Heat)
 			{
 				continue;
@@ -559,7 +584,7 @@ void AGFTheftDirector::Refresh(float DeltaSeconds)
 			StandDown(Index);
 			for (const FString& Key : Case.Players)
 			{
-				FGFTheftHeat* Heat = Heats.Find(Key);
+				FGFTheftHeat* Heat = Heats.Find(Key, Case.TownId);
 				if (Heat && Heat->State == EGFTheftHeat::Hunted)
 				{
 					if (FGFTheftRules::AdvanceHeat(*Heat, 0.f, true, 0))
@@ -571,21 +596,75 @@ void AGFTheftDirector::Refresh(float DeltaSeconds)
 			Case.bClosed = true;
 		}
 	}
+	// Closed cases have let go of their dinos and their heat. Nothing reads them again.
+	Cases.RemoveAll([](const FCase& Case) { return Case.bClosed; });
+	SettleStrandedEscapes();
 	PublishHeats();
 }
 
 void AGFTheftDirector::StandDown(int32 CaseIndex)
 {
+	LetGoAll(CaseIndex);
+}
+
+void AGFTheftDirector::LetGoAll(int32 CaseIndex)
+{
 	if (!Cases.IsValidIndex(CaseIndex))
 	{
 		return;
 	}
-	for (const TWeakObjectPtr<AGFDino>& Ptr : Cases[CaseIndex].Hired)
+	FCase& Case = Cases[CaseIndex];
+	for (const FCase::FHire& Hire : Case.Hired)
 	{
-		AGFDino* Dino = Ptr.Get();
-		if (Dino && Dino->Taming)
+		AGFDino* Dino = Hire.Dino.Get();
+		if (!Dino || Dino->IsActorBeingDestroyed())
 		{
-			Dino->Taming->ServerReleaseHire();
+			continue;
+		}
+		const EGFTameState State = Dino->Taming ? Dino->Taming->GetTameState() : EGFTameState::Wild;
+		switch (FGFTheftRules::ReleaseFor(Hire.bSpawned, State))
+		{
+		case EGFHireRelease::Despawn:
+			// A downed or dead spawn keeps its own body lifecycle (loot, harvest). Only a live one goes now.
+			if (Dino->GetLife() == EGFDinoLife::Alive)
+			{
+				Dino->Destroy();
+			}
+			break;
+		case EGFHireRelease::Release:
+			if (Dino->Taming)
+			{
+				Dino->Taming->ServerReleaseHire();
+			}
+			break;
+		default:
+			break;
+		}
+	}
+	Case.Hired.Reset();
+}
+
+void AGFTheftDirector::SettleStrandedEscapes()
+{
+	UWorld* World = GetWorld();
+	const UGFQuestSubsystem* Quest = UGFQuestSubsystem::Get(this);
+	const AGameStateBase* GS = World ? World->GetGameState() : nullptr;
+	if (!Quest || !GS)
+	{
+		return;
+	}
+	for (const APlayerState* Player : GS->PlayerArray)
+	{
+		const AGFPlayerState* PS = Cast<AGFPlayerState>(Player);
+		if (!PS || PS->PlayerKey.IsEmpty())
+		{
+			continue;
+		}
+		const FGFQuestProgress* Progress = Quest->FindProgress(PS->PlayerKey);
+		if (Progress && FGFQuestLine::IsStrandedAtEscape(*Progress, Heats.IsHot(PS->PlayerKey)))
+		{
+			UE_LOG(LogGF, Log, TEXT("Theft: %s was at Escape with no live heat. Clearing it."), *PS->PlayerKey);
+			FGFQuestEvents::Raise(World, FGFQuestEvents::HeatCleared(PS->PlayerKey));
 		}
 	}
 }
@@ -596,7 +675,7 @@ void AGFTheftDirector::ClearPlayer(const FString& PlayerKey, FName TownId)
 	{
 		return;
 	}
-	FGFTheftHeat& Heat = Heats.FindOrAdd(PlayerKey);
+	FGFTheftHeat& Heat = Heats.FindOrAdd(PlayerKey, TownId);
 	if (Heat.State != EGFTheftHeat::Clear)
 	{
 		Heat.State = EGFTheftHeat::Clear;
@@ -612,14 +691,19 @@ void AGFTheftDirector::PublishHeats()
 	{
 		return;
 	}
-	for (const TPair<FString, FGFTheftHeat>& Pair : Heats)
+	for (const FString& Key : Heats.Players())
 	{
+		const FGFTheftHeat* Shown = Heats.Hottest(Key);
+		if (!Shown)
+		{
+			continue;
+		}
 		AGFPlayerController* Found = nullptr;
 		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
 		{
 			AGFPlayerController* Candidate = Cast<AGFPlayerController>(It->Get());
 			const AGFPlayerState* PS = Candidate ? Candidate->GetPlayerState<AGFPlayerState>() : nullptr;
-			if (PS && PS->PlayerKey == Pair.Key)
+			if (PS && PS->PlayerKey == Key)
 			{
 				Found = Candidate;
 				break;
@@ -627,7 +711,7 @@ void AGFTheftDirector::PublishHeats()
 		}
 		if (Found)
 		{
-			Found->NotifyTheftHeat(Pair.Value.State, Pair.Value.HuntLeft);
+			Found->NotifyTheftHeat(Shown->State, Shown->HuntLeft);
 		}
 	}
 }

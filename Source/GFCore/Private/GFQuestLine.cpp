@@ -355,6 +355,11 @@ FGFQuestApplyResult FGFQuestLine::Apply(const FGFQuestEvent& Event)
 	}
 }
 
+bool FGFQuestLine::IsStrandedAtEscape(const FGFQuestProgress& Progress, bool bHasLiveHeat)
+{
+	return Progress.Step == EGFQuestStep::Escape && !bHasLiveHeat;
+}
+
 FGFQuestApplyResult FGFQuestLine::ApplyCrystal(const FGFQuestEvent& Event)
 {
 	if (!Event.FactionId.IsNone() && !Progress.HeatFactions.Contains(Event.FactionId))

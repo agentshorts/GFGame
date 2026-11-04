@@ -29,6 +29,10 @@ private:
 	void Refresh(float DeltaSeconds);
 	void StandDown(int32 CaseIndex);
 	void ClearPlayer(const FString& PlayerKey, FName TownId);
+	/** Lets go of every dino the case still holds (see FGFTheftRules::ReleaseFor). */
+	void LetGoAll(int32 CaseIndex);
+	/** A quest left at Escape with no live heat here (a reload, a restart) is cleared rather than stuck. */
+	void SettleStrandedEscapes();
 	/** Push each heat snapshot to that player's controller. The rules stay on this actor. */
 	void PublishHeats();
 
@@ -42,11 +46,17 @@ private:
 		double OpenedAt = 0.0;
 		bool bHired = false;
 		bool bClosed = false;
-		TArray<TWeakObjectPtr<AGFDino>> Hired;
+		struct FHire
+		{
+			TWeakObjectPtr<AGFDino> Dino;
+			/** Spawned for this hire, so the case owns the body and despawns it. */
+			bool bSpawned = false;
+		};
+		TArray<FHire> Hired;
 	};
 
 	TArray<FCase> Cases;
-	TMap<FString, FGFTheftHeat> Heats;
+	FGFTheftHeatBook Heats;
 	FDelegateHandle CrystalHandle;
 	FDelegateHandle HireHandle;
 	int32 NextCaseId = 1;

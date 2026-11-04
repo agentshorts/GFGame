@@ -214,4 +214,71 @@ bool FGFTheftHeatClearsTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTheftHeatPerTownTest, "GFGame.Theft.Heat.PerTown", GFTheftTests::Flags)
+bool FGFTheftHeatPerTownTest::RunTest(const FString&)
+{
+	const FName Rime(TEXT("Rime"));
+	const FName Verdant(TEXT("Verdant"));
+	FGFTheftHeatBook Book;
+	TestNull(TEXT("Nothing yet"), Book.Hottest(TEXT("P")));
+	TestFalse(TEXT("Not hot yet"), Book.IsHot(TEXT("P")));
+
+	FGFTheftRules::NoteWitness(Book.FindOrAdd(TEXT("P"), Rime), Rime);
+	FGFTheftRules::NoteHire(Book.FindOrAdd(TEXT("P"), Rime));
+	TestTrue(TEXT("Hunted in Rime"), Book.Find(TEXT("P"), Rime)->State == EGFTheftHeat::Hunted);
+	TestNull(TEXT("Verdant has no record yet"), Book.Find(TEXT("P"), Verdant));
+
+	// A second theft in another town while Rime still hunts gets its own record.
+	FGFTheftRules::NoteWitness(Book.FindOrAdd(TEXT("P"), Verdant), Verdant);
+	TestTrue(TEXT("Spotted in Verdant"), Book.Find(TEXT("P"), Verdant)->State == EGFTheftHeat::Spotted);
+	TestTrue(TEXT("Rime untouched"), Book.Find(TEXT("P"), Rime)->State == EGFTheftHeat::Hunted);
+	TestEqual(TEXT("Two records"), Book.Entries.Num(), 2);
+	TestEqual(TEXT("One player"), Book.Players().Num(), 1);
+	TestTrue(TEXT("The HUD shows the hunt"), Book.Hottest(TEXT("P"))->State == EGFTheftHeat::Hunted);
+	TestEqual(TEXT("Hottest is Rime"), Book.Hottest(TEXT("P"))->TownId, Rime);
+
+	FGFTheftHeat& RimeHeat = *Book.Find(TEXT("P"), Rime);
+	TestTrue(TEXT("Rime clears when its hire is gone"), FGFTheftRules::AdvanceHeat(RimeHeat, 0.1f, true, 0));
+	TestTrue(TEXT("Still hot from Verdant"), Book.IsHot(TEXT("P")));
+	TestEqual(TEXT("Hottest is now Verdant"), Book.Hottest(TEXT("P"))->TownId, Verdant);
+	Book.Find(TEXT("P"), Verdant)->State = EGFTheftHeat::Clear;
+	TestFalse(TEXT("Cold once both clear"), Book.IsHot(TEXT("P")));
+	TestFalse(TEXT("Another player is untouched"), Book.IsHot(TEXT("Q")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTheftHireOwnershipTest, "GFGame.Theft.Hire.Ownership", GFTheftTests::Flags)
+bool FGFTheftHireOwnershipTest::RunTest(const FString&)
+{
+	auto R = [](EGFHireRelease V) { return static_cast<int32>(V); };
+	TestEqual(TEXT("A borrowed dino is released"), R(FGFTheftRules::ReleaseFor(false, EGFTameState::Hostile)), R(EGFHireRelease::Release));
+	TestEqual(TEXT("A hire spawn is despawned"), R(FGFTheftRules::ReleaseFor(true, EGFTameState::Hostile)), R(EGFHireRelease::Despawn));
+	TestEqual(TEXT("A fled hire spawn is despawned"), R(FGFTheftRules::ReleaseFor(true, EGFTameState::Fled)), R(EGFHireRelease::Despawn));
+	TestEqual(TEXT("A fled borrowed dino is released"), R(FGFTheftRules::ReleaseFor(false, EGFTameState::Fled)), R(EGFHireRelease::Release));
+	TestEqual(TEXT("A tamed spawn is kept"), R(FGFTheftRules::ReleaseFor(true, EGFTameState::Tamed)), R(EGFHireRelease::Keep));
+	TestEqual(TEXT("A tamed borrowed dino is kept"), R(FGFTheftRules::ReleaseFor(false, EGFTameState::Tamed)), R(EGFHireRelease::Keep));
+
+	TestTrue(TEXT("Re-aim a hostile hire"), FGFTheftRules::ShouldRehire(EGFTameState::Hostile));
+	TestTrue(TEXT("Re-aim a calmed hire"), FGFTheftRules::ShouldRehire(EGFTameState::Alert));
+	TestFalse(TEXT("Never re-hire a fled dino"), FGFTheftRules::ShouldRehire(EGFTameState::Fled));
+	TestFalse(TEXT("Never re-hire a tame"), FGFTheftRules::ShouldRehire(EGFTameState::Tamed));
+
+	const FString Thief(TEXT("Thief"));
+	TestTrue(TEXT("Hostile at the thief chases"), FGFTheftRules::IsChasing(true, EGFTameState::Hostile, Thief, Thief));
+	TestFalse(TEXT("Fled does not chase"), FGFTheftRules::IsChasing(true, EGFTameState::Fled, Thief, Thief));
+	TestFalse(TEXT("Calmed does not chase"), FGFTheftRules::IsChasing(true, EGFTameState::Alert, Thief, Thief));
+	TestFalse(TEXT("Aimed elsewhere does not chase"), FGFTheftRules::IsChasing(true, EGFTameState::Hostile, TEXT("Other"), Thief));
+	TestFalse(TEXT("Dead does not chase"), FGFTheftRules::IsChasing(false, EGFTameState::Hostile, Thief, Thief));
+	TestFalse(TEXT("No thief, no chase"), FGFTheftRules::IsChasing(true, EGFTameState::Hostile, FString(), FString()));
+
+	// A hire that flees no longer keeps the heat up, so the hunt clears instead of waiting on it.
+	FGFTameMachine Dino;
+	Dino.ForceHostile(Thief, true, 1.f);
+	TestTrue(TEXT("Hired and chasing"), FGFTheftRules::IsChasing(true, Dino.State, Dino.TargetKey, Thief));
+	Dino.Flee();
+	TestFalse(TEXT("Fled hire stops chasing"), FGFTheftRules::IsChasing(true, Dino.State, Dino.TargetKey, Thief));
+	TestFalse(TEXT("And is not hired back"), FGFTheftRules::ShouldRehire(Dino.State));
+	return true;
+}
+
 #endif
