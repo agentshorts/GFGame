@@ -30,6 +30,9 @@
 #include "GFVoxelWorld.h"
 #include "GFMiningRange.h"
 #include "GFHotbarRules.h"
+#include "GFInventoryScreen.h"
+#include "GFInventoryView.h"
+#include "GFInventoryComponent.h"
 #include "GFEconomy.h"
 #include "GFItemTypes.h"
 #include "GFMagicComponent.h"
@@ -275,6 +278,7 @@ void AGFHUD::DrawHUD()
 	DrawFieldHud();
 	DrawPauseMenu();
 	DrawElderMenu();
+	DrawInventoryScreen();
 }
 
 void AGFHUD::DrawMiningRange()
@@ -494,6 +498,141 @@ void AGFHUD::NotifyHitBoxClick(FName BoxName)
 	if (Modal == EGFHudModal::Elder && BoxName.ToString().StartsWith(TEXT("GFElder_")))
 	{
 		ActivateElderBox(BoxName);
+		return;
+	}
+	if (Modal != EGFHudModal::Inventory || !BoxName.ToString().StartsWith(TEXT("GFInv_")))
+	{
+		return;
+	}
+	FString Box = BoxName.ToString();
+	if (Box == TEXT("GFInv_Close"))
+	{
+		CloseInventory();
+		return;
+	}
+	if (Box == TEXT("GFInv_Prev") || Box == TEXT("GFInv_Next"))
+	{
+		InvPage = FMath::Clamp(InvPage + (Box == TEXT("GFInv_Next") ? 1 : -1), 0, FMath::Max(0, InvPageCount - 1));
+		return;
+	}
+	if (Box.RemoveFromStart(TEXT("GFInv_Tab_")) && Box.IsNumeric())
+	{
+		const int32 Tab = FCString::Atoi(*Box);
+		if (Tab >= 0 && Tab < FGFInventoryView::TabCount)
+		{
+			SetInventoryTab(static_cast<EGFInventoryTab>(Tab));
+		}
+		return;
+	}
+	SubmitHotbarMove(InvCursor.Press(InventoryTargetFor(BoxName)));
+}
+
+void AGFHUD::NotifyHitBoxRelease(FName BoxName)
+{
+	Super::NotifyHitBoxRelease(BoxName);
+	if (Modal == EGFHudModal::Inventory && BoxName.ToString().StartsWith(TEXT("GFInv_")))
+	{
+		SubmitHotbarMove(InvCursor.Release(InventoryTargetFor(BoxName)));
+	}
+}
+
+FGFInvTarget AGFHUD::InventoryTargetFor(FName BoxName) const
+{
+	FString Box = BoxName.ToString();
+	if (Box.RemoveFromStart(TEXT("GFInv_Cell_")) && Box.IsNumeric())
+	{
+		const int32 Index = FCString::Atoi(*Box);
+		return InvPageEntries.IsValidIndex(Index) ? FGFInvTarget::Grid(InvPageEntries[Index].Id) : FGFInvTarget::Nothing();
+	}
+	Box = BoxName.ToString();
+	if (Box.RemoveFromStart(TEXT("GFInv_Slot_")) && Box.IsNumeric())
+	{
+		const int32 Slot = FCString::Atoi(*Box);
+		const APlayerController* PC = GetOwningPlayerController();
+		const AGFPlayerState* PS = PC ? PC->GetPlayerState<AGFPlayerState>() : nullptr;
+		const TArray<FName> Ids = PS ? PS->GetHotbarSlots() : TArray<FName>();
+		return FGFInvTarget::BarSlot(Slot, Ids.IsValidIndex(Slot) ? Ids[Slot] : FName());
+	}
+	return FGFInvTarget::Nothing();
+}
+
+void AGFHUD::SubmitHotbarMove(const TOptional<FGFHotbarMove>& Move)
+{
+	if (!Move.IsSet())
+	{
+		return;
+	}
+	const APlayerController* PC = GetOwningPlayerController();
+	AGFPlayerState* PS = PC ? PC->GetPlayerState<AGFPlayerState>() : nullptr;
+	if (PS)
+	{
+		LastHotbarRequest = PS->RequestHotbarMove(Move.GetValue());
+		bLastHotbarReported = false;
+	}
+}
+
+void AGFHUD::ToggleInventory()
+{
+	SetHudModal(EGFHudModalEvent::ToggleInventory);
+}
+
+void AGFHUD::OpenInventory()
+{
+	SetHudModal(EGFHudModalEvent::OpenInventory);
+}
+
+void AGFHUD::CloseInventory()
+{
+	SetHudModal(EGFHudModalEvent::CloseInventory);
+}
+
+void AGFHUD::SetInventoryTab(EGFInventoryTab Tab)
+{
+	if (Tab != InvTab)
+	{
+		InvTab = Tab;
+		InvPage = 0;
+	}
+}
+
+void AGFHUD::InventoryNumberKey(int32 Slot)
+{
+	if (Modal == EGFHudModal::Inventory)
+	{
+		SubmitHotbarMove(InvCursor.NumberKey(Slot, InvHover));
+	}
+}
+
+TArray<FGFInventoryEntry> AGFHUD::GetInventoryEntries() const
+{
+	const APlayerController* PC = GetOwningPlayerController();
+	const AGFPlayerState* PS = PC ? PC->GetPlayerState<AGFPlayerState>() : nullptr;
+	if (!PS || !PS->Inventory)
+	{
+		return {};
+	}
+	TArray<FGFHotbarBlock> Placeable;
+	if (const AGFVoxelWorld* Voxel = PS->GetVoxelWorld())
+	{
+		for (const FName BlockId : Voxel->GetPlaceableBlockIds())
+		{
+			Placeable.Add({ BlockId, PS->ItemForBlock(BlockId) });
+		}
+	}
+	const AGFGameState* GS = PS->GetGFGameState();
+	return FGFInventoryView::Build(PS->Inventory->GetInventory(), Placeable, GS ? GS->GetItemTable() : nullptr, GS && GS->bFreeBuild);
+}
+
+void AGFHUD::RefreshInventoryPage(const FGFInventoryLayout& Layout)
+{
+	const TArray<FGFInventoryEntry> Tab = FGFInventoryView::Filter(GetInventoryEntries(), InvTab);
+	const int32 PerPage = Layout.Cells.Num();
+	InvPageCount = FGFInventoryView::PageCount(Tab.Num(), PerPage);
+	InvPage = FGFInventoryView::ClampPage(InvPage, Tab.Num(), PerPage);
+	InvPageEntries.Reset();
+	for (int32 Index = InvPage * PerPage; Index < Tab.Num() && InvPageEntries.Num() < PerPage; ++Index)
+	{
+		InvPageEntries.Add(Tab[Index]);
 	}
 }
 
@@ -1111,6 +1250,35 @@ FLinearColor AGFHUD::SlotSwatch(FName SlotId) const
 	return FLinearColor::MakeFromHSV8(static_cast<uint8>(Hash & 0xFF), 120, 200);
 }
 
+void AGFHUD::DrawSlotArt(FName Id, float X, float Y, float W, float H, bool bSpent)
+{
+	UFont* Font = HudFont();
+	const float Pad = FMath::Max(2.f, W * 0.14f);
+	const float IconSize = FMath::Max(0.f, FMath::Min(W, H) - 2.f * Pad);
+	const float IconX = X + (W - IconSize) * 0.5f;
+	const float IconY = Y + (H - IconSize) * 0.5f;
+	const FLinearColor Tint = bSpent ? FLinearColor(1.f, 1.f, 1.f, 0.35f) : FLinearColor::White;
+	if (Id == FGFHotbarRules::FistsId())
+	{
+		DrawText(TEXT("Hands"), FLinearColor(0.85f, 0.85f, 0.85f), X + 6.f, Y + H * 0.5f - 7.f, Font, W < 48.f ? 0.5f : 0.7f, false);
+	}
+	else if (!Id.IsNone())
+	{
+		if (UTexture2D* Icon = SlotIcon(Id))
+		{
+			DrawTexture(Icon, IconX, IconY, IconSize, IconSize, 0.f, 0.f, 1.f, 1.f, Tint, BLEND_Translucent);
+		}
+		else
+		{
+			FLinearColor Swatch = SlotSwatch(Id);
+			Swatch.A = bSpent ? 0.35f : 0.95f;
+			DrawRect(Swatch, IconX, IconY, IconSize, IconSize);
+			const FLinearColor Ink = Swatch.GetLuminance() > 0.5f ? FLinearColor::Black : FLinearColor::White;
+			DrawText(FGFHotbarRules::ShortLabel(Id), Ink, IconX + 4.f, IconY + 3.f, Font, W < 48.f ? 0.55f : 0.8f, false);
+		}
+	}
+}
+
 void AGFHUD::DrawHotbar()
 {
 	const AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn());
@@ -1150,32 +1318,9 @@ void AGFHUD::DrawHotbar()
 		}
 		DrawRect(Slot.bSelected ? FLinearColor(0.16f, 0.13f, 0.06f, 0.92f) : FLinearColor(0.f, 0.f, 0.f, 0.55f), Slot.X, Y, Slot.W, Slot.H);
 
-		const float Pad = FMath::Max(2.f, Slot.W * 0.14f);
-		const float IconSize = FMath::Max(0.f, FMath::Min(Slot.W, Slot.H) - 2.f * Pad);
-		const float IconX = Slot.X + (Slot.W - IconSize) * 0.5f;
-		const float IconY = Y + (Slot.H - IconSize) * 0.5f;
 		const int64 Count = PS ? PS->GetHotbarCount(Id) : -1;
 		const bool bSpent = Count == 0;
-		const FLinearColor Tint = bSpent ? FLinearColor(1.f, 1.f, 1.f, 0.35f) : FLinearColor::White;
-		if (Id == FGFHotbarRules::FistsId())
-		{
-			DrawText(TEXT("Hands"), FLinearColor(0.85f, 0.85f, 0.85f), Slot.X + 6.f, Y + Slot.H * 0.5f - 7.f, Font, Slot.W < 48.f ? 0.5f : 0.7f, false);
-		}
-		else if (!Id.IsNone())
-		{
-			if (UTexture2D* Icon = SlotIcon(Id))
-			{
-				DrawTexture(Icon, IconX, IconY, IconSize, IconSize, 0.f, 0.f, 1.f, 1.f, Tint, BLEND_Translucent);
-			}
-			else
-			{
-				FLinearColor Swatch = SlotSwatch(Id);
-				Swatch.A = bSpent ? 0.35f : 0.95f;
-				DrawRect(Swatch, IconX, IconY, IconSize, IconSize);
-				const FLinearColor Ink = Swatch.GetLuminance() > 0.5f ? FLinearColor::Black : FLinearColor::White;
-				DrawText(FGFHotbarRules::ShortLabel(Id), Ink, IconX + 4.f, IconY + 3.f, Font, Slot.W < 48.f ? 0.55f : 0.8f, false);
-			}
-		}
+		DrawSlotArt(Id, Slot.X, Y, Slot.W, Slot.H, bSpent);
 		// Key number top left, count bottom right.
 		DrawText(FString::FromInt(Index + 1), Slot.bSelected ? Gold : FLinearColor(1.f, 1.f, 1.f, 0.75f), Slot.X + 3.f, Y + 1.f, Font, 0.55f, false);
 		const FString CountText = FGFHotbarRules::FormatCount(Count);
@@ -1237,7 +1382,7 @@ void AGFHUD::DrawHint()
 {
 	const UWorld* World = GetWorld();
 	const float Elapsed = (World && bShownAtSet) ? static_cast<float>(World->GetTimeSeconds() - ShownAt) : 0.f;
-	if (!GFHintVisible(Elapsed, bHintUserOverride, bHintUserVisible))
+	if (!GFHintVisible(Elapsed, bHintUserOverride, bHintUserVisible) || Modal == EGFHudModal::Inventory)
 	{
 		return;
 	}
@@ -1432,6 +1577,11 @@ void AGFHUD::SetHudModal(EGFHudModalEvent Event)
 		{
 			PC->ClearReturnPrompt();
 		}
+	}
+	if (Prev == EGFHudModal::Inventory && Modal != EGFHudModal::Inventory)
+	{
+		InvCursor.Cancel();
+		InvHover = FGFInvTarget();
 	}
 	if (Prev == EGFHudModal::Elder && Modal != EGFHudModal::Elder && Modal != EGFHudModal::Chat)
 	{
@@ -2248,5 +2398,188 @@ void AGFHUD::DrawFerryStand()
 	{
 		DrawText(Prompt[i], (i == 0) ? Gold : Soft, X + Pad, Y, Font, Scale, false);
 		Y += LineH;
+	}
+}
+
+void AGFHUD::DrawInventoryScreen()
+{
+	if (Modal != EGFHudModal::Inventory || !Canvas)
+	{
+		return;
+	}
+	const APlayerController* PC = GetOwningPlayerController();
+	const AGFPlayerState* PS = PC ? PC->GetPlayerState<AGFPlayerState>() : nullptr;
+	UFont* Font = HudFont();
+	const FGFInventoryLayout Layout = GFLayoutInventory(Canvas->ClipX, Canvas->ClipY);
+	RefreshInventoryPage(Layout);
+	const FLinearColor Gold(1.f, 0.86f, 0.32f, 1.f);
+
+	// Everything that is not a cell, a slot or a button: a drop here takes a bar item back into the bag.
+	AddHitBox(FVector2D(0.f, 0.f), FVector2D(Canvas->ClipX, Canvas->ClipY), TEXT("GFInv_Back"), true, 0);
+
+	const FGFHudRect& P = Layout.Panel;
+	DrawRect(FLinearColor(0.06f, 0.07f, 0.10f, 0.92f), P.X, P.Y, P.W, P.H);
+	DrawText(TEXT("Bag"), FLinearColor(0.93f, 0.96f, 1.f), P.X + GFHUD::InvPad, P.Y + 6.f, Font, 1.f, false);
+	DrawText(TEXT("Tab / I / Esc close"), FLinearColor(0.6f, 0.62f, 0.66f), P.X + GFHUD::InvPad + 48.f, P.Y + 9.f, Font, 0.7f, false);
+	DrawRect(FLinearColor(0.3f, 0.1f, 0.1f, 0.9f), Layout.Close.X, Layout.Close.Y, Layout.Close.W, Layout.Close.H);
+	DrawText(TEXT("X"), FLinearColor::White, Layout.Close.X + 7.f, Layout.Close.Y + 3.f, Font, 0.9f, false);
+	AddHitBox(FVector2D(Layout.Close.X, Layout.Close.Y), FVector2D(Layout.Close.W, Layout.Close.H), TEXT("GFInv_Close"), true, 10);
+
+	const TArray<FGFInventoryEntry> All = GetInventoryEntries();
+	for (int32 Index = 0; Index < Layout.Tabs.Num(); ++Index)
+	{
+		const EGFInventoryTab Tab = static_cast<EGFInventoryTab>(Index);
+		const FGFHudRect& T = Layout.Tabs[Index];
+		const bool bOn = Tab == InvTab;
+		DrawRect(bOn ? FLinearColor(0.22f, 0.19f, 0.09f, 0.95f) : FLinearColor(0.f, 0.f, 0.f, 0.45f), T.X, T.Y, T.W, T.H);
+		const int32 InTab = FGFInventoryView::Filter(All, Tab).Num();
+		DrawText(FString::Printf(TEXT("%s %d"), *FGFInventoryView::TabName(Tab), InTab), bOn ? Gold : FLinearColor(0.75f, 0.78f, 0.82f), T.X + 5.f, T.Y + 4.f, Font, 0.7f, false);
+		AddHitBox(FVector2D(T.X, T.Y), FVector2D(T.W, T.H), FName(*FString::Printf(TEXT("GFInv_Tab_%d"), Index)), true, 10);
+	}
+
+	float MouseX = -1.f;
+	float MouseY = -1.f;
+	if (PC)
+	{
+		PC->GetMousePosition(MouseX, MouseY);
+	}
+	InvHover = FGFInvTarget();
+	const FGFInventoryEntry* HoverEntry = nullptr;
+
+	for (int32 Index = 0; Index < Layout.Cells.Num(); ++Index)
+	{
+		const FGFHudRect& C = Layout.Cells[Index];
+		DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.12f), C.X - 1.f, C.Y - 1.f, C.W + 2.f, C.H + 2.f);
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.5f), C.X, C.Y, C.W, C.H);
+		if (!InvPageEntries.IsValidIndex(Index))
+		{
+			continue;
+		}
+		const FGFInventoryEntry& Entry = InvPageEntries[Index];
+		const bool bHeldHere = InvCursor.IsHolding() && InvCursor.GetFromSlot() == INDEX_NONE && InvCursor.GetHeld() == Entry.Id;
+		if (GFHudContains(C, MouseX, MouseY))
+		{
+			InvHover = FGFInvTarget::Grid(Entry.Id);
+			HoverEntry = &Entry;
+			DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.6f), C.X - 2.f, C.Y - 2.f, C.W + 4.f, 2.f);
+			DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.6f), C.X - 2.f, C.Bottom(), C.W + 4.f, 2.f);
+		}
+		DrawSlotArt(Entry.Id, C.X, C.Y, C.W, C.H, bHeldHere);
+		const FString CountText = FGFHotbarRules::FormatCount(Entry.Count);
+		if (!CountText.IsEmpty())
+		{
+			float XL = 0.f;
+			float YL = 10.f;
+			if (Font)
+			{
+				Canvas->TextSize(Font, CountText, XL, YL, 0.65f, 0.65f);
+			}
+			DrawText(CountText, FLinearColor::White, C.X + C.W - XL - 3.f, C.Y + C.H - YL - 2.f, Font, 0.65f, false);
+		}
+		AddHitBox(FVector2D(C.X, C.Y), FVector2D(C.W, C.H), FName(*FString::Printf(TEXT("GFInv_Cell_%d"), Index)), true, 10);
+	}
+	if (InvPageEntries.Num() == 0)
+	{
+		const TCHAR* Empty = InvTab == EGFInventoryTab::Blocks ? TEXT("No blocks yet. Dig some up with LMB.") : TEXT("Nothing here yet.");
+		DrawText(Empty, FLinearColor(0.7f, 0.72f, 0.76f), Layout.Cells.Num() > 0 ? Layout.Cells[0].X : P.X + GFHUD::InvPad, (Layout.Cells.Num() > 0 ? Layout.Cells[0].Y : P.Y + 80.f) + 16.f, Font, 0.8f, false);
+	}
+
+	const FString PageText = GFFormatInventoryPage(InvPage, InvPageCount);
+	if (!PageText.IsEmpty())
+	{
+		for (const FGFHudRect* Button : { &Layout.Prev, &Layout.Next })
+		{
+			const bool bPrev = Button == &Layout.Prev;
+			const bool bLive = bPrev ? InvPage > 0 : InvPage + 1 < InvPageCount;
+			DrawRect(FLinearColor(0.f, 0.f, 0.f, bLive ? 0.6f : 0.25f), Button->X, Button->Y, Button->W, Button->H);
+			DrawText(bPrev ? TEXT("< Prev") : TEXT("Next >"), FLinearColor(1.f, 1.f, 1.f, bLive ? 0.95f : 0.4f), Button->X + 8.f, Button->Y + 4.f, Font, 0.75f, false);
+			AddHitBox(FVector2D(Button->X, Button->Y), FVector2D(Button->W, Button->H), bPrev ? TEXT("GFInv_Prev") : TEXT("GFInv_Next"), true, 10);
+		}
+		DrawText(PageText, FLinearColor(0.75f, 0.78f, 0.82f), P.X + P.W * 0.5f - 34.f, Layout.Prev.Y + 4.f, Font, 0.75f, false);
+	}
+
+	// The hotbar takes drops while the bag is open. The selected slot's 4 px lift is not part of its hit box.
+	const TArray<FName> BarIds = PS ? PS->GetHotbarSlots() : TArray<FName>();
+	const TArray<FGFHUDSlotRect> Bar = GFLayoutHotbar(FGFHotbarRules::SlotCount, INDEX_NONE, Canvas->ClipX, Canvas->ClipY);
+	for (int32 Index = 0; Index < Bar.Num(); ++Index)
+	{
+		const FGFHUDSlotRect& S = Bar[Index];
+		const FGFHudRect Rect{ S.X, S.Y, S.W, S.H };
+		if (GFHudContains(Rect, MouseX, MouseY))
+		{
+			InvHover = FGFInvTarget::BarSlot(Index, BarIds.IsValidIndex(Index) ? BarIds[Index] : FName());
+			if (InvCursor.IsHolding())
+			{
+				DrawRect(FLinearColor(0.4f, 0.9f, 0.5f, 0.35f), S.X, S.Y, S.W, S.H);
+			}
+		}
+		if (InvCursor.GetFromSlot() == Index)
+		{
+			DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.5f), S.X, S.Y, S.W, S.H);
+		}
+		AddHitBox(FVector2D(S.X, S.Y), FVector2D(S.W, S.H), FName(*FString::Printf(TEXT("GFInv_Slot_%d"), Index)), true, 10);
+	}
+
+	// What the cursor carries follows it; otherwise the tooltip for what it is over.
+	if (InvCursor.IsHolding() && MouseX >= 0.f)
+	{
+		DrawSlotArt(InvCursor.GetHeld(), MouseX - 20.f, MouseY - 20.f, 40.f, 40.f, false);
+	}
+	else
+	{
+		FGFInventoryEntry BarEntry;
+		if (!HoverEntry && InvHover.Kind == FGFInvTarget::EKind::Slot && !InvHover.Id.IsNone() && InvHover.Id != FGFHotbarRules::FistsId())
+		{
+			for (const FGFInventoryEntry& Entry : All)
+			{
+				if (Entry.Id == InvHover.Id)
+				{
+					BarEntry = Entry;
+					HoverEntry = &BarEntry;
+					break;
+				}
+			}
+		}
+		if (HoverEntry)
+		{
+			const UWorld* World = GetWorld();
+			const AGFGameState* GS = World ? World->GetGameState<AGFGameState>() : nullptr;
+			const FGFItemRow* Row = GS ? FGFEconomy::FindItem(GS->GetItemTable(), HoverEntry->ItemId) : nullptr;
+			const TArray<FString> Lines = GFFormatInventoryTooltip(*HoverEntry, Row, SlotDisplayName(HoverEntry->Id));
+			const FGFHudRect Tip = GFPlaceTooltip(MouseX, MouseY, Lines.Num(), Canvas->ClipX, Canvas->ClipY);
+			DrawRect(FLinearColor(0.02f, 0.02f, 0.03f, 0.95f), Tip.X, Tip.Y, Tip.W, Tip.H);
+			DrawRect(Gold, Tip.X, Tip.Y, Tip.W, 2.f);
+			for (int32 Line = 0; Line < Lines.Num(); ++Line)
+			{
+				const bool bTitle = Line == 0;
+				const bool bHowTo = Line == Lines.Num() - 1;
+				const FLinearColor Color = bTitle ? Gold : (bHowTo ? FLinearColor(0.6f, 0.62f, 0.66f) : FLinearColor(0.9f, 0.9f, 0.9f));
+				DrawText(Lines[Line], Color, Tip.X + GFHUD::TooltipPad, Tip.Y + GFHUD::TooltipPad + Line * GFHUD::TooltipLineH, Font, bTitle ? 0.9f : 0.75f, false);
+			}
+		}
+	}
+
+	// Say why the server refused the last move (owned elsewhere, spent meanwhile, too fast).
+	if (!bLastHotbarReported && PS)
+	{
+		if (const EGFHotbarMoveResult* Result = PS->HotbarResults.Find(LastHotbarRequest))
+		{
+			if (*Result != EGFHotbarMoveResult::Pending)
+			{
+				bLastHotbarReported = true;
+				if (*Result == EGFHotbarMoveResult::NotOwned)
+				{
+					PushToast(TEXT("You don't have any of that anymore."));
+				}
+				else if (*Result == EGFHotbarMoveResult::UnknownItem || *Result == EGFHotbarMoveResult::BadSlot)
+				{
+					PushToast(TEXT("That can't go on the hotbar."));
+				}
+				else if (*Result == EGFHotbarMoveResult::Busy)
+				{
+					PushToast(TEXT("Easy there. Try that again."));
+				}
+			}
+		}
 	}
 }

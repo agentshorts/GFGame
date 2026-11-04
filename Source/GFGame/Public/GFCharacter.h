@@ -88,6 +88,7 @@ public:
 	/** Number keys and the wheel land here. Out-of-range slots wrap. An empty slot means bare hands. */
 	void SelectHotbarSlot(int32 Slot);
 	int32 GetSelectedHotbarSlot() const { return SelectedHotbarSlot; }
+	bool IsHandItemSelected() const { return bHandItemSelected; }
 
 	/** Future weapons and abilities call this. Wheel-cycling a block clears the override. */
 	void EquipAimHeld(EGFAimHeldKind Kind, EGFWeaponProfile Profile);
@@ -198,6 +199,12 @@ protected:
 	void RefreshHotbarSelection();
 	/** What the selected slot held when SelectedBlock was last set from it. */
 	FName HotbarSlotSeen;
+	/** Hand item or block, and the matching HeldItem request (AGFPlayerState::RequestSetHeldItem). */
+	void ApplyHotbarPick();
+	/** The selected slot is an item, not a block: aim as fists, never place. */
+	bool bHandItemSelected = false;
+	/** Last HeldItem this character asked for from the bar. */
+	FName HeldItemSent;
 	void OnSprint(const FInputActionValue& Value);
 	void OnSprintStopped(const FInputActionValue& Value);
 	void OnDash(const FInputActionValue& Value);

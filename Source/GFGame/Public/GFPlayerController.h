@@ -113,6 +113,7 @@ protected:
 	void HandleShardhopKey();
 	void HandleVillainKey();
 	void HandleReturnKey();
+	void HandleInventoryKey();
 	void HandleSlot1();
 	void HandleSlot2();
 	void HandleSlot3();
@@ -147,6 +148,9 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> ReturnAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> InventoryAction;
 
 	FKey ReturnKey;
 

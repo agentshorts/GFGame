@@ -78,6 +78,7 @@ void AGFPlayerController::EnsureHudInput()
 		ShardhopAction = Make(TEXT("IA_GFShardhop"));
 		VillainAction = Make(TEXT("IA_GFVillain"));
 		ReturnAction = Make(TEXT("IA_GFReturn"));
+		InventoryAction = Make(TEXT("IA_GFInventory"));
 		SlotActions.Reset();
 		for (int32 Slot = 0; Slot < FGFHotbarRules::SlotCount; ++Slot)
 		{
@@ -95,6 +96,7 @@ void AGFPlayerController::EnsureHudInput()
 			if (Name == TEXT("Shardhop")) return ShardhopAction;
 			if (Name == TEXT("Villain")) return VillainAction;
 			if (Name == TEXT("Return")) return ReturnAction;
+			if (Name == TEXT("Inventory")) return InventoryAction;
 			FString Text = Name.ToString();
 			if (Text.RemoveFromStart(TEXT("Slot")))
 			{
@@ -133,6 +135,7 @@ void AGFPlayerController::EnsureHudInput()
 			EIC->BindAction(ShardhopAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleShardhopKey);
 			EIC->BindAction(VillainAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleVillainKey);
 			EIC->BindAction(ReturnAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleReturnKey);
+			EIC->BindAction(InventoryAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleInventoryKey);
 			if (SlotActions.Num() == FGFHotbarRules::SlotCount)
 			{
 				EIC->BindAction(SlotActions[0], ETriggerEvent::Started, this, &AGFPlayerController::HandleSlot1);
@@ -384,9 +387,23 @@ void AGFPlayerController::HandleShardhopKey()
 	}
 }
 
+void AGFPlayerController::HandleInventoryKey()
+{
+	if (AGFHUD* HUD = Cast<AGFHUD>(GetHUD()); HUD && !HUD->IsChatOpen())
+	{
+		HUD->ToggleInventory();
+	}
+}
+
 void AGFPlayerController::SendSlotKey(int32 KeyIndex)
 {
-	const AGFHUD* HUD = Cast<AGFHUD>(GetHUD());
+	AGFHUD* HUD = Cast<AGFHUD>(GetHUD());
+	if (HUD && HUD->IsInventoryOpen())
+	{
+		// In the bag a number key puts the hovered or held item on that slot.
+		HUD->InventoryNumberKey(KeyIndex);
+		return;
+	}
 	if (HUD && (HUD->IsChatOpen() || FGFHudModalRules::HoldsPawn(HUD->GetHudModal(), HUD->GetHudRestore())))
 	{
 		return;

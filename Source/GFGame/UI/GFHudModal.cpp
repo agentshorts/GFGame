@@ -1,5 +1,15 @@
 #include "GFHUD.h"
 
+namespace
+{
+	/** Menus that hold the pawn and can sit under chat. */
+	bool IsMenu(EGFHudModal Modal)
+	{
+		return Modal == EGFHudModal::Pause || Modal == EGFHudModal::PauseConfirm || Modal == EGFHudModal::Elder
+			|| Modal == EGFHudModal::Inventory;
+	}
+}
+
 bool FGFHudModalRules::IsPause(EGFHudModal Modal)
 {
 	return Modal == EGFHudModal::Pause || Modal == EGFHudModal::PauseConfirm;
@@ -7,20 +17,20 @@ bool FGFHudModalRules::IsPause(EGFHudModal Modal)
 
 bool FGFHudModalRules::HoldsPawn(EGFHudModal Modal, EGFHudModal Restore)
 {
-	if (Modal == EGFHudModal::Pause || Modal == EGFHudModal::PauseConfirm || Modal == EGFHudModal::Elder)
+	if (IsMenu(Modal))
 	{
 		return true;
 	}
 	if (Modal == EGFHudModal::Chat)
 	{
-		return Restore == EGFHudModal::Pause || Restore == EGFHudModal::PauseConfirm || Restore == EGFHudModal::Elder;
+		return IsMenu(Restore);
 	}
 	return false;
 }
 
 bool FGFHudModalRules::FreesMouse(EGFHudModal Modal)
 {
-	return Modal == EGFHudModal::Pause || Modal == EGFHudModal::PauseConfirm || Modal == EGFHudModal::Elder;
+	return IsMenu(Modal);
 }
 
 bool FGFHudModalRules::ShowsFieldHud(EGFHudModal Modal, EGFHudModal Restore)
@@ -49,7 +59,7 @@ FGFHudModalRules::FState FGFHudModalRules::Transition(EGFHudModal Modal, EGFHudM
 		Out.Restore = EGFHudModal::Game;
 	};
 
-	const bool bMenuUnderChat = Restore == EGFHudModal::Pause || Restore == EGFHudModal::PauseConfirm || Restore == EGFHudModal::Elder;
+	const bool bMenuUnderChat = IsMenu(Restore);
 
 	switch (Event)
 	{
@@ -87,7 +97,8 @@ FGFHudModalRules::FState FGFHudModalRules::Transition(EGFHudModal Modal, EGFHudM
 		}
 		break;
 	case EGFHudModalEvent::OpenConfirm:
-		if (Modal == EGFHudModal::Game || Modal == EGFHudModal::Pause || Modal == EGFHudModal::Elder || Modal == EGFHudModal::Aim)
+		if (Modal == EGFHudModal::Game || Modal == EGFHudModal::Pause || Modal == EGFHudModal::Elder || Modal == EGFHudModal::Aim
+			|| Modal == EGFHudModal::Inventory)
 		{
 			Go(EGFHudModal::PauseConfirm);
 		}
@@ -105,9 +116,7 @@ FGFHudModalRules::FState FGFHudModalRules::Transition(EGFHudModal Modal, EGFHudM
 	case EGFHudModalEvent::OpenChat:
 		if (Modal != EGFHudModal::Chat && Modal != EGFHudModal::Aim)
 		{
-			Out.Restore = (Modal == EGFHudModal::Pause || Modal == EGFHudModal::PauseConfirm || Modal == EGFHudModal::Elder)
-				? Modal
-				: EGFHudModal::Game;
+			Out.Restore = IsMenu(Modal) ? Modal : EGFHudModal::Game;
 			Out.Modal = EGFHudModal::Chat;
 		}
 		break;
@@ -148,6 +157,32 @@ FGFHudModalRules::FState FGFHudModalRules::Transition(EGFHudModal Modal, EGFHudM
 		else if (Modal == EGFHudModal::Chat && Restore == EGFHudModal::Elder)
 		{
 			Out.Restore = EGFHudModal::Game;
+		}
+		break;
+	case EGFHudModalEvent::OpenInventory:
+		if (Modal == EGFHudModal::Game)
+		{
+			Go(EGFHudModal::Inventory);
+		}
+		break;
+	case EGFHudModalEvent::CloseInventory:
+		if (Modal == EGFHudModal::Inventory)
+		{
+			Go(EGFHudModal::Game);
+		}
+		else if (Modal == EGFHudModal::Chat && Restore == EGFHudModal::Inventory)
+		{
+			Out.Restore = EGFHudModal::Game;
+		}
+		break;
+	case EGFHudModalEvent::ToggleInventory:
+		if (Modal == EGFHudModal::Game)
+		{
+			Go(EGFHudModal::Inventory);
+		}
+		else if (Modal == EGFHudModal::Inventory)
+		{
+			Go(EGFHudModal::Game);
 		}
 		break;
 	case EGFHudModalEvent::Escape:

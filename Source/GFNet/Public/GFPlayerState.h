@@ -268,12 +268,25 @@ public:
 	FName ItemForBlock(FName BlockId) const;
 
 	/**
-	 * The nine hotbar slots, left to right (FGFHotbarRules). None is an empty slot.
-	 * Built from the placeable blocks the player can spend, Fists last. Same answer on the server and the owner.
+	 * The nine hotbar slots, left to right. The arranged bar (Progress.Hotbar) once the player has moved
+	 * anything, else the automatic fill (FGFHotbarRules::DefaultSlots).
 	 */
 	TArray<FName> GetHotbarSlots() const;
-	/** Count the hotbar shows for a slot id: the item it spends. -1 for Fists, empty, or free build. */
+	/** The automatic fill: the placeable blocks the player can spend, Fists last. */
+	TArray<FName> GetDefaultHotbarSlots() const;
+	/** Count the hotbar shows for a slot id: the item it spends. -1 for Fists, empty, or a free build block. */
 	int64 GetHotbarCount(FName SlotId) const;
+	/** Is Id a placeable block in this world? */
+	bool IsPlaceableBlock(FName Id) const;
+	/** Is Id something the hotbar can hold: a DT_Items row or a placeable block (None and Fists are separate). */
+	bool IsKnownHotbarId(FName Id) const;
+
+	/** Inventory screen: arrange the bar. Applied on the server after CheckId; the answer lands in HotbarResults. */
+	int32 RequestHotbarMove(const FGFHotbarMove& Move);
+	/** Client side: answer per hotbar request id (Pending until the server replies). */
+	TMap<int32, EGFHotbarMoveResult> HotbarResults;
+	/** Server: validate and apply one move, then save it with the character. */
+	EGFHotbarMoveResult ServerApplyHotbarMove(const FGFHotbarMove& Move);
 
 	void ServerAcceptCharacter(FGFCharacterData Data);
 	FGFCharacterData BuildCharacterData() const;
@@ -302,6 +315,12 @@ public:
 
 	UFUNCTION(Server, Reliable)
 	void ServerSetHeldItem(FName ItemId);
+
+	UFUNCTION(Server, Reliable)
+	void ServerHotbarMove(FGFHotbarMove Move, int32 RequestId);
+
+	UFUNCTION(Client, Reliable)
+	void ClientHotbarResult(int32 RequestId, EGFHotbarMoveResult Result);
 
 	/** Slot 0..4: Delver, Wrangler, Scavenger, then the two unnamed classes. */
 	UFUNCTION(Server, Reliable)
@@ -368,6 +387,10 @@ protected:
 	FName ObservedZoneId;
 
 	int32 NextEditId = 1;
+	int32 NextHotbarRequestId = 1;
+	/** Server: hotbar moves taken in the current one-second window (FGFHotbarRules::MaxMovesPerSecond). */
+	double HotbarWindowStart = -1.0;
+	int32 HotbarMovesInWindow = 0;
 	int32 CharacterRevision = 0;
 	int32 AckedRevision = 0;
 	int32 NextLandRequestId = 1;
