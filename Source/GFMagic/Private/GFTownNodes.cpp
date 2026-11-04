@@ -1,9 +1,11 @@
 #include "GFTownNodes.h"
+#include "GFBlockIntegritySubsystem.h"
 #include "GFLog.h"
 #include "GFMagicComponent.h"
 #include "GFMagicShapes.h"
 #include "GFMagicTables.h"
 #include "GFMineable.h"
+#include "GFMiningFX.h"
 #include "GFPlayerState.h"
 #include "GFVoxelTypes.h"
 #include "GFVoxelWorld.h"
@@ -46,6 +48,7 @@ namespace
 		UPrimitiveComponent* Component = nullptr;
 		FName BlockId;
 		FVector Impact = FVector::ZeroVector;
+		FVector Normal = FVector::UpVector;
 		float Distance = 0.f;
 		bool bCrystal = false;
 	};
@@ -79,23 +82,44 @@ namespace
 		UPrimitiveComponent* Comp = Hit.GetComponent();
 		if (!Comp)
 		{
+			UE_LOG(LogGF, Verbose, TEXT("Town mine blocked: no component"));
 			return ETownTrace::Blocked;
 		}
 		FString Why;
 		const bool bOk = PS ? PS->CanMineHit(Hit, Why) : FGFMineable::CanMineHit(Hit, Why);
 		if (!bOk)
 		{
+			const UStaticMesh* Mesh = FGFMineable::MeshOf(Comp);
+			const FString MeshName = Mesh ? Mesh->GetName() : Comp->GetName();
+			if (FGFMineable::WarnIfListedWithoutTag(Mesh))
+			{
+				UE_LOG(LogGF, Warning, TEXT("Town mine blocked on %s: %s"), *MeshName, *Why);
+			}
+			else
+			{
+				UE_LOG(LogGF, Verbose, TEXT("Town mine blocked on %s: %s"), *MeshName, *Why);
+			}
 			return ETownTrace::Blocked;
 		}
 		const UGFMineableAssetUserData* Data = FGFMineable::Find(FGFMineable::MeshOf(Comp));
 		const FName BlockId = FGFTownNodeRules::BlockIdFor(Data);
 		if (BlockId.IsNone())
 		{
+			UE_LOG(LogGF, Verbose, TEXT("Town mine blocked on %s: no block for this mineable mode"), *Comp->GetName());
 			return ETownTrace::Blocked;
 		}
 		Out.Component = Comp;
 		Out.BlockId = BlockId;
 		Out.Impact = Hit.ImpactPoint;
+		Out.Normal = Hit.ImpactNormal.GetSafeNormal();
+		if (Out.Normal.IsNearlyZero())
+		{
+			Out.Normal = (Start - FVector(Hit.ImpactPoint)).GetSafeNormal();
+		}
+		if (Out.Normal.IsNearlyZero())
+		{
+			Out.Normal = FVector::UpVector;
+		}
 		Out.Distance = Hit.Distance;
 		Out.bCrystal = Data && Data->Mode == EGFMineableMode::Slots;
 		return ETownTrace::Node;
@@ -459,7 +483,7 @@ const FGFTownNodeField::FNode* FGFTownNodeField::Find(const UPrimitiveComponent*
 	return Nodes.Find(FGFTownNodeRules::KeyFor(Component));
 }
 
-FGFTownNodeField::FNode& FGFTownNodeField::FindOrAdd(const UPrimitiveComponent* Component, FName BlockId, bool bCrystal, const FVector& Impact)
+FGFTownNodeField::FNode& FGFTownNodeField::FindOrAdd(const UPrimitiveComponent* Component, FName BlockId, bool bCrystal, const FVector& Impact, const FVector& Normal)
 {
 	const FString Key = FGFTownNodeRules::KeyFor(Component);
 	FNode& Node = Nodes.FindOrAdd(Key);
@@ -472,7 +496,29 @@ FGFTownNodeField::FNode& FGFTownNodeField::FindOrAdd(const UPrimitiveComponent* 
 		Node.bCrystal = bCrystal;
 	}
 	Node.LastImpact = Impact;
+	Node.LastNormal = Normal.GetSafeNormal().IsNearlyZero() ? FVector::UpVector : Normal.GetSafeNormal();
 	return Node;
+}
+
+void FGFTownNodeField::EmitContact(UWorld* World, const FNode& Node, EGFMagicElement Element, const FVector& Normal, float BeforeRemaining, bool bBroke)
+{
+	if (!World || World->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	UGFBlockIntegritySubsystem* Magic = World->GetSubsystem<UGFBlockIntegritySubsystem>();
+	if (!Magic)
+	{
+		return;
+	}
+	const float Full = FGFMagicRules::IntegrityOf(FGFMagicCatalog::BlockHardness(Node.BlockId));
+	const float After = bBroke ? 0.f : Node.Wound.Remaining;
+	TArray<FGFMiningFXEvent> Events;
+	FGFMiningFX::Collect(BeforeRemaining, After, Full, bBroke, Element, FGFMiningFX::KitForBlock(Node.BlockId), Node.LastImpact, Normal, Events);
+	for (const FGFMiningFXEvent& Event : Events)
+	{
+		Magic->PlayMiningFX(Event);
+	}
 }
 
 void FGFTownNodeField::CommitBreak(FNode& Node, const FMagicBreak& Break, const FVector& At, double Now, UGFMagicComponent* Fallback, TFunctionRef<UGFMagicComponent*(const FString&)> FindCaster)
@@ -615,7 +661,7 @@ void FGFTownNodeField::CastShapes(UGFMagicComponent* Caster, int32& Budget, doub
 		{
 			return;
 		}
-		FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.Impact);
+		FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.Impact, Hit.Normal);
 		if (Node.bDepleted || Node.Freeze.bLocked)
 		{
 			return;
@@ -670,7 +716,7 @@ void FGFTownNodeField::CastShapes(UGFMagicComponent* Caster, int32& Budget, doub
 		{
 			break;
 		}
-		FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.Impact);
+		FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.Impact, Hit.Normal);
 		if (Node.bDepleted)
 		{
 			continue;
@@ -681,9 +727,13 @@ void FGFTownNodeField::CastShapes(UGFMagicComponent* Caster, int32& Budget, doub
 		Request.IntegrityPerSecond = Power;
 		const float Scale = FGFMagicShapes::SparkFalloff(Hit.Distance, Spell->FalloffStartCm, Range, Spell->FalloffMin);
 		Request.CellScale.Add(FIntVector::ZeroValue, Scale);
+		const float Full = FGFMagicRules::IntegrityOf(FGFMagicCatalog::BlockHardness(Node.BlockId));
+		const float BeforeRem = Node.Wound.bStarted ? Node.Wound.Remaining : Full;
 		const FMagicHitOutput Out = FGFTownNodeRules::ApplyHit(Node.Wound, Request, Node.BlockId);
 		Budget = FMath::Max(0, Budget - Out.Spent);
-		if (Out.Breaks.Num() > 0)
+		const bool bBroke = Out.Breaks.Num() > 0;
+		EmitContact(World, Node, Caster->GetElement(), Hit.Normal, BeforeRem, bBroke);
+		if (bBroke)
 		{
 			// The hitter is Fallback, so the drop is paid once. The contributor list is the same person.
 			CommitBreak(Node, Out.Breaks[0], Hit.Impact, Now, Caster, [](const FString&) { return nullptr; });
@@ -752,7 +802,7 @@ void FGFTownNodeField::HitSwing(UGFMagicComponent* Caster, const FMagicSwing& Sw
 			break;
 		}
 		const FTownHit& Hit = Pair.Value;
-		FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.Impact);
+		FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.Impact, Hit.Normal);
 		if (Node.bDepleted)
 		{
 			continue;
@@ -761,9 +811,13 @@ void FGFTownNodeField::HitSwing(UGFMagicComponent* Caster, const FMagicSwing& Sw
 		FillCommon(Request, Caster, EGFMagicElement::Root);
 		Request.bImpulse = true;
 		Request.ImpulsePower = Swing.Power * (Swing.Rhythm > 0.f ? Swing.Rhythm : 1.f);
+		const float Full = FGFMagicRules::IntegrityOf(FGFMagicCatalog::BlockHardness(Node.BlockId));
+		const float BeforeRem = Node.Wound.bStarted ? Node.Wound.Remaining : Full;
 		const FMagicHitOutput Out = FGFTownNodeRules::ApplyHit(Node.Wound, Request, Node.BlockId);
 		Budget = FMath::Max(0, Budget - Out.Spent);
-		if (Out.Breaks.Num() > 0)
+		const bool bBroke = Out.Breaks.Num() > 0;
+		EmitContact(World, Node, EGFMagicElement::Root, Hit.Normal, BeforeRem, bBroke);
+		if (bBroke)
 		{
 			CommitBreak(Node, Out.Breaks[0], Hit.Impact, Now, Caster, [](const FString&) { return nullptr; });
 		}
@@ -783,7 +837,7 @@ bool FGFTownNodeField::ConsumeGlob(UWorld* World, const FMagicGlob& Glob, const 
 	{
 		return true;
 	}
-	FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.Impact);
+	FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.Impact, Hit.Normal);
 	if (Node.bDepleted)
 	{
 		return true;
@@ -842,9 +896,13 @@ void FGFTownNodeField::TickOngoing(UWorld* World, double Now, int32& Budget, TFu
 		Request.ImpulsePower = Smear.PerSecond * GFMagic::TickSeconds;
 		Request.Rate = Smear.Rate > 0.f ? Smear.Rate : 1.f;
 		Request.SmeltChance = Smelt;
+		const float Full = FGFMagicRules::IntegrityOf(FGFMagicCatalog::BlockHardness(Node->BlockId));
+		const float BeforeRem = Node->Wound.bStarted ? Node->Wound.Remaining : Full;
 		const FMagicHitOutput Out = FGFTownNodeRules::ApplyHit(Node->Wound, Request, Node->BlockId);
 		Budget = FMath::Max(0, Budget - Out.Spent);
-		if (Out.Breaks.Num() > 0)
+		const bool bBroke = Out.Breaks.Num() > 0;
+		EmitContact(World, *Node, EGFMagicElement::Magma, Node->LastNormal, BeforeRem, bBroke);
+		if (bBroke)
 		{
 			CommitBreak(*Node, Out.Breaks[0], Node->LastImpact, Now, Owner, FindCaster);
 		}
@@ -882,6 +940,9 @@ void FGFTownNodeField::TickOngoing(UWorld* World, double Now, int32& Budget, TFu
 			Break.DropCount = 1 + Bonus;
 		}
 		UGFMagicComponent* Owner = Break.Contributors.Num() > 0 ? FindCaster(Break.Contributors[0]) : nullptr;
+		const float Full = FGFMagicRules::IntegrityOf(FGFMagicCatalog::BlockHardness(Node.BlockId));
+		const float BeforeRem = Node.Wound.bStarted ? Node.Wound.Remaining : Full;
+		EmitContact(World, Node, EGFMagicElement::Frost, Node.LastNormal, BeforeRem, true);
 		CommitBreak(Node, Break, Node.LastImpact, Now, Owner, FindCaster);
 		Budget = FMath::Max(0, Budget - 1);
 	}

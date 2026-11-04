@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GFMagicTypes.h"
+#include "NiagaraComponent.h"
 #include "GFMagicActors.generated.h"
 
 class UStaticMeshComponent;
@@ -46,7 +47,7 @@ private:
 	static constexpr float LifeSeconds = 0.45f;
 };
 
-/** Placeholder beam. Sparkcone is an engine cone plus a spot light. Niagara replaces this later. */
+/** Field beam. Niagara per element when DT_MiningFX resolves, otherwise the engine cone or sphere, plus the spot light. */
 UCLASS()
 class GFMAGIC_API AGFMagicFieldMarker : public AActor
 {
@@ -59,6 +60,9 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	void SetBeam(EGFMagicElement InElement, const FVector& Dir, float HalfAngleDeg, float RangeCm, float Intensity);
+
+	/** True when no Niagara system resolved and the engine mesh is showing. */
+	bool IsUsingMeshFallback() const { return bMeshFallback; }
 
 	UPROPERTY(ReplicatedUsing = OnRep_Beam)
 	EGFMagicElement Element = EGFMagicElement::Spark;
@@ -84,7 +88,12 @@ private:
 	TObjectPtr<UStaticMeshComponent> Mesh;
 
 	UPROPERTY()
+	TObjectPtr<UNiagaraComponent> FX;
+
+	UPROPERTY()
 	TObjectPtr<USpotLightComponent> Light;
+
+	bool bMeshFallback = true;
 };
 
 /** The summon, sweeping the tunnel it just cut. */

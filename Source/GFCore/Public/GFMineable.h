@@ -101,6 +101,19 @@ struct GFCORE_API FGFMineable
 	static bool LoadWhitelistFile(const FString& Path, TArray<FGFMineableEntry>& Out, FString& OutError);
 
 	static EGFMineableMode ModeFromString(const FString& Mode);
+
+	/** True when Mesh's name is a row in Data/Town/*_mineable.json and it has no mineable tag. */
+	static bool ListedWithoutTag(const UStaticMesh* Mesh);
+
+	/**
+	 * Logs once when a listed kit mesh has no UGFMineableAssetUserData.
+	 * Returns the same answer as ListedWithoutTag.
+	 */
+	static bool WarnIfListedWithoutTag(const UStaticMesh* Mesh);
+
+	/** Watches static mesh loads and warns when a listed kit mesh has no mineable tag. */
+	static void StartKitAudit();
+	static void StopKitAudit();
 };
 
 /** Editor/script hooks (Tools/import_town_v1.py stamps the data through these). */

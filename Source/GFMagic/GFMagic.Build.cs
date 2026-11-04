@@ -7,7 +7,7 @@ public class GFMagic : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
-			"Core", "CoreUObject", "Engine", "NetCore",
+			"Core", "CoreUObject", "Engine", "NetCore", "Niagara",
 			"GameplayAbilities", "GameplayTags", "GameplayTasks",
 			"GFCore", "GFVoxel", "GFNet"
 		});

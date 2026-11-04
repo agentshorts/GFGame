@@ -1,6 +1,7 @@
 #include "GFMagicActors.h"
 #include "GFAssetMap.h"
 #include "GFMagicRules.h"
+#include "GFMiningFX.h"
 #include "Components/SpotLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Math/RotationMatrix.h"
@@ -93,6 +94,11 @@ AGFMagicFieldMarker::AGFMagicFieldMarker()
 	SetReplicateMovement(true);
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	SetRootComponent(Mesh);
+	FX = CreateDefaultSubobject<UNiagaraComponent>(TEXT("FX"));
+	FX->SetupAttachment(Mesh);
+	FX->SetAutoActivate(false);
+	FX->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	FX->SetVisibility(false);
 	Light = CreateDefaultSubobject<USpotLightComponent>(TEXT("Beam"));
 	Light->SetupAttachment(Mesh);
 	Light->SetMobility(EComponentMobility::Movable);
@@ -142,23 +148,45 @@ void AGFMagicFieldMarker::ApplyMesh()
 	const FLinearColor Color = FGFMagicRules::ElementColor(Element);
 	Mesh->SetStaticMesh(FGFAssetMap::PlaceholderMesh(bCone ? EGFPlaceholderShape::Cone : EGFPlaceholderShape::Sphere));
 	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Mesh->SetVisibility(true);
 	if (UMaterialInterface* Tint = FGFAssetMap::MakeTint(this, Color))
 	{
 		Mesh->SetMaterial(0, Tint);
 	}
 	const FVector Dir = BeamDir.GetSafeNormal().IsNearlyZero() ? FVector(0.f, 0.f, -1.f) : BeamDir.GetSafeNormal();
+	FVector Scale = FVector(1.6f);
+	FRotator MeshRotation = FRotator::ZeroRotator;
 	if (bCone)
 	{
 		const float HalfRad = FMath::DegreesToRadians(FMath::Clamp(BeamHalfAngle, 1.f, 89.f));
 		const float Length = FMath::Max(100.f, BeamRangeCm);
 		const float Radius = Length * FMath::Tan(HalfRad);
-		Mesh->SetRelativeScale3D(FVector(Radius / 50.f, Radius / 50.f, Length / 100.f));
-		Mesh->SetRelativeRotation(FRotationMatrix::MakeFromZ(Dir).Rotator());
+		Scale = FVector(Radius / 50.f, Radius / 50.f, Length / 100.f);
+		MeshRotation = FRotationMatrix::MakeFromZ(Dir).Rotator();
 	}
-	else
+	Mesh->SetRelativeScale3D(Scale);
+	Mesh->SetRelativeRotation(MeshRotation);
+	UNiagaraSystem* System = FGFMiningFX::LoadFor(EGFMiningFXKind::Beam, Element, EGFMiningFXKit::Any);
+	bMeshFallback = System == nullptr;
+	if (FX)
 	{
-		Mesh->SetRelativeScale3D(FVector(1.6f));
-		Mesh->SetRelativeRotation(FRotator::ZeroRotator);
+		if (System)
+		{
+			if (FX->GetAsset() != System)
+			{
+				FX->SetAsset(System);
+				FX->Activate(true);
+			}
+			FX->SetVisibility(true);
+			FX->SetRelativeScale3D(Scale);
+			FX->SetRelativeRotation(MeshRotation);
+			Mesh->SetVisibility(false);
+		}
+		else
+		{
+			FX->Deactivate();
+			FX->SetVisibility(false);
+		}
 	}
 	if (Light)
 	{
