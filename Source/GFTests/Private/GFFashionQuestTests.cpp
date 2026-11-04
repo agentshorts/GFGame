@@ -198,7 +198,11 @@ bool FGFFashionQuestShowWinTierTest::RunTest(const FString&)
 	const FGFQuestApplyResult Second = Low.Apply(FGFQuestEvents::ShowPlaced(TEXT("P"), 2, 3));
 	TestEqual(TEXT("Line refuses second"), Second.Reason, FGFQuestCodes::LowScore);
 	TestFalse(TEXT("Second does not finish"), Second.bBecameLeader);
+	// A lost show drops the entry, so each later show needs its own ShowEntered.
+	TestEqual(TEXT("Lost show drops the entry"), Low.Progress.Count, 0);
+	TestTrue(TEXT("Enters again after second"), Low.Apply(FGFQuestEvents::ShowEntered(TEXT("P"))).Result == EGFQuestResult::Ok);
 	TestEqual(TEXT("Line refuses tier B"), Low.Apply(FGFQuestEvents::ShowPlaced(TEXT("P"), 1, 1)).Reason, FGFQuestCodes::LowScore);
+	TestTrue(TEXT("Enters again after tier B"), Low.Apply(FGFQuestEvents::ShowEntered(TEXT("P"))).Result == EGFQuestResult::Ok);
 	const FGFQuestApplyResult Won = Low.Apply(FGFQuestEvents::ShowPlaced(TEXT("P"), 1, FGFQuestShowRule::WinTier));
 	TestTrue(TEXT("Tier A finishes the errand"), Won.bBecameLeader && Won.Result == EGFQuestResult::Ok);
 	TestTrue(TEXT("Done"), Low.Progress.Step == EGFQuestStep::Done);
@@ -255,9 +259,12 @@ bool FGFFashionQuestLeaderSwitchTest::RunTest(const FString&)
 
 	TestEqual(TEXT("Second place leaves the seat"), World.Quest->ApplyEvent(FGFQuestEvents::ShowPlaced(TEXT("B"), 2, 3)).Reason, FGFQuestCodes::LowScore);
 	TestEqual(TEXT("Seat after second"), World.GS->FactionLeaderOf(Verdant), FString(TEXT("C")));
+	// A lost show drops the entry, so B enters again before each later show.
+	TestTrue(TEXT("B enters after second"), World.Quest->ApplyEvent(FGFQuestEvents::ShowEntered(TEXT("B"))).Result == EGFQuestResult::Ok);
 	TestEqual(TEXT("Tier B leaves the seat"), World.Quest->ApplyEvent(FGFQuestEvents::ShowPlaced(TEXT("B"), 1, 1)).Reason, FGFQuestCodes::LowScore);
 	TestEqual(TEXT("Seat after tier B"), World.GS->FactionLeaderOf(Verdant), FString(TEXT("C")));
 	TestEqual(TEXT("No show post yet"), ShowWins(World.World, TEXT("B")), 0);
+	TestTrue(TEXT("B enters after tier B"), World.Quest->ApplyEvent(FGFQuestEvents::ShowEntered(TEXT("B"))).Result == EGFQuestResult::Ok);
 
 	const FGFQuestApplyResult Won = World.Quest->ApplyEvent(FGFQuestEvents::ShowPlaced(TEXT("B"), 1, FGFQuestShowRule::WinTier));
 	TestTrue(TEXT("Show win"), Won.bBecameLeader && Won.Result == EGFQuestResult::Ok);
