@@ -1685,4 +1685,67 @@ bool FGFWallCrystalRegrowTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFWallCrystalRegrowWaitTest, "GFGame.TownMineable.WallCrystal.RegrowWait", GFTownMineTestFlags)
+bool FGFWallCrystalRegrowWaitTest::RunTest(const FString&)
+{
+	using namespace GFWallCrystalTest;
+	TestEqual(TEXT("The regrow timer stays at 120 s"), FGFTownNodeRules::RegrowSeconds, 120.f);
+	FMineWorld W;
+	if (!W.Open(*this, TEXT("GFWallCrystalRegrowWait")))
+	{
+		return false;
+	}
+	W.Magic->SetTownRegrowSeconds(1.f);
+	UStaticMeshComponent* Wall = PlaceAsset(W, TEXT("SM_Town_Rime_Wall_Straight"), FVector::ZeroVector);
+	if (!TestNotNull(TEXT("Rime wall"), Wall))
+	{
+		return false;
+	}
+	const FStand Stand = StandOutside(W.World, Wall, 200.f, CrystalFace);
+	if (!TestTrue(TEXT("Wall crystal face"), Stand.bOk))
+	{
+		return false;
+	}
+	AGFMagicPlayerState* PS = Digger(W.World, TEXT("Digger"), Stand.At);
+	if (!TestNotNull(TEXT("Digger"), PS))
+	{
+		return false;
+	}
+	Hold(PS, W.Magic, Stand.At, Stand.Impact, 2.f);
+	PS->Magic->SetFieldHeld(false);
+	AActor* Piece = Wall->GetOwner();
+	if (!TestTrue(TEXT("The wall is down"), Piece->IsHidden()))
+	{
+		return false;
+	}
+	TestFalse(TEXT("An empty gap does not hold the regrow"), FGFTownNodeRules::IsRegrowBlocked(Piece));
+
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ACharacter* Stuck = W.World->SpawnActor<ACharacter>(ACharacter::StaticClass(), FTransform(Wall->Bounds.Origin), Params);
+	if (!TestNotNull(TEXT("A player stands in the gap"), Stuck))
+	{
+		return false;
+	}
+	TestTrue(TEXT("A pawn in the gap holds the regrow"), FGFTownNodeRules::IsRegrowBlocked(Piece));
+
+	W.Magic->Advance(1.2f);
+	TestTrue(TEXT("The timer is up but the wall waits for the pawn"), W.Magic->IsTownNodeDepleted(Wall));
+	TestTrue(TEXT("The wall stays hidden"), Piece->IsHidden());
+	TestFalse(TEXT("The wall does not close around the pawn"), Piece->GetActorEnableCollision());
+
+	W.Magic->Advance(FGFTownNodeRules::RegrowRetrySeconds + 0.5f);
+	TestTrue(TEXT("The retry still waits while the pawn stays"), W.Magic->IsTownNodeDepleted(Wall));
+	TestFalse(TEXT("Still no collision on retry"), Piece->GetActorEnableCollision());
+
+	Stuck->SetActorLocation(Wall->Bounds.Origin + FVector(Wall->Bounds.BoxExtent.X + Wall->Bounds.BoxExtent.Y + 1000.f, 0.f, 0.f));
+	TestFalse(TEXT("The pawn walked clear"), FGFTownNodeRules::IsRegrowBlocked(Piece));
+	W.Magic->Advance(FGFTownNodeRules::RegrowRetrySeconds + 0.5f);
+	TestFalse(TEXT("The wall regrows once the gap is clear"), W.Magic->IsTownNodeDepleted(Wall));
+	TestFalse(TEXT("The wall shows again"), Piece->IsHidden());
+	TestTrue(TEXT("The wall blocks again"), Piece->GetActorEnableCollision());
+	TestEqual(TEXT("Crystal integrity is full again"), W.Magic->GetTownNodeRemaining(Wall), 200.f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -9,6 +9,8 @@
 // A broken tree hides and drops collision. A depleted crystal slot keeps the prop and clears material slot 1,
 // except on a house or town wall piece (Decision #321): mining its crystal destroys the whole piece, which hides,
 // drops collision and regrows like a tree. The break still raises FGFMiningFX Break with the Crystal kit.
+// A piece never regrows onto a player: while a pawn overlaps it, the regrow waits and checks again every
+// RegrowRetrySeconds, so the gap only closes once it is clear.
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -93,6 +95,9 @@ struct GFMAGIC_API FGFTownNodeRules
 	/** DT_Plants first stage shared by Steakroot, Emberpepper and Thornmelon. */
 	static constexpr float RegrowSeconds = 120.f;
 
+	/** A house or wall piece that would regrow onto a pawn waits this long, then checks again. */
+	static constexpr float RegrowRetrySeconds = 3.f;
+
 	/** Log for a whole mesh (trees), CrystalVein for a crystal slot, None otherwise. */
 	static FName BlockIdFor(const UGFMineableAssetUserData* Data);
 
@@ -113,6 +118,9 @@ struct GFMAGIC_API FGFTownNodeRules
 
 	/** Hide a tree or a structure piece, or spend material slot 1 on a crystal prop. bDepleted false puts it back. */
 	static void ApplyVisual(AActor* Actor, bool bDepleted, bool bCrystal, bool bPiece = false);
+
+	/** True while a pawn with collision overlaps the piece's bounds, so turning its collision back on would trap them. */
+	static bool IsRegrowBlocked(const AActor* Piece);
 
 	/** Same integrity step as a voxel cell. The wound is the node's hit points. */
 	static FMagicHitOutput ApplyHit(FMagicWound& Wound, const FMagicHitRequest& Request, FName BlockId);
@@ -169,6 +177,7 @@ private:
 		bool bCrystal = false;
 		bool bPiece = false;
 		bool bDepleted = false;
+		bool bRegrowHeld = false;
 		double RegrowAt = 0.0;
 		FVector LastImpact = FVector::ZeroVector;
 		FVector LastNormal = FVector::UpVector;

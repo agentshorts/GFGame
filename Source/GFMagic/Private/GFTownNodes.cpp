@@ -398,6 +398,38 @@ void FGFTownNodeRules::ApplyVisual(AActor* Actor, bool bDepleted, bool bCrystal,
 	Actor->SetActorEnableCollision(!bDepleted);
 }
 
+bool FGFTownNodeRules::IsRegrowBlocked(const AActor* Piece)
+{
+	UWorld* World = Piece ? Piece->GetWorld() : nullptr;
+	if (!World)
+	{
+		return false;
+	}
+	const FBox Box = Piece->GetComponentsBoundingBox(true);
+	if (!Box.IsValid)
+	{
+		return false;
+	}
+	for (TActorIterator<APawn> It(World); It; ++It)
+	{
+		const APawn* Pawn = *It;
+		if (!IsValid(Pawn) || Pawn->IsActorBeingDestroyed() || !Pawn->GetActorEnableCollision())
+		{
+			continue;
+		}
+		const UPrimitiveComponent* Body = Cast<UPrimitiveComponent>(Pawn->GetRootComponent());
+		if (!Body || !Body->IsCollisionEnabled())
+		{
+			continue;
+		}
+		if (Box.Intersect(Body->Bounds.GetBox()))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 FMagicHitOutput FGFTownNodeRules::ApplyHit(FMagicWound& Wound, const FMagicHitRequest& Request, FName BlockId)
 {
 	const FIntVector Cell = FIntVector::ZeroValue;
@@ -982,6 +1014,17 @@ void FGFTownNodeField::TickOngoing(UWorld* World, double Now, int32& Budget, TFu
 		{
 			continue;
 		}
+		if (Node.bPiece && FGFTownNodeRules::IsRegrowBlocked(Node.Actor.Get()))
+		{
+			Node.RegrowAt = Now + static_cast<double>(FGFTownNodeRules::RegrowRetrySeconds);
+			if (!Node.bRegrowHeld)
+			{
+				Node.bRegrowHeld = true;
+				UE_LOG(LogGF, Log, TEXT("Town node %s regrow waits: a pawn stands in the piece, checking again every %.0fs"), *Node.Key, FGFTownNodeRules::RegrowRetrySeconds);
+			}
+			continue;
+		}
+		Node.bRegrowHeld = false;
 		Node.bDepleted = false;
 		Node.Wound = FMagicWound();
 		Node.Freeze = FFreeze();
