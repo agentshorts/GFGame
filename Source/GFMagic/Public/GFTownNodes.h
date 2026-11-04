@@ -155,6 +155,7 @@ private:
 		bool bDepleted = false;
 		double RegrowAt = 0.0;
 		FVector LastImpact = FVector::ZeroVector;
+		FVector LastNormal = FVector::UpVector;
 		FMagicWound Wound;
 		FFreeze Freeze;
 	};
@@ -168,9 +169,10 @@ private:
 		TArray<FString> Owners;
 	};
 
-	FNode& FindOrAdd(const UPrimitiveComponent* Component, FName BlockId, bool bCrystal, const FVector& Impact);
+	FNode& FindOrAdd(const UPrimitiveComponent* Component, FName BlockId, bool bCrystal, const FVector& Impact, const FVector& Normal);
 	const FNode* Find(const UPrimitiveComponent* Component) const;
 	void CommitBreak(FNode& Node, const FMagicBreak& Break, const FVector& At, double Now, UGFMagicComponent* Fallback, TFunctionRef<UGFMagicComponent*(const FString&)> FindCaster);
+	void EmitContact(UWorld* World, const FNode& Node, EGFMagicElement Element, const FVector& Normal, float BeforeRemaining, bool bBroke);
 	void Publish(UWorld* World);
 
 	TMap<FString, FNode> Nodes;

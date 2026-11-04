@@ -135,6 +135,11 @@ TStatId UGFBlockIntegritySubsystem::GetStatId() const
 
 void UGFBlockIntegritySubsystem::Deinitialize()
 {
+	if (AGFMiningFXRelay* Relay = FXRelay.Get())
+	{
+		Relay->Destroy();
+		FXRelay = nullptr;
+	}
 	if (TownNodes)
 	{
 		TownNodes->Reset();
@@ -524,6 +529,7 @@ void UGFBlockIntegritySubsystem::ApplyCast(UGFMagicComponent* Caster, FMagicDefe
 	Request.bJackpot = Deferred.bJackpot;
 
 	const TArray<FIntVector> Original = Deferred.Cells;
+	const TMap<FIntVector, FMagicWound> BeforeWounds = Wounds;
 	FMagicWorldView View;
 	View.BlockAt = [Voxel](const FIntVector& Cell) { return Voxel->GetBlock(Cell); };
 	View.IsPlaced = [this](const FIntVector& Cell) { return IsPlaced(Cell); };
@@ -547,6 +553,7 @@ void UGFBlockIntegritySubsystem::ApplyCast(UGFMagicComponent* Caster, FMagicDefe
 
 	const FMagicHitOutput Out = FGFMagicRules::Apply(Wounds, Request, View);
 	Budget = FMath::Max(0, Budget - Out.Spent);
+	ReportVoxelFX(Caster, Deferred.Element, Voxel, BeforeWounds, Out);
 	Commit(Voxel, Out);
 
 	TArray<FIntVector> Again;
@@ -935,15 +942,19 @@ void UGFBlockIntegritySubsystem::StepPuddlesAndSmears(int32& Budget, AGFVoxelWor
 		}
 	}
 	FMagicWorldView View = MakeView(OwnerState, Voxel);
+	const TMap<FIntVector, FMagicWound> BeforePuddles = Wounds;
 	const FMagicHitOutput PuddleHits = FGFMagicShapes::TickPuddles(Puddles, Wounds, Now, GFMagic::TickSeconds, *Spell, View, Budget, Smelt);
 	Budget = FMath::Max(0, Budget - PuddleHits.Spent);
+	ReportVoxelFX(nullptr, EGFMagicElement::Magma, Voxel, BeforePuddles, PuddleHits);
 	Commit(Voxel, PuddleHits);
 	for (const FMagicPuddle& Puddle : Puddles)
 	{
 		RememberMark(Puddle.Cell, TEXT("Burning"), Spell->MarkSeconds > 0.f ? Spell->MarkSeconds : 2.f);
 	}
+	const TMap<FIntVector, FMagicWound> BeforeSmears = Wounds;
 	const FMagicHitOutput SmearHits = FGFMagicShapes::TickSmears(Smears, Wounds, Now, GFMagic::TickSeconds, View, Budget, Smelt);
 	Budget = FMath::Max(0, Budget - SmearHits.Spent);
+	ReportVoxelFX(nullptr, EGFMagicElement::Magma, Voxel, BeforeSmears, SmearHits);
 	Commit(Voxel, SmearHits);
 }
 
@@ -994,10 +1005,12 @@ void UGFBlockIntegritySubsystem::StepFreeze(int32& Budget, AGFVoxelWorld* Voxel,
 	}
 	const double Now = MiningNow;
 	FMagicWorldView View = MakeView(Who ? Cast<AGFPlayerState>(Who->GetOwner()) : nullptr, Voxel);
+	const TMap<FIntVector, FMagicWound> BeforeFreeze = Wounds;
 	const FMagicHitOutput Out = FGFMagicShapes::TickFreeze(
 		Freeze, FreezeChains, Beam, Detonate, AimCell, Contributors, Now, GFMagic::TickSeconds,
 		Rate, Quench, Bonus, *Spell, View, NextChainId);
 	Budget = FMath::Max(0, Budget - Out.Breaks.Num());
+	ReportVoxelFX(Who, EGFMagicElement::Frost, Voxel, BeforeFreeze, Out);
 	Commit(Voxel, Out);
 	for (const TPair<FIntVector, FMagicFreezeCell>& Pair : Freeze)
 	{
@@ -1132,5 +1145,95 @@ void UGFBlockIntegritySubsystem::SetTownRegrowSeconds(float Seconds)
 	if (TownNodes)
 	{
 		TownNodes->SetRegrowSeconds(Seconds);
+	}
+}
+
+void UGFBlockIntegritySubsystem::PlayMiningFX(const FGFMiningFXEvent& Event)
+{
+	UWorld* World = GetWorld();
+	if (!World || World->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	FGFMiningFX::OnPlayed().Broadcast(Event);
+	if (AGFMiningFXRelay* Relay = EnsureFXRelay())
+	{
+		Relay->Dispatch(Event);
+	}
+}
+
+AGFMiningFXRelay* UGFBlockIntegritySubsystem::EnsureFXRelay()
+{
+	if (AGFMiningFXRelay* Live = FXRelay.Get())
+	{
+		return Live;
+	}
+	UWorld* World = GetWorld();
+	if (!World || World->GetNetMode() == NM_Client)
+	{
+		return nullptr;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AGFMiningFXRelay* Live = World->SpawnActor<AGFMiningFXRelay>(AGFMiningFXRelay::StaticClass(), FTransform::Identity, Params);
+	FXRelay = Live;
+	return Live;
+}
+
+void UGFBlockIntegritySubsystem::ReportVoxelFX(UGFMagicComponent* Caster, EGFMagicElement Element, AGFVoxelWorld* Voxel, const TMap<FIntVector, FMagicWound>& Before, const FMagicHitOutput& Out)
+{
+	if (!Voxel)
+	{
+		return;
+	}
+	auto LocationOf = [Voxel](const FIntVector& Cell) { return Voxel->CellToWorld(Cell); };
+	auto NormalOf = [Caster, Voxel](const FIntVector& Cell)
+	{
+		if (!Caster)
+		{
+			return FVector::UpVector;
+		}
+		const FVector Toward = Caster->CastOrigin() - Voxel->CellToWorld(Cell);
+		const FVector Normal = Toward.GetSafeNormal();
+		return Normal.IsNearlyZero() ? FVector::UpVector : Normal;
+	};
+	TSet<FIntVector> Broke;
+	for (const FMagicBreak& Break : Out.Breaks)
+	{
+		Broke.Add(Break.Cell);
+		const float Full = FGFMagicRules::IntegrityOf(FGFMagicCatalog::BlockHardness(Break.BlockId));
+		const FMagicWound* Prev = Before.Find(Break.Cell);
+		const float BeforeRem = (Prev && Prev->bStarted) ? Prev->Remaining : Full;
+		TArray<FGFMiningFXEvent> Events;
+		FGFMiningFX::Collect(BeforeRem, 0.f, Full, true, Element, FGFMiningFX::KitForBlock(Break.BlockId), LocationOf(Break.Cell), NormalOf(Break.Cell), Events);
+		for (const FGFMiningFXEvent& Event : Events)
+		{
+			PlayMiningFX(Event);
+		}
+	}
+	for (const TPair<FIntVector, FMagicWound>& Pair : Wounds)
+	{
+		if (Broke.Contains(Pair.Key) || !Pair.Value.bStarted)
+		{
+			continue;
+		}
+		const FName BlockId = Voxel->GetBlock(Pair.Key);
+		if (BlockId.IsNone())
+		{
+			continue;
+		}
+		const float Full = FGFMagicRules::IntegrityOf(FGFMagicCatalog::BlockHardness(BlockId));
+		const FMagicWound* Prev = Before.Find(Pair.Key);
+		const float BeforeRem = (Prev && Prev->bStarted) ? Prev->Remaining : Full;
+		if (Pair.Value.Remaining >= BeforeRem - KINDA_SMALL_NUMBER)
+		{
+			continue;
+		}
+		TArray<FGFMiningFXEvent> Events;
+		FGFMiningFX::Collect(BeforeRem, Pair.Value.Remaining, Full, false, Element, FGFMiningFX::KitForBlock(BlockId), LocationOf(Pair.Key), NormalOf(Pair.Key), Events);
+		for (const FGFMiningFXEvent& Event : Events)
+		{
+			PlayMiningFX(Event);
+		}
 	}
 }

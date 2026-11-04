@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "GFMagicComponent.h"
 #include "GFMagicShapes.h"
+#include "GFMiningFX.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "GFBlockIntegritySubsystem.generated.h"
 
@@ -58,6 +59,9 @@ public:
 	float GetTownRegrowSeconds() const;
 	void SetTownRegrowSeconds(float Seconds);
 
+	/** Authority: raise the cosmetic hit, crack, or break event and replicate it. */
+	void PlayMiningFX(const FGFMiningFXEvent& Event);
+
 private:
 	void EnsureBound();
 	void Step();
@@ -79,6 +83,8 @@ private:
 	void PayTownField(UGFMagicComponent* Caster);
 	void OfferDinoHit(UGFMagicComponent* Caster, const FVector& Origin, const FVector& Dir, float Range, float HalfAngleDeg, float Damage);
 	void TryFieldDinoHit(UGFMagicComponent* Caster);
+	void ReportVoxelFX(UGFMagicComponent* Caster, EGFMagicElement Element, AGFVoxelWorld* Voxel, const TMap<FIntVector, FMagicWound>& Before, const FMagicHitOutput& Out);
+	AGFMiningFXRelay* EnsureFXRelay();
 
 	TSet<FIntVector> Placed;
 	TMap<FIntVector, FMagicWound> Wounds;
@@ -98,4 +104,5 @@ private:
 	TFunction<TArray<FIntVector>(const APawn*, const FVector&, const AGFVoxelWorld*)> StairwellFn;
 	TFunction<void(UGFMagicComponent* Caster, const FVector& Origin, const FVector& Dir, float Range, float HalfAngleDeg, float Damage)> DinoHitFn;
 	TUniquePtr<FGFTownNodeField> TownNodes;
+	TWeakObjectPtr<AGFMiningFXRelay> FXRelay;
 };

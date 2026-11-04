@@ -764,22 +764,26 @@ bool AGFPlayerState::CanMineAt(const FVector& WorldPoint, const FIntVector& Cell
 		OutReason = TEXT("out of bounds");
 		return false;
 	}
-	return PassesMineLandRules(GS, WorldPoint, Cell, /*bCellInWorld*/ true, OutReason);
+	return PassesMineLandRules(GS, WorldPoint, Cell, /*bCellInWorld*/ true, OutReason, /*bWhitelistedMesh*/ false);
 }
 
-bool AGFPlayerState::PassesMineLandRules(const AGFGameState* GS, const FVector& WorldPoint, const FIntVector& Cell, bool bCellInWorld, FString& OutReason) const
+bool AGFPlayerState::PassesMineLandRules(const AGFGameState* GS, const FVector& WorldPoint, const FIntVector& Cell, bool bCellInWorld, FString& OutReason, bool bWhitelistedMesh) const
 {
 	const EGFOverworldEdit Land = GS->OverworldEditQuery.IsBound()
 		? GS->OverworldEditQuery.Execute(FactionId, WorldPoint)
 		: EGFOverworldEdit::Inactive;
-	if (Land == EGFOverworldEdit::Deny)
+	// Whitelisted meshes (trees, crystal linings, crystal pieces) are mineable off faction land.
+	// Voxel edits keep the Deny gate.
+	if (!bWhitelistedMesh && Land == EGFOverworldEdit::Deny)
 	{
 		OutReason = TEXT("outside faction land");
 		return false;
 	}
 	const FName Why = GS->EditBlockReason(this, WorldPoint);
-	const bool bSharedFarm = Land == EGFOverworldEdit::Shared && Why == FName(TEXT("VisitorNoRights"));
-	if (!Why.IsNone() && !bSharedFarm)
+	const bool bVisitor = Why == FName(TEXT("VisitorNoRights"));
+	const bool bSharedFarm = Land == EGFOverworldEdit::Shared && bVisitor;
+	// The visitor exception covers every whitelist hit, not only crystal slots.
+	if (!Why.IsNone() && !bSharedFarm && !(bWhitelistedMesh && bVisitor))
 	{
 		OutReason = Why.ToString();
 		return false;
@@ -818,18 +822,7 @@ bool AGFPlayerState::CanMineHit(const FHitResult& Hit, FString& OutReason) const
 	const AGFVoxelWorld* Voxel = GetVoxelWorld();
 	const FIntVector Cell = Voxel ? Voxel->WorldToCell(Point) : FIntVector::ZeroValue;
 	const bool bCellInWorld = Voxel && Voxel->GetGrid().IsInBounds(Cell);
-	if (PassesMineLandRules(GS, Point, Cell, bCellInWorld, OutReason))
-	{
-		return true;
-	}
-	// Taking a town crystal as a visitor is the theft the townsfolk answer, so the visitor rule does not stop it.
-	const UGFMineableAssetUserData* Data = FGFMineable::Find(FGFMineable::MeshOf(Hit.GetComponent()));
-	if (Data && Data->Mode == EGFMineableMode::Slots && OutReason == TEXT("VisitorNoRights"))
-	{
-		OutReason.Reset();
-		return true;
-	}
-	return false;
+	return PassesMineLandRules(GS, Point, Cell, bCellInWorld, OutReason, /*bWhitelistedMesh*/ true);
 }
 
 bool AGFPlayerState::ServerHandleEdit(const FIntVector& Cell, FName BlockId, FString* OutReason, int32* OutChunkRevision)

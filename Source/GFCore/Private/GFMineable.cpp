@@ -1,4 +1,5 @@
 #include "GFMineable.h"
+#include "GFLog.h"
 #include "Components/StaticMeshComponent.h"
 #include "Dom/JsonObject.h"
 #include "Engine/HitResult.h"
@@ -8,6 +9,8 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "StaticMeshResources.h"
+#include "UObject/UObjectGlobals.h"
+#include "UObject/UObjectIterator.h"
 
 bool FGFMineable::AllowsSlot(const UGFMineableAssetUserData* Data, int32 SlotIndex)
 {
@@ -211,6 +214,113 @@ FString FGFMineable::TownsV2WhitelistPath()
 bool FGFMineable::LoadTownsV2Whitelist(TArray<FGFMineableEntry>& Out, FString& OutError)
 {
 	return LoadWhitelistFile(TownsV2WhitelistPath(), Out, OutError);
+}
+
+namespace
+{
+	struct FKitList
+	{
+		TSet<FName> Names;
+		bool bReady = false;
+
+		void Ensure()
+		{
+			if (bReady)
+			{
+				return;
+			}
+			bReady = true;
+			auto Ingest = [this](bool (*Load)(TArray<FGFMineableEntry>&, FString&))
+			{
+				TArray<FGFMineableEntry> Rows;
+				FString Err;
+				if (!Load(Rows, Err))
+				{
+					return;
+				}
+				for (const FGFMineableEntry& Row : Rows)
+				{
+					Names.Add(Row.Asset);
+				}
+			};
+			Ingest(&FGFMineable::LoadTownWhitelist);
+			Ingest(&FGFMineable::LoadTownsV2Whitelist);
+		}
+	};
+
+	FKitList& KitList()
+	{
+		static FKitList List;
+		return List;
+	}
+
+	TSet<FName>& TagWarnings()
+	{
+		static TSet<FName> Warned;
+		return Warned;
+	}
+
+	FDelegateHandle& AssetLoadedHandle()
+	{
+		static FDelegateHandle Handle;
+		return Handle;
+	}
+
+	void AuditMesh(UObject* Object)
+	{
+		const UStaticMesh* Mesh = Cast<UStaticMesh>(Object);
+		if (!Mesh || Mesh->HasAnyFlags(RF_ClassDefaultObject | RF_NeedPostLoad))
+		{
+			return;
+		}
+		FGFMineable::WarnIfListedWithoutTag(Mesh);
+	}
+}
+
+bool FGFMineable::ListedWithoutTag(const UStaticMesh* Mesh)
+{
+	if (!Mesh || Find(Mesh))
+	{
+		return false;
+	}
+	KitList().Ensure();
+	return KitList().Names.Contains(Mesh->GetFName());
+}
+
+bool FGFMineable::WarnIfListedWithoutTag(const UStaticMesh* Mesh)
+{
+	if (!ListedWithoutTag(Mesh))
+	{
+		return false;
+	}
+	const FName Name = Mesh->GetFName();
+	if (!TagWarnings().Contains(Name))
+	{
+		TagWarnings().Add(Name);
+		UE_LOG(LogGF, Warning, TEXT("Mineable kit mesh %s is listed in Data/Town/*_mineable.json but has no UGFMineableAssetUserData"), *Name.ToString());
+	}
+	return true;
+}
+
+void FGFMineable::StartKitAudit()
+{
+	if (!AssetLoadedHandle().IsValid())
+	{
+		AssetLoadedHandle() = FCoreUObjectDelegates::OnAssetLoaded.AddStatic(&AuditMesh);
+	}
+	for (TObjectIterator<UStaticMesh> It; It; ++It)
+	{
+		AuditMesh(*It);
+	}
+}
+
+void FGFMineable::StopKitAudit()
+{
+	if (AssetLoadedHandle().IsValid())
+	{
+		FCoreUObjectDelegates::OnAssetLoaded.Remove(AssetLoadedHandle());
+		AssetLoadedHandle().Reset();
+	}
 }
 
 bool UGFMineableLibrary::SetMeshMineable(UStaticMesh* Mesh, EGFMineableMode Mode, const TArray<int32>& Slots, FName Kit, const FString& Reason)
