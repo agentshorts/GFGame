@@ -219,10 +219,83 @@ FGFHudRect GFHudHotbarBounds(float CanvasW, float CanvasH)
 		return Rect;
 	}
 	Rect.X = 0.f;
-	Rect.H = GFHUD::HotbarBottomMargin + GFHUD::HotbarSlotH;
+	Rect.H = GFHUD::HotbarBottomMargin + GFHUD::HotbarSlotH + GFHUD::HotbarBandGap + GFHUD::HotbarBandH;
 	Rect.W = CanvasW;
 	Rect.Y = CanvasH - Rect.H;
 	return Rect;
+}
+
+float GFHudHotbarTop(float CanvasH)
+{
+	return CanvasH - (GFHUD::HotbarBottomMargin + GFHUD::HotbarSlotH + GFHUD::HotbarBandGap + GFHUD::HotbarBandH);
+}
+
+FGFHotbarBandLayout GFLayoutHotbarBand(float CanvasW, float CanvasH, float ItemW, float ElementW)
+{
+	FGFHotbarBandLayout Out;
+	if (CanvasW <= 1.f || CanvasH <= 1.f)
+	{
+		return Out;
+	}
+	constexpr float PairGap = 8.f;
+	const float Avail = FMath::Max(0.f, CanvasW - 2.f * GFHUD::HotbarSideMargin);
+	float Left = FMath::Max(0.f, ItemW);
+	float Right = FMath::Max(0.f, ElementW);
+	const float Gap = (Left > 0.f && Right > 0.f) ? PairGap : 0.f;
+	const float Need = Left + Gap + Right;
+	if (Need > Avail && Need > 0.f)
+	{
+		const float Scale = FMath::Max(0.f, Avail - Gap) / (Left + Right);
+		Left *= Scale;
+		Right *= Scale;
+	}
+	const float Total = Left + Gap + Right;
+	const float X = (CanvasW - Total) * 0.5f;
+	const float Y = FMath::Max(0.f, GFHudHotbarTop(CanvasH));
+	if (Left > 0.f)
+	{
+		Out.Item = { X, Y, Left, GFHUD::HotbarBandH };
+	}
+	if (Right > 0.f)
+	{
+		Out.Element = { X + Left + Gap, Y, Right, GFHUD::HotbarBandH };
+	}
+	return Out;
+}
+
+FString GFElementName(EGFMagicElement Element)
+{
+	switch (Element)
+	{
+	case EGFMagicElement::Magma: return TEXT("Magma");
+	case EGFMagicElement::Root: return TEXT("Root");
+	case EGFMagicElement::Frost: return TEXT("Frost");
+	default: return TEXT("Spark");
+	}
+}
+
+FLinearColor GFElementColor(EGFMagicElement Element)
+{
+	switch (Element)
+	{
+	case EGFMagicElement::Magma: return FLinearColor(1.f, 0.42f, 0.12f);
+	case EGFMagicElement::Root: return FLinearColor(0.42f, 0.86f, 0.32f);
+	case EGFMagicElement::Frost: return FLinearColor(0.55f, 0.85f, 1.f);
+	default: return FLinearColor(1.f, 0.93f, 0.45f);
+	}
+}
+
+FGFElementChip GFFormatElementChip(EGFMagicElement Current, EGFMagicElement FactionElement)
+{
+	FGFElementChip Chip;
+	Chip.Label = GFElementName(Current);
+	Chip.Color = GFElementColor(Current);
+	Chip.bCanSwap = FactionElement != EGFMagicElement::Spark;
+	const EGFMagicElement Other = (Current == EGFMagicElement::Spark) ? FactionElement : EGFMagicElement::Spark;
+	Chip.Hint = Chip.bCanSwap
+		? FString::Printf(TEXT("[%s] swap to %s"), GFHUD::ElementKeyHint(), *GFElementName(Other))
+		: FString::Printf(TEXT("[%s] join a faction to swap"), GFHUD::ElementKeyHint());
+	return Chip;
 }
 
 namespace
@@ -285,7 +358,7 @@ FGFFieldHudLayout GFLayoutFieldHud(float CanvasW, float CanvasH, int32 TrackerLi
 		Out.Interact.H = GFHUD::InteractHeight;
 		Out.Interact.X = (CanvasW - Out.Interact.W) * 0.5f;
 		Out.Interact.Y = CanvasH * 0.5f + GFHUD::InteractBelowCenter;
-		const float HotbarTop = CanvasH - (GFHUD::HotbarBottomMargin + GFHUD::HotbarSlotH);
+		const float HotbarTop = GFHudHotbarTop(CanvasH);
 		if (Out.Interact.Bottom() > HotbarTop)
 		{
 			Out.Interact.Y = HotbarTop - Out.Interact.H - 8.f;

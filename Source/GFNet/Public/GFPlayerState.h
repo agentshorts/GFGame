@@ -267,6 +267,14 @@ public:
 	/** Item a block costs to place and gives back when removed. */
 	FName ItemForBlock(FName BlockId) const;
 
+	/**
+	 * The nine hotbar slots, left to right (FGFHotbarRules). None is an empty slot.
+	 * Built from the placeable blocks the player can spend, Fists last. Same answer on the server and the owner.
+	 */
+	TArray<FName> GetHotbarSlots() const;
+	/** Count the hotbar shows for a slot id: the item it spends. -1 for Fists, empty, or free build. */
+	int64 GetHotbarCount(FName SlotId) const;
+
 	void ServerAcceptCharacter(FGFCharacterData Data);
 	FGFCharacterData BuildCharacterData() const;
 	void ApplyCharacterData(const FGFCharacterData& Data);
