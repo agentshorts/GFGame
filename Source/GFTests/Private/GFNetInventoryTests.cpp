@@ -183,6 +183,14 @@ bool FGFNetHotbarMovesTest::RunTest(const FString&)
 		Test->TestEqual(TEXT("Slot 5 places dirt"), C->SelectedBlock, FName(TEXT("Dirt")));
 		Test->TestTrue(TEXT("Holding a block"), C->GetAimHeldKind() == EGFAimHeldKind::Block);
 		Test->TestFalse(TEXT("Not a hand item"), C->IsHandItemSelected());
+		// The wheel walks every slot, empty ones too. Slots 4 and 6 are empty, so they are bare hands.
+		C->CycleBlock(1);
+		Test->TestEqual(TEXT("Wheel up from dirt stops on the empty slot 6"), C->GetSelectedHotbarSlot(), 5);
+		Test->TestEqual(TEXT("An empty slot is bare hands"), C->SelectedBlock, GFAim::FistsId());
+		C->CycleBlock(-1);
+		C->CycleBlock(-1);
+		Test->TestEqual(TEXT("Wheel down past dirt stops on the empty slot 4"), C->GetSelectedHotbarSlot(), 3);
+		Test->TestEqual(TEXT("Still bare hands"), C->SelectedBlock, GFAim::FistsId());
 		C->SelectHotbarSlot(8);
 		Test->TestTrue(TEXT("Slot 9 is in hand"), C->IsHandItemSelected());
 		Test->TestTrue(TEXT("A hand item aims like fists"), C->GetAimHeldKind() == EGFAimHeldKind::Fists);

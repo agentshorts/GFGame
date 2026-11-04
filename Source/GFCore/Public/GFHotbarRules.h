@@ -103,7 +103,10 @@ struct GFCORE_API FGFHotbarRules
 	/** Any index into [0, SlotCount). */
 	static int32 Wrap(int32 Index);
 
-	/** Mouse wheel step. A current slot outside the bar starts from slot 0. */
+	/**
+	 * Mouse wheel step. Walks all SlotCount slots in order, empty ones included (an empty slot is bare hands),
+	 * so the wheel and the number keys always agree on where a slot is. A current slot outside the bar starts from 0.
+	 */
 	static int32 Cycle(int32 Current, int32 Direction);
 
 	/**

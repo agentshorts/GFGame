@@ -61,6 +61,14 @@ bool FGFHotbarSlotSelectTest::RunTest(const FString&)
 	TestEqual(TEXT("A big wheel delta is still one step"), FGFHotbarRules::Cycle(3, 5), 4);
 	TestEqual(TEXT("No wheel keeps the slot"), FGFHotbarRules::Cycle(4, 0), 4);
 	TestEqual(TEXT("A bad current slot starts at 0"), FGFHotbarRules::Cycle(42, 1), 0);
+	TSet<int32> Visited;
+	int32 Walk = 0;
+	for (int32 Step = 0; Step < FGFHotbarRules::SlotCount; ++Step)
+	{
+		Walk = FGFHotbarRules::Cycle(Walk, 1);
+		Visited.Add(Walk);
+	}
+	TestEqual(TEXT("Nine wheel steps visit all nine slots"), Visited.Num(), FGFHotbarRules::SlotCount);
 
 	// Number keys: 1 to 5 choose a class until it is chosen, then every key is a slot.
 	TestTrue(TEXT("Five class keys"), FGFPathRules::SlotCount() == 5);
