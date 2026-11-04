@@ -510,7 +510,7 @@ bool FGFMiningFXEventTest::RunTest(const FString&)
 	W.Voxel->ServerApplyEdit(Dirt, TEXT("Dirt"));
 	const FVector DirtAt = W.Voxel->CellToWorld(Dirt);
 	AGFMagicPlayerState* PS = W.World->SpawnActor<AGFMagicPlayerState>();
-	if (!TestNotNull(TEXT("Digger"), PS) || !TestNotNull(TEXT("Magic component"), PS->Magic))
+	if (!TestNotNull(TEXT("Digger"), PS) || !TestNotNull(TEXT("Magic component"), PS->Magic.Get()))
 	{
 		return false;
 	}
