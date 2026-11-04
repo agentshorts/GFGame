@@ -301,3 +301,4 @@ private:
 	FGFInvTarget InvHover;
 	int32 LastHotbarRequest = INDEX_NONE;
 	bool bLastHotbarReported = true;
+};
