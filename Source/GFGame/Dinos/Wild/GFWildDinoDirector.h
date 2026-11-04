@@ -95,7 +95,7 @@ public:
 	float RespawnSeconds = 60.f;
 
 	/**
-	 * False: leave the tame state Wild. True: mark Hostile with an empty target key.
+	 * False: leave the tame state Wild. True: rouse it (Hostile, no target until a threat comes in range).
 	 * Proximity aggro and noise still run either way.
 	 */
 	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "GF|Wild")

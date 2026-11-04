@@ -231,6 +231,15 @@ void UGFTamingComponent::ServerReleaseHire()
 	SyncReplicated();
 }
 
+void UGFTamingComponent::ServerRouse()
+{
+	const AActor* Owner = GetOwner();
+	if (Owner && Owner->HasAuthority() && Machine.Rouse())
+	{
+		SyncReplicated();
+	}
+}
+
 void UGFTamingComponent::ServerNotifyHit()
 {
 	const AActor* Owner = GetOwner();

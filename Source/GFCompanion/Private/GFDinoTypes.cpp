@@ -219,6 +219,10 @@ bool FGFDinoDiet::UpdateCompletion(FGFDiscoveredDinoPreferences& Book, const FDi
 
 void FGFTameMachine::SetState(EGFTameState NewState)
 {
+	if (NewState == EGFTameState::Tamed)
+	{
+		bHired = false;
+	}
 	State = NewState;
 	StateTime = 0.f;
 	CalmTime = 0.f;
@@ -233,7 +237,11 @@ void FGFTameMachine::EndVisit()
 
 EGFForceHostile FGFTameMachine::ForceHostile(const FString& Key, bool bHire, float Now)
 {
-	if (State == EGFTameState::Tamed)
+	if (Key.IsEmpty() || State == EGFTameState::Tamed)
+	{
+		return EGFForceHostile::Refused;
+	}
+	if (!bHire && bHired)
 	{
 		return EGFForceHostile::Refused;
 	}
@@ -252,6 +260,11 @@ EGFForceHostile FGFTameMachine::ForceHostile(const FString& Key, bool bHire, flo
 		return EGFForceHostile::Retargeted;
 	}
 
+	// Every path from here takes the key.
+	if (bHire)
+	{
+		bHired = true;
+	}
 	const bool bWasHostile = State == EGFTameState::Hostile;
 	const bool bWasFled = State == EGFTameState::Fled;
 	if (bHire && bWasHostile && TargetKey == Key && !bCalmed)
@@ -283,13 +296,25 @@ EGFForceHostile FGFTameMachine::ForceHostile(const FString& Key, bool bHire, flo
 
 void FGFTameMachine::ReleaseHire()
 {
-	if (State == EGFTameState::Tamed)
+	bHired = false;
+	if (State == EGFTameState::Tamed || State == EGFTameState::Fled)
 	{
 		return;
 	}
 	EndVisit();
 	CalmUntil = -1000.f;
 	SetState(EGFTameState::Wild);
+}
+
+bool FGFTameMachine::Rouse()
+{
+	if (State == EGFTameState::Tamed)
+	{
+		return false;
+	}
+	TargetKey.Reset();
+	SetState(EGFTameState::Hostile);
+	return true;
 }
 
 bool FGFTameMachine::ApplyCalm(float Now, float Seconds)

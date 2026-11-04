@@ -471,4 +471,46 @@ bool FGFTameForceHostileRetargetTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTameForceHostileHireTest, "GFGame.Tame.ForceHostile.Hire", TameFlags)
+bool FGFTameForceHostileHireTest::RunTest(const FString&)
+{
+	FGFTameMachine Ring;
+	TestEqual(TEXT("An empty key is refused"), E(Ring.ForceHostile(FString())), E(EGFForceHostile::Refused));
+	TestEqual(TEXT("Still wild"), E(Ring.State), E(EGFTameState::Wild));
+	TestEqual(TEXT("An empty hire is refused"), E(Ring.ForceHostile(FString(), true, 1.f)), E(EGFForceHostile::Refused));
+	TestFalse(TEXT("Not hired by an empty key"), Ring.bHired);
+
+	TestEqual(TEXT("Hired at the thief"), E(Ring.ForceHostile(TEXT("Thief"), true, 1.f)), E(EGFForceHostile::Engaged));
+	TestTrue(TEXT("Marked hired"), Ring.bHired);
+	TestEqual(TEXT("A pack call cannot steal a hire"), E(Ring.ForceHostile(TEXT("Other"))), E(EGFForceHostile::Refused));
+	TestEqual(TEXT("Still at the thief"), Ring.TargetKey, FString(TEXT("Thief")));
+	TestEqual(TEXT("The next hire tick holds"), E(Ring.ForceHostile(TEXT("Thief"), true, 2.f)), E(EGFForceHostile::Held));
+
+	Ring.Flee();
+	Ring.ReleaseHire();
+	TestEqual(TEXT("Release keeps a fled dino fled"), E(Ring.State), E(EGFTameState::Fled));
+	TestFalse(TEXT("Release clears the hire"), Ring.bHired);
+
+	FGFTameMachine Free;
+	Free.ForceHostile(TEXT("Thief"), true, 1.f);
+	Free.ReleaseHire();
+	TestEqual(TEXT("Release stands a hostile hire down"), E(Free.State), E(EGFTameState::Wild));
+	TestFalse(TEXT("Not hired after release"), Free.bHired);
+	TestEqual(TEXT("Pack calls work again"), E(Free.ForceHostile(TEXT("Other"))), E(EGFForceHostile::Engaged));
+
+	// A wild spawn told to start hostile, with nobody to chase yet.
+	FGFTameMachine Spawn;
+	TestTrue(TEXT("Rouse a wild spawn"), Spawn.Rouse());
+	TestEqual(TEXT("Roused hostile"), E(Spawn.State), E(EGFTameState::Hostile));
+	TestTrue(TEXT("No target yet"), Spawn.TargetKey.IsEmpty());
+	TestEqual(TEXT("A real key then engages it"), E(Spawn.ForceHostile(TEXT("A"))), E(EGFForceHostile::Retargeted));
+	TestEqual(TEXT("Aimed at A"), Spawn.TargetKey, FString(TEXT("A")));
+
+	FGFTameMachine Tame;
+	Tame.State = EGFTameState::Tamed;
+	TestFalse(TEXT("A tame cannot be roused"), Tame.Rouse());
+	TestEqual(TEXT("Still tamed"), E(Tame.State), E(EGFTameState::Tamed));
+	return true;
+}
+
 #endif

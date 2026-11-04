@@ -62,6 +62,10 @@ public:
 	EGFForceHostile ServerHire(const FString& Key);
 	/** Server: a hired dino drops the chase and returns to Wild. A tamed dino stays tamed. */
 	void ServerReleaseHire();
+	/** Server: spawn-hostile option. Hostile with no target until a threat comes in range. */
+	void ServerRouse();
+	/** True while an elder hire holds this dino. */
+	bool IsHired() const { return Machine.bHired; }
 	/** Server: a player attack connected. Resets the calm-down timer. Hostile stays Hostile. */
 	void ServerNotifyHit();
 

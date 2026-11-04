@@ -326,7 +326,7 @@ AGFDino* AGFWildDinoDirector::SpawnOne(const FGFWildDinoSpawn& Entry)
 	}
 	if (bSpawnHostile && Dino->Taming)
 	{
-		Dino->Taming->ServerForceHostile(FString());
+		Dino->Taming->ServerRouse();
 	}
 	UE_LOG(LogGF, Log, TEXT("WildDino: %s at %s (anchor %s)"), *Entry.Species.ToString(), *Point.ToString(), *Entry.AnchorId.ToString());
 	return Dino;

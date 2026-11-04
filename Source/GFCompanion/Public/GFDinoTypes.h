@@ -256,6 +256,8 @@ struct GFCOMPANION_API FGFTameMachine
 	UPROPERTY() float LastOfferTime = -1000.f;
 	/** Calming Mist: until this time (server seconds) nobody counts as a threat and refusals don't anger it. */
 	UPROPERTY() float CalmUntil = -1000.f;
+	/** An elder hire holds it. Only another hire can retarget it until ReleaseHire (or a tame) lets go. */
+	UPROPERTY() bool bHired = false;
 
 	static constexpr float CalmingMistSeconds = 10.f;
 
@@ -267,14 +269,17 @@ struct GFCOMPANION_API FGFTameMachine
 	void NotifyHit() { CalmTime = 0.f; }
 	/**
 	 * Turn hostile at Key.
-	 * A tamed dino refuses. A fled or calmed dino refuses unless bHire is set.
+	 * An empty key refuses: hostile at nobody is not a state. A tamed dino refuses. A fled or calmed dino refuses
+	 * unless bHire is set, and so does a hired dino (a pack call cannot pull it off the thief).
 	 * An already hostile dino takes a new key. A hire also restarts the hostile clock
 	 * so the 20s flee and the calm-down do not drop the chase on that call.
 	 * Now is the server clock for the mist check. A very small Now skips that check.
 	 */
 	EGFForceHostile ForceHostile(const FString& Key, bool bHire = false, float Now = -1.0e9f);
-	/** Drop a hire and return to Wild. A tamed dino stays tamed. */
+	/** Drop a hire and return to Wild. A tamed dino stays tamed, and a fled one keeps running. */
 	void ReleaseHire();
+	/** Spawn option: Hostile with no target yet, so the first threat in range becomes the target. Tamed refuses. */
+	bool Rouse();
 	/** Calming Mist: a Threat or Hostile dino settles to Alert and stays calm for Seconds. False if tamed or fled. */
 	bool ApplyCalm(float Now, float Seconds = CalmingMistSeconds);
 	bool IsCalmed(float Now) const { return Now < CalmUntil; }
