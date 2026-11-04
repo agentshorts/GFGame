@@ -248,6 +248,46 @@ bool FGFInventoryCursorTest::RunTest(const FString&)
 		TestFalse(TEXT("Cancel lets go"), Cursor.IsHolding() || Cursor.IsButtonDown());
 		TestFalse(TEXT("A stray release after cancel does nothing"), Cursor.Release(Slot3).IsSet());
 	}
+	{
+		// #304 pass 2: the bag closed between the drop press and its release. The swallow must not outlive Cancel.
+		FGFInventoryCursor Cursor;
+		Cursor.Press(Amber);
+		Cursor.Release(Amber);
+		TestTrue(TEXT("Drop press assigns"), IsMove(Cursor.Press(Slot3), FGFHotbarMove::Assign(2, TEXT("Amber"))));
+		TestTrue(TEXT("Waiting to swallow its release"), Cursor.GetPhase() == EGFInvCursorPhase::Dropping);
+		Cursor.Cancel();
+		TestTrue(TEXT("Cancel goes all the way to idle"), Cursor.GetPhase() == EGFInvCursorPhase::Idle);
+		Cursor.Press(Slot1Dirt);
+		TestTrue(TEXT("The next drag after reopening works"), IsMove(Cursor.Release(Slot5Stone), FGFHotbarMove::Swap(0, 4)));
+		TestTrue(TEXT("And ends idle"), Cursor.GetPhase() == EGFInvCursorPhase::Idle);
+	}
+	{
+		// A release that reached no box: the HUD now routes it as Nothing, which takes a bar item off the bar.
+		FGFInventoryCursor Cursor;
+		Cursor.Press(Slot1Dirt);
+		TestTrue(TEXT("Dragging"), Cursor.GetPhase() == EGFInvCursorPhase::Dragging && Cursor.IsButtonDown());
+		TestTrue(TEXT("Stray release off the panel clears the slot"), IsMove(Cursor.Release(FGFInvTarget::Nothing()), FGFHotbarMove::Clear(0)));
+		TestFalse(TEXT("Not stuck down"), Cursor.IsButtonDown());
+	}
+	{
+		// If a release is lost anyway, the next press starts clean instead of swallowing a later release.
+		FGFInventoryCursor Cursor;
+		Cursor.Press(Amber);
+		Cursor.Release(Amber);
+		Cursor.Press(Slot3);
+		TestFalse(TEXT("Lost drop release, new press picks up"), Cursor.Press(Slot1Dirt).IsSet());
+		TestTrue(TEXT("Picked up the slot"), Cursor.GetPhase() == EGFInvCursorPhase::Dragging && Cursor.GetFromSlot() == 0);
+		TestTrue(TEXT("Its release is not swallowed"), IsMove(Cursor.Release(Slot5Stone), FGFHotbarMove::Swap(0, 4)));
+	}
+	{
+		// A number key mid-drag drops, and the button's later release is swallowed exactly once.
+		FGFInventoryCursor Cursor;
+		Cursor.Press(Amber);
+		TestTrue(TEXT("Number key mid-drag assigns"), IsMove(Cursor.NumberKey(4, FGFInvTarget::Nothing()), FGFHotbarMove::Assign(4, TEXT("Amber"))));
+		TestTrue(TEXT("Waiting for the button"), Cursor.GetPhase() == EGFInvCursorPhase::Dropping);
+		TestFalse(TEXT("Its release does nothing"), Cursor.Release(Slot3).IsSet());
+		TestTrue(TEXT("Idle after"), Cursor.GetPhase() == EGFInvCursorPhase::Idle);
+	}
 	return true;
 }
 

@@ -232,6 +232,8 @@ private:
 	/** Hit box name to what it points at. Unknown names are Nothing. */
 	FGFInvTarget InventoryTargetFor(FName BoxName) const;
 	void SubmitHotbarMove(const TOptional<FGFHotbarMove>& Move);
+	/** Sends a left button release that landed on no bag box to the cursor as a drop on nothing. */
+	void CatchStrayInventoryRelease();
 	/** Rebuilds InvPageEntries for the current tab and page (clamping the page). */
 	void RefreshInventoryPage(const FGFInventoryLayout& Layout);
 	/**

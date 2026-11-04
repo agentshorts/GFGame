@@ -242,8 +242,24 @@ void AGFHUD::DrawPathsAndVillains()
 	}
 }
 
+void AGFHUD::CatchStrayInventoryRelease()
+{
+	if (Modal != EGFHudModal::Inventory || !InvCursor.IsButtonDown())
+	{
+		return;
+	}
+	// Hit box releases were dispatched with this frame's input, before the draw. A button that is up while the cursor
+	// still thinks it is down was let go over no bag box (the world behind the panel, its border, off the window).
+	const APlayerController* PC = GetOwningPlayerController();
+	if (PC && !PC->IsInputKeyDown(EKeys::LeftMouseButton))
+	{
+		SubmitHotbarMove(InvCursor.Release(FGFInvTarget::Nothing()));
+	}
+}
+
 void AGFHUD::DrawHUD()
 {
+	CatchStrayInventoryRelease();
 	Super::DrawHUD();
 	if (!bShowHUD || !Canvas)
 	{

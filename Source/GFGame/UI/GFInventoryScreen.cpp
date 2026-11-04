@@ -206,17 +206,19 @@ TOptional<FGFHotbarMove> FGFInventoryCursor::DropOn(const FGFInvTarget& Target)
 		// Off the bar: back into the bag.
 		Move = FGFHotbarMove::Clear(FromSlot);
 	}
-	Cancel();
+	ClearPayload();
 	return Move;
 }
 
 TOptional<FGFHotbarMove> FGFInventoryCursor::Press(const FGFInvTarget& Target)
 {
-	if (IsHolding() && !bDown)
+	if (Phase == EGFInvCursorPhase::Holding)
 	{
-		bSwallowRelease = true;
-		return DropOn(Target);
+		TOptional<FGFHotbarMove> Move = DropOn(Target);
+		Phase = EGFInvCursorPhase::Dropping;
+		return Move;
 	}
+	// Idle, or a Dragging or Dropping whose release never arrived: start over from this press.
 	Cancel();
 	if (Target.Id.IsNone() || Target.Kind == FGFInvTarget::EKind::Nothing)
 	{
@@ -225,28 +227,32 @@ TOptional<FGFHotbarMove> FGFInventoryCursor::Press(const FGFInvTarget& Target)
 	Held = Target.Id;
 	FromSlot = Target.Kind == FGFInvTarget::EKind::Slot ? Target.Slot : INDEX_NONE;
 	PressedOn = Target;
-	bDown = true;
+	Phase = EGFInvCursorPhase::Dragging;
 	return {};
 }
 
 TOptional<FGFHotbarMove> FGFInventoryCursor::Release(const FGFInvTarget& Target)
 {
-	if (bSwallowRelease)
+	switch (Phase)
 	{
-		bSwallowRelease = false;
+	case EGFInvCursorPhase::Dropping:
+		Phase = EGFInvCursorPhase::Idle;
+		return {};
+	case EGFInvCursorPhase::Dragging:
+		if (Target.SameAs(PressedOn))
+		{
+			// A click: keep holding it until the next press.
+			Phase = EGFInvCursorPhase::Holding;
+			return {};
+		}
+		{
+			TOptional<FGFHotbarMove> Move = DropOn(Target);
+			Phase = EGFInvCursorPhase::Idle;
+			return Move;
+		}
+	default:
 		return {};
 	}
-	if (!bDown)
-	{
-		return {};
-	}
-	bDown = false;
-	if (Target.SameAs(PressedOn))
-	{
-		// A click: keep holding it until the next press.
-		return {};
-	}
-	return DropOn(Target);
 }
 
 TOptional<FGFHotbarMove> FGFInventoryCursor::NumberKey(int32 Slot, const FGFInvTarget& Hovered)
@@ -257,8 +263,11 @@ TOptional<FGFHotbarMove> FGFInventoryCursor::NumberKey(int32 Slot, const FGFInvT
 	}
 	if (IsHolding())
 	{
-		bDown = false;
-		return DropOn(FGFInvTarget::BarSlot(Slot, NAME_None));
+		// Mid-drag the button is still down, so its release is swallowed.
+		const EGFInvCursorPhase After = Phase == EGFInvCursorPhase::Dragging ? EGFInvCursorPhase::Dropping : EGFInvCursorPhase::Idle;
+		TOptional<FGFHotbarMove> Move = DropOn(FGFInvTarget::BarSlot(Slot, NAME_None));
+		Phase = After;
+		return Move;
 	}
 	if (Hovered.Kind == FGFInvTarget::EKind::Grid && !Hovered.Id.IsNone())
 	{
@@ -271,10 +280,15 @@ TOptional<FGFHotbarMove> FGFInventoryCursor::NumberKey(int32 Slot, const FGFInvT
 	return {};
 }
 
-void FGFInventoryCursor::Cancel()
+void FGFInventoryCursor::ClearPayload()
 {
 	Held = NAME_None;
 	FromSlot = INDEX_NONE;
 	PressedOn = FGFInvTarget();
-	bDown = false;
+}
+
+void FGFInventoryCursor::Cancel()
+{
+	ClearPayload();
+	Phase = EGFInvCursorPhase::Idle;
 }

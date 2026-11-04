@@ -93,27 +93,43 @@ struct GFGAME_API FGFInvTarget
  * (a drag). Releasing where it was pressed keeps holding it, and the next press drops it (click, then click).
  * Dropping a bar item on the grid or on nothing takes it off the bar.
  */
+enum class EGFInvCursorPhase : uint8
+{
+	/** Nothing held, button up. */
+	Idle,
+	/** Button down on an item: a drag, or the first half of a click. */
+	Dragging,
+	/** Clicked: the item rides the cursor with the button up until the next press. */
+	Holding,
+	/** The press that dropped a held item (or a number key mid-drag). Its release does nothing. */
+	Dropping
+};
+
 struct GFGAME_API FGFInventoryCursor
 {
 	TOptional<FGFHotbarMove> Press(const FGFInvTarget& Target);
+	/** Every left button release while the bag is up. Off any bag box, pass FGFInvTarget::Nothing(). */
 	TOptional<FGFHotbarMove> Release(const FGFInvTarget& Target);
 	/** Number key k while the bag is open: the held item, else the hovered one, goes to slot k. */
 	TOptional<FGFHotbarMove> NumberKey(int32 Slot, const FGFInvTarget& Hovered);
+	/** Back to Idle with nothing held, from any phase. */
 	void Cancel();
 
-	bool IsHolding() const { return !Held.IsNone(); }
-	FName GetHeld() const { return Held; }
-	int32 GetFromSlot() const { return FromSlot; }
-	bool IsButtonDown() const { return bDown; }
+	EGFInvCursorPhase GetPhase() const { return Phase; }
+	bool IsHolding() const { return Phase == EGFInvCursorPhase::Dragging || Phase == EGFInvCursorPhase::Holding; }
+	FName GetHeld() const { return IsHolding() ? Held : FName(); }
+	int32 GetFromSlot() const { return IsHolding() ? FromSlot : INDEX_NONE; }
+	bool IsButtonDown() const { return Phase == EGFInvCursorPhase::Dragging || Phase == EGFInvCursorPhase::Dropping; }
 
 private:
+	/** The move for letting go of the held item over Target. Clears the payload; the caller sets the phase. */
 	TOptional<FGFHotbarMove> DropOn(const FGFInvTarget& Target);
+	void ClearPayload();
 
+	EGFInvCursorPhase Phase = EGFInvCursorPhase::Idle;
+	/** Dragging or Holding only. */
 	FName Held;
 	/** INDEX_NONE when it came from the grid. */
 	int32 FromSlot = INDEX_NONE;
 	FGFInvTarget PressedOn;
-	bool bDown = false;
-	/** The press that dropped a click-held item; its release does nothing. */
-	bool bSwallowRelease = false;
 };
