@@ -1335,7 +1335,7 @@ void AGFHUD::DrawHotbar()
 		DrawRect(Slot.bSelected ? FLinearColor(0.16f, 0.13f, 0.06f, 0.92f) : FLinearColor(0.f, 0.f, 0.f, 0.55f), Slot.X, Y, Slot.W, Slot.H);
 
 		const int64 Count = PS ? PS->GetHotbarCount(Id) : -1;
-		const bool bSpent = Count == 0;
+		const bool bSpent = FGFHotbarRules::IsSpent(Id, Count);
 		DrawSlotArt(Id, Slot.X, Y, Slot.W, Slot.H, bSpent);
 		// Key number top left, count bottom right.
 		DrawText(FString::FromInt(Index + 1), Slot.bSelected ? Gold : FLinearColor(1.f, 1.f, 1.f, 0.75f), Slot.X + 3.f, Y + 1.f, Font, 0.55f, false);

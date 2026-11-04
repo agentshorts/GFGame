@@ -574,20 +574,9 @@ void AGFPlayerState::ClientTransferResult_Implementation(FGuid TxId, EGFTxResult
 	TransferResults.Add(TxId, Result);
 }
 
-void AGFPlayerState::HandleInventoryChanged(FName ItemId, int32 NewCount)
+void AGFPlayerState::HandleInventoryChanged(FName, int32)
 {
-	if (NewCount <= 0 && Progress.Hotbar.bArranged)
-	{
-		// An arranged bar lets go of an item once it runs out, and of a block that spends it.
-		const AGFGameState* GS = GetGFGameState();
-		const bool bFree = GS && GS->bFreeBuild;
-		if (FGFHotbarRules::ClearSpent(Progress.Hotbar.Slots, ItemId,
-			[this](FName Id) { return ItemForBlock(Id); },
-			[this, bFree](FName Id) { return bFree && IsPlaceableBlock(Id); }))
-		{
-			MarkCharacterChanged();
-		}
-	}
+	// An arranged bar keeps a spent item in its slot (#330). The HUD greys it out at 0 and it fills again on pickup.
 	ScheduleWriteBack();
 }
 

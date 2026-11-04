@@ -153,19 +153,19 @@ bool FGFHotbarMoveRulesTest::RunTest(const FString&)
 	TestTrue(TEXT("Free build does not hand out items"), FGFHotbarRules::CheckId(TEXT("Amber"), true, false, 0, true) == EGFHotbarMoveResult::NotOwned);
 	TestTrue(TEXT("Free build lets any block through"), FGFHotbarRules::CheckId(TEXT("Grass"), true, true, 0, true) == EGFHotbarMoveResult::Ok);
 
-	// Running out of an item empties its slots: the item, and a block that spends it (Grass spends Dirt).
-	const auto ItemFor = [](FName Id) { return Id == FName(TEXT("Grass")) ? FName(TEXT("Dirt")) : Id; };
-	const auto KeepNone = [](FName) { return false; };
-	TArray<FName> Bar = { TEXT("Grass"), TEXT("Dirt"), NAME_None, TEXT("Amber"), NAME_None, NAME_None, NAME_None, NAME_None, FGFHotbarRules::FistsId() };
-	TestTrue(TEXT("Spending the dirt changes the bar"), FGFHotbarRules::ClearSpent(Bar, TEXT("Dirt"), ItemFor, KeepNone));
-	TestTrue(TEXT("Grass and Dirt both clear"), Bar[0].IsNone() && Bar[1].IsNone());
-	TestEqual(TEXT("Amber stays"), Bar[3], FName(TEXT("Amber")));
-	TestEqual(TEXT("Fists stay"), Bar[8], FGFHotbarRules::FistsId());
-	TestTrue(TEXT("Spending the amber clears it"), FGFHotbarRules::ClearSpent(Bar, TEXT("Amber"), ItemFor, KeepNone) && Bar[3].IsNone());
-	TestFalse(TEXT("Nothing left to clear"), FGFHotbarRules::ClearSpent(Bar, TEXT("Amber"), ItemFor, KeepNone));
-	TestFalse(TEXT("A None item clears nothing"), FGFHotbarRules::ClearSpent(Bar, NAME_None, ItemFor, KeepNone));
-	TArray<FName> Free = { TEXT("Grass"), TEXT("Dirt") };
-	TestFalse(TEXT("Free build keeps its blocks"), FGFHotbarRules::ClearSpent(Free, TEXT("Dirt"), ItemFor, [](FName) { return true; }));
+	// #330: running out keeps the slot. It greys out at 0 and fills again when the item comes back.
+	TestTrue(TEXT("An item at 0 is spent"), FGFHotbarRules::IsSpent(TEXT("Amber"), 0));
+	TestFalse(TEXT("An item with a count is not"), FGFHotbarRules::IsSpent(TEXT("Amber"), 3));
+	TestFalse(TEXT("No count (free build) is not"), FGFHotbarRules::IsSpent(TEXT("Dirt"), -1));
+	TestFalse(TEXT("An empty slot is not"), FGFHotbarRules::IsSpent(NAME_None, 0));
+	TestFalse(TEXT("Fists are never spent"), FGFHotbarRules::IsSpent(FGFHotbarRules::FistsId(), 0));
+	FGFHotbarLayout Sticky;
+	Sticky.bArranged = true;
+	Sticky.Slots = Bar({ TEXT("Grass"), TEXT("Dirt"), nullptr, TEXT("Amber") });
+	const TArray<FName> Kept = FGFHotbarRules::Resolve(Sticky, Start);
+	TestTrue(TEXT("The arranged bar still shows the spent items where they were"), Kept[0] == TEXT("Grass") && Kept[1] == TEXT("Dirt") && Kept[3] == TEXT("Amber"));
+	TestTrue(TEXT("A spent slot can still be moved"), FGFHotbarRules::Apply(Sticky.Slots, FGFHotbarMove::Swap(3, 5)) == EGFHotbarMoveResult::Ok && Sticky.Slots[5] == TEXT("Amber"));
+	TestTrue(TEXT("Or cleared by hand"), FGFHotbarRules::Apply(Sticky.Slots, FGFHotbarMove::Clear(5)) == EGFHotbarMoveResult::Ok && Sticky.Slots[5].IsNone());
 	return true;
 }
 

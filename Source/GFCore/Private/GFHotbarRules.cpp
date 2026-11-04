@@ -224,26 +224,9 @@ EGFHotbarMoveResult FGFHotbarRules::Apply(TArray<FName>& Slots, const FGFHotbarM
 	}
 }
 
-bool FGFHotbarRules::ClearSpent(TArray<FName>& Slots, FName SpentItem, TFunctionRef<FName(FName)> ItemFor, TFunctionRef<bool(FName)> Keep)
+bool FGFHotbarRules::IsSpent(FName Id, int64 Count)
 {
-	if (SpentItem.IsNone())
-	{
-		return false;
-	}
-	bool bChanged = false;
-	for (FName& Slot : Slots)
-	{
-		if (Slot.IsNone() || Slot == FistsId() || Keep(Slot))
-		{
-			continue;
-		}
-		if (Slot == SpentItem || ItemFor(Slot) == SpentItem)
-		{
-			Slot = NAME_None;
-			bChanged = true;
-		}
-	}
-	return bChanged;
+	return Count == 0 && !Id.IsNone() && Id != FistsId();
 }
 
 EGFHotbarMoveResult FGFHotbarRules::CheckId(FName Id, bool bKnown, bool bPlaceable, int64 Owned, bool bFreeBuild)

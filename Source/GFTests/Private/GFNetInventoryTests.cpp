@@ -86,14 +86,6 @@ namespace GFNetInventoryDetail
 		Out[8] = TEXT("Amber");
 		return Out;
 	}
-
-	/** Expected() once the amber is spent: its slot is empty. */
-	TArray<FName> SpentExpected()
-	{
-		TArray<FName> Out = Expected();
-		Out[8] = NAME_None;
-		return Out;
-	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFNetHotbarMovesTest, "GFGame.Net.Hotbar.Moves", GFNetInventoryDetail::Flags)
@@ -208,7 +200,7 @@ bool FGFNetHotbarMovesTest::RunTest(const FString&)
 		const AGFPlayerState* OnServer = ClientOnServer();
 		return OnServer && OnServer->HeldItem == TEXT("Amber");
 	});
-	// Spending the amber clears its slot. The rest of the arranged bar stays where the player put it.
+	// #330: spending the amber keeps its slot (greyed at 0) rather than emptying or reshuffling the bar.
 	Do(Ctx, []()
 	{
 		if (AGFPlayerState* OnServer = ClientOnServer())
@@ -216,21 +208,39 @@ bool FGFNetHotbarMovesTest::RunTest(const FString&)
 			OnServer->Inventory->RemoveItem(TEXT("Amber"), 2);
 		}
 	});
-	WaitUntil(Ctx, TEXT("client bag empties and the bar drops the amber"), 10.f, []()
+	WaitUntil(Ctx, TEXT("client bag empties"), 10.f, []()
 	{
 		const AGFPlayerState* PS = ClientPS();
-		return PS && PS->Inventory && PS->Inventory->GetCount(TEXT("Amber")) == 0 && PS->GetHotbarSlots() == SpentExpected();
+		return PS && PS->Inventory && PS->Inventory->GetCount(TEXT("Amber")) == 0;
+	});
+	Wait(Ctx, 0.2f);
+	Do(Ctx, [Ctx]()
+	{
+		const AGFPlayerState* PS = ClientPS();
+		const AGFPlayerState* OnServer = ClientOnServer();
+		Ctx->Test->TestTrue(TEXT("An arranged bar keeps a spent item"), PS && PS->GetHotbarSlots() == Expected());
+		Ctx->Test->TestTrue(TEXT("So does the server bar"), OnServer && OnServer->GetHotbarSlots() == Expected());
+		Ctx->Test->TestEqual(TEXT("Shown as 0"), PS ? PS->GetHotbarCount(TEXT("Amber")) : int64(-2), int64(0));
+		Ctx->Test->TestTrue(TEXT("Drawn greyed out"), PS && FGFHotbarRules::IsSpent(TEXT("Amber"), PS->GetHotbarCount(TEXT("Amber"))));
+		Ctx->Test->TestTrue(TEXT("Still arranged"), OnServer && OnServer->Progress.Hotbar.bArranged);
+	});
+	// Picking amber up again fills the same slot, with no move from the player.
+	Do(Ctx, []()
+	{
+		if (AGFPlayerState* OnServer = ClientOnServer())
+		{
+			OnServer->Inventory->AddItem(TEXT("Amber"), 1);
+		}
+	});
+	WaitUntil(Ctx, TEXT("the kept slot refills"), 10.f, []()
+	{
+		const AGFPlayerState* PS = ClientPS();
+		return PS && PS->GetHotbarCount(TEXT("Amber")) == 1 && PS->GetHotbarSlots() == Expected();
 	});
 	Do(Ctx, [Ctx]()
 	{
-		const AGFPlayerState* OnServer = ClientOnServer();
-		Ctx->Test->TestTrue(TEXT("The server bar cleared the spent slot"), OnServer && OnServer->GetHotbarSlots() == SpentExpected());
-		Ctx->Test->TestTrue(TEXT("Still arranged"), OnServer && OnServer->Progress.Hotbar.bArranged);
-	});
-	WaitUntil(Ctx, TEXT("slot 9 is bare hands again"), 10.f, []()
-	{
-		const AGFCharacter* C = ClientCharacter();
-		return C && C->GetSelectedHotbarSlot() == 8 && !C->IsHandItemSelected() && C->SelectedBlock == GFAim::FistsId();
+		const AGFPlayerState* PS = ClientPS();
+		Ctx->Test->TestFalse(TEXT("Not greyed once refilled"), PS && FGFHotbarRules::IsSpent(TEXT("Amber"), PS->GetHotbarCount(TEXT("Amber"))));
 	});
 	Stop(Ctx);
 	return true;

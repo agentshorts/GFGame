@@ -135,10 +135,10 @@ struct GFCORE_API FGFHotbarRules
 	static TArray<FName> Resolve(const FGFHotbarLayout& Layout, const TArray<FName>& Default);
 
 	/**
-	 * An item ran out: every slot holding it, or a block that spends it (ItemFor), goes empty. None and Fists stay,
-	 * and so does any slot Keep says to keep (free build blocks). True when a slot changed.
+	 * A slot whose item ran out (#330): it keeps the id where the player put it, draws greyed out with a 0, and
+	 * fills again by itself once the item comes back. Count is what GetHotbarCount reports (-1 means no count).
 	 */
-	static bool ClearSpent(TArray<FName>& Slots, FName SpentItem, TFunctionRef<FName(FName)> ItemFor, TFunctionRef<bool(FName)> Keep);
+	static bool IsSpent(FName Id, int64 Count);
 
 	/** Applies Move to Slots (padded to SlotCount first). Ownership is not checked here; see CheckId. */
 	static EGFHotbarMoveResult Apply(TArray<FName>& Slots, const FGFHotbarMove& Move);
