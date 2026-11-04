@@ -47,6 +47,16 @@ bool FGFHudModalRules::ConfirmsReturn(EGFHudModal Modal)
 	return Modal == EGFHudModal::PauseConfirm;
 }
 
+bool FGFHudModalRules::HasElder(EGFHudModal Modal, EGFHudModal Restore)
+{
+	return Modal == EGFHudModal::Elder || (Modal == EGFHudModal::Chat && Restore == EGFHudModal::Elder);
+}
+
+bool FGFHudModalRules::EndsElderSession(const FState& Before, const FState& After)
+{
+	return HasElder(Before.Modal, Before.Restore) && !HasElder(After.Modal, After.Restore);
+}
+
 FGFHudModalRules::FState FGFHudModalRules::Transition(EGFHudModal Modal, EGFHudModal Restore, EGFHudModalEvent Event)
 {
 	FState Out;
@@ -140,11 +150,13 @@ FGFHudModalRules::FState FGFHudModalRules::Transition(EGFHudModal Modal, EGFHudM
 		}
 		break;
 	case EGFHudModalEvent::OpenElder:
-		if (Modal == EGFHudModal::Chat)
+		// The open is a server reply, so it can land after the player opened something else. It never replaces
+		// pause, the confirm, the bag or a menu under chat; the HUD then closes the server session instead.
+		if (Modal == EGFHudModal::Chat && Restore == EGFHudModal::Game)
 		{
 			Out.Restore = EGFHudModal::Elder;
 		}
-		else if (Modal != EGFHudModal::Aim && Modal != EGFHudModal::Elder)
+		else if (Modal == EGFHudModal::Game)
 		{
 			Go(EGFHudModal::Elder);
 		}

@@ -1555,6 +1555,7 @@ void AGFHUD::SetHudModal(EGFHudModalEvent Event)
 	}
 
 	const EGFHudModal Prev = Modal;
+	const FGFHudModalRules::FState Before{ Modal, Restore };
 	Modal = Next.Modal;
 	Restore = Next.Restore;
 
@@ -1583,7 +1584,7 @@ void AGFHUD::SetHudModal(EGFHudModalEvent Event)
 		InvCursor.Cancel();
 		InvHover = FGFInvTarget();
 	}
-	if (Prev == EGFHudModal::Elder && Modal != EGFHudModal::Elder && Modal != EGFHudModal::Chat)
+	if (FGFHudModalRules::EndsElderSession(Before, Next))
 	{
 		if (AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController()))
 		{
@@ -1639,8 +1640,9 @@ void AGFHUD::OpenElderMenu(AGFElder* Elder, FName TownId)
 	ElderTownId = TownId;
 	SetElderTab(EGFElderTab::Talk);
 	SetHudModal(EGFHudModalEvent::OpenElder);
-	// Aim refuses the panel. Drop the server session so a hidden menu cannot still trade.
-	if (Modal != EGFHudModal::Elder && Restore != EGFHudModal::Elder)
+	// Only Game (or chat over Game) takes the panel. Anything else refused it: drop the server session so a hidden
+	// menu cannot still trade.
+	if (!FGFHudModalRules::HasElder(Modal, Restore))
 	{
 		if (AGFPlayerController* PC = Cast<AGFPlayerController>(GetOwningPlayerController()))
 		{

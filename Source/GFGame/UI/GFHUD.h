@@ -87,6 +87,10 @@ struct GFGAME_API FGFHudModalRules
 	 * Escape leaves that modal, so the next press asks again.
 	 */
 	static bool ConfirmsReturn(EGFHudModal Modal);
+	/** The elder menu is up, or waiting under chat. */
+	static bool HasElder(EGFHudModal Modal, EGFHudModal Restore);
+	/** The step lost the elder menu (from the top or from under chat): the server session must close too. */
+	static bool EndsElderSession(const FState& Before, const FState& After);
 };
 
 struct FGFHUDToast

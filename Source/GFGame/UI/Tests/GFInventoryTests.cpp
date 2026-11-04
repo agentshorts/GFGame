@@ -74,7 +74,7 @@ bool FGFInventoryModalTest::RunTest(const FString&)
 	const FGFHudModalRules::FState ClosedUnder = Step(Chat, EGFHudModalEvent::CloseInventory);
 	TestTrue(TEXT("Closing the bag under chat leaves chat up over the game"), ClosedUnder.Modal == EGFHudModal::Chat && ClosedUnder.Restore == EGFHudModal::Game);
 
-	TestTrue(TEXT("The elder replaces the bag"), Step(Open, EGFHudModalEvent::OpenElder).Modal == EGFHudModal::Elder);
+	TestTrue(TEXT("A late elder reply does not replace the bag"), Step(Open, EGFHudModalEvent::OpenElder).Modal == EGFHudModal::Inventory);
 	TestTrue(TEXT("The hub prompt replaces the bag"), Step(Open, EGFHudModalEvent::OpenConfirm).Modal == EGFHudModal::PauseConfirm);
 	TestTrue(TEXT("Teardown closes it"), Step(Open, EGFHudModalEvent::Reset).Modal == EGFHudModal::Game);
 	TestTrue(TEXT("Aim settings cannot open over the bag"), Step(Open, EGFHudModalEvent::OpenAim).Modal == EGFHudModal::Inventory);
