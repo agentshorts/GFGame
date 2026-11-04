@@ -1152,13 +1152,15 @@ bool FGFTownsV2MineBreakTest::RunTest(const FString&)
 	PS->Magic->SetFieldHeld(false);
 	TestTrue(TEXT("Sparkcone fells the ash tree"), W.Magic->IsTownNodeDepleted(Ash));
 	TestEqual(TEXT("The ash tree pays a plank"), PS->Inventory->GetCount(TEXT("WoodPlank")), 2);
-	UMaterialInterface* Body = House->GetMaterial(0);
+	UMaterialInterface* CrystalMat = House->GetMaterial(1);
 	Hold(PS, W.Magic, HouseStand.At, HouseStand.Impact, 1.6f);
 	PS->Magic->SetFieldHeld(false);
 	TestTrue(TEXT("Sparkcone spends the house crystal"), W.Magic->IsTownNodeDepleted(House));
-	TestFalse(TEXT("The house stays visible"), House->GetOwner()->IsHidden());
-	TestTrue(TEXT("The house still blocks"), House->GetOwner()->GetActorEnableCollision());
-	TestEqual(TEXT("House slot 1 wears the body material"), House->GetMaterial(1), Body);
+	// Decision #321: a house is a structure piece, so its crystal break takes the whole piece down.
+	TestTrue(TEXT("The house is a structure piece"), W.Magic->IsTownNodePiece(House));
+	TestTrue(TEXT("The house piece is destroyed"), House->GetOwner()->IsHidden());
+	TestFalse(TEXT("The gap does not block"), House->GetOwner()->GetActorEnableCollision());
+	TestEqual(TEXT("A destroyed piece leaves slot 1 alone"), House->GetMaterial(1), CrystalMat);
 	TestEqual(TEXT("The house pays a crystal"), PS->Inventory->GetCount(TEXT("Crystal")), 1);
 	for (UStaticMeshComponent* Prop : { Lava, Crane })
 	{
