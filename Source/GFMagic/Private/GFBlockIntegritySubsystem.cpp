@@ -1135,6 +1135,11 @@ bool UGFBlockIntegritySubsystem::IsTownNodeDepleted(const UPrimitiveComponent* C
 	return TownNodes && TownNodes->IsDepleted(Component);
 }
 
+bool UGFBlockIntegritySubsystem::IsTownNodePiece(const UPrimitiveComponent* Component) const
+{
+	return TownNodes && TownNodes->IsPiece(Component);
+}
+
 float UGFBlockIntegritySubsystem::GetTownRegrowSeconds() const
 {
 	return TownNodes ? TownNodes->GetRegrowSeconds() : FGFTownNodeRules::RegrowSeconds;

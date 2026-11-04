@@ -5,6 +5,7 @@
 //  - Hits: complex traces onto real triangles. Crystal-slot faces and trees are allowed; the main slot, walls,
 //    inlay pieces (mosaic, planter, fountain, canal) and the power span are refused.
 //  - Damage, Break, Regrow, Spells: allowed hits spend Log / CrystalVein integrity, drop through the magnet, and regrow.
+//  - WallCrystal (Decision #321): crystal set into a house or town wall destroys that piece, raises the Break FX and regrows.
 // The networked case is GFGame.Net.TownMineable (needs the editor).
 #include "Misc/AutomationTest.h"
 #include "GFMineable.h"
@@ -34,6 +35,7 @@
 #include "StaticMeshAttributes.h"
 #include "StaticMeshResources.h"
 #include "GFNetTestUtils.h"
+#include "GFMiningFX.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -1387,6 +1389,299 @@ bool FGFNetTownMineTest::RunTest(const FString&)
 			&& *SawRibbon;
 	});
 	Stop(Ctx);
+	return true;
+}
+
+// ---------- Decision #321: crystal in houses and town walls destroys the piece ----------
+
+namespace GFWallCrystalTest
+{
+	using namespace GFTownMineTest;
+
+	struct FFXListen
+	{
+		TArray<FGFMiningFXEvent> Events;
+		FDelegateHandle Handle;
+		FFXListen() { Handle = FGFMiningFX::OnPlayed().AddLambda([this](const FGFMiningFXEvent& E) { Events.Add(E); }); }
+		~FFXListen() { FGFMiningFX::OnPlayed().Remove(Handle); }
+		int32 Count(EGFMiningFXKind Kind, EGFMiningFXKit Kit) const
+		{
+			int32 N = 0;
+			for (const FGFMiningFXEvent& E : Events)
+			{
+				N += (E.Kind == Kind && E.Kit == Kit) ? 1 : 0;
+			}
+			return N;
+		}
+	};
+
+	struct FTakenListen
+	{
+		TArray<FString> Keys;
+		FDelegateHandle Handle;
+		FTakenListen()
+		{
+			Handle = FGFTownNodeEvents::OnCrystalTaken().AddLambda([this](UWorld*, const FString& Key, FVector, const TArray<FString>&) { Keys.Add(Key); });
+		}
+		~FTakenListen() { FGFTownNodeEvents::OnCrystalTaken().Remove(Handle); }
+	};
+
+	static bool CrystalFace(const FHitResult& Hit)
+	{
+		FString Why;
+		return FGFMineable::CanMineHit(Hit, Why) && FGFMineable::SlotFromHit(Hit) == 1;
+	}
+
+	static bool MainFace(const FHitResult& Hit)
+	{
+		FString Why;
+		return FGFMineable::SlotFromHit(Hit) == 0 && !FGFMineable::CanMineHit(Hit, Why);
+	}
+
+	static const TCHAR* const Pieces[] = {
+		TEXT("SM_Town_Rime_Wall_Straight"), TEXT("SM_Town_Rime_Wall_Corner"), TEXT("SM_Town_Rime_Wall_Gate"),
+		TEXT("SM_Town_House_Small"), TEXT("SM_Town_House_Med"), TEXT("SM_Town_House_Large"),
+		TEXT("SM_Town_Cinderwright_House_Small"), TEXT("SM_Town_Cinderwright_House_Med"), TEXT("SM_Town_Cinderwright_House_Large"),
+		TEXT("SM_Town_Rime_House_Small"), TEXT("SM_Town_Rime_House_Med"), TEXT("SM_Town_Rime_House_Large"),
+		TEXT("SM_Town_Homestead_StarterHouse_Cinderwright"), TEXT("SM_Town_Homestead_StarterHouse_Rime"), TEXT("SM_Town_Homestead_StarterHouse_Verdant")
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFWallCrystalRulesTest, "GFGame.TownMineable.WallCrystal.Rules", GFTownMineTestFlags)
+bool FGFWallCrystalRulesTest::RunTest(const FString&)
+{
+	using namespace GFWallCrystalTest;
+	for (const TCHAR* Name : Pieces)
+	{
+		TestTrue(FString(Name) + TEXT(" is a structure piece"), FGFTownNodeRules::IsStructurePiece(Name));
+	}
+	for (const TCHAR* Name : { TEXT("SM_Town_LampPost"), TEXT("SM_Town_PowerPylon"), TEXT("SM_Town_CaravanPen"), TEXT("SM_Town_Tower_Spire"),
+		TEXT("SM_Town_Cinderwright_CountingHouse"), TEXT("SM_Town_Cinderwright_Smelter"), TEXT("SM_Town_Rime_Tower_Watch"),
+		TEXT("SM_Town_Homestead_Glasshouse"), TEXT("SM_Town_ForestTree_A"), TEXT("SM_Town_Cinderwright_Stall_Coilback"), TEXT("") })
+	{
+		TestFalse(FString(Name) + TEXT(" keeps the slot swap"), FGFTownNodeRules::IsStructurePiece(Name));
+	}
+
+	// Every crystal-slot row that reads as a piece is one we expect, and every expected piece is a crystal-slot row.
+	TArray<FGFMineableEntry> All;
+	TArray<FGFMineableEntry> V2;
+	FString Err;
+	TestTrue(TEXT("town_v1 whitelist loads"), FGFMineable::LoadTownWhitelist(All, Err));
+	TestTrue(TEXT("towns_v2 whitelist loads"), FGFMineable::LoadTownsV2Whitelist(V2, Err));
+	All.Append(V2);
+	TSet<FName> Want;
+	for (const TCHAR* Name : Pieces)
+	{
+		Want.Add(FName(Name));
+	}
+	TSet<FName> Got;
+	for (const FGFMineableEntry& E : All)
+	{
+		if (FGFTownNodeRules::IsStructurePiece(E.Asset.ToString()))
+		{
+			if (E.Mode == EGFMineableMode::Slots)
+			{
+				Got.Add(E.Asset);
+			}
+			else
+			{
+				TestTrue(E.Asset.ToString() + TEXT(" is a piece without crystal, so it stays refused"), E.Mode == EGFMineableMode::None);
+			}
+		}
+	}
+	for (const FName& Name : Want)
+	{
+		TestTrue(Name.ToString() + TEXT(" is a crystal-slot piece in the whitelist"), Got.Contains(Name));
+	}
+	TestEqual(TEXT("No unexpected crystal-slot pieces"), Got.Num(), Want.Num());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFWallCrystalVisualTest, "GFGame.TownMineable.WallCrystal.Visual", GFTownMineTestFlags)
+bool FGFWallCrystalVisualTest::RunTest(const FString&)
+{
+	using namespace GFWallCrystalTest;
+	FMineWorld W;
+	if (!W.Open(*this, TEXT("GFWallCrystalVisual")))
+	{
+		return false;
+	}
+	UStaticMeshComponent* Wall = PlaceAsset(W, TEXT("SM_Town_Rime_Wall_Straight"), FVector::ZeroVector);
+	if (!TestNotNull(TEXT("Rime wall"), Wall))
+	{
+		return false;
+	}
+	AActor* Actor = Wall->GetOwner();
+	UMaterialInterface* Slot1 = Wall->GetMaterial(1);
+	FGFTownNodeRules::ApplyVisual(Actor, true, true, true);
+	TestTrue(TEXT("A spent piece hides"), Actor->IsHidden());
+	TestFalse(TEXT("A spent piece stops blocking"), Actor->GetActorEnableCollision());
+	TestEqual(TEXT("A spent piece does not swap slot 1"), Wall->GetMaterial(1), Slot1);
+	FGFTownNodeRules::ApplyVisual(Actor, false, true, true);
+	TestFalse(TEXT("A restored piece shows"), Actor->IsHidden());
+	TestTrue(TEXT("A restored piece blocks"), Actor->GetActorEnableCollision());
+
+	FGFTownNodeRules::ApplyVisual(Actor, true, true, false);
+	TestFalse(TEXT("A plain crystal prop stays visible"), Actor->IsHidden());
+	TestTrue(TEXT("A plain crystal prop still blocks"), Actor->GetActorEnableCollision());
+	FGFTownNodeRules::ApplyVisual(Actor, false, true, false);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFWallCrystalBreakTest, "GFGame.TownMineable.WallCrystal.Break", GFTownMineTestFlags)
+bool FGFWallCrystalBreakTest::RunTest(const FString&)
+{
+	using namespace GFWallCrystalTest;
+	FMineWorld W;
+	if (!W.Open(*this, TEXT("GFWallCrystalBreak")))
+	{
+		return false;
+	}
+	UStaticMeshComponent* Wall = PlaceAsset(W, TEXT("SM_Town_Rime_Wall_Straight"), FVector::ZeroVector);
+	UStaticMeshComponent* House = PlaceAsset(W, TEXT("SM_Town_House_Small"), FVector(8000, 0, 0));
+	UStaticMeshComponent* Lamp = PlaceAsset(W, TEXT("SM_Town_LampPost"), FVector(16000, 0, 0));
+	if (!TestNotNull(TEXT("Rime wall"), Wall) || !TestNotNull(TEXT("House"), House) || !TestNotNull(TEXT("Lamp"), Lamp))
+	{
+		return false;
+	}
+	TestEqual(TEXT("A wall crystal starts at crystal-vein integrity"), W.Magic->GetTownNodeRemaining(Wall), 200.f);
+	const FStand WallStand = StandOutside(W.World, Wall, 200.f, CrystalFace);
+	const FStand HouseStand = StandOutside(W.World, House, 200.f, CrystalFace);
+	const FStand LampStand = StandOutside(W.World, Lamp, 200.f, CrystalFace);
+	if (!TestTrue(TEXT("Wall crystal face"), WallStand.bOk) || !TestTrue(TEXT("House crystal face"), HouseStand.bOk) || !TestTrue(TEXT("Lamp crystal face"), LampStand.bOk))
+	{
+		return false;
+	}
+	AGFMagicPlayerState* PS = Digger(W.World, TEXT("Digger"), WallStand.At);
+	if (!TestNotNull(TEXT("Digger"), PS))
+	{
+		return false;
+	}
+
+	int32 Crystals = 0;
+	for (UStaticMeshComponent* Piece : { Wall, House })
+	{
+		const FStand& Stand = Piece == Wall ? WallStand : HouseStand;
+		const FString Label = Piece == Wall ? TEXT("Wall") : TEXT("House");
+		FFXListen FX;
+		FTakenListen Taken;
+		Hold(PS, W.Magic, Stand.At, Stand.Impact, 2.f);
+		PS->Magic->SetFieldHeld(false);
+		TestTrue(Label + TEXT(": the crystal is spent"), W.Magic->IsTownNodeDepleted(Piece));
+		TestTrue(Label + TEXT(": the node is a piece"), W.Magic->IsTownNodePiece(Piece));
+		TestTrue(Label + TEXT(": the piece is destroyed"), Piece->GetOwner()->IsHidden());
+		TestFalse(Label + TEXT(": the gap does not block"), Piece->GetOwner()->GetActorEnableCollision());
+		TestEqual(Label + TEXT(": one crystal paid"), PS->Inventory->GetCount(TEXT("Crystal")), ++Crystals);
+		TestEqual(Label + TEXT(": one Break FX with the crystal kit"), FX.Count(EGFMiningFXKind::Break, EGFMiningFXKit::Crystal), 1);
+		TestTrue(Label + TEXT(": hit FX played on the way"), FX.Count(EGFMiningFXKind::Hit, EGFMiningFXKit::Crystal) > 0);
+		TestEqual(Label + TEXT(": crystal taken broadcast once"), Taken.Keys.Num(), 1);
+
+		Hold(PS, W.Magic, Stand.At, Stand.Impact, 0.5f);
+		PS->Magic->SetFieldHeld(false);
+		TestEqual(Label + TEXT(": a destroyed piece does not pay twice"), PS->Inventory->GetCount(TEXT("Crystal")), Crystals);
+	}
+
+	bool bRelayPiece = false;
+	for (TActorIterator<AGFTownMineRelay> It(W.World); It; ++It)
+	{
+		for (const FGFTownNodeRep& Node : It->GetNodes())
+		{
+			if (Node.Key == FGFTownNodeRules::KeyFor(Wall))
+			{
+				bRelayPiece = Node.bPiece && Node.bCrystal && Node.bDepleted;
+			}
+		}
+	}
+	TestTrue(TEXT("The relay tells clients the wall piece is down"), bRelayPiece);
+
+	// Control: a lamp post crystal keeps the prop, as before.
+	Hold(PS, W.Magic, LampStand.At, LampStand.Impact, 2.f);
+	PS->Magic->SetFieldHeld(false);
+	TestTrue(TEXT("Lamp crystal is spent"), W.Magic->IsTownNodeDepleted(Lamp));
+	TestFalse(TEXT("Lamp is not a piece"), W.Magic->IsTownNodePiece(Lamp));
+	TestFalse(TEXT("Lamp stays visible"), Lamp->GetOwner()->IsHidden());
+	TestTrue(TEXT("Lamp still blocks"), Lamp->GetOwner()->GetActorEnableCollision());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFWallCrystalMainFaceTest, "GFGame.TownMineable.WallCrystal.MainFace", GFTownMineTestFlags)
+bool FGFWallCrystalMainFaceTest::RunTest(const FString&)
+{
+	using namespace GFWallCrystalTest;
+	FMineWorld W;
+	if (!W.Open(*this, TEXT("GFWallCrystalMainFace")))
+	{
+		return false;
+	}
+	UStaticMeshComponent* Wall = PlaceAsset(W, TEXT("SM_Town_Rime_Wall_Corner"), FVector::ZeroVector);
+	UStaticMeshComponent* Plain = PlaceAsset(W, TEXT("SM_Town_Wall_Straight"), FVector(8000, 0, 0));
+	if (!TestNotNull(TEXT("Rime wall"), Wall) || !TestNotNull(TEXT("Plain wall"), Plain))
+	{
+		return false;
+	}
+	const FStand Stand = StandOutside(W.World, Wall, 200.f, MainFace);
+	const FStand PlainStand = StandOutside(W.World, Plain, 200.f, [](const FHitResult&) { return true; });
+	if (!TestTrue(TEXT("Wall main face"), Stand.bOk) || !TestTrue(TEXT("Plain wall face"), PlainStand.bOk))
+	{
+		return false;
+	}
+	AGFMagicPlayerState* PS = Digger(W.World, TEXT("Digger"), Stand.At);
+	if (!TestNotNull(TEXT("Digger"), PS))
+	{
+		return false;
+	}
+	FFXListen FX;
+	// Short hold: the cone spreads, and a full crystal break takes about 1.6 s even if a side ray grazes the lining.
+	Hold(PS, W.Magic, Stand.At, Stand.Impact, 0.5f);
+	PS->Magic->SetFieldHeld(false);
+	TestFalse(TEXT("Stone alone never spends the wall"), W.Magic->IsTownNodeDepleted(Wall));
+	TestFalse(TEXT("Stone alone never destroys the wall"), Wall->GetOwner()->IsHidden());
+	Hold(PS, W.Magic, PlainStand.At, PlainStand.Impact, 0.5f);
+	PS->Magic->SetFieldHeld(false);
+	TestEqual(TEXT("A wall without crystal has no node"), W.Magic->GetTownNodeRemaining(Plain), -1.f);
+	TestFalse(TEXT("A wall without crystal stays up"), Plain->GetOwner()->IsHidden());
+	TestEqual(TEXT("No break FX from refused faces"), FX.Count(EGFMiningFXKind::Break, EGFMiningFXKit::Crystal), 0);
+	TestEqual(TEXT("No crystal paid"), PS->Inventory->GetCount(TEXT("Crystal")), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFWallCrystalRegrowTest, "GFGame.TownMineable.WallCrystal.Regrow", GFTownMineTestFlags)
+bool FGFWallCrystalRegrowTest::RunTest(const FString&)
+{
+	using namespace GFWallCrystalTest;
+	FMineWorld W;
+	if (!W.Open(*this, TEXT("GFWallCrystalRegrow")))
+	{
+		return false;
+	}
+	W.Magic->SetTownRegrowSeconds(1.f);
+	UStaticMeshComponent* House = PlaceAsset(W, TEXT("SM_Town_Rime_House_Small"), FVector::ZeroVector);
+	if (!TestNotNull(TEXT("Rime house"), House))
+	{
+		return false;
+	}
+	const FStand Stand = StandOutside(W.World, House, 200.f, CrystalFace);
+	if (!TestTrue(TEXT("House crystal face"), Stand.bOk))
+	{
+		return false;
+	}
+	AGFMagicPlayerState* PS = Digger(W.World, TEXT("Digger"), Stand.At);
+	if (!TestNotNull(TEXT("Digger"), PS))
+	{
+		return false;
+	}
+	Hold(PS, W.Magic, Stand.At, Stand.Impact, 2.f);
+	PS->Magic->SetFieldHeld(false);
+	TestTrue(TEXT("The house is down"), House->GetOwner()->IsHidden());
+	W.Magic->Advance(1.2f);
+	TestFalse(TEXT("The timer rebuilds the house"), W.Magic->IsTownNodeDepleted(House));
+	TestFalse(TEXT("The house shows again"), House->GetOwner()->IsHidden());
+	TestTrue(TEXT("The house blocks again"), House->GetOwner()->GetActorEnableCollision());
+	TestEqual(TEXT("Crystal integrity is full again"), W.Magic->GetTownNodeRemaining(House), 200.f);
+	Hold(PS, W.Magic, Stand.At, Stand.Impact, 2.f);
+	PS->Magic->SetFieldHeld(false);
+	TestTrue(TEXT("It can be taken down again"), House->GetOwner()->IsHidden());
+	TestEqual(TEXT("The second break pays another crystal"), PS->Inventory->GetCount(TEXT("Crystal")), 2);
 	return true;
 }
 

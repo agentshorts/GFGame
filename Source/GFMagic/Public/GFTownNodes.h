@@ -6,7 +6,9 @@
 // (chance 1, count 1, the block's DropItem) rolled by FGFRewards and handed to UGFMagicComponent::ReceiveDrop,
 // which fills GFInventoryComponent and spawns the magnet ribbon. A depleted node regrows after
 // RegrowSeconds (120s, the first stage of Steakroot / Emberpepper / Thornmelon in DT_Plants).
-// A broken tree hides and drops collision. A depleted crystal slot keeps the prop and clears material slot 1.
+// A broken tree hides and drops collision. A depleted crystal slot keeps the prop and clears material slot 1,
+// except on a house or town wall piece (Decision #321): mining its crystal destroys the whole piece, which hides,
+// drops collision and regrows like a tree. The break still raises FGFMiningFX Break with the Crystal kit.
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -48,6 +50,10 @@ struct GFMAGIC_API FGFTownNodeRep
 	/** Crystal slot: the prop stays, only material slot 1 is spent. */
 	UPROPERTY()
 	bool bCrystal = false;
+
+	/** Crystal set into a house or wall piece: breaking it destroys the whole piece. */
+	UPROPERTY()
+	bool bPiece = false;
 
 	/** Set when the actor replicates. Level meshes are found by Key instead. */
 	UPROPERTY()
@@ -99,8 +105,14 @@ struct GFMAGIC_API FGFTownNodeRules
 
 	static AActor* FindActor(UWorld* World, const FString& Key);
 
-	/** Hide a tree, or spend material slot 1 on a crystal prop. bDepleted false puts it back. */
-	static void ApplyVisual(AActor* Actor, bool bDepleted, bool bCrystal);
+	/**
+	 * True for a house or town wall piece (asset name token House, StarterHouse or Wall). Its crystal is mineable
+	 * and breaking it destroys the piece. Civic buildings, stalls, lamps and pylons keep the slot swap.
+	 */
+	static bool IsStructurePiece(const FString& MeshName);
+
+	/** Hide a tree or a structure piece, or spend material slot 1 on a crystal prop. bDepleted false puts it back. */
+	static void ApplyVisual(AActor* Actor, bool bDepleted, bool bCrystal, bool bPiece = false);
 
 	/** Same integrity step as a voxel cell. The wound is the node's hit points. */
 	static FMagicHitOutput ApplyHit(FMagicWound& Wound, const FMagicHitRequest& Request, FName BlockId);
@@ -120,6 +132,9 @@ public:
 	/** Full block integrity before the first hit, the wound after that, 0 when spent, -1 if the mesh cannot be mined. */
 	float Remaining(const UPrimitiveComponent* Component) const;
 	bool IsDepleted(const UPrimitiveComponent* Component) const;
+
+	/** True once a hit opened a node on a house or wall piece. */
+	bool IsPiece(const UPrimitiveComponent* Component) const;
 
 	/** Cone and Frostbind traces. Spray and Rootmaul are globs and swings. */
 	void CastShapes(UGFMagicComponent* Caster, int32& Budget, double Now);
@@ -152,6 +167,7 @@ private:
 		TWeakObjectPtr<AActor> Actor;
 		FName BlockId;
 		bool bCrystal = false;
+		bool bPiece = false;
 		bool bDepleted = false;
 		double RegrowAt = 0.0;
 		FVector LastImpact = FVector::ZeroVector;
@@ -169,7 +185,7 @@ private:
 		TArray<FString> Owners;
 	};
 
-	FNode& FindOrAdd(const UPrimitiveComponent* Component, FName BlockId, bool bCrystal, const FVector& Impact, const FVector& Normal);
+	FNode& FindOrAdd(const UPrimitiveComponent* Component, FName BlockId, bool bCrystal, bool bPiece, const FVector& Impact, const FVector& Normal);
 	const FNode* Find(const UPrimitiveComponent* Component) const;
 	void CommitBreak(FNode& Node, const FMagicBreak& Break, const FVector& At, double Now, UGFMagicComponent* Fallback, TFunctionRef<UGFMagicComponent*(const FString&)> FindCaster);
 	void EmitContact(UWorld* World, const FNode& Node, EGFMagicElement Element, const FVector& Normal, float BeforeRemaining, bool bBroke);

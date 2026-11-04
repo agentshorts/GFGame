@@ -56,6 +56,8 @@ public:
 	/** Log integrity (100) or CrystalVein integrity (200) before a hit, the wound after, 0 when spent, -1 if the mesh is not mineable. */
 	float GetTownNodeRemaining(const UPrimitiveComponent* Component) const;
 	bool IsTownNodeDepleted(const UPrimitiveComponent* Component) const;
+	/** True when a hit opened a node on a house or wall piece whose crystal break destroys the piece. */
+	bool IsTownNodePiece(const UPrimitiveComponent* Component) const;
 	float GetTownRegrowSeconds() const;
 	void SetTownRegrowSeconds(float Seconds);
 
