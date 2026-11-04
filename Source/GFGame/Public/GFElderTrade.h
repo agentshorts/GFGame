@@ -66,7 +66,12 @@ struct GFGAME_API FGFElderTrade
 	/** Payment value for a pile of goods. Buy uses 5/4, sell uses 4/5. */
 	static int32 Quote(EGFElderTradeKind Kind, int64 GoodsValue);
 
-	static FGuid MakeTxId(const FString& PlayerKey, const FString& ElderKey, FName RowId, int32 RequestId);
+	/**
+	 * SessionId is made by the server when the menu opens (AGFPlayerController::OpenElderMenu). RequestId is the
+	 * client's counter, which starts over with every controller, so it only dedupes resends inside one session.
+	 * Without the session the saved ledger would swallow the first trades after a rejoin as AlreadyApplied.
+	 */
+	static FGuid MakeTxId(const FGuid& SessionId, const FString& PlayerKey, const FString& ElderKey, FName RowId, int32 RequestId);
 	static FGuid ChildId(const FGuid& TxId, int32 Salt);
 
 	/**

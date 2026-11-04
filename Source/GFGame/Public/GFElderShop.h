@@ -15,10 +15,10 @@ public:
 	static UGFElderShopSubsystem* Get(const UWorld* World);
 
 	/**
-	 * Server. TxId is hash(player key, elder key, row, request id).
-	 * OutWhy is a toast when nothing was traded.
+	 * Server. TxId is hash(menu session id, player key, elder key, row, request id).
+	 * OutWhy is a toast when nothing was traded. An invalid session id is refused.
 	 */
-	EGFTxResult Trade(const FString& PlayerKey, const FString& ElderKey, FName TownId, FName RowId, int32 RequestId, FString& OutWhy);
+	EGFTxResult Trade(const FGuid& SessionId, const FString& PlayerKey, const FString& ElderKey, FName TownId, FName RowId, int32 RequestId, FString& OutWhy);
 
 private:
 	UPROPERTY()

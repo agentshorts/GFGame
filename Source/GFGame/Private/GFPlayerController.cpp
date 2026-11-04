@@ -627,6 +627,7 @@ void AGFPlayerController::OpenElderMenu(AGFElder* Elder)
 		return;
 	}
 	ElderSession = Elder;
+	ElderSessionId = FGuid::NewGuid();
 	ElderPhase = FGFElderSessionRules::Transition(ElderPhase, EGFElderSessionEvent::Opened);
 	if (IsLocalController())
 	{
@@ -665,6 +666,7 @@ void AGFPlayerController::ServerCloseElderMenu_Implementation()
 {
 	ElderPhase = FGFElderSessionRules::Transition(ElderPhase, EGFElderSessionEvent::Closed);
 	ElderSession.Reset();
+	ElderSessionId.Invalidate();
 }
 
 bool AGFPlayerController::ElderMenuAllows(FString& OutWhy) const
@@ -796,7 +798,7 @@ void AGFPlayerController::ServerElderTrade_Implementation(FName RowId, int32 Req
 		return;
 	}
 	FString TradeWhy;
-	const EGFTxResult Result = Shop->Trade(PS->PlayerKey, Elder->LedgerKey(), Elder->TownId, RowId, RequestId, TradeWhy);
+	const EGFTxResult Result = Shop->Trade(ElderSessionId, PS->PlayerKey, Elder->LedgerKey(), Elder->TownId, RowId, RequestId, TradeWhy);
 	if (Result != EGFTxResult::Applied && Result != EGFTxResult::AlreadyApplied)
 	{
 		ShowElderToast(TradeWhy.IsEmpty() ? FString(TEXT("The trade did not go through.")) : TradeWhy);

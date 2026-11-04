@@ -44,7 +44,7 @@ UGFElderShopSubsystem* UGFElderShopSubsystem::Get(const UWorld* World)
 	return World ? World->GetSubsystem<UGFElderShopSubsystem>() : nullptr;
 }
 
-EGFTxResult UGFElderShopSubsystem::Trade(const FString& PlayerKey, const FString& ElderKey, FName TownId, FName RowId, int32 RequestId, FString& OutWhy)
+EGFTxResult UGFElderShopSubsystem::Trade(const FGuid& SessionId, const FString& PlayerKey, const FString& ElderKey, FName TownId, FName RowId, int32 RequestId, FString& OutWhy)
 {
 	OutWhy.Reset();
 	UWorld* World = GetWorld();
@@ -59,6 +59,11 @@ EGFTxResult UGFElderShopSubsystem::Trade(const FString& PlayerKey, const FString
 		OutWhy = TEXT("The shop is closed.");
 		return EGFTxResult::UnknownAccount;
 	}
+	if (!SessionId.IsValid())
+	{
+		OutWhy = TEXT("The elder is not listening.");
+		return EGFTxResult::UnknownAccount;
+	}
 	const FGFElderTradeCatalog Catalog = FGFElderTradeCatalog::Load();
 	const FGFElderTradeListing* Row = Catalog.Find(RowId);
 	if (!Row || Row->TownId != TownId)
@@ -69,6 +74,6 @@ EGFTxResult UGFElderShopSubsystem::Trade(const FString& PlayerKey, const FString
 	FElderAccounts Accounts;
 	Accounts.GS = GS;
 	Accounts.Stock = &Stock;
-	const FGuid TxId = FGFElderTrade::MakeTxId(PlayerKey, ElderKey, RowId, RequestId);
+	const FGuid TxId = FGFElderTrade::MakeTxId(SessionId, PlayerKey, ElderKey, RowId, RequestId);
 	return FGFElderTrade::Apply(GS->Ledger, Accounts, TxId, PlayerKey, ElderKey, Row->Give, Row->Get, OutWhy);
 }

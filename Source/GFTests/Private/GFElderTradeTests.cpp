@@ -133,9 +133,10 @@ bool FGFElderTradeIdempotentTest::RunTest(const FString&)
 	const FName RowId = TEXT("Rime_Fiber");
 	const TArray<FGFItemStack> Give = { FGFItemStack(TEXT("Wood"), 5) };
 	const TArray<FGFItemStack> Get = { FGFItemStack(TEXT("Fiber"), 4) };
-	const FGuid TxId = FGFElderTrade::MakeTxId(Player, Elder, RowId, 1);
-	TestTrue(TEXT("TxId is stable"), TxId == FGFElderTrade::MakeTxId(Player, Elder, RowId, 1));
-	TestFalse(TEXT("A new request is a new TxId"), TxId == FGFElderTrade::MakeTxId(Player, Elder, RowId, 2));
+	const FGuid Session(1, 2, 3, 4);
+	const FGuid TxId = FGFElderTrade::MakeTxId(Session, Player, Elder, RowId, 1);
+	TestTrue(TEXT("TxId is stable"), TxId == FGFElderTrade::MakeTxId(Session, Player, Elder, RowId, 1));
+	TestFalse(TEXT("A new request is a new TxId"), TxId == FGFElderTrade::MakeTxId(Session, Player, Elder, RowId, 2));
 	TestTrue(TEXT("TxId is valid"), TxId.IsValid());
 	TestFalse(TEXT("Mint child is not the parent"), FGFElderTrade::ChildId(TxId, 1) == TxId);
 	TestFalse(TEXT("Get child is not the mint child"), FGFElderTrade::ChildId(TxId, 1) == FGFElderTrade::ChildId(TxId, 2));
@@ -194,7 +195,7 @@ bool FGFElderTradeIdempotentTest::RunTest(const FString&)
 		TestEqual(TEXT("Mint stays"), Ledger.GetMinted(TEXT("Fiber")), int64(4));
 
 		Accounts.Accounts[Player].Add(TEXT("Wood"), 5);
-		const FGuid Again = FGFElderTrade::MakeTxId(Player, Elder, RowId, 2);
+		const FGuid Again = FGFElderTrade::MakeTxId(Session, Player, Elder, RowId, 2);
 		Why.Reset();
 		TestTrue(TEXT("A new request pays again"), FGFElderTrade::Apply(Ledger, Accounts, Again, Player, Elder, Give, Get, Why) == EGFTxResult::Applied);
 		TestEqual(TEXT("Second fiber pile"), Accounts.Accounts[Player].GetCount(TEXT("Fiber")), 8);
@@ -213,7 +214,7 @@ bool FGFElderTradeIdempotentTest::RunTest(const FString&)
 		const int64 WoodBefore = CountAll(Accounts, TEXT("Wood"));
 		const int64 FiberBefore = CountAll(Accounts, TEXT("Fiber"));
 		FString Why;
-		const FGuid StockedId = FGFElderTrade::MakeTxId(Player, Elder, RowId, 7);
+		const FGuid StockedId = FGFElderTrade::MakeTxId(Session, Player, Elder, RowId, 7);
 		TestTrue(TEXT("Stocked elder needs no mint"), FGFElderTrade::Apply(Ledger, Accounts, StockedId, Player, Elder, Give, Get, Why) == EGFTxResult::Applied);
 		TestEqual(TEXT("Wood still conserved"), CountAll(Accounts, TEXT("Wood")), WoodBefore);
 		TestEqual(TEXT("Fiber still conserved"), CountAll(Accounts, TEXT("Fiber")), FiberBefore);
@@ -222,6 +223,47 @@ bool FGFElderTradeIdempotentTest::RunTest(const FString&)
 		TestEqual(TEXT("Player took the fiber"), Accounts.Accounts[Player].GetCount(TEXT("Fiber")), 4);
 		TestEqual(TEXT("Elder took the wood"), Accounts.Accounts[Elder].GetCount(TEXT("Wood")), 5);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFElderTradeSessionScopedTest, "GFGame.Elder.Trade.SessionScopedTxId", GFElderTradeTest::Flags)
+bool FGFElderTradeSessionScopedTest::RunTest(const FString&)
+{
+	using namespace GFElderTradeTest;
+	// #304 pass 2: the client request counter starts over with every controller, but the ledger (saved) remembers
+	// every applied id. The menu session id keeps a rejoin's "request 1" from matching last session's "request 1".
+	const FString Player = TEXT("P");
+	const FString Elder = TEXT("elder:Rime");
+	const FName RowId = TEXT("Rime_Fiber");
+	const TArray<FGFItemStack> Give = { FGFItemStack(TEXT("Wood"), 5) };
+	const TArray<FGFItemStack> Get = { FGFItemStack(TEXT("Fiber"), 4) };
+	const FGuid Before = FGuid::NewGuid();
+	const FGuid After = FGuid::NewGuid();
+	TestFalse(TEXT("same request in a new session is a new id"),
+		FGFElderTrade::MakeTxId(Before, Player, Elder, RowId, 1) == FGFElderTrade::MakeTxId(After, Player, Elder, RowId, 1));
+	TestTrue(TEXT("same request in the same session is the same id"),
+		FGFElderTrade::MakeTxId(Before, Player, Elder, RowId, 1) == FGFElderTrade::MakeTxId(Before, Player, Elder, RowId, 1));
+
+	FGFMapLedgerAccounts Accounts;
+	FGFInventory Pocket;
+	Pocket.Add(TEXT("Wood"), 10);
+	Accounts.Accounts.Add(Player, Pocket);
+	FGFTransferLedger Ledger;
+	FString Why;
+	TestTrue(TEXT("first session trade applies"),
+		FGFElderTrade::Apply(Ledger, Accounts, FGFElderTrade::MakeTxId(Before, Player, Elder, RowId, 1), Player, Elder, Give, Get, Why) == EGFTxResult::Applied);
+
+	// The ledger survives (save, rejoin); the counter does not. Request 1 again, new session.
+	FGFTransferLedger Reloaded = Ledger;
+	Reloaded.RebuildIndex();
+	Why.Reset();
+	TestTrue(TEXT("rejoin trade applies instead of AlreadyApplied"),
+		FGFElderTrade::Apply(Reloaded, Accounts, FGFElderTrade::MakeTxId(After, Player, Elder, RowId, 1), Player, Elder, Give, Get, Why) == EGFTxResult::Applied);
+	TestEqual(TEXT("both trades paid out"), Accounts.Accounts[Player].GetCount(TEXT("Fiber")), 8);
+	Why.Reset();
+	TestTrue(TEXT("a resend inside the new session still dedupes"),
+		FGFElderTrade::Apply(Reloaded, Accounts, FGFElderTrade::MakeTxId(After, Player, Elder, RowId, 1), Player, Elder, Give, Get, Why) == EGFTxResult::AlreadyApplied);
+	TestEqual(TEXT("no third pile"), Accounts.Accounts[Player].GetCount(TEXT("Fiber")), 8);
 	return true;
 }
 

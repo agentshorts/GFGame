@@ -23,9 +23,9 @@ int32 FGFElderTrade::Quote(EGFElderTradeKind Kind, int64 GoodsValue)
 	return RoundRatio(GoodsValue, 5, 4);
 }
 
-FGuid FGFElderTrade::MakeTxId(const FString& PlayerKey, const FString& ElderKey, FName RowId, int32 RequestId)
+FGuid FGFElderTrade::MakeTxId(const FGuid& SessionId, const FString& PlayerKey, const FString& ElderKey, FName RowId, int32 RequestId)
 {
-	const FString Seed = FString::Printf(TEXT("%s|%s|%s|%d"), *PlayerKey, *ElderKey, *RowId.ToString(), RequestId);
+	const FString Seed = FString::Printf(TEXT("%s|%s|%s|%s|%d"), *SessionId.ToString(EGuidFormats::Digits), *PlayerKey, *ElderKey, *RowId.ToString(), RequestId);
 	const uint32 A = FCrc::StrCrc32(*Seed);
 	const uint32 B = FCrc::StrCrc32(*Seed, 0x811C9DC5u);
 	const uint32 C = FCrc::StrCrc32(*Seed, 0x01000193u);

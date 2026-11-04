@@ -170,6 +170,8 @@ protected:
 
 	EGFElderSession ElderPhase = EGFElderSession::Closed;
 	TWeakObjectPtr<AGFElder> ElderSession;
+	/** Server. New for every menu open, so trade ids from an earlier session or controller never collide. */
+	FGuid ElderSessionId;
 	int32 ElderRequestSerial = 0;
 
 	void SubmitReturn(bool bConfirmed, bool bFromMenu);
