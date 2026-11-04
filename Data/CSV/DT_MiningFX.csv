@@ -11,7 +11,7 @@ Crack_Any,Crack,Any,Any,/Game/FX/Mining/NS_Mine_Hit.NS_Mine_Hit
 Break_Any,Break,Any,Any,/Game/FX/Mining/NS_Mine_Hit.NS_Mine_Hit
 Break_Tree,Break,Any,Tree,/Game/FX/Mining/NS_Mine_Break_Wood.NS_Mine_Break_Wood
 Break_Crystal,Break,Any,Crystal,/Game/FX/Mining/NS_Mine_Break_Crystal.NS_Mine_Break_Crystal
-Beam_Spark,Beam,Spark,Any,/Game/FX/Mining/NS_Sparkcone.NS_Sparkcone
+Beam_Spark,Beam,Spark,Any,/Game/FX/Mining/NS_Sparkcone_v2.NS_Sparkcone_v2
 Beam_Magma,Beam,Magma,Any,/Game/FX/Mining/NS_MagmaSpray.NS_MagmaSpray
 Beam_Frost,Beam,Frost,Any,/Game/FX/Mining/NS_Frostbind_Beam.NS_Frostbind_Beam
 Beam_Root,Beam,Root,Any,/Game/FX/Mining/NS_Rootmaul_Hit.NS_Rootmaul_Hit
