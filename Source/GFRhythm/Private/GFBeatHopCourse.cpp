@@ -78,6 +78,8 @@ namespace GFBeatHopCourse
 	static const FName AnimLandCatch = TEXT("Player.Land_Catch");
 	static const FName AnimRunFast = TEXT("Player.Run_Fast");
 	static const FName AnimVictory = TEXT("Player.Victory");
+	/** Beat Hop's claim on UGFSimpleAnimComponent lapses this long after DriveAnims stops renewing it. */
+	static constexpr float HopLeaseSeconds = 0.2f;
 	static constexpr float StrafeSpeedCms = 120.f;
 	static constexpr float FallBelowTopCm = 60.f;
 	static constexpr float MoveSpeedCms = 20.f;
@@ -2358,7 +2360,9 @@ void AGFBeatHopCourse::DriveAnims(double Now)
 	const bool bDrawAnims = GetNetMode() != NM_DedicatedServer;
 	const double HalfWidth = FMath::Max(1, NumLanes) * LaneWidthCm * 0.5;
 
-	auto Play = [](USkeletalMeshComponent* Mesh, FName Key, float Rate) -> float
+	// Beat Hop owns the mesh through a short lease (renewed every tick below). An emote, fist scope or ferry seat above
+	// it keeps its pose; the hop clip shows again when they release. Pawns without SimpleAnim get the clip directly.
+	auto Play = [](UGFSimpleAnimComponent* Simple, USkeletalMeshComponent* Mesh, FName Key, float Rate) -> float
 	{
 		const FGFAnimMapRow* Row = FGFAnimMap::Find(Key);
 		UAnimSequenceBase* Clip = Row ? FGFAnimMap::Load(Key) : nullptr;
@@ -2366,9 +2370,16 @@ void AGFBeatHopCourse::DriveAnims(double Now)
 		{
 			return 0.f;
 		}
-		Mesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-		Mesh->PlayAnimation(Clip, Row->bLoop);
-		Mesh->SetPlayRate(Rate);
+		if (Simple)
+		{
+			Simple->ClaimClip(EGFAnimOwner::BeatHop, Key, Row->bLoop, GFBeatHopCourse::HopLeaseSeconds, Rate);
+		}
+		else
+		{
+			Mesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+			Mesh->PlayAnimation(Clip, Row->bLoop);
+			Mesh->SetPlayRate(Rate);
+		}
 		return Row->bLoop ? 0.f : Clip->GetPlayLength() / FMath::Max(Rate, 0.01f);
 	};
 
@@ -2417,7 +2428,7 @@ void AGFBeatHopCourse::DriveAnims(double Now)
 				H->Key = Key;
 				return;
 			}
-			const float Len = Play(Mesh, Key, Rate);
+			const float Len = Play(Simple, Mesh, Key, Rate);
 			H->Key = Key;
 			H->OneShotUntil = bOneShot ? Now + Len : 0.0;
 		};
@@ -2428,13 +2439,13 @@ void AGFBeatHopCourse::DriveAnims(double Now)
 			const FName Want = ClipForViewer(true, H->Key, AnimRep->Clip);
 			if (Want != H->Key)
 			{
-				const float Len = bDrawAnims ? Play(Mesh, Want, AnimRep->PlayRate) : 0.f;
+				const float Len = bDrawAnims ? Play(Simple, Mesh, Want, AnimRep->PlayRate) : 0.f;
 				H->Key = Want;
 				H->OneShotUntil = AnimRep->bOneShot ? Now + Len : 0.0;
 			}
 			if (Simple && !H->Key.IsNone())
 			{
-				Simple->PauseFor(0.2f);
+				Simple->RenewClaim(EGFAnimOwner::BeatHop, HopLeaseSeconds);
 			}
 			H->bWasFalling = bFalling;
 			continue;
@@ -2452,11 +2463,15 @@ void AGFBeatHopCourse::DriveAnims(double Now)
 				H->bCaught = false;
 				H->Key = NAME_None;
 				H->bWasFalling = Move->IsFalling();
+				if (Simple)
+				{
+					Simple->ReleaseClaim(EGFAnimOwner::BeatHop);
+				}
 				continue; // released: SimpleAnim idles
 			}
 			if (Simple)
 			{
-				Simple->PauseFor(0.2f);
+				Simple->RenewClaim(EGFAnimOwner::BeatHop, HopLeaseSeconds);
 			}
 			continue;
 		}
@@ -2556,6 +2571,10 @@ void AGFBeatHopCourse::DriveAnims(double Now)
 			{
 				Set(AnimRunFast, AnimRate(AnimRunFast, Speed), false);
 			}
+			else if (bDrawAnims && Simple)
+			{
+				Simple->SetClaimPlayRate(EGFAnimOwner::BeatHop, AnimRate(AnimRunFast, Speed));
+			}
 			else if (bDrawAnims && Mesh)
 			{
 				Mesh->SetPlayRate(AnimRate(AnimRunFast, Speed));
@@ -2565,11 +2584,15 @@ void AGFBeatHopCourse::DriveAnims(double Now)
 		{
 			// Standing still on the course: SimpleAnim's idle takes over.
 			H->Key = NAME_None;
+			if (Simple)
+			{
+				Simple->ReleaseClaim(EGFAnimOwner::BeatHop);
+			}
 			continue;
 		}
 		if (Simple && !H->Key.IsNone())
 		{
-			Simple->PauseFor(0.2f);
+			Simple->RenewClaim(EGFAnimOwner::BeatHop, HopLeaseSeconds);
 		}
 	}
 	for (auto It = HopAnims.CreateIterator(); It; ++It)
