@@ -9,6 +9,8 @@
 #include "GFSocialComponent.h"
 #include "GFGameState.h"
 #include "GFHUD.h"
+#include "GFHotbarRules.h"
+#include "GFCharacter.h"
 #include "GFPlayerState.h"
 #include "GFTamingComponent.h"
 #include "GFShardhop.h"
@@ -76,11 +78,11 @@ void AGFPlayerController::EnsureHudInput()
 		ShardhopAction = Make(TEXT("IA_GFShardhop"));
 		VillainAction = Make(TEXT("IA_GFVillain"));
 		ReturnAction = Make(TEXT("IA_GFReturn"));
-		PathActions.Reset();
-		for (int32 Slot = 0; Slot < 5; ++Slot)
+		SlotActions.Reset();
+		for (int32 Slot = 0; Slot < FGFHotbarRules::SlotCount; ++Slot)
 		{
-			UInputAction* Action = Make(*FString::Printf(TEXT("IA_GFPath%d"), Slot + 1));
-			PathActions.Add(Action);
+			UInputAction* Action = Make(*FString::Printf(TEXT("IA_GFSlot%d"), Slot + 1));
+			SlotActions.Add(Action);
 		}
 		HudMapping = NewObject<UInputMappingContext>(this, TEXT("IMC_GFHUD"));
 		TArray<FGFMappedKey> Binds;
@@ -93,11 +95,15 @@ void AGFPlayerController::EnsureHudInput()
 			if (Name == TEXT("Shardhop")) return ShardhopAction;
 			if (Name == TEXT("Villain")) return VillainAction;
 			if (Name == TEXT("Return")) return ReturnAction;
-			if (Name == TEXT("Path1") && PathActions.IsValidIndex(0)) return PathActions[0];
-			if (Name == TEXT("Path2") && PathActions.IsValidIndex(1)) return PathActions[1];
-			if (Name == TEXT("Path3") && PathActions.IsValidIndex(2)) return PathActions[2];
-			if (Name == TEXT("Path4") && PathActions.IsValidIndex(3)) return PathActions[3];
-			if (Name == TEXT("Path5") && PathActions.IsValidIndex(4)) return PathActions[4];
+			FString Text = Name.ToString();
+			if (Text.RemoveFromStart(TEXT("Slot")))
+			{
+				const int32 Index = FCString::Atoi(*Text) - 1;
+				if (SlotActions.IsValidIndex(Index))
+				{
+					return SlotActions[Index];
+				}
+			}
 			return nullptr;
 		};
 		for (const FGFMappedKey& Bind : Binds)
@@ -127,13 +133,17 @@ void AGFPlayerController::EnsureHudInput()
 			EIC->BindAction(ShardhopAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleShardhopKey);
 			EIC->BindAction(VillainAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleVillainKey);
 			EIC->BindAction(ReturnAction, ETriggerEvent::Started, this, &AGFPlayerController::HandleReturnKey);
-			if (PathActions.Num() == 5)
+			if (SlotActions.Num() == FGFHotbarRules::SlotCount)
 			{
-				EIC->BindAction(PathActions[0], ETriggerEvent::Started, this, &AGFPlayerController::HandlePath1);
-				EIC->BindAction(PathActions[1], ETriggerEvent::Started, this, &AGFPlayerController::HandlePath2);
-				EIC->BindAction(PathActions[2], ETriggerEvent::Started, this, &AGFPlayerController::HandlePath3);
-				EIC->BindAction(PathActions[3], ETriggerEvent::Started, this, &AGFPlayerController::HandlePath4);
-				EIC->BindAction(PathActions[4], ETriggerEvent::Started, this, &AGFPlayerController::HandlePath5);
+				EIC->BindAction(SlotActions[0], ETriggerEvent::Started, this, &AGFPlayerController::HandleSlot1);
+				EIC->BindAction(SlotActions[1], ETriggerEvent::Started, this, &AGFPlayerController::HandleSlot2);
+				EIC->BindAction(SlotActions[2], ETriggerEvent::Started, this, &AGFPlayerController::HandleSlot3);
+				EIC->BindAction(SlotActions[3], ETriggerEvent::Started, this, &AGFPlayerController::HandleSlot4);
+				EIC->BindAction(SlotActions[4], ETriggerEvent::Started, this, &AGFPlayerController::HandleSlot5);
+				EIC->BindAction(SlotActions[5], ETriggerEvent::Started, this, &AGFPlayerController::HandleSlot6);
+				EIC->BindAction(SlotActions[6], ETriggerEvent::Started, this, &AGFPlayerController::HandleSlot7);
+				EIC->BindAction(SlotActions[7], ETriggerEvent::Started, this, &AGFPlayerController::HandleSlot8);
+				EIC->BindAction(SlotActions[8], ETriggerEvent::Started, this, &AGFPlayerController::HandleSlot9);
 			}
 			bHudActionsBound = true;
 		}
@@ -374,20 +384,40 @@ void AGFPlayerController::HandleShardhopKey()
 	}
 }
 
-void AGFPlayerController::SendPathSlot(int32 Slot)
+void AGFPlayerController::SendSlotKey(int32 KeyIndex)
 {
-	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
-	if (PS && !PS->Progress.bPathChosen)
+	const AGFHUD* HUD = Cast<AGFHUD>(GetHUD());
+	if (HUD && (HUD->IsChatOpen() || FGFHudModalRules::HoldsPawn(HUD->GetHudModal(), HUD->GetHudRestore())))
 	{
-		PS->ServerChoosePath(static_cast<uint8>(Slot));
+		return;
+	}
+	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	const bool bPathPending = PS && !PS->Progress.bPathChosen;
+	switch (FGFHotbarRules::RouteNumberKey(KeyIndex, bPathPending))
+	{
+	case EGFNumberKeyUse::Path:
+		PS->ServerChoosePath(static_cast<uint8>(KeyIndex));
+		break;
+	case EGFNumberKeyUse::Hotbar:
+		if (AGFCharacter* Character = Cast<AGFCharacter>(GetPawn()))
+		{
+			Character->SelectHotbarSlot(KeyIndex);
+		}
+		break;
+	default:
+		break;
 	}
 }
 
-void AGFPlayerController::HandlePath1() { SendPathSlot(0); }
-void AGFPlayerController::HandlePath2() { SendPathSlot(1); }
-void AGFPlayerController::HandlePath3() { SendPathSlot(2); }
-void AGFPlayerController::HandlePath4() { SendPathSlot(3); }
-void AGFPlayerController::HandlePath5() { SendPathSlot(4); }
+void AGFPlayerController::HandleSlot1() { SendSlotKey(0); }
+void AGFPlayerController::HandleSlot2() { SendSlotKey(1); }
+void AGFPlayerController::HandleSlot3() { SendSlotKey(2); }
+void AGFPlayerController::HandleSlot4() { SendSlotKey(3); }
+void AGFPlayerController::HandleSlot5() { SendSlotKey(4); }
+void AGFPlayerController::HandleSlot6() { SendSlotKey(5); }
+void AGFPlayerController::HandleSlot7() { SendSlotKey(6); }
+void AGFPlayerController::HandleSlot8() { SendSlotKey(7); }
+void AGFPlayerController::HandleSlot9() { SendSlotKey(8); }
 
 void AGFPlayerController::HandleVillainKey()
 {

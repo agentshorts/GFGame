@@ -19,6 +19,7 @@
 #include "GFSimpleAnimComponent.h"
 #include "GFFootIKComponent.h"
 #include "GFVoxelWorld.h"
+#include "GFHotbarRules.h"
 #include "GFBlockIntegritySubsystem.h"
 #include "GFMagicComponent.h"
 #include "GFMagicTables.h"
@@ -161,6 +162,7 @@ void AGFCharacter::Tick(float DeltaSeconds)
 		return;
 	}
 	RefreshAimFromProfile();
+	RefreshHotbarSelection();
 	SyncAimContext();
 	GFAimAdvance(AimState, AimTuning, DeltaSeconds);
 	ApplyShoulderOffset();
@@ -820,16 +822,29 @@ bool AGFCharacter::TryRemoveBlock()
 
 void AGFCharacter::CycleBlock(int32 Direction)
 {
+	SelectHotbarSlot(FGFHotbarRules::Cycle(SelectedHotbarSlot, Direction));
+}
+
+void AGFCharacter::SelectHotbarSlot(int32 Slot)
+{
 	bHeldOverride = false;
+	SelectedHotbarSlot = FGFHotbarRules::Wrap(Slot);
 	const TArray<FName> Ids = GetHotbarIds();
-	if (Ids.Num() == 0)
-	{
-		return;
-	}
-	const int32 Current = Ids.IndexOfByKey(SelectedBlock);
-	const int32 Next = Current == INDEX_NONE ? 0 : (Current + Direction + Ids.Num()) % Ids.Num();
-	SelectedBlock = Ids[Next];
+	HotbarSlotSeen = Ids.IsValidIndex(SelectedHotbarSlot) ? Ids[SelectedHotbarSlot] : FName();
+	SelectedBlock = HotbarSlotSeen.IsNone() ? GFAim::FistsId() : HotbarSlotSeen;
 	SyncAimContext();
+}
+
+void AGFCharacter::RefreshHotbarSelection()
+{
+	const TArray<FName> Ids = GetHotbarIds();
+	const FName Now = Ids.IsValidIndex(SelectedHotbarSlot) ? Ids[SelectedHotbarSlot] : FName();
+	if (Now != HotbarSlotSeen)
+	{
+		// The slot changed under the player. Follow it without clearing a weapon or ability override.
+		HotbarSlotSeen = Now;
+		SelectedBlock = Now.IsNone() ? GFAim::FistsId() : Now;
+	}
 }
 
 namespace
@@ -910,15 +925,13 @@ float AGFCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEve
 
 TArray<FName> AGFCharacter::GetHotbarIds() const
 {
+	if (const AGFPlayerState* PS = GetPlayerState<AGFPlayerState>())
+	{
+		return PS->GetHotbarSlots();
+	}
 	TArray<FName> Ids;
-	if (const AGFVoxelWorld* Voxel = FindVoxelWorld())
-	{
-		Ids = Voxel->GetPlaceableBlockIds();
-	}
-	if (Ids.Num() > 0)
-	{
-		Ids.Add(GFAim::FistsId());
-	}
+	Ids.Init(NAME_None, FGFHotbarRules::SlotCount);
+	Ids.Last() = GFAim::FistsId();
 	return Ids;
 }
 

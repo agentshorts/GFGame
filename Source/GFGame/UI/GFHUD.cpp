@@ -29,6 +29,12 @@
 #include "GFTerritorySubsystem.h"
 #include "GFVoxelWorld.h"
 #include "GFMiningRange.h"
+#include "GFHotbarRules.h"
+#include "GFEconomy.h"
+#include "GFItemTypes.h"
+#include "GFMagicComponent.h"
+#include "GFMagicRules.h"
+#include "Misc/PackageName.h"
 #include "Engine/Canvas.h"
 #include "Engine/Texture2D.h"
 #include "Engine/Engine.h"
@@ -1024,31 +1030,206 @@ void AGFHUD::DrawToasts()
 	}
 }
 
+UTexture2D* AGFHUD::SlotIcon(FName SlotId)
+{
+	if (SlotId.IsNone() || SlotId == FGFHotbarRules::FistsId())
+	{
+		return nullptr;
+	}
+	if (const TObjectPtr<UTexture2D>* Hit = IconCache.Find(SlotId))
+	{
+		return Hit->Get();
+	}
+	UTexture2D* Found = nullptr;
+	const APlayerController* PC = GetOwningPlayerController();
+	const AGFPlayerState* PS = PC ? PC->GetPlayerState<AGFPlayerState>() : nullptr;
+	const FName ItemId = PS ? PS->ItemForBlock(SlotId) : SlotId;
+	const UWorld* World = GetWorld();
+	const AGFGameState* GS = World ? World->GetGameState<AGFGameState>() : nullptr;
+	// 1. The item row's own icon. 2. The T_Icon_<Id> convention for the slot id, then for the item it spends.
+	// A miss is cached as null, so a slot without art costs one lookup per session, not one per frame.
+	for (const FName Id : { SlotId, ItemId })
+	{
+		if (Found)
+		{
+			break;
+		}
+		if (const FGFItemRow* Row = GS ? FGFEconomy::FindItem(GS->GetItemTable(), Id) : nullptr)
+		{
+			if (!Row->Icon.IsNull())
+			{
+				Found = Row->Icon.LoadSynchronous();
+			}
+		}
+		if (!Found)
+		{
+			const FString Path = FGFHotbarRules::ConventionIconPath(Id);
+			if (!Path.IsEmpty() && FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(Path)))
+			{
+				Found = LoadObject<UTexture2D>(nullptr, *Path, nullptr, LOAD_Quiet | LOAD_NoWarn);
+			}
+		}
+	}
+	IconCache.Add(SlotId, Found);
+	return Found;
+}
+
+FString AGFHUD::SlotDisplayName(FName SlotId) const
+{
+	if (SlotId.IsNone())
+	{
+		return TEXT("Empty");
+	}
+	if (SlotId == FGFHotbarRules::FistsId())
+	{
+		return TEXT("Hands");
+	}
+	const UWorld* World = GetWorld();
+	const AGFGameState* GS = World ? World->GetGameState<AGFGameState>() : nullptr;
+	if (const FGFItemRow* Row = GS ? FGFEconomy::FindItem(GS->GetItemTable(), SlotId) : nullptr)
+	{
+		if (!Row->DisplayName.IsEmpty())
+		{
+			return Row->DisplayName.ToString();
+		}
+	}
+	return FName::NameToDisplayString(SlotId.ToString(), false);
+}
+
+FLinearColor AGFHUD::SlotSwatch(FName SlotId) const
+{
+	for (TActorIterator<AGFVoxelWorld> It(GetWorld()); It; ++It)
+	{
+		if (const FGFBlockRow* Row = It->FindBlockRow(SlotId))
+		{
+			return Row->DebugColor;
+		}
+		break;
+	}
+	// Not a block: a stable colour per id so two different items never look alike side by side.
+	const uint32 Hash = GetTypeHash(SlotId.ToString());
+	return FLinearColor::MakeFromHSV8(static_cast<uint8>(Hash & 0xFF), 120, 200);
+}
+
 void AGFHUD::DrawHotbar()
 {
 	const AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn());
-	const FName Selected = Character ? Character->SelectedBlock : NAME_None;
-	TArray<FName> Ids = Character ? Character->GetHotbarIds() : TArray<FName>();
-	if (!Character)
+	const APlayerController* PC = GetOwningPlayerController();
+	const AGFPlayerState* PS = PC ? PC->GetPlayerState<AGFPlayerState>() : nullptr;
+	TArray<FName> Ids;
+	if (Character)
 	{
-		for (TActorIterator<AGFVoxelWorld> It(GetWorld()); It; ++It)
-		{
-			Ids = It->GetPlaceableBlockIds();
-			break;
-		}
+		Ids = Character->GetHotbarIds();
 	}
-	const int32 SelectedIndex = Ids.IndexOfByKey(Selected);
+	else if (PS)
+	{
+		Ids = PS->GetHotbarSlots();
+	}
+	if (Ids.Num() == 0)
+	{
+		return;
+	}
+	const int32 SelectedIndex = Character ? Character->GetSelectedHotbarSlot() : INDEX_NONE;
 	const TArray<FGFHUDSlotRect> Slots = GFLayoutHotbar(Ids.Num(), SelectedIndex, Canvas->ClipX, Canvas->ClipY);
 	UFont* Font = HudFont();
+	const FLinearColor Gold(1.f, 0.86f, 0.32f, 1.f);
 	for (int32 Index = 0; Index < Slots.Num(); ++Index)
 	{
 		const FGFHUDSlotRect& Slot = Slots[Index];
-		const FLinearColor Border = Slot.bSelected ? FLinearColor(1.f, 0.92f, 0.45f, 0.95f) : FLinearColor(1.f, 1.f, 1.f, 0.28f);
-		const FLinearColor Fill = Slot.bSelected ? FLinearColor(0.95f, 0.78f, 0.22f, 0.92f) : FLinearColor(0.f, 0.f, 0.f, 0.5f);
-		DrawRect(Border, Slot.X - 2.f, Slot.Y - 2.f, Slot.W + 4.f, Slot.H + 4.f);
-		DrawRect(Fill, Slot.X, Slot.Y, Slot.W, Slot.H);
-		const FLinearColor TextColor = Slot.bSelected ? FLinearColor::Black : FLinearColor::White;
-		DrawText(Ids[Index].ToString(), TextColor, Slot.X + 4.f, Slot.Y + 6.f, Font, Slot.W < 48.f ? 0.55f : 0.75f, false);
+		const FName Id = Ids[Index];
+		// Selected: a thick gold frame, a lifted fill, and the slot pops up 4 px.
+		const float Lift = Slot.bSelected ? 4.f : 0.f;
+		const float Y = Slot.Y - Lift;
+		if (Slot.bSelected)
+		{
+			DrawRect(Gold, Slot.X - 3.f, Y - 3.f, Slot.W + 6.f, Slot.H + 6.f);
+		}
+		else
+		{
+			DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.25f), Slot.X - 1.f, Y - 1.f, Slot.W + 2.f, Slot.H + 2.f);
+		}
+		DrawRect(Slot.bSelected ? FLinearColor(0.16f, 0.13f, 0.06f, 0.92f) : FLinearColor(0.f, 0.f, 0.f, 0.55f), Slot.X, Y, Slot.W, Slot.H);
+
+		const float Pad = FMath::Max(2.f, Slot.W * 0.14f);
+		const float IconSize = FMath::Max(0.f, FMath::Min(Slot.W, Slot.H) - 2.f * Pad);
+		const float IconX = Slot.X + (Slot.W - IconSize) * 0.5f;
+		const float IconY = Y + (Slot.H - IconSize) * 0.5f;
+		const int64 Count = PS ? PS->GetHotbarCount(Id) : -1;
+		const bool bSpent = Count == 0;
+		const FLinearColor Tint = bSpent ? FLinearColor(1.f, 1.f, 1.f, 0.35f) : FLinearColor::White;
+		if (Id == FGFHotbarRules::FistsId())
+		{
+			DrawText(TEXT("Hands"), FLinearColor(0.85f, 0.85f, 0.85f), Slot.X + 6.f, Y + Slot.H * 0.5f - 7.f, Font, Slot.W < 48.f ? 0.5f : 0.7f, false);
+		}
+		else if (!Id.IsNone())
+		{
+			if (UTexture2D* Icon = SlotIcon(Id))
+			{
+				DrawTexture(Icon, IconX, IconY, IconSize, IconSize, 0.f, 0.f, 1.f, 1.f, Tint, BLEND_Translucent);
+			}
+			else
+			{
+				FLinearColor Swatch = SlotSwatch(Id);
+				Swatch.A = bSpent ? 0.35f : 0.95f;
+				DrawRect(Swatch, IconX, IconY, IconSize, IconSize);
+				const FLinearColor Ink = Swatch.GetLuminance() > 0.5f ? FLinearColor::Black : FLinearColor::White;
+				DrawText(FGFHotbarRules::ShortLabel(Id), Ink, IconX + 4.f, IconY + 3.f, Font, Slot.W < 48.f ? 0.55f : 0.8f, false);
+			}
+		}
+		// Key number top left, count bottom right.
+		DrawText(FString::FromInt(Index + 1), Slot.bSelected ? Gold : FLinearColor(1.f, 1.f, 1.f, 0.75f), Slot.X + 3.f, Y + 1.f, Font, 0.55f, false);
+		const FString CountText = FGFHotbarRules::FormatCount(Count);
+		if (!CountText.IsEmpty())
+		{
+			float XL = 0.f;
+			float YL = 10.f;
+			if (Font)
+			{
+				Canvas->TextSize(Font, CountText, XL, YL, 0.65f, 0.65f);
+			}
+			const FLinearColor CountColor = bSpent ? FLinearColor(1.f, 0.45f, 0.4f) : FLinearColor::White;
+			DrawText(CountText, FLinearColor(0.f, 0.f, 0.f, 0.8f), Slot.X + Slot.W - XL - 2.f, Y + Slot.H - YL - 1.f, Font, 0.65f, false);
+			DrawText(CountText, CountColor, Slot.X + Slot.W - XL - 3.f, Y + Slot.H - YL - 2.f, Font, 0.65f, false);
+		}
+	}
+
+	// Band above the slots: the selected item's name, then the element with its swap key.
+	const FString ItemLine = Ids.IsValidIndex(SelectedIndex) ? SlotDisplayName(Ids[SelectedIndex]) : FString();
+	const UGFMagicComponent* Magic = PS ? PS->FindComponentByClass<UGFMagicComponent>() : nullptr;
+	const FGFElementChip Chip = Magic
+		? GFFormatElementChip(Magic->GetElement(), FGFMagicRules::FactionElement(PS->FactionId))
+		: FGFElementChip();
+	const FString ElementLine = Magic ? FString::Printf(TEXT("%s   %s"), *Chip.Label, *Chip.Hint) : FString();
+	auto Measure = [this, Font](const FString& Text)
+	{
+		float XL = 0.f;
+		float YL = 0.f;
+		if (Font && !Text.IsEmpty())
+		{
+			Canvas->TextSize(Font, Text, XL, YL, 0.8f, 0.8f);
+		}
+		return Text.IsEmpty() ? 0.f : XL + 20.f;
+	};
+	const FGFHotbarBandLayout Band = GFLayoutHotbarBand(Canvas->ClipX, Canvas->ClipY, Measure(ItemLine), Measure(ElementLine) + (Magic ? 14.f : 0.f));
+	if (!Band.Item.IsEmpty())
+	{
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.55f), Band.Item.X, Band.Item.Y, Band.Item.W, Band.Item.H);
+		DrawText(ItemLine, FLinearColor::White, Band.Item.X + 10.f, Band.Item.Y + 3.f, Font, 0.8f, false);
+	}
+	if (!Band.Element.IsEmpty())
+	{
+		const FGFHudRect& E = Band.Element;
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.6f), E.X, E.Y, E.W, E.H);
+		DrawRect(Chip.Color, E.X, E.Y, 4.f, E.H);
+		DrawRect(Chip.Color, E.X + 10.f, E.Y + E.H * 0.5f - 4.f, 8.f, 8.f);
+		DrawText(Chip.Label, Chip.Color, E.X + 24.f, E.Y + 3.f, Font, 0.8f, false);
+		float LabelW = 0.f;
+		float LabelH = 0.f;
+		if (Font)
+		{
+			Canvas->TextSize(Font, Chip.Label + TEXT("   "), LabelW, LabelH, 0.8f, 0.8f);
+		}
+		DrawText(Chip.Hint, Chip.bCanSwap ? FLinearColor(0.92f, 0.92f, 0.92f) : FLinearColor(0.7f, 0.7f, 0.7f), E.X + 24.f + LabelW, E.Y + 3.f, Font, 0.8f, false);
 	}
 }
 
@@ -1068,7 +1249,7 @@ void AGFHUD::DrawHint()
 	{
 		Canvas->TextSize(Font, Hint, XL, YL);
 	}
-	const float HotbarTop = Canvas->ClipY - GFHUD::HotbarBottomMargin - GFHUD::HotbarSlotH;
+	const float HotbarTop = GFHudHotbarTop(Canvas->ClipY);
 	const float X = FMath::Max(8.f, (Canvas->ClipX - XL) * 0.5f);
 	const float Y = HotbarTop - YL - 6.f;
 	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.45f), X - 6.f, Y - 2.f, XL + 12.f, YL + 4.f);

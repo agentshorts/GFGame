@@ -7,6 +7,7 @@
 #include "GFPathRules.h"
 #include "GFQuestLine.h"
 #include "GFTheftRules.h"
+#include "GFMagicTypes.h"
 
 namespace GFHUD
 {
@@ -22,13 +23,22 @@ namespace GFHUD
 
 	constexpr int32 VisibleChatLines = 8;
 
-	constexpr float HotbarSlotW = 72.f;
-	constexpr float HotbarSlotH = 28.f;
+	/** Square slots: an icon, the key number top left, the count bottom right. */
+	constexpr float HotbarSlotW = 56.f;
+	constexpr float HotbarSlotH = 56.f;
 	constexpr float HotbarGap = 4.f;
 	constexpr float HotbarBottomMargin = 16.f;
 	constexpr float HotbarSideMargin = 16.f;
 	/** Floor used while squeezing the row onto a narrow canvas. The row still fits if this overflows. */
 	constexpr float HotbarMinSlotW = 8.f;
+	/** Element chip row above the slots ("Spark" plus the R / D-pad Right swap hint). Part of the hotbar bounds. */
+	constexpr float HotbarBandH = 22.f;
+	constexpr float HotbarBandGap = 8.f;
+	/** Key hint for ToggleElement. GFGame.HUD.Hotbar.ElementChip checks it against the key table. */
+	inline const TCHAR* ElementKeyHint()
+	{
+		return TEXT("R / D-pad Right");
+	}
 
 	/** Name-tag slots. AGFGameMode assigns ColorIndex from 0. The palette wraps. */
 	constexpr int32 PlayerColorCount = 10;
@@ -55,11 +65,11 @@ namespace GFHUD
 
 	inline const TCHAR* ControlsHint()
 	{
-		return TEXT("WASD move, Shift sprint, Ctrl dash, Q swing, E yank, Space jump, LMB dig, RMB place or aim, wheel block, Alt+wheel zoom, MMB shoulder, V view, Enter chat, Esc menu, Home return");
+		return TEXT("WASD move, Shift sprint, Ctrl dash, Q swing, E yank, Space jump, LMB dig, RMB place or aim, wheel or 1-9 hotbar, Alt+wheel zoom, MMB shoulder, V view, Enter chat, Esc menu, Home return");
 	}
 }
 
-/** One hotbar cell in canvas pixels. bSelected is the cell AGFCharacter::SelectedBlock matches. */
+/** One hotbar cell in canvas pixels. bSelected is AGFCharacter::SelectedHotbarSlot. */
 struct GFGAME_API FGFHUDSlotRect
 {
 	float X = 0.f;
@@ -138,8 +148,36 @@ GFGAME_API bool GFHudRectsOverlap(const FGFHudRect& A, const FGFHudRect& B);
 /** True when Rect sits inside the canvas. An empty rect does. */
 GFGAME_API bool GFHudRectInside(const FGFHudRect& Rect, float CanvasW, float CanvasH);
 
-/** Bottom strip the hotbar row occupies, full canvas width. */
+/** Bottom strip the hotbar row and its element chip occupy, full canvas width. */
 GFGAME_API FGFHudRect GFHudHotbarBounds(float CanvasW, float CanvasH);
+
+/** Y of the top of the hotbar bounds. The controls hint and the interact prompt stay above it. */
+GFGAME_API float GFHudHotbarTop(float CanvasH);
+
+/**
+ * The row above the slots: the selected item's name on the left, the element chip on the right, centred as a pair.
+ * Widths are measured text plus padding. A zero width leaves that box empty. Both stay inside the hotbar bounds.
+ */
+struct GFGAME_API FGFHotbarBandLayout
+{
+	FGFHudRect Item;
+	FGFHudRect Element;
+};
+
+GFGAME_API FGFHotbarBandLayout GFLayoutHotbarBand(float CanvasW, float CanvasH, float ItemW, float ElementW);
+
+/** Current magic element on the hotbar. bCanSwap is false while the faction element is Spark too (no faction yet). */
+struct GFGAME_API FGFElementChip
+{
+	FString Label;
+	FString Hint;
+	FLinearColor Color = FLinearColor::White;
+	bool bCanSwap = false;
+};
+
+GFGAME_API FString GFElementName(EGFMagicElement Element);
+GFGAME_API FLinearColor GFElementColor(EGFMagicElement Element);
+GFGAME_API FGFElementChip GFFormatElementChip(EGFMagicElement Current, EGFMagicElement FactionElement);
 
 /** Square around the screen center that covers the stamina arc. */
 GFGAME_API FGFHudRect GFHudStaminaBounds(float CanvasW, float CanvasH);

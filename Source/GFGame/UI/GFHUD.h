@@ -211,6 +211,12 @@ private:
 	void SendChat(const FString& Line);
 
 	UFont* HudFont() const;
+	/** Item row icon, else /Game/Art/Items/Textures/T_Icon_<Id>, else null. Cached. */
+	UTexture2D* SlotIcon(FName SlotId);
+	/** Item display name, else the id spaced out. "Hands" for Fists, "Empty" for None. */
+	FString SlotDisplayName(FName SlotId) const;
+	/** Block DebugColor, else a stable colour from the id. */
+	FLinearColor SlotSwatch(FName SlotId) const;
 
 	/** Slate entry. Incomplete here so this header does not include widget headers. */
 	FGHUDChat* Chat = nullptr;
@@ -223,6 +229,10 @@ private:
 	bool bShownAtSet = false;
 	bool bHintUserOverride = false;
 	bool bHintUserVisible = true;
+
+	/** Hotbar and inventory icons per slot id. Null is a cached miss (the slot draws a colour swatch). */
+	UPROPERTY(Transient)
+	TMap<FName, TObjectPtr<UTexture2D>> IconCache;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTexture2D> BeatJudgementTex;

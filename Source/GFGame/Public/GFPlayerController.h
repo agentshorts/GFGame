@@ -113,12 +113,17 @@ protected:
 	void HandleShardhopKey();
 	void HandleVillainKey();
 	void HandleReturnKey();
-	void HandlePath1();
-	void HandlePath2();
-	void HandlePath3();
-	void HandlePath4();
-	void HandlePath5();
-	void SendPathSlot(int32 Slot);
+	void HandleSlot1();
+	void HandleSlot2();
+	void HandleSlot3();
+	void HandleSlot4();
+	void HandleSlot5();
+	void HandleSlot6();
+	void HandleSlot7();
+	void HandleSlot8();
+	void HandleSlot9();
+	/** Number key KeyIndex (0 is the 1 key): a class pick while the choice is open, else a hotbar slot. */
+	void SendSlotKey(int32 KeyIndex);
 	void TickShardhop();
 	void FinishShardhop(FName DestId);
 
@@ -146,7 +151,7 @@ protected:
 	FKey ReturnKey;
 
 	UPROPERTY(Transient)
-	TArray<TObjectPtr<UInputAction>> PathActions;
+	TArray<TObjectPtr<UInputAction>> SlotActions;
 
 	FTimerHandle ShardhopTimer;
 	bool bShardhopActive = false;

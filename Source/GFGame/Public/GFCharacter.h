@@ -83,7 +83,11 @@ public:
 	bool WantsScopeOverlay() const { return GFWantsScopeOverlay(AimState); }
 	bool WantsFistVignette() const { return AimState.bFistScope; }
 	bool IsCrosshairSpreadActive() const;
+	/** The nine hotbar slots (AGFPlayerState::GetHotbarSlots). None is an empty slot. Fists alone without a player state. */
 	TArray<FName> GetHotbarIds() const;
+	/** Number keys and the wheel land here. Out-of-range slots wrap. An empty slot means bare hands. */
+	void SelectHotbarSlot(int32 Slot);
+	int32 GetSelectedHotbarSlot() const { return SelectedHotbarSlot; }
 
 	/** Future weapons and abilities call this. Wheel-cycling a block clears the override. */
 	void EquipAimHeld(EGFAimHeldKind Kind, EGFWeaponProfile Profile);
@@ -107,6 +111,10 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Build")
 	FName SelectedBlock;
+
+	/** Highlighted hotbar slot, 0..8. Local, like SelectedBlock. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|Build")
+	int32 SelectedHotbarSlot = 0;
 
 	/** Asks the server (through AGFPlayerState) to place SelectedBlock where the camera points. The inventory lives on the player state. */
 	UFUNCTION(BlueprintCallable, Category = "GF|Build")
@@ -186,6 +194,10 @@ protected:
 	void OnToggleElement(const FInputActionValue& Value);
 	void OnOvercharge(const FInputActionValue& Value);
 	void OnHotbar(const FInputActionValue& Value);
+	/** Keeps SelectedBlock on the selected slot when the slot's contents change (an item runs out, a new one arrives). */
+	void RefreshHotbarSelection();
+	/** What the selected slot held when SelectedBlock was last set from it. */
+	FName HotbarSlotSeen;
 	void OnSprint(const FInputActionValue& Value);
 	void OnSprintStopped(const FInputActionValue& Value);
 	void OnDash(const FInputActionValue& Value);

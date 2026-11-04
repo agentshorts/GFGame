@@ -4,6 +4,7 @@
 #include "GFLocalProfileSubsystem.h"
 #include "GFInventoryComponent.h"
 #include "GFPathRules.h"
+#include "GFHotbarRules.h"
 #include "GFMineable.h"
 #include "Engine/HitResult.h"
 #include "GFVoxelWorld.h"
@@ -643,6 +644,34 @@ FName AGFPlayerState::ItemForBlock(FName BlockId) const
 	const AGFVoxelWorld* Voxel = GetVoxelWorld();
 	const FGFBlockRow* Row = Voxel ? Voxel->FindBlockRow(BlockId) : nullptr;
 	return (Row && !Row->DropItem.IsNone()) ? Row->DropItem : BlockId;
+}
+
+TArray<FName> AGFPlayerState::GetHotbarSlots() const
+{
+	TArray<FGFHotbarBlock> Placeable;
+	if (const AGFVoxelWorld* Voxel = GetVoxelWorld())
+	{
+		for (const FName BlockId : Voxel->GetPlaceableBlockIds())
+		{
+			Placeable.Add({ BlockId, ItemForBlock(BlockId) });
+		}
+	}
+	const AGFGameState* GS = GetGFGameState();
+	const bool bFree = GS && GS->bFreeBuild;
+	return FGFHotbarRules::DefaultSlots(Placeable, [this](FName ItemId) -> int64
+	{
+		return Inventory ? Inventory->GetCount(ItemId) : 0;
+	}, bFree);
+}
+
+int64 AGFPlayerState::GetHotbarCount(FName SlotId) const
+{
+	const AGFGameState* GS = GetGFGameState();
+	if (SlotId.IsNone() || SlotId == FGFHotbarRules::FistsId() || !Inventory || (GS && GS->bFreeBuild))
+	{
+		return -1;
+	}
+	return Inventory->GetCount(ItemForBlock(SlotId));
 }
 
 int32 AGFPlayerState::RequestEdit(FIntVector Cell, FName BlockId)
