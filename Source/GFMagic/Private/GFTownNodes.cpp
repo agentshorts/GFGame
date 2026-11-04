@@ -51,6 +51,7 @@ namespace
 		FVector Normal = FVector::UpVector;
 		float Distance = 0.f;
 		bool bCrystal = false;
+		bool bPiece = false;
 	};
 
 	ETownTrace TraceTown(UWorld* World, AGFPlayerState* PS, const FVector& Start, const FVector& End, bool bVoxelBlocks, FTownHit& Out)
@@ -122,6 +123,11 @@ namespace
 		}
 		Out.Distance = Hit.Distance;
 		Out.bCrystal = Data && Data->Mode == EGFMineableMode::Slots;
+		if (Out.bCrystal)
+		{
+			const UStaticMesh* Mesh = FGFMineable::MeshOf(Comp);
+			Out.bPiece = Mesh && FGFTownNodeRules::IsStructurePiece(Mesh->GetName());
+		}
 		return ETownTrace::Node;
 	}
 
@@ -202,7 +208,7 @@ void AGFTownMineRelay::SetNodes(const TArray<FGFTownNodeRep>& In)
 		{
 			const FGFTownNodeRep& A = Nodes[Index];
 			const FGFTownNodeRep& B = In[Index];
-			if (A.Key != B.Key || A.bDepleted != B.bDepleted || A.bCrystal != B.bCrystal || A.Actor != B.Actor)
+			if (A.Key != B.Key || A.bDepleted != B.bDepleted || A.bCrystal != B.bCrystal || A.bPiece != B.bPiece || A.Actor != B.Actor)
 			{
 				bSame = false;
 				break;
@@ -255,7 +261,7 @@ void AGFTownMineRelay::ApplyOne(const FGFTownNodeRep& Node, bool bDepleted) cons
 	{
 		Target = FGFTownNodeRules::FindActor(GetWorld(), Node.Key);
 	}
-	FGFTownNodeRules::ApplyVisual(Target, bDepleted, Node.bCrystal);
+	FGFTownNodeRules::ApplyVisual(Target, bDepleted, Node.bCrystal, Node.bPiece);
 }
 
 FName FGFTownNodeRules::BlockIdFor(const UGFMineableAssetUserData* Data)
@@ -342,13 +348,27 @@ AActor* FGFTownNodeRules::FindActor(UWorld* World, const FString& Key)
 	return nullptr;
 }
 
-void FGFTownNodeRules::ApplyVisual(AActor* Actor, bool bDepleted, bool bCrystal)
+bool FGFTownNodeRules::IsStructurePiece(const FString& MeshName)
+{
+	TArray<FString> Tokens;
+	MeshName.ParseIntoArray(Tokens, TEXT("_"), true);
+	for (const FString& Token : Tokens)
+	{
+		if (Token.Equals(TEXT("House"), ESearchCase::IgnoreCase) || Token.Equals(TEXT("StarterHouse"), ESearchCase::IgnoreCase) || Token.Equals(TEXT("Wall"), ESearchCase::IgnoreCase))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void FGFTownNodeRules::ApplyVisual(AActor* Actor, bool bDepleted, bool bCrystal, bool bPiece)
 {
 	if (!Actor)
 	{
 		return;
 	}
-	if (bCrystal)
+	if (bCrystal && !bPiece)
 	{
 		TInlineComponentArray<UStaticMeshComponent*> Meshes;
 		Actor->GetComponents(Meshes);
@@ -376,6 +396,38 @@ void FGFTownNodeRules::ApplyVisual(AActor* Actor, bool bDepleted, bool bCrystal)
 	}
 	Actor->SetActorHiddenInGame(bDepleted);
 	Actor->SetActorEnableCollision(!bDepleted);
+}
+
+bool FGFTownNodeRules::IsRegrowBlocked(const AActor* Piece)
+{
+	UWorld* World = Piece ? Piece->GetWorld() : nullptr;
+	if (!World)
+	{
+		return false;
+	}
+	const FBox Box = Piece->GetComponentsBoundingBox(true);
+	if (!Box.IsValid)
+	{
+		return false;
+	}
+	for (TActorIterator<APawn> It(World); It; ++It)
+	{
+		const APawn* Pawn = *It;
+		if (!IsValid(Pawn) || Pawn->IsActorBeingDestroyed() || !Pawn->GetActorEnableCollision())
+		{
+			continue;
+		}
+		const UPrimitiveComponent* Body = Cast<UPrimitiveComponent>(Pawn->GetRootComponent());
+		if (!Body || !Body->IsCollisionEnabled())
+		{
+			continue;
+		}
+		if (Box.Intersect(Body->Bounds.GetBox()))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 FMagicHitOutput FGFTownNodeRules::ApplyHit(FMagicWound& Wound, const FMagicHitRequest& Request, FName BlockId)
@@ -474,6 +526,12 @@ bool FGFTownNodeField::IsDepleted(const UPrimitiveComponent* Component) const
 	return Node && Node->bDepleted;
 }
 
+bool FGFTownNodeField::IsPiece(const UPrimitiveComponent* Component) const
+{
+	const FNode* Node = Find(Component);
+	return Node && Node->bPiece;
+}
+
 const FGFTownNodeField::FNode* FGFTownNodeField::Find(const UPrimitiveComponent* Component) const
 {
 	if (!Component)
@@ -483,7 +541,7 @@ const FGFTownNodeField::FNode* FGFTownNodeField::Find(const UPrimitiveComponent*
 	return Nodes.Find(FGFTownNodeRules::KeyFor(Component));
 }
 
-FGFTownNodeField::FNode& FGFTownNodeField::FindOrAdd(const UPrimitiveComponent* Component, FName BlockId, bool bCrystal, const FVector& Impact, const FVector& Normal)
+FGFTownNodeField::FNode& FGFTownNodeField::FindOrAdd(const UPrimitiveComponent* Component, FName BlockId, bool bCrystal, bool bPiece, const FVector& Impact, const FVector& Normal)
 {
 	const FString Key = FGFTownNodeRules::KeyFor(Component);
 	FNode& Node = Nodes.FindOrAdd(Key);
@@ -494,6 +552,7 @@ FGFTownNodeField::FNode& FGFTownNodeField::FindOrAdd(const UPrimitiveComponent* 
 		Node.Actor = Component ? Component->GetOwner() : nullptr;
 		Node.BlockId = BlockId;
 		Node.bCrystal = bCrystal;
+		Node.bPiece = bCrystal && bPiece;
 	}
 	Node.LastImpact = Impact;
 	Node.LastNormal = Normal.GetSafeNormal().IsNearlyZero() ? FVector::UpVector : Normal.GetSafeNormal();
@@ -531,7 +590,7 @@ void FGFTownNodeField::CommitBreak(FNode& Node, const FMagicBreak& Break, const 
 	Node.RegrowAt = Now + static_cast<double>(RegrowSeconds);
 	Node.Wound = FMagicWound();
 	Node.Freeze = FFreeze();
-	FGFTownNodeRules::ApplyVisual(Node.Actor.Get(), true, Node.bCrystal);
+	FGFTownNodeRules::ApplyVisual(Node.Actor.Get(), true, Node.bCrystal, Node.bPiece);
 	bDirty = true;
 	bool bPaid = false;
 	for (const FString& Key : Break.Contributors)
@@ -546,7 +605,7 @@ void FGFTownNodeField::CommitBreak(FNode& Node, const FMagicBreak& Break, const 
 	{
 		FGFTownNodeRules::Grant(Fallback, Break, At, Now);
 	}
-	UE_LOG(LogGF, Log, TEXT("Town node %s broke, drop %s x%d, regrow in %.0fs"), *Node.Key, *Break.DropItem.ToString(), Break.DropCount, RegrowSeconds);
+	UE_LOG(LogGF, Log, TEXT("Town node %s broke%s, drop %s x%d, regrow in %.0fs"), *Node.Key, Node.bPiece ? TEXT(" and took its piece down") : TEXT(""), *Break.DropItem.ToString(), Break.DropCount, RegrowSeconds);
 	if (!Node.bCrystal)
 	{
 		return;
@@ -612,6 +671,7 @@ void FGFTownNodeField::Publish(UWorld* World)
 		Rep.Key = Pair.Key;
 		Rep.bDepleted = true;
 		Rep.bCrystal = Pair.Value.bCrystal;
+		Rep.bPiece = Pair.Value.bPiece;
 		if (AActor* Actor = Pair.Value.Actor.Get())
 		{
 			if (Actor->GetIsReplicated())
@@ -661,7 +721,7 @@ void FGFTownNodeField::CastShapes(UGFMagicComponent* Caster, int32& Budget, doub
 		{
 			return;
 		}
-		FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.Impact, Hit.Normal);
+		FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.bPiece, Hit.Impact, Hit.Normal);
 		if (Node.bDepleted || Node.Freeze.bLocked)
 		{
 			return;
@@ -716,7 +776,7 @@ void FGFTownNodeField::CastShapes(UGFMagicComponent* Caster, int32& Budget, doub
 		{
 			break;
 		}
-		FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.Impact, Hit.Normal);
+		FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.bPiece, Hit.Impact, Hit.Normal);
 		if (Node.bDepleted)
 		{
 			continue;
@@ -802,7 +862,7 @@ void FGFTownNodeField::HitSwing(UGFMagicComponent* Caster, const FMagicSwing& Sw
 			break;
 		}
 		const FTownHit& Hit = Pair.Value;
-		FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.Impact, Hit.Normal);
+		FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.bPiece, Hit.Impact, Hit.Normal);
 		if (Node.bDepleted)
 		{
 			continue;
@@ -837,7 +897,7 @@ bool FGFTownNodeField::ConsumeGlob(UWorld* World, const FMagicGlob& Glob, const 
 	{
 		return true;
 	}
-	FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.Impact, Hit.Normal);
+	FNode& Node = FindOrAdd(Hit.Component, Hit.BlockId, Hit.bCrystal, Hit.bPiece, Hit.Impact, Hit.Normal);
 	if (Node.bDepleted)
 	{
 		return true;
@@ -954,10 +1014,21 @@ void FGFTownNodeField::TickOngoing(UWorld* World, double Now, int32& Budget, TFu
 		{
 			continue;
 		}
+		if (Node.bPiece && FGFTownNodeRules::IsRegrowBlocked(Node.Actor.Get()))
+		{
+			Node.RegrowAt = Now + static_cast<double>(FGFTownNodeRules::RegrowRetrySeconds);
+			if (!Node.bRegrowHeld)
+			{
+				Node.bRegrowHeld = true;
+				UE_LOG(LogGF, Log, TEXT("Town node %s regrow waits: a pawn stands in the piece, checking again every %.0fs"), *Node.Key, FGFTownNodeRules::RegrowRetrySeconds);
+			}
+			continue;
+		}
+		Node.bRegrowHeld = false;
 		Node.bDepleted = false;
 		Node.Wound = FMagicWound();
 		Node.Freeze = FFreeze();
-		FGFTownNodeRules::ApplyVisual(Node.Actor.Get(), false, Node.bCrystal);
+		FGFTownNodeRules::ApplyVisual(Node.Actor.Get(), false, Node.bCrystal, Node.bPiece);
 		bDirty = true;
 		UE_LOG(LogGF, Log, TEXT("Town node %s regrew"), *Node.Key);
 	}
