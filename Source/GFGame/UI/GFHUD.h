@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
+#include "GFInventoryScreen.h"
 #include "GFHUD.generated.h"
 
 class UFont;
@@ -22,7 +23,9 @@ enum class EGFHudModal : uint8
 	PauseConfirm,
 	Chat,
 	Aim,
-	Elder
+	Elder,
+	/** The bag (Tab or I): frees the mouse and holds the pawn, the field HUD stays up. */
+	Inventory
 };
 
 /** The only inputs to AGFHUD::SetHudModal. */
@@ -42,7 +45,11 @@ enum class EGFHudModalEvent : uint8
 	CloseElder,
 	Escape,
 	/** Teardown. Any modal goes back to the game. */
-	Reset
+	Reset,
+	OpenInventory,
+	CloseInventory,
+	/** Tab or I: opens the bag from the game, closes it when it is up. Ignored over other menus. */
+	ToggleInventory
 };
 
 /** Pages inside the elder menu. Not a second modal. */
@@ -149,6 +156,27 @@ public:
 	/** Clicks on the pause entries (hit boxes GFPause_<index>). */
 	virtual void NotifyHitBoxClick(FName BoxName) override;
 
+	/** Clicks and drops in the bag (hit boxes GFInv_*). The press is NotifyHitBoxClick. */
+	virtual void NotifyHitBoxRelease(FName BoxName) override;
+
+	bool IsInventoryOpen() const { return Modal == EGFHudModal::Inventory; }
+	/** Tab or I. */
+	void ToggleInventory();
+	void OpenInventory();
+	void CloseInventory();
+	EGFInventoryTab GetInventoryTab() const { return InvTab; }
+	void SetInventoryTab(EGFInventoryTab Tab);
+	int32 GetInventoryPage() const { return InvPage; }
+	/** Everything the bag lists, all tabs (FGFInventoryView::Build on the owning player state). */
+	TArray<FGFInventoryEntry> GetInventoryEntries() const;
+	/** The current tab and page, in cell order. Cell hit box GFInv_Cell_<i> is entry i. Built each draw. */
+	const TArray<FGFInventoryEntry>& GetInventoryPageEntries() const { return InvPageEntries; }
+	const FGFInventoryCursor& GetInventoryCursor() const { return InvCursor; }
+	/** Number key while the bag is open: the held or hovered item goes to that slot. */
+	void InventoryNumberKey(int32 Slot);
+	/** Last hotbar move this HUD sent (AGFPlayerState::HotbarResults key), or INDEX_NONE. */
+	int32 GetLastHotbarRequest() const { return LastHotbarRequest; }
+
 	bool IsChatOpen() const { return Modal == EGFHudModal::Chat; }
 	void OpenChat();
 	/** Close without sending. */
@@ -194,6 +222,14 @@ private:
 	void DrawFieldHud();
 	void DrawElderMenu();
 	void ActivateElderBox(FName BoxName);
+	void DrawInventoryScreen();
+	/** Icon, or a swatch with a short label, inside a tile. Shared by the hotbar and the bag. */
+	void DrawSlotArt(FName Id, float X, float Y, float W, float H, bool bSpent);
+	/** Hit box name to what it points at. Unknown names are Nothing. */
+	FGFInvTarget InventoryTargetFor(FName BoxName) const;
+	void SubmitHotbarMove(const TOptional<FGFHotbarMove>& Move);
+	/** Rebuilds InvPageEntries for the current tab and page (clamping the page). */
+	void RefreshInventoryPage(const FGFInventoryLayout& Layout);
 	/**
 	 * Input mode, cursor and pawn input for whichever modal is up (PauseInputFor for pause, confirm, and the elder menu).
 	 * Chat and the aim panel set their own UI-only mode while open; when they close this puts back the menu or the game.
@@ -254,4 +290,14 @@ private:
 	bool bItemHowToPinned = false;
 	int32 AppliedNotices = 0;
 	int32 AppliedResults = 0;
-};
+
+	/** Bag state. Local only; the bar itself lives on the player state. */
+	FGFInventoryCursor InvCursor;
+	EGFInventoryTab InvTab = EGFInventoryTab::Blocks;
+	int32 InvPage = 0;
+	int32 InvPageCount = 1;
+	TArray<FGFInventoryEntry> InvPageEntries;
+	/** What the mouse is over this frame (tooltips and number keys). */
+	FGFInvTarget InvHover;
+	int32 LastHotbarRequest = INDEX_NONE;
+	bool bLastHotbarReported = true;

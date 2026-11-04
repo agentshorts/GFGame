@@ -57,6 +57,8 @@ void FGFDefaultInputKeys::HudKeys(TArray<FGFMappedKey>& Out, FKey ReturnKey)
 	Add(TEXT("Shardhop"), EKeys::F);
 	Add(TEXT("Villain"), EKeys::G);
 	Add(TEXT("Return"), ReturnKey.IsValid() ? ReturnKey : EKeys::Home);
+	Add(TEXT("Inventory"), EKeys::Tab);
+	Add(TEXT("Inventory"), EKeys::I);
 	// Number keys select hotbar slots. While the class choice is open, 1 to 5 pick a class instead
 	// (FGFHotbarRules::RouteNumberKey).
 	Add(TEXT("Slot1"), EKeys::One);

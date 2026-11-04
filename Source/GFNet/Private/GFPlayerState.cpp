@@ -5,6 +5,7 @@
 #include "GFInventoryComponent.h"
 #include "GFPathRules.h"
 #include "GFHotbarRules.h"
+#include "GFEconomy.h"
 #include "GFMineable.h"
 #include "Engine/HitResult.h"
 #include "GFVoxelWorld.h"
@@ -648,6 +649,11 @@ FName AGFPlayerState::ItemForBlock(FName BlockId) const
 
 TArray<FName> AGFPlayerState::GetHotbarSlots() const
 {
+	return FGFHotbarRules::Resolve(Progress.Hotbar, Progress.Hotbar.bArranged ? TArray<FName>() : GetDefaultHotbarSlots());
+}
+
+TArray<FName> AGFPlayerState::GetDefaultHotbarSlots() const
+{
 	TArray<FGFHotbarBlock> Placeable;
 	if (const AGFVoxelWorld* Voxel = GetVoxelWorld())
 	{
@@ -667,11 +673,99 @@ TArray<FName> AGFPlayerState::GetHotbarSlots() const
 int64 AGFPlayerState::GetHotbarCount(FName SlotId) const
 {
 	const AGFGameState* GS = GetGFGameState();
-	if (SlotId.IsNone() || SlotId == FGFHotbarRules::FistsId() || !Inventory || (GS && GS->bFreeBuild))
+	if (SlotId.IsNone() || SlotId == FGFHotbarRules::FistsId() || !Inventory)
+	{
+		return -1;
+	}
+	if (GS && GS->bFreeBuild && IsPlaceableBlock(SlotId))
 	{
 		return -1;
 	}
 	return Inventory->GetCount(ItemForBlock(SlotId));
+}
+
+bool AGFPlayerState::IsPlaceableBlock(FName Id) const
+{
+	const AGFVoxelWorld* Voxel = GetVoxelWorld();
+	return Voxel && !Id.IsNone() && Voxel->GetPlaceableBlockIds().Contains(Id);
+}
+
+bool AGFPlayerState::IsKnownHotbarId(FName Id) const
+{
+	if (Id.IsNone())
+	{
+		return false;
+	}
+	if (IsPlaceableBlock(Id))
+	{
+		return true;
+	}
+	const AGFGameState* GS = GetGFGameState();
+	return GS && FGFEconomy::FindItem(GS->GetItemTable(), Id) != nullptr;
+}
+
+int32 AGFPlayerState::RequestHotbarMove(const FGFHotbarMove& Move)
+{
+	const int32 RequestId = NextHotbarRequestId++;
+	if (HasAuthority())
+	{
+		HotbarResults.Add(RequestId, ServerApplyHotbarMove(Move));
+		return RequestId;
+	}
+	HotbarResults.Add(RequestId, EGFHotbarMoveResult::Pending);
+	ServerHotbarMove(Move, RequestId);
+	return RequestId;
+}
+
+void AGFPlayerState::ServerHotbarMove_Implementation(FGFHotbarMove Move, int32 RequestId)
+{
+	ClientHotbarResult(RequestId, ServerApplyHotbarMove(Move));
+}
+
+void AGFPlayerState::ClientHotbarResult_Implementation(int32 RequestId, EGFHotbarMoveResult Result)
+{
+	HotbarResults.Add(RequestId, Result);
+}
+
+EGFHotbarMoveResult AGFPlayerState::ServerApplyHotbarMove(const FGFHotbarMove& Move)
+{
+	if (!HasAuthority())
+	{
+		return EGFHotbarMoveResult::Pending;
+	}
+	const UWorld* World = GetWorld();
+	const double Now = World ? World->GetRealTimeSeconds() : 0.0;
+	if (HotbarWindowStart < 0.0 || Now - HotbarWindowStart >= 1.0)
+	{
+		HotbarWindowStart = Now;
+		HotbarMovesInWindow = 0;
+	}
+	if (++HotbarMovesInWindow > FGFHotbarRules::MaxMovesPerSecond)
+	{
+		return EGFHotbarMoveResult::Busy;
+	}
+	if (Move.Kind == EGFHotbarMoveKind::Assign)
+	{
+		const AGFGameState* GS = GetGFGameState();
+		const bool bPlaceable = IsPlaceableBlock(Move.Id);
+		const int64 Owned = Inventory ? Inventory->GetCount(ItemForBlock(Move.Id)) : 0;
+		const EGFHotbarMoveResult Check = FGFHotbarRules::CheckId(Move.Id, IsKnownHotbarId(Move.Id), bPlaceable, Owned, GS && GS->bFreeBuild);
+		if (Check != EGFHotbarMoveResult::Ok)
+		{
+			return Check;
+		}
+	}
+	// The first move starts from what the player was looking at, so arranging one slot keeps the rest.
+	TArray<FName> Slots = GetHotbarSlots();
+	const EGFHotbarMoveResult Result = FGFHotbarRules::Apply(Slots, Move);
+	if (Result != EGFHotbarMoveResult::Ok)
+	{
+		return Result;
+	}
+	Progress.Hotbar.Slots = MoveTemp(Slots);
+	Progress.Hotbar.bArranged = true;
+	MarkCharacterChanged();
+	return Result;
 }
 
 int32 AGFPlayerState::RequestEdit(FIntVector Cell, FName BlockId)

@@ -7,6 +7,7 @@
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
 #include "GFItemTypes.h"
+#include "GFHotbarRules.h"
 #include "GFModeTypes.generated.h"
 
 class AGFPlayerState;
@@ -209,6 +210,8 @@ struct GFNET_API FGFPlayerProgress
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") FGFMineCrew Crew;
 	/** Shardstones this player may hop to. Empty on older saves. A row that starts unlocked still counts. */
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") TArray<FName> UnlockedShardstones;
+	/** Hotbar arranged in the inventory screen. Unarranged on older saves, which keeps the automatic fill. */
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Progress") FGFHotbarLayout Hotbar;
 
 	/** Class picked on first spawn. None until then. Saved with the character, not with Villain Mode. */
 	UPROPERTY(SaveGame, BlueprintReadOnly, Category = "GF|Path") EGFPath Path = EGFPath::None;

@@ -832,7 +832,22 @@ void AGFCharacter::SelectHotbarSlot(int32 Slot)
 	const TArray<FName> Ids = GetHotbarIds();
 	HotbarSlotSeen = Ids.IsValidIndex(SelectedHotbarSlot) ? Ids[SelectedHotbarSlot] : FName();
 	SelectedBlock = HotbarSlotSeen.IsNone() ? GFAim::FistsId() : HotbarSlotSeen;
+	ApplyHotbarPick();
 	SyncAimContext();
+}
+
+void AGFCharacter::ApplyHotbarPick()
+{
+	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	// An item that is not a block (a treat, a crystal) is held in hand: no block ghost, and taming sees it.
+	bHandItemSelected = PS && SelectedBlock != GFAim::FistsId() && !PS->IsPlaceableBlock(SelectedBlock) && PS->IsKnownHotbarId(SelectedBlock);
+	const FName Want = bHandItemSelected ? SelectedBlock : FName();
+	if (PS && IsLocallyControlled() && Want != HeldItemSent)
+	{
+		// Only touches HeldItem once the bar has held an item, so blocks alone never clear what something else set.
+		HeldItemSent = Want;
+		PS->RequestSetHeldItem(Want);
+	}
 }
 
 void AGFCharacter::RefreshHotbarSelection()
@@ -844,6 +859,7 @@ void AGFCharacter::RefreshHotbarSelection()
 		// The slot changed under the player. Follow it without clearing a weapon or ability override.
 		HotbarSlotSeen = Now;
 		SelectedBlock = Now.IsNone() ? GFAim::FistsId() : Now;
+		ApplyHotbarPick();
 	}
 }
 
@@ -1031,7 +1047,7 @@ void AGFCharacter::SyncAimContext()
 {
 	if (!bHeldOverride)
 	{
-		AimState.Held = (SelectedBlock == GFAim::FistsId()) ? EGFAimHeldKind::Fists : EGFAimHeldKind::Block;
+		AimState.Held = (SelectedBlock == GFAim::FistsId() || bHandItemSelected) ? EGFAimHeldKind::Fists : EGFAimHeldKind::Block;
 	}
 	AimState.bSnoutZoom = IsAimingDownASnout();
 	AimState.bHoldToAim = AimUser.bHoldToAim;
