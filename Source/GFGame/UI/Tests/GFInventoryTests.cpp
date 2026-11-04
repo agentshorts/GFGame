@@ -94,7 +94,7 @@ bool FGFInventoryKeysTest::RunTest(const FString&)
 	{
 		TestFalse(FString::Printf(TEXT("%s is not on Tab or I"), *Row.Action.ToString()), Row.Key == EKeys::Tab || Row.Key == EKeys::I);
 	}
-	TestTrue(TEXT("The controls hint names the bag"), FString(GFHUD::ControlsHint()).Contains(TEXT("Tab bag")));
+	TestTrue(TEXT("The controls hint names both bag keys"), FString(GFHUD::ControlsHint()).Contains(TEXT("Tab/I bag")));
 	return true;
 }
 

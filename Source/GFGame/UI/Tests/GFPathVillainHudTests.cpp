@@ -15,7 +15,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFPathVillainHudTest, "GFGame.HUD.PathsAndVill
 bool FGFPathVillainHudTest::RunTest(const FString&)
 {
 	TestEqual(TEXT("Hint copy stays the movement line"), FString(GFHUD::ControlsHint()),
-		FString(TEXT("WASD move, Shift sprint, Ctrl dash, Q swing, E yank, Space jump, LMB dig, RMB place or aim, wheel or 1-9 hotbar, Tab bag, Alt+wheel zoom, MMB shoulder, V view, Enter chat, Esc menu, Home return")));
+		FString(TEXT("WASD move, Shift sprint, Ctrl dash, Q swing, E yank, Space jump, LMB dig, RMB place or aim, wheel or 1-9 hotbar, Tab/I bag, Alt+wheel zoom, MMB shoulder, V view, Enter chat, Esc menu, Home return")));
 	TestEqual(TEXT("Villain sight matches the rule"), GFHUD::VillainSightCm, FGFVillainRules::SightCm);
 
 	const FGFNameplateText None = GFFormatNameplate(FString(), EGFPath::None, false, FString(), true);
