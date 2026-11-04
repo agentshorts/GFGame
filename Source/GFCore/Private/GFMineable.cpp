@@ -306,7 +306,9 @@ void FGFMineable::StartKitAudit()
 {
 	if (!AssetLoadedHandle().IsValid())
 	{
+#if WITH_EDITOR
 		AssetLoadedHandle() = FCoreUObjectDelegates::OnAssetLoaded.AddStatic(&AuditMesh);
+#endif
 	}
 	for (TObjectIterator<UStaticMesh> It; It; ++It)
 	{
@@ -318,7 +320,9 @@ void FGFMineable::StopKitAudit()
 {
 	if (AssetLoadedHandle().IsValid())
 	{
+#if WITH_EDITOR
 		FCoreUObjectDelegates::OnAssetLoaded.Remove(AssetLoadedHandle());
+#endif
 		AssetLoadedHandle().Reset();
 	}
 }
