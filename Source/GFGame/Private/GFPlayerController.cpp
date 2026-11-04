@@ -416,9 +416,9 @@ void AGFPlayerController::SendSlotKey(int32 KeyIndex)
 		PS->ServerChoosePath(static_cast<uint8>(KeyIndex));
 		break;
 	case EGFNumberKeyUse::Hotbar:
-		if (AGFCharacter* Character = Cast<AGFCharacter>(GetPawn()))
+		if (AGFCharacter* GFChar = Cast<AGFCharacter>(GetPawn()))
 		{
-			Character->SelectHotbarSlot(KeyIndex);
+			GFChar->SelectHotbarSlot(KeyIndex);
 		}
 		break;
 	default:
