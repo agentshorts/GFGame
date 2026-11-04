@@ -253,6 +253,11 @@ FGFQuestApplyResult UGFQuestSubsystem::ApplyEvent(const FGFQuestEvent& Event)
 		if (Result.Result == EGFQuestResult::Refused)
 		{
 			UE_LOG(LogGF, Verbose, TEXT("Quest: %s refused (%s)."), *Event.PlayerKey, *Result.Reason.ToString());
+			// A refusal can still close a sub-step (a lost show drops its entry). Keep the player in step with it.
+			if (PS && !(Line.Progress == Before))
+			{
+				PushPlayer(PS);
+			}
 		}
 		return Result;
 	}

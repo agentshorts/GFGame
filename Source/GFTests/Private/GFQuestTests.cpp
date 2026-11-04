@@ -165,7 +165,8 @@ namespace GFQuestTest
 			E.Rank = EGFFactionRank::Champion;
 			return E;
 		}
-		if (Step == EGFQuestStep::CraftLook && Sub == 0 && Kind == EGFQuestEventKind::OutfitCrafted)
+		// A newer craft replaces the one to wear (#330), so crafting again after the first is fine.
+		if (Step == EGFQuestStep::CraftLook && (Sub == 0 || Sub == 1) && Kind == EGFQuestEventKind::OutfitCrafted)
 		{
 			E.bOk = true;
 			E.Result = EGFQuestResult::Ok;
@@ -477,8 +478,17 @@ bool FGFQuestLineTransitionsTest::RunTest(const FString&)
 		Show.Progress.Rank = EGFFactionRank::Champion;
 		Show.Progress.FactionId = Rime;
 		TestEqual(TEXT("Second place"), Show.Apply(FGFQuestEvents::ShowPlaced(TEXT("P"), 2, 3)).Reason, FGFQuestCodes::LowScore);
+		TestEqual(TEXT("A lost show drops the entry"), Show.Progress.Count, 0);
+		TestEqual(TEXT("A later place without a new entry does not count"), Show.Apply(FGFQuestEvents::ShowPlaced(TEXT("P"), 1, 3)).Reason, FGFQuestCodes::OutOfOrder);
+		TestTrue(TEXT("Entering the next show works"), Show.Apply(FGFQuestEvents::ShowEntered(TEXT("P"))).Result == EGFQuestResult::Ok);
 		TestEqual(TEXT("Tier B"), Show.Apply(FGFQuestEvents::ShowPlaced(TEXT("P"), 1, 1)).Reason, FGFQuestCodes::LowScore);
-		TestEqual(TEXT("Still entered"), Show.Progress.Count, 1);
+		TestEqual(TEXT("Dropped again"), Show.Progress.Count, 0);
+		TestTrue(TEXT("Still on the show step"), Show.Progress.Step == EGFQuestStep::WinShow);
+		// An abandoned show reports place 0, which is a loss like any other.
+		Show.Apply(FGFQuestEvents::ShowEntered(TEXT("P")));
+		TestEqual(TEXT("Abandoned show"), Show.Apply(FGFQuestEvents::ShowPlaced(TEXT("P"), 0, 0)).Reason, FGFQuestCodes::LowScore);
+		TestEqual(TEXT("Abandoned show drops the entry"), Show.Progress.Count, 0);
+		Show.Apply(FGFQuestEvents::ShowEntered(TEXT("P")));
 		const FGFQuestApplyResult TierS = Show.Apply(FGFQuestEvents::ShowPlaced(TEXT("P"), 1, 3));
 		TestTrue(TEXT("Tier S wins"), TierS.bBecameLeader);
 		TestTrue(TEXT("Leader"), Show.Progress.Rank == EGFFactionRank::Leader);
@@ -492,6 +502,18 @@ bool FGFQuestLineTransitionsTest::RunTest(const FString&)
 		TestEqual(TEXT("Still crafted"), Craft.Progress.Count, 1);
 		TestTrue(TEXT("The crafted piece"), Craft.Apply(FGFQuestEvents::OutfitWorn(TEXT("P"), Loafer)).Result == EGFQuestResult::Ok);
 		TestTrue(TEXT("Show next"), Craft.Progress.Step == EGFQuestStep::WinShow);
+
+		// #330: the first piece was traded away. Crafting another one (any Hide or Scales piece) replaces it.
+		FGFQuestLine Lost;
+		Lost.Progress.Step = EGFQuestStep::CraftLook;
+		Lost.Progress.Rank = EGFFactionRank::Champion;
+		TestTrue(TEXT("First craft"), Lost.Apply(FGFQuestEvents::OutfitCrafted(TEXT("P"), Loafer)).Result == EGFQuestResult::Ok);
+		TestTrue(TEXT("A second craft is taken"), Lost.Apply(FGFQuestEvents::OutfitCrafted(TEXT("P"), Pack)).Result == EGFQuestResult::Ok);
+		TestEqual(TEXT("And replaces the piece to wear"), Lost.Progress.CraftedItem, Pack);
+		TestEqual(TEXT("Still one craft"), Lost.Progress.Count, 1);
+		TestEqual(TEXT("The old piece no longer counts"), Lost.Apply(FGFQuestEvents::OutfitWorn(TEXT("P"), Loafer)).Reason, FGFQuestCodes::WrongItem);
+		TestTrue(TEXT("The new piece does"), Lost.Apply(FGFQuestEvents::OutfitWorn(TEXT("P"), Pack)).Result == EGFQuestResult::Ok);
+		TestTrue(TEXT("Show next after a recraft"), Lost.Progress.Step == EGFQuestStep::WinShow);
 
 		FGFQuestLine Bad;
 		FGFQuestEvent Unknown;
@@ -814,6 +836,8 @@ bool FGFQuestSaveRoundTripTest::RunTest(const FString&)
 	TestEqual(TEXT("Place before entry"), World.Quest->ApplyEvent(FGFQuestEvents::ShowPlaced(TEXT("B"), 1, 3)).Reason, FGFQuestCodes::OutOfOrder);
 	TestTrue(TEXT("B entered"), World.Quest->ApplyEvent(FGFQuestEvents::ShowEntered(TEXT("B"))).Result == EGFQuestResult::Ok);
 	TestEqual(TEXT("Low score"), World.Quest->ApplyEvent(FGFQuestEvents::ShowPlaced(TEXT("B"), 2, 3)).Reason, FGFQuestCodes::LowScore);
+	TestEqual(TEXT("The lost entry reaches the player"), B->QuestCount, 0);
+	TestTrue(TEXT("B enters the next show"), World.Quest->ApplyEvent(FGFQuestEvents::ShowEntered(TEXT("B"))).Result == EGFQuestResult::Ok);
 
 	FString LeaderKey;
 	FName LeaderFaction;

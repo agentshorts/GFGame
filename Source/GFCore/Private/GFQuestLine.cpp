@@ -497,10 +497,8 @@ FGFQuestApplyResult FGFQuestLine::ApplyCraft(const FGFQuestEvent& Event)
 	Result.Reason = FGFQuestCodes::OutOfOrder;
 	if (Event.Kind == EGFQuestEventKind::OutfitCrafted)
 	{
-		if (Progress.Count != 0)
-		{
-			return Result;
-		}
+		// Any Atelier piece that uses Hide or Scales counts (only those raise OutfitCrafted). A newer craft replaces
+		// the one to wear (#330), so trading or losing the first piece never strands the step.
 		Progress.Count = 1;
 		Progress.CraftedItem = Event.ItemId;
 		Result.Result = EGFQuestResult::Ok;
@@ -548,6 +546,8 @@ FGFQuestApplyResult FGFQuestLine::ApplyShow(const FGFQuestEvent& Event)
 	}
 	if (Event.Count != FGFQuestShowRule::WinPlace || Event.Score < FGFQuestShowRule::WinTier)
 	{
+		// That show is over. The entry goes with it, so a later show needs its own ShowEntered.
+		Progress.Count = 0;
 		Result.Result = EGFQuestResult::Refused;
 		Result.Reason = FGFQuestCodes::LowScore;
 		return Result;

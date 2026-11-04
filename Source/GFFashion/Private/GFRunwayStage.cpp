@@ -314,6 +314,17 @@ bool AGFRunwayStage::AbandonShow()
 	{
 		return false;
 	}
+	// The show ends without results: tell the quest it was not a win, so the entry does not carry over.
+	if (UWorld* World = GetWorld())
+	{
+		for (const FGFRunwayContestant& Contestant : Show.GetContestants())
+		{
+			if (!Contestant.PlayerKey.IsEmpty())
+			{
+				FGFQuestEvents::Raise(World, FGFQuestEvents::ShowPlaced(Contestant.PlayerKey, 0, 0));
+			}
+		}
+	}
 	Show.Reset();
 	bPaid = true;
 	SyncState();
