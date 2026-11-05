@@ -311,7 +311,7 @@ def import_tile(kind, r):
     folder = tile_folder(kind)
     man = json.load(open(os.path.join(folder, "manifest_v1.json"), encoding="utf-8"))
     name = "SM_Hop_Tile_" + kind
-    if man["unreal_target"] != layout.mesh_path(kind):
+    if man["unreal_target"].split(".")[0] != layout.mesh_path(kind).split(".")[0]:
         raise RuntimeError("manifest target {} is not {}".format(man["unreal_target"], layout.mesh_path(kind)))
     m = base.run_import(os.path.join(folder, man["files"]["mesh"]), TILE_DIR, name, base.fbx_static())
     tex = {}
