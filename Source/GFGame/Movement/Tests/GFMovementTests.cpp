@@ -308,6 +308,8 @@ bool FGFMovementMiniGameTest::RunTest(const FString&)
 		TEXT("/Game/Maps/L_Mine"),
 	};
 	TArray<FString> LoadedShort;
+	// Expected count is loaded gate classes, not GateMaps length, so a new gate needs no magic number update.
+	int32 GateClassCount = 0;
 	for (TObjectIterator<UClass> It; It; ++It)
 	{
 		if (!It->IsNative()
@@ -323,11 +325,12 @@ bool FGFMovementMiniGameTest::RunTest(const FString&)
 		{
 			continue;
 		}
+		++GateClassCount;
 		const FString Full = Gate->GetMapName().ToString();
 		LoadedShort.AddUnique(GFMovementPolicy::ShortMapName(Full));
 		TestTrue(*FString::Printf(TEXT("Loaded gate %s"), *Full), GFMovementPolicy::IsMiniGameMapName(Full));
 	}
-	TestEqual(TEXT("Every gate class has a map"), LoadedShort.Num(), static_cast<int32>(UE_ARRAY_COUNT(GateMaps)));
+	TestEqual(TEXT("Every gate class has a map"), LoadedShort.Num(), GateClassCount);
 	for (const TCHAR* GateMap : GateMaps)
 	{
 		const FString Short = GFMovementPolicy::ShortMapName(GateMap);
