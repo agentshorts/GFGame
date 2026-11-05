@@ -34,6 +34,14 @@ void FGFStaminaState::ResetFull(const UGFMovementTuning& Tuning)
 	WallRunSpeed = 0.f;
 	WallRunDir = FVector::ForwardVector;
 	WallNormal = FVector::ForwardVector;
+	bWallClimbing = false;
+	bWallClimbBlocked = false;
+	WallClimbTimeLeft = 0.f;
+	WallClimbCoyoteLeft = 0.f;
+	WallClimbNormal = FVector::ForwardVector;
+	bMantling = false;
+	MantleTimeLeft = 0.f;
+	MantleTarget = FVector::ZeroVector;
 	bSwiveling = false;
 	SwivelAngle = 0.f;
 	SwivelRadius = 0.f;
@@ -81,7 +89,7 @@ namespace GFStaminaSimDetail
 		{
 			return false;
 		}
-		if (Next.bGripping || Next.bSwiveling || Next.bSwinging || Next.bYanking)
+		if (Next.bGripping || Next.bSwiveling || Next.bSwinging || Next.bYanking || Next.bWallClimbing || Next.bMantling)
 		{
 			return false;
 		}
@@ -180,7 +188,7 @@ float GFStaminaSim::GravityScale(const FGFStaminaState& State, const UGFMovement
 	{
 		return Tuning.DashGravityScale;
 	}
-	if (State.bGripping || State.bWallRunning || State.bSwiveling || State.bSwinging || State.bYanking)
+	if (State.bGripping || State.bWallRunning || State.bSwiveling || State.bSwinging || State.bYanking || State.bWallClimbing || State.bMantling)
 	{
 		return 0.f;
 	}
@@ -257,7 +265,8 @@ FGFStaminaState GFStaminaSim::Step(const FGFStaminaState& State, const FGFStamin
 		bSpent = true;
 	}
 
-	const bool bTraversalBusy = Next.bGripping || Next.bWallRunning || Next.bSwiveling || Next.bSwinging || Next.bYanking;
+	const bool bTraversalBusy = Next.bGripping || Next.bWallRunning || Next.bSwiveling || Next.bSwinging || Next.bYanking
+		|| Next.bWallClimbing || Next.bMantling;
 	const bool bAirDash = !Command.bGrounded;
 	const float DashOverride = bAirDash ? Command.AirDashDurationOverride : Command.GroundDashDurationOverride;
 	const float DashDuration = DashOverride >= 0.f ? DashOverride : Tuning.DashDuration;

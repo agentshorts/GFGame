@@ -22,6 +22,19 @@ struct GFGAME_API FGFTraversalContact
 	FVector SwivelOrigin = FVector::ZeroVector;
 	bool bGrappleHit = false;
 	FVector GrapplePoint = FVector::ZeroVector;
+
+	/**
+	 * #355: a wall straight ahead of the move input (or the wall being climbed), probed above step height so stairs
+	 * and low blocks never count. Separate from bWallContact, which only looks to the sides for a wall run.
+	 */
+	bool bWallAhead = false;
+	FVector WallAheadNormal = FVector::ForwardVector;
+	/** #355: a walkable lip above the climbed wall with room for the capsule on top. */
+	bool bLedge = false;
+	/** Capsule center standing on that lip. */
+	FVector LedgeTarget = FVector::ZeroVector;
+	/** Lip height above the feet, cm. */
+	float LedgeHeight = 0.f;
 };
 
 /** One tick of intent. Edges (dash, yank) are only true on the press. */
@@ -50,6 +63,8 @@ struct GFGAME_API FGFStaminaCommand
 	float AirDashDurationOverride = -1.f;
 	float WallKickSpeedOverride = -1.f;
 	int32 JumpsPerAirtimeOverride = -1;
+	/** #355: false turns wall climb and its mantle off (Beat Hop runs). */
+	bool bWallClimbAllowed = true;
 };
 
 /** Result of the last steps. Copied into saved moves so a replay starts from the same pool. */
@@ -76,6 +91,19 @@ struct GFGAME_API FGFStaminaState
 	float WallRunSpeed = 0.f;
 	FVector WallRunDir = FVector::ForwardVector;
 	FVector WallNormal = FVector::ForwardVector;
+
+	/** #355 wall climb: straight up the wall the input pushes into. */
+	bool bWallClimbing = false;
+	/** Set when a climb ran out of time or stamina. Cleared once the input stops pushing into a wall. */
+	bool bWallClimbBlocked = false;
+	float WallClimbTimeLeft = 0.f;
+	/** Seconds since leaving the floor that a climb may still start. */
+	float WallClimbCoyoteLeft = 0.f;
+	FVector WallClimbNormal = FVector::ForwardVector;
+	/** #355 climb-exit mantle: rise to the lip, then step onto it. */
+	bool bMantling = false;
+	float MantleTimeLeft = 0.f;
+	FVector MantleTarget = FVector::ZeroVector;
 
 	bool bSwiveling = false;
 	float SwivelAngle = 0.f;
@@ -174,7 +202,13 @@ namespace GFTraversalSim
 	GFGAME_API bool IsSwivelTarget(bool bTagged, const FVector& BoundsSize, const UGFMovementTuning& Tuning);
 
 	/**
-	 * Grip, wall run, swivel, and grapple for one step.
+	 * #355: input pushes into the wall more than along it (the inverse of the wall run test), with at least MinDot
+	 * of the flat input against the wall normal.
+	 */
+	GFGAME_API bool IsIntoWall(const FVector& MoveDirection, const FVector& WallNormal, float MinDot);
+
+	/**
+	 * Grip, wall climb, mantle, wall run, swivel, and grapple for one step.
 	 * Returns true when stamina was spent. May clear a dash that just hit a wall or a pole.
 	 */
 	GFGAME_API bool Apply(FGFStaminaState& Next, const FGFStaminaCommand& Command, const UGFMovementTuning& Tuning);
@@ -182,7 +216,7 @@ namespace GFTraversalSim
 	/** Drops active traversal. Leaves the grapple cooldown where it was. */
 	GFGAME_API void ClearActivity(FGFStaminaState& State, const UGFMovementTuning& Tuning);
 
-	/** Airborne, air dash, or a swing. Hidden while clinging, wall running, or orbiting. */
+	/** Airborne, air dash, or a swing. Hidden while clinging, climbing, mantling, wall running, or orbiting. */
 	GFGAME_API bool ShouldShowLandingMarker(const FGFStaminaState& State, bool bGrounded, bool bEnabled);
 
 	GFGAME_API FVector BallisticPoint(const FVector& Origin, const FVector& Velocity, float GravityZ, float Time);

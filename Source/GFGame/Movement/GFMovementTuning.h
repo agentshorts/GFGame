@@ -1,6 +1,6 @@
 #pragma once
 
-// Every stamina, sprint, dash, jump, traversal, hearth and arc number lives here.
+// Every stamina, sprint, dash, jump, traversal (wall climb included), hearth and arc number lives here.
 // UGFCharacterMovementComponent uses the asset when one is assigned, otherwise this class default.
 
 #include "CoreMinimal.h"
@@ -132,6 +132,77 @@ public:
 	/** How far past the capsule to look for a wall, cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallRun", meta = (ClampMin = "0"))
 	float WallProbeDistance = 48.f;
+
+	/** #355: climb speed straight up the wall, cm/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbSpeed = 350.f;
+
+	/** cm/s into the wall while climbing, so the capsule stays on the face. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbStickSpeed = 60.f;
+
+	/** Stamina per second while climbing. Free in the Kindle Ring and on cost-free runs. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbDrainPerSecond = 12.f;
+
+	/** Longest climb per wall visit, seconds. Running out drops the climb until the input stops pushing into a wall. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbMaxSeconds = 1.5f;
+
+	/** A climb may still start this long after leaving the floor, seconds. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbCoyoteSeconds = 0.12f;
+
+	/** Minimum dot of the flat input against the wall normal. The input must also push in more than along. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0", ClampMax = "1"))
+	float WallClimbIntoMin = 0.5f;
+
+	/** How far past the capsule to look for a wall ahead, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbProbeDistance = 20.f;
+
+	/** The wall-ahead probe sits this far above the step height, cm, so stairs and low blocks are never a climb. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbProbeAboveStep = 20.f;
+
+	/**
+	 * Run speed a climb carries into a wall run when the input turns along the wall, cm/s. Keep it above
+	 * WallRunMinSpeed or the hand-off never passes the wall run speed gate.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbToRunSpeed = 450.f;
+
+	/** Highest lip a climb mantles onto, cm above the feet. Higher walls climb until the lip is this close. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbMantleReach = 220.f;
+
+	/** Lowest lip that counts as a mantle, cm above the feet. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbMantleMinLip = 30.f;
+
+	/** How far past the wall face (beyond the capsule radius) the mantle stands, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbMantleInset = 10.f;
+
+	/** Stamina paid when a mantle starts. Free in the Kindle Ring and on cost-free runs. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbMantleCost = 10.f;
+
+	/** Mantle rise speed to the lip, cm/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbMantleUpSpeed = 600.f;
+
+	/** Mantle step onto the lip, cm/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbMantleForwardSpeed = 450.f;
+
+	/** Longest mantle, seconds. It ends here even if it never arrived, so nothing sticks. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbMantleMaxSeconds = 0.8f;
+
+	/** Distance to the mantle target that counts as arrived, cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WallClimb", meta = (ClampMin = "0"))
+	float WallClimbMantleArrive = 4.f;
 
 	/** Untagged colliders wider than this are not swivels, cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Swivel", meta = (ClampMin = "0"))

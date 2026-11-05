@@ -59,6 +59,11 @@ namespace GFTraversalDetail
 		return true;
 	}
 
+	FVector GFTraversalFlatUnit(const FVector& Direction)
+	{
+		return FVector(Direction.X, Direction.Y, 0.0).GetSafeNormal();
+	}
+
 	FVector GFTraversalTangent(float Angle, float Sign)
 	{
 		const double Radians = static_cast<double>(Angle);
@@ -70,6 +75,20 @@ namespace GFTraversalDetail
 		}
 		return Tangent;
 	}
+}
+
+bool GFTraversalSim::IsIntoWall(const FVector& MoveDirection, const FVector& WallNormal, float MinDot)
+{
+	const FVector Normal = GFTraversalDetail::GFTraversalFlatNormal(WallNormal);
+	const FVector Tangent = FVector::CrossProduct(FVector::UpVector, Normal).GetSafeNormal();
+	const FVector Move = GFTraversalDetail::GFTraversalFlatUnit(MoveDirection);
+	if (Move.IsNearlyZero())
+	{
+		return false;
+	}
+	const double Into = FVector::DotProduct(Move, Normal * -1.0);
+	const double Along = FMath::Abs(FVector::DotProduct(Move, Tangent));
+	return Into >= static_cast<double>(FMath::Max(0.f, MinDot)) && Into > Along;
 }
 
 FName GFTraversalSim::SwivelTag()
@@ -105,6 +124,11 @@ void GFTraversalSim::ClearActivity(FGFStaminaState& State, const UGFMovementTuni
 	State.bWallRunning = false;
 	State.bWallRunBlocked = false;
 	State.WallRunTimeLeft = Tuning.WallRunMaxSeconds;
+	State.bWallClimbing = false;
+	State.bWallClimbBlocked = false;
+	State.WallClimbTimeLeft = 0.f;
+	State.bMantling = false;
+	State.MantleTimeLeft = 0.f;
 	State.bSwiveling = false;
 	State.bSwinging = false;
 	State.bYanking = false;
@@ -114,7 +138,7 @@ void GFTraversalSim::ClearActivity(FGFStaminaState& State, const UGFMovementTuni
 
 bool GFTraversalSim::ShouldShowLandingMarker(const FGFStaminaState& State, bool bGrounded, bool bEnabled)
 {
-	if (!bEnabled || State.bGripping || State.bWallRunning || State.bSwiveling)
+	if (!bEnabled || State.bGripping || State.bWallRunning || State.bSwiveling || State.bWallClimbing || State.bMantling)
 	{
 		return false;
 	}
@@ -488,22 +512,184 @@ bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Comma
 	}
 
 	const bool bBusy = Next.bGripping || Next.bDashing || Next.bSwiveling || Next.bSwinging || Next.bYanking || Next.bOverrideVelocity;
-	if (!Contact.bWallContact)
+
+	// #355 wall climb and its mantle. Cling, dash, pole and rope above already won this step if they are busy.
+	if (Command.bGrounded)
+	{
+		Next.WallClimbCoyoteLeft = Tuning.WallClimbCoyoteSeconds;
+	}
+	else
+	{
+		GFTraversalDetail::GFTraversalConsume(Next.WallClimbCoyoteLeft, Dt);
+	}
+	bool bClimbHandoff = false;
+	FVector HandoffNormal = Next.WallClimbNormal;
+	auto EndMantle = [&Next]()
+	{
+		Next.bMantling = false;
+		Next.MantleTimeLeft = 0.f;
+		Next.bOverrideVelocity = true;
+		Next.OverrideVelocity = FVector::ZeroVector;
+	};
+	auto StepMantle = [&Next, &Command, &Tuning, Dt, &EndMantle]()
+	{
+		GFTraversalDetail::GFTraversalConsume(Next.MantleTimeLeft, Dt);
+		const FVector To = Next.MantleTarget - Command.PlayerLocation;
+		const double Arrive = static_cast<double>(FMath::Max(0.f, Tuning.WallClimbMantleArrive));
+		const double StepTime = static_cast<double>(FMath::Max(Dt, KINDA_SMALL_NUMBER));
+		if (Next.MantleTimeLeft <= KINDA_SMALL_NUMBER)
+		{
+			EndMantle();
+			return;
+		}
+		if (To.Z > Arrive)
+		{
+			// Rise first so the capsule clears the lip instead of sliding into the wall top.
+			const double Up = FMath::Min(static_cast<double>(FMath::Max(0.f, Tuning.WallClimbMantleUpSpeed)), To.Z / StepTime);
+			Next.bOverrideVelocity = true;
+			Next.OverrideVelocity = FVector(0.0, 0.0, Up);
+			return;
+		}
+		const FVector Flat(To.X, To.Y, 0.0);
+		const double Dist = Flat.Size();
+		if (Dist <= Arrive || Command.bGrounded)
+		{
+			EndMantle();
+			return;
+		}
+		const double Speed = FMath::Min(static_cast<double>(FMath::Max(0.f, Tuning.WallClimbMantleForwardSpeed)), Dist / StepTime);
+		Next.bOverrideVelocity = true;
+		Next.OverrideVelocity = Flat / Dist * Speed;
+	};
+
+	if (bBusy || !Command.bWallClimbAllowed)
+	{
+		Next.bWallClimbing = false;
+		Next.bMantling = false;
+		Next.MantleTimeLeft = 0.f;
+	}
+	else if (Next.bMantling)
+	{
+		StepMantle();
+	}
+	else
+	{
+		bool bClimbWall = false;
+		FVector ClimbNormal = Next.WallClimbNormal;
+		if (Contact.bWallAhead && GFTraversalDetail::GFTraversalIsWallNormal(Contact.WallAheadNormal, Tuning.WallNormalMaxZ))
+		{
+			bClimbWall = true;
+			ClimbNormal = GFTraversalDetail::GFTraversalFlatNormal(Contact.WallAheadNormal);
+		}
+		else if (Contact.bWallContact && GFTraversalDetail::GFTraversalIsWallNormal(Contact.WallNormal, Tuning.WallNormalMaxZ))
+		{
+			bClimbWall = true;
+			ClimbNormal = GFTraversalDetail::GFTraversalFlatNormal(Contact.WallNormal);
+		}
+		const bool bInto = bClimbWall && GFTraversalSim::IsIntoWall(Command.MoveDirection, ClimbNormal, Tuning.WallClimbIntoMin);
+		if (!bInto && !Next.bWallClimbing)
+		{
+			Next.bWallClimbBlocked = false;
+		}
+
+		const bool bFloorOrCoyote = Command.bGrounded || Next.WallClimbCoyoteLeft > 0.f;
+		const bool bGroundHop = Command.bGrounded && Command.bJumpPressed;
+		if (!Next.bWallClimbing && !Next.bWallClimbBlocked && bInto && bFloorOrCoyote && !bGroundHop
+			&& Tuning.WallClimbMaxSeconds > 0.f && (bInfinite || Next.Stamina > 0.f))
+		{
+			Next.bWallClimbing = true;
+			Next.WallClimbTimeLeft = Tuning.WallClimbMaxSeconds;
+			Next.WallClimbNormal = ClimbNormal;
+			Next.bWallRunning = false;
+		}
+
+		if (Next.bWallClimbing)
+		{
+			FVector AlongDir = FVector::ForwardVector;
+			const bool bAlong = bClimbWall && GFTraversalDetail::GFTraversalAlongWall(Command.MoveDirection, ClimbNormal, Tuning.WallRunAlongMin, AlongDir);
+			const bool bLedgeInReach = Contact.bLedge
+				&& Contact.LedgeHeight >= Tuning.WallClimbMantleMinLip
+				&& Contact.LedgeHeight <= Tuning.WallClimbMantleReach;
+			if (bClimbWall)
+			{
+				Next.WallClimbNormal = ClimbNormal;
+			}
+			if (!bClimbWall)
+			{
+				Next.bWallClimbing = false;
+			}
+			else if (Command.bJumpPressed)
+			{
+				// Same kick as a cling: off the wall, with the hop count and the air dash back.
+				Next.bWallClimbing = false;
+				Next.bWallClimbBlocked = true;
+				Next.AirDashesUsed = 0;
+				Next.JumpsUsed = 0;
+				Next.FlipTimeLeft = 0.f;
+				Next.bTraversalJump = true;
+				Next.bOverrideVelocity = true;
+				Next.OverrideVelocity = ClimbNormal * static_cast<double>(KickSpeed) + FVector(0.0, 0.0, static_cast<double>(Tuning.WallKickUp));
+			}
+			else if (bAlong)
+			{
+				Next.bWallClimbing = false;
+				bClimbHandoff = true;
+				HandoffNormal = ClimbNormal;
+			}
+			else if (!bInto)
+			{
+				Next.bWallClimbing = false;
+			}
+			else if (bLedgeInReach && CanAfford(Tuning.WallClimbMantleCost))
+			{
+				Pay(Tuning.WallClimbMantleCost);
+				Next.bWallClimbing = false;
+				Next.bMantling = true;
+				Next.MantleTimeLeft = Tuning.WallClimbMantleMaxSeconds;
+				Next.MantleTarget = Contact.LedgeTarget;
+				StepMantle();
+			}
+			else
+			{
+				const float Consumed = GFTraversalDetail::GFTraversalConsume(Next.WallClimbTimeLeft, Dt);
+				Pay(Tuning.WallClimbDrainPerSecond * Consumed);
+				if (Next.WallClimbTimeLeft <= KINDA_SMALL_NUMBER || (!bInfinite && Next.Stamina <= 0.f))
+				{
+					Next.bWallClimbing = false;
+					Next.WallClimbTimeLeft = 0.f;
+					Next.bWallClimbBlocked = true;
+				}
+				else
+				{
+					Next.bOverrideVelocity = true;
+					Next.OverrideVelocity = FVector(0.0, 0.0, static_cast<double>(FMath::Max(0.f, Tuning.WallClimbSpeed)))
+						+ ClimbNormal * -static_cast<double>(FMath::Max(0.f, Tuning.WallClimbStickSpeed));
+				}
+			}
+		}
+	}
+
+	// A climb that turns along the wall hands off to the wall run below: same budget, same gates, with the climb
+	// counted as off the floor and as carrying WallClimbToRunSpeed.
+	const bool bRunWall = Contact.bWallContact || bClimbHandoff;
+	const FVector RunNormal = bClimbHandoff ? HandoffNormal : Contact.WallNormal;
+	if (!bRunWall)
 	{
 		Next.bWallRunBlocked = false;
 		Next.bWallRunning = false;
 		Next.WallRunTimeLeft = Tuning.WallRunMaxSeconds;
 	}
-	else if (bBusy)
+	else if (bBusy || Next.bWallClimbing || Next.bMantling || (Next.bOverrideVelocity && !bClimbHandoff))
 	{
 		Next.bWallRunning = false;
 	}
 	else
 	{
 		FVector AlongDir = FVector::ForwardVector;
-		const bool bAlong = GFTraversalDetail::GFTraversalAlongWall(Command.MoveDirection, Contact.WallNormal, Tuning.WallRunAlongMin, AlongDir);
-		const bool bFast = Command.HorizontalSpeed > Tuning.WallRunMinSpeed;
-		const bool bAir = !Command.bGrounded;
+		const bool bAlong = GFTraversalDetail::GFTraversalAlongWall(Command.MoveDirection, RunNormal, Tuning.WallRunAlongMin, AlongDir);
+		const float RunSpeed = bClimbHandoff ? FMath::Max(Command.HorizontalSpeed, Tuning.WallClimbToRunSpeed) : Command.HorizontalSpeed;
+		const bool bFast = RunSpeed > Tuning.WallRunMinSpeed;
+		const bool bAir = !Command.bGrounded || bClimbHandoff;
 		if (Next.bWallRunning && (!bAlong || !bFast || !bAir))
 		{
 			Next.bWallRunning = false;
@@ -512,8 +698,8 @@ bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Comma
 		{
 			Next.bWallRunning = true;
 			Next.WallRunDir = AlongDir;
-			Next.WallRunSpeed = Command.HorizontalSpeed;
-			Next.WallNormal = GFTraversalDetail::GFTraversalFlatNormal(Contact.WallNormal);
+			Next.WallRunSpeed = RunSpeed;
+			Next.WallNormal = GFTraversalDetail::GFTraversalFlatNormal(RunNormal);
 		}
 		if (Next.bWallRunning)
 		{
