@@ -1,0 +1,80 @@
+{
+ "schema": "gf.mineable/v1",
+ "kit": "rest_area_structures_v1",
+ "source": "handoff/inbox/rest_area_structures_v1 (the campfire, notice board, covered wagon and tent folders, merged from two art drops)",
+ "rule": "Rest area structures (issue 335). Never mineable (mode none). Tools/import_rest_area_structures.py imports them; Tools/place_towns_v2.py places them at the rest area. Not read by the mining whitelist loader.",
+ "meshes": [
+  {
+   "asset": "SM_Town_Caravan_Campfire",
+   "path": "/Game/Art/Town/Caravan/SM_Town_Caravan_Campfire",
+   "folder": "SM_Town_Caravan_Campfire_v1",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 252,
+   "reason": "prop",
+   "dimensions_cm": [
+    150.0,
+    150.0,
+    81.25
+   ]
+  },
+  {
+   "asset": "SM_Town_Caravan_NoticeBoard",
+   "path": "/Game/Art/Town/Caravan/SM_Town_Caravan_NoticeBoard",
+   "folder": "SM_Town_Caravan_NoticeBoard_v1",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 204,
+   "reason": "prop",
+   "dimensions_cm": [
+    50.0,
+    150.0,
+    250.0
+   ]
+  },
+  {
+   "asset": "SM_Town_Caravan_CoveredWagon",
+   "path": "/Game/Art/Town/Outskirts/Caravan/SM_Town_Caravan_CoveredWagon",
+   "folder": "SM_Town_Caravan_CoveredWagon_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 670,
+   "reason": "prop",
+   "dimensions_cm": [
+    587.5,
+    300.0,
+    300.0
+   ]
+  },
+  {
+   "asset": "SM_Town_Caravan_Tent",
+   "path": "/Game/Art/Town/Outskirts/Caravan/SM_Town_Caravan_Tent",
+   "folder": "SM_Town_Caravan_Tent_v1",
+   "manifest": "manifest_v1.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 488,
+   "reason": "prop",
+   "dimensions_cm": [
+    400.0,
+    400.0,
+    243.75
+   ]
+  }
+ ]
+}
