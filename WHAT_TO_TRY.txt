@@ -1,3 +1,13 @@
+Wall climb (issue 355)
+
+Where: anywhere with a tall wall, for example a house or factory wall on the world map (L_World_Factions_A).
+Run at the wall and keep holding forward into it. You climb straight up for up to 1.5 seconds (about 5 m). Stamina drains slowly while you climb.
+Let go of forward, or pull away, and you drop. Run out of time or stamina and you drop too. Ease off the stick before the same wall will take you again.
+Jump while climbing to kick off the wall, like the dash cling kick. Your hops and air dash come back.
+Turn the stick along the wall mid-climb and you go straight into a wall run, on the same wall run timer.
+If a ledge you can stand on is within reach (up to about 2.2 m above your feet), you pull yourself up onto it for 10 stamina.
+Stairs and one-block steps still step up as before, they never start a climb. No climbing in Beat Hop runs. Free inside the Kindle Ring.
+
 Stair collision v2: walkable buried treads (issue 353)
 
 Where: the world map (L_World_Factions_A), after Tools/fix_stair_collision_341.py has been run with GFSTAIR_MODE=apply on this branch.
