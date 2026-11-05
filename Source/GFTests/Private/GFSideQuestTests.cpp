@@ -202,14 +202,23 @@ bool FGFSideQuestBoardUnlockTest::RunTest(const FString&)
 	Climber.Refresh();
 	TestTrue(TEXT("Champion: Cinder line available"), StatusOf(Climber, LineCinder) == EGFSideQuestStatus::Available);
 
-	// Shipped stub lines (Accept only) are never offered until their steps land.
+	// Shipped stub lines (Accept only) are never offered until their steps land. Verdant ships in full (QL-c);
+	// GFGame.SideQuest.Line.Verdant.Transitions walks it. Rime and Cinderwright stay stubs.
 	const FGFSideQuestCatalog& Stubs = FGFSideQuestCatalog::Builtin();
+	int32 StubCount = 0;
 	for (const FGFSideQuestLineRule& Rule : Stubs.Lines)
 	{
+		if (FGFSideQuestCatalog::SameTown(Rule.TownId, Verdant))
+		{
+			TestTrue(TEXT("Verdant line is playable"), Rule.IsPlayable());
+			continue;
+		}
+		++StubCount;
 		FGFSideQuestLine Line = Player(Rule.TownId, EGFFactionRank::Leader, &Stubs);
 		TestTrue(*FString::Printf(TEXT("Stub %s locked"), *Rule.LineId.ToString()), StatusOf(Line, Rule.LineId) == EGFSideQuestStatus::Locked);
 		TestEqual(*FString::Printf(TEXT("Stub %s not ready"), *Rule.LineId.ToString()), Line.Apply(FGFSideQuestEvents::TalkAccepted(TEXT("P"), Rule.LineId, Rule.TownId)).Reason, FGFSideQuestCodes::NotReady);
 	}
+	TestEqual(TEXT("Rime and Cinderwright stay stubs"), StubCount, 2);
 	return true;
 }
 

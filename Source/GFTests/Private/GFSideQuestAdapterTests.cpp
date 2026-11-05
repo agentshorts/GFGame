@@ -1,5 +1,5 @@
 // Side quest world adapters and elder Talk side buttons (QL-b). Each world test injects a small test catalog through
-// UGFQuestSubsystem::SetSideCatalogForTests (shipped lines stay locked), sets errand standing through the "Quest"
+// UGFQuestSubsystem::SetSideCatalogForTests (the shipped catalog stays out of the way), sets errand standing through the "Quest"
 // blob, then drives the real world hook: town tree break, town crystal take, crystal drop, Accel Hop landing,
 // mantle at a tagged climb lip, ferry arrival, and the elder hand-in.
 // Run: UnrealEditor-Cmd GFGame.uproject -ExecCmds="Automation RunTests GFGame.SideQuest;Quit" -unattended -nullrhi
@@ -529,6 +529,8 @@ bool FGFSideQuestAdapterClimbTagTest::RunTest(const FString&)
 	}
 	Lip->Tags = { TEXT("GFQuestClimb_Cinderwright") };
 	Plain->Tags = { TEXT("Climb") };
+	// Tagged lips only here. DefaultGame.ini ships a Verdant fallback (QL-c); the fallback part below sets its own.
+	W.Adapters->ClimbLipFallbacks.Reset();
 	W.Adapters->RefreshClimbLips();
 	if (!TestEqual(TEXT("One tagged lip"), W.Adapters->GetClimbLips().Num(), 1))
 	{
