@@ -2,6 +2,7 @@
 #include "Aim/GFAimSim.h"
 #include "GFCharacter.h"
 #include "GFCrosshairTypes.h"
+#include "GFHopMusicSubsystem.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Input/SButton.h"
@@ -273,6 +274,11 @@ namespace
 			Row(SNew(STextBlock).Text(FText::FromString(TEXT("ADS sensitivity %"))).ColorAndOpacity(FLinearColor::White));
 			Row(Spin(50.f, 150.f, TAttribute<float>::CreateLambda([this]() { return AimUser.SensitivityScale * 100.f; }), [this](float V) { AimUser.SensitivityScale = V / 100.f; PushAim(); }, SensBox));
 
+			// Beat Hop playlist (issue 343): the player's own tracks for Acceleration Hop, saved for this player only.
+			Header(TEXT("Beat Hop playlist"));
+			Row(SAssignNew(PlaylistColumn, SVerticalBox));
+			RebuildPlaylist(true);
+
 			Header(TEXT("Share code"));
 			Row(SAssignNew(ShareText, SEditableText)
 				.Text(FText::FromString(Crosshair.ToShareCode()))
@@ -335,8 +341,176 @@ namespace
 				]);
 		}
 
+		FGFHopMusicDirector* HopMusic() const
+		{
+			return UGFHopMusicSubsystem::FindDirector(Character.Get());
+		}
+
+		static FString HopModeLabel(EGFHopPlayMode Mode)
+		{
+			switch (Mode)
+			{
+			case EGFHopPlayMode::Shuffle: return TEXT("Shuffle");
+			case EGFHopPlayMode::RepeatOne: return TEXT("Repeat One");
+			default: return TEXT("In Order");
+			}
+		}
+
+		/** Saves the playlist (GameUserSettings.ini, this player only) and redraws its rows. */
+		void SavePlaylist()
+		{
+			if (FGFHopMusicDirector* Music = HopMusic())
+			{
+				Music->SavePrefs();
+			}
+			RebuildPlaylist(false);
+		}
+
+		TSharedRef<SWidget> SmallButton(const FString& Label, bool bEnabled, TFunction<void()> OnClick)
+		{
+			return SNew(SButton)
+				.IsEnabled(bEnabled)
+				.OnClicked_Lambda([OnClick]()
+				{
+					OnClick();
+					return FReply::Handled();
+				})
+				[
+					SNew(STextBlock).Text(FText::FromString(Label))
+				];
+		}
+
+		void RebuildPlaylist(bool bRescan)
+		{
+			if (!PlaylistColumn.IsValid())
+			{
+				return;
+			}
+			PlaylistColumn->ClearChildren();
+			auto Line = [this](TSharedRef<SWidget> Widget)
+			{
+				PlaylistColumn->AddSlot().AutoHeight().Padding(0.f, 2.f)[ Widget ];
+			};
+			auto Note = [](const FString& Text)
+			{
+				return SNew(STextBlock).Text(FText::FromString(Text)).AutoWrapText(true).ColorAndOpacity(FLinearColor(0.75f, 0.78f, 0.8f));
+			};
+			FGFHopMusicDirector* Music = HopMusic();
+			if (!Music)
+			{
+				Line(Note(TEXT("Open this in game to edit the playlist.")));
+				return;
+			}
+			const FGFHopLibraryScan& Scan = bRescan || !Music->HasScanned() ? Music->Rescan() : Music->GetScan();
+			FGFHopPlaylistPrefs& Prefs = Music->Prefs();
+			const TArray<FString> Found = Scan.Keys();
+			if (Found.Num() == 0)
+			{
+				Line(Note(TEXT("No local tracks: the built-in song plays. Put .wav files with a BPM (\"Song 128bpm.wav\" or a .json beside it) in:")));
+				Line(Note(Scan.Folder));
+			}
+			else
+			{
+				Line(Note(FString::Printf(TEXT("%d track(s) in %s"), Found.Num(), *Scan.Folder)));
+			}
+			if (Scan.Skipped.Num() > 0)
+			{
+				Line(Note(FString::Printf(TEXT("%d file(s) skipped (see the log): %s"), Scan.Skipped.Num(), *Scan.Skipped[0])));
+			}
+
+			const TArray<FString> Ordered = FGFHopPlaylistRules::OrderedFound(Prefs, Found);
+			for (int32 Index = 0; Index < Ordered.Num(); ++Index)
+			{
+				const FString Key = Ordered[Index];
+				const FGFHopTrack* Track = Scan.Find(Key);
+				const FString Label = Track ? FString::Printf(TEXT("%s  (%.0f BPM)"), *Track->Title, Track->Bpm) : Key;
+				Line(SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+					[
+						SNew(SCheckBox)
+						.ToolTipText(FText::FromString(Key))
+						.IsChecked_Lambda([this, Key]()
+						{
+							FGFHopMusicDirector* M = HopMusic();
+							const FGFHopPlaylistEntry* Row = M ? M->Prefs().Entries.FindByPredicate([&Key](const FGFHopPlaylistEntry& E) { return E.Key == Key; }) : nullptr;
+							return Row && Row->bIncluded ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+						})
+						.OnCheckStateChanged_Lambda([this, Key](ECheckBoxState State)
+						{
+							if (FGFHopMusicDirector* M = HopMusic())
+							{
+								FGFHopPlaylistRules::SetIncluded(M->Prefs(), Key, State == ECheckBoxState::Checked);
+								SavePlaylist();
+							}
+						})
+						[
+							SNew(STextBlock).Text(FText::FromString(Label)).ColorAndOpacity(FLinearColor::White)
+						]
+					]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(1.f)
+					[
+						SmallButton(TEXT("Up"), Index > 0, [this, Key]()
+						{
+							if (FGFHopMusicDirector* M = HopMusic())
+							{
+								FGFHopPlaylistRules::MoveAmongFound(M->Prefs(), M->GetScan().Keys(), Key, -1);
+								SavePlaylist();
+							}
+						})
+					]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(1.f)
+					[
+						SmallButton(TEXT("Down"), Index + 1 < Ordered.Num(), [this, Key]()
+						{
+							if (FGFHopMusicDirector* M = HopMusic())
+							{
+								FGFHopPlaylistRules::MoveAmongFound(M->Prefs(), M->GetScan().Keys(), Key, 1);
+								SavePlaylist();
+							}
+						})
+					]);
+			}
+
+			TSharedRef<SHorizontalBox> Modes = SNew(SHorizontalBox);
+			for (const EGFHopPlayMode Mode : { EGFHopPlayMode::InOrder, EGFHopPlayMode::Shuffle, EGFHopPlayMode::RepeatOne })
+			{
+				const bool bCurrent = Prefs.Mode == Mode;
+				Modes->AddSlot().FillWidth(1.f).Padding(1.f)
+				[
+					SmallButton(bCurrent ? FString::Printf(TEXT("[%s]"), *HopModeLabel(Mode)) : HopModeLabel(Mode), true, [this, Mode]()
+					{
+						if (FGFHopMusicDirector* M = HopMusic())
+						{
+							M->Prefs().Mode = Mode;
+							SavePlaylist();
+						}
+					})
+				];
+			}
+			Line(Modes);
+			Line(SNew(SCheckBox)
+				.IsChecked_Lambda([this]()
+				{
+					FGFHopMusicDirector* M = HopMusic();
+					return M && M->Prefs().bResume ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+				})
+				.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
+				{
+					if (FGFHopMusicDirector* M = HopMusic())
+					{
+						M->Prefs().bResume = State == ECheckBoxState::Checked;
+						SavePlaylist();
+					}
+				})
+				[
+					SNew(STextBlock).Text(FText::FromString(TEXT("Resume (off = next track on each road)"))).ColorAndOpacity(FLinearColor::White)
+				]);
+			Line(SmallButton(TEXT("Rescan folder"), true, [this]() { RebuildPlaylist(true); }));
+		}
+
 		TWeakObjectPtr<AGFCharacter> Character;
 		FSimpleDelegate OnClose;
+		TSharedPtr<SVerticalBox> PlaylistColumn;
 		FGFCrosshairSettings Crosshair;
 		FGFAimUserSettings AimUser;
 		TSharedPtr<SVerticalBox> Column;
