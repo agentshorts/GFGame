@@ -148,8 +148,14 @@ public:
 	 */
 	FGFAirSteer BuildAirSteer(const FVector& Aim) const;
 
-	/** v3 (#347): Location is inside some hop road's box. */
-	bool IsOnAccelHopRoad(const FVector& Location) const;
+	/** v3 (#347): Location is inside some hop road's box (its top face raised by HeadroomUpCm). */
+	bool IsOnAccelHopRoad(const FVector& Location, double HeadroomUpCm = 0.0) const;
+
+	/** #347: Location is inside the air steer scope: a hop road's box plus AccelHop.AirSteerRoadHeadroomCm on top. */
+	bool IsInAirSteerRoadScope(const FVector& Location) const;
+
+	/** #347: the current (or last) flight took off inside the air steer scope. Set by every grounded move. */
+	bool DidAirSteerTakeOffOnRoad() const { return bAirSteerTakeoffOnRoad; }
 
 	/** v3 (#347): the steering the last move flew with (tests and the HUD read it). */
 	const FGFAirSteer& GetMoveAirSteer() const { return MoveAirSteer; }
@@ -328,4 +334,11 @@ private:
 	/** #347: built once per move in PerformMovement (from the move's camera, so a replay steers the same way). */
 	FGFAirSteer MoveAirSteer;
 	float LastAirSteerTurnDeg = 0.f;
+	/** #347: one log line per flight when aim steering drops because the pawn left the road scope. */
+	bool bAirSteerScopeLossLogged = false;
+	/**
+	 * #347: recomputed by every move that starts on the ground, read by the moves (and the landing probe) in the air.
+	 * A correction replay recomputes it from the replayed grounded move, so owner and server agree.
+	 */
+	bool bAirSteerTakeoffOnRoad = false;
 };

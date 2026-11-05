@@ -286,6 +286,13 @@ bool FGFAccelHopRoadActorTest::RunTest(const FString&)
 	const FTransform Turned(FRotator(0.0, 90.0, 0.0), FVector::ZeroVector, FVector(3.0));
 	TestTrue(TEXT("A turned box uses its own axes"), AGFAccelHopRoad::BoxContains(Turned, FVector(1000.0, 100.0, 100.0), FVector(0.0, 900.0, 0.0)));
 	TestFalse(TEXT("Scale is ignored"), AGFAccelHopRoad::BoxContains(Turned, FVector(1000.0, 100.0, 100.0), FVector(0.0, 2000.0, 0.0)));
+	// #347: a triple jump peaks over the placed box. Headroom raises only the top face.
+	TestFalse(TEXT("Over the box top with no headroom"), AGFAccelHopRoad::BoxContains(Along, Half, FVector(20000.0, 0.0, 600.0)));
+	TestTrue(TEXT("Over the box top inside the headroom"), AGFAccelHopRoad::BoxContains(Along, Half, FVector(20000.0, 0.0, 600.0), 1000.0));
+	TestFalse(TEXT("Past the headroom"), AGFAccelHopRoad::BoxContains(Along, Half, FVector(20000.0, 0.0, 1500.0), 1000.0));
+	TestFalse(TEXT("Headroom never lowers the floor"), AGFAccelHopRoad::BoxContains(Along, Half, FVector(20000.0, 0.0, -600.0), 1000.0));
+	TestFalse(TEXT("Headroom never widens the sides"), AGFAccelHopRoad::BoxContains(Along, Half, FVector(20000.0, 800.0, 600.0), 1000.0));
+	TestFalse(TEXT("Negative headroom is none"), AGFAccelHopRoad::BoxContains(Along, Half, FVector(20000.0, 0.0, 600.0), -1000.0));
 
 	// Mode: Beat Hop's session rule. Co-op always plays the built-in song; live only solo, asked for, and opened.
 	TestTrue(TEXT("Default is the song"), AGFAccelHopRoad::PickMode(false, 1, false) == EGFBeatHopMode::Songs);

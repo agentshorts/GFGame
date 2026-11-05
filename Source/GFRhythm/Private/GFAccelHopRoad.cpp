@@ -55,17 +55,18 @@ void AGFAccelHopRoad::SetRoadExtent(FVector HalfExtent)
 	Bounds->SetBoxExtent(HalfExtent.ComponentMax(FVector(50.f)));
 }
 
-bool AGFAccelHopRoad::ContainsPoint(const FVector& Point) const
+bool AGFAccelHopRoad::ContainsPoint(const FVector& Point, double HeadroomUpCm) const
 {
-	return Bounds && BoxContains(Bounds->GetComponentTransform(), Bounds->GetUnscaledBoxExtent(), Point);
+	return Bounds && BoxContains(Bounds->GetComponentTransform(), Bounds->GetUnscaledBoxExtent(), Point, HeadroomUpCm);
 }
 
-bool AGFAccelHopRoad::BoxContains(const FTransform& BoxTransform, const FVector& HalfExtent, const FVector& Point)
+bool AGFAccelHopRoad::BoxContains(const FTransform& BoxTransform, const FVector& HalfExtent, const FVector& Point, double HeadroomUpCm)
 {
 	FTransform NoScale = BoxTransform;
 	NoScale.SetScale3D(FVector::OneVector);
 	const FVector Local = NoScale.InverseTransformPosition(Point);
-	return FMath::Abs(Local.X) <= HalfExtent.X && FMath::Abs(Local.Y) <= HalfExtent.Y && FMath::Abs(Local.Z) <= HalfExtent.Z;
+	return FMath::Abs(Local.X) <= HalfExtent.X && FMath::Abs(Local.Y) <= HalfExtent.Y && Local.Z >= -HalfExtent.Z
+		&& Local.Z <= HalfExtent.Z + FMath::Max(0.0, HeadroomUpCm);
 }
 
 EGFBeatHopMode AGFAccelHopRoad::PickMode(bool bWantLive, int32 NumPlayers, bool bLiveStarted)

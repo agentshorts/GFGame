@@ -98,9 +98,26 @@ struct GFRHYTHM_API FGFAccelHopTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|AirSteer", meta = (ClampMin = "0", ClampMax = "180"))
 	float AirSteerMaxAngleDeg = 150.f;
 
-	/** On: aim steering only while the pawn is inside a hop road's box. Off: on every jump. */
+	/** On: aim steering only on a hop road (inside its box, see the two below). Off: on every jump. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|AirSteer")
 	bool bAirSteerOnlyOnRoad = true;
+
+	/**
+	 * With bAirSteerOnlyOnRoad: a hop that took off on the road steers all the way down, even after it drifts out of
+	 * the box (a 60 degree turn carries a hop several metres sideways, past the box's side). Without it the steering
+	 * cut out mid-hop and the landing circle stopped following the camera.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|AirSteer")
+	bool bAirSteerKeepsTakeoffRoad = true;
+
+	/**
+	 * With bAirSteerOnlyOnRoad, the road box counts this far above its top face, cm. The placed box reaches 4 m over
+	 * the road and a jump, double and triple jump peaks about 4 m over the takeoff (5 m of pawn centre over the road),
+	 * so without this the steering switched off at the top of the hop and the landing circle stopped following the
+	 * camera. The floor and the sides of the box are unchanged.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|AirSteer", meta = (ClampMin = "0"))
+	float AirSteerRoadHeadroomCm = 1000.f;
 };
 
 /**

@@ -51,11 +51,17 @@ public:
 
 	UBoxComponent* GetBounds() const { return Bounds; }
 
-	/** #347: is a world point inside this road's box (the air steer scope)? */
-	bool ContainsPoint(const FVector& Point) const;
+	/**
+	 * #347: is a world point inside this road's box (the air steer scope)? HeadroomUpCm stretches only the top of the
+	 * box, so a hop that peaks over the placed box still counts as on the road.
+	 */
+	bool ContainsPoint(const FVector& Point, double HeadroomUpCm = 0.0) const;
 
-	/** Pure: is P inside a box with this transform and half extent (scale ignored)? */
-	static bool BoxContains(const FTransform& BoxTransform, const FVector& HalfExtent, const FVector& Point);
+	/**
+	 * Pure: is P inside a box with this transform and half extent (scale ignored)? HeadroomUpCm (#347) raises the top
+	 * face only (box local +Z); the floor and the sides stay where they are.
+	 */
+	static bool BoxContains(const FTransform& BoxTransform, const FVector& HalfExtent, const FVector& Point, double HeadroomUpCm = 0.0);
 
 	/** Pure: the mode the road plays. Live only when asked for, allowed (solo) and the capture opened. */
 	static EGFBeatHopMode PickMode(bool bWantLive, int32 NumPlayers, bool bLiveStarted);

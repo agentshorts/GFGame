@@ -588,8 +588,27 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 	StepDeltaSeconds = DeltaTime;
 	// #347: aim steering for this move, from the camera this move recorded (a replay restores it), so the owner,
 	// the server and a correction replay all turn the flight the same way.
-	MoveAirSteer = BuildAirSteer(Command.CameraForward);
-	LastAirSteerTurnDeg = 0.f;
+	{
+		const bool bSteeredBefore = MoveAirSteer.bOn;
+		if (!IsFalling())
+		{
+			// #347: where this flight takes off from, if this move jumps. The moves in the air keep it.
+			bAirSteerTakeoffOnRoad = IsInAirSteerRoadScope(CharacterOwner->GetActorLocation());
+			bAirSteerScopeLossLogged = false;
+		}
+		MoveAirSteer = BuildAirSteer(Command.CameraForward);
+		LastAirSteerTurnDeg = 0.f;
+		// #347: say so once per flight when the steering (and with it the circle following the camera) drops because
+		// the pawn left the road scope mid-flight. Before the takeoff latch and the headroom that froze the circle.
+		if (IsFalling() && bSteeredBefore && !MoveAirSteer.bOn && !bAirSteerScopeLossLogged && GetTuning().AccelHop.bAirSteerOnlyOnRoad
+			&& !IsInAirSteerRoadScope(CharacterOwner->GetActorLocation()))
+		{
+			bAirSteerScopeLossLogged = true;
+			UE_LOG(LogGF, Log, TEXT("AirSteer: off mid-flight, %s left the hop road scope at %s (took off on the road %d, headroom %.0f cm over the box)"),
+				*CharacterOwner->GetName(), *CharacterOwner->GetActorLocation().ToCompactString(), bAirSteerTakeoffOnRoad ? 1 : 0,
+				GetTuning().AccelHop.AirSteerRoadHeadroomCm);
+		}
+	}
 
 	if (bAuthoritative)
 	{
@@ -838,7 +857,9 @@ FGFAirSteer UGFCharacterMovementComponent::BuildAirSteer(const FVector& Aim) con
 	{
 		return Steer;
 	}
-	if (Hop.bAirSteerOnlyOnRoad && !IsOnAccelHopRoad(CharacterOwner->GetActorLocation()))
+	// #347: on the road means inside the box (plus headroom on top), or in a flight that took off inside it.
+	if (Hop.bAirSteerOnlyOnRoad && !(Hop.bAirSteerKeepsTakeoffRoad && IsFalling() && bAirSteerTakeoffOnRoad)
+		&& !IsInAirSteerRoadScope(CharacterOwner->GetActorLocation()))
 	{
 		return Steer;
 	}
@@ -850,7 +871,7 @@ FGFAirSteer UGFCharacterMovementComponent::BuildAirSteer(const FVector& Aim) con
 	return Steer;
 }
 
-bool UGFCharacterMovementComponent::IsOnAccelHopRoad(const FVector& Location) const
+bool UGFCharacterMovementComponent::IsOnAccelHopRoad(const FVector& Location, double HeadroomUpCm) const
 {
 	const UWorld* World = GetWorld();
 	if (!World)
@@ -859,12 +880,17 @@ bool UGFCharacterMovementComponent::IsOnAccelHopRoad(const FVector& Location) co
 	}
 	for (TActorIterator<AGFAccelHopRoad> It(World); It; ++It)
 	{
-		if (It->ContainsPoint(Location))
+		if (It->ContainsPoint(Location, HeadroomUpCm))
 		{
 			return true;
 		}
 	}
 	return false;
+}
+
+bool UGFCharacterMovementComponent::IsInAirSteerRoadScope(const FVector& Location) const
+{
+	return IsOnAccelHopRoad(Location, static_cast<double>(FMath::Max(0.f, GetTuning().AccelHop.AirSteerRoadHeadroomCm)));
 }
 
 void UGFCharacterMovementComponent::HandleImpact(const FHitResult& Hit, float TimeSlice, const FVector& MoveDelta)
