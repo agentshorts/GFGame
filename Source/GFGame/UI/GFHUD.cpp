@@ -41,6 +41,8 @@
 #include "GFMagicRules.h"
 #include "Misc/PackageName.h"
 #include "Engine/Canvas.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/Texture2D.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
@@ -286,8 +288,9 @@ void AGFHUD::DrawHUD()
 	DrawAimOverlay();
 	DrawCompass();
 	DrawStaminaArc();
-	DrawLandingMarker();
+	// The lit diamond lies on the ground, so it goes down first and the landing circle is drawn over it (#347).
 	DrawAccelHopLitMarker();
+	DrawLandingMarker();
 	DrawZoneLabel();
 	DrawChat();
 	DrawToasts();
@@ -996,6 +999,9 @@ void AGFHUD::DrawLandingMarker()
 
 void AGFHUD::DrawAccelHopLitMarker()
 {
+	// v3 (#347): a magenta diamond lying flat on the lit tile's top face, black outline and white core, plus a beacon
+	// chevron over it. The v2 marker was a thin gold diamond floating 60 cm up, the same gold as the lit landing
+	// ring, so the two read as one thing. Shape (diamond vs circle) and color (magenta vs green or gold) now differ.
 	const AGFAccelHopRoad* Road = AGFAccelHopRoad::FindLocalRoad(GetWorld());
 	const AGFAccelHopTile* Tile = Road ? Road->GetLitTile() : nullptr;
 	APlayerController* Controller = GetOwningPlayerController();
@@ -1003,21 +1009,82 @@ void AGFHUD::DrawAccelHopLitMarker()
 	{
 		return;
 	}
-	FVector2D Screen = FVector2D::ZeroVector;
-	if (!Controller->ProjectWorldLocationToScreen(Tile->GetActorLocation() + FVector(0.0, 0.0, 60.0), Screen, true))
+	const FGFAccelHopLitTuning& Tuning = Road->GetLitTuning();
+	const float Pulse = Tile->GetLitPulse();
+
+	// The tile's own footprint (its axes, not the world box) and its top face. Before the art import there is no mesh,
+	// so it falls back to the actor location and MarkerMinHalfCm.
+	FVector Top = Tile->GetActorLocation();
+	float HalfX = 0.f;
+	float HalfY = 0.f;
+	if (const UStaticMeshComponent* Mesh = Tile->GetMesh(); Mesh && Mesh->GetStaticMesh())
 	{
-		return;
+		const FVector Local = Mesh->GetStaticMesh()->GetBounds().BoxExtent * Mesh->GetComponentScale().GetAbs();
+		HalfX = static_cast<float>(Local.X);
+		HalfY = static_cast<float>(Local.Y);
+		Top = Mesh->Bounds.Origin;
+		Top.Z = Mesh->Bounds.Origin.Z + Mesh->Bounds.BoxExtent.Z;
 	}
-	if (Screen.X < 0.f || Screen.Y < 0.f || Screen.X > Canvas->ClipX || Screen.Y > Canvas->ClipY)
+	Top.Z += static_cast<double>(Tuning.MarkerLiftCm);
+	const float HalfCm = FGFAccelHopLitRules::LitMarkerHalfCm(HalfX, HalfY, Pulse, Tuning);
+	FVector Corners[4];
+	FGFAccelHopLitRules::LitMarkerCorners(Top, Tile->GetActorForwardVector(), HalfCm, Corners);
+
+	auto OnScreen = [this](const FVector2D& P)
 	{
-		return;
+		return P.X >= 0.f && P.Y >= 0.f && P.X <= Canvas->ClipX && P.Y <= Canvas->ClipY;
+	};
+	FVector2D Center = FVector2D::ZeroVector;
+	const bool bCenter = Controller->ProjectWorldLocationToScreen(Top, Center, true);
+	FVector2D Screen[4];
+	bool bAll = bCenter;
+	for (int32 Index = 0; Index < 4 && bAll; ++Index)
+	{
+		bAll = Controller->ProjectWorldLocationToScreen(Corners[Index], Screen[Index], true);
 	}
-	const float Size = 10.f + 8.f * Tile->GetLitPulse();
-	const FLinearColor Gold(1.f, 0.82f, 0.25f, 0.95f);
-	DrawLine(Screen.X, Screen.Y - Size, Screen.X + Size, Screen.Y, Gold, 2.f);
-	DrawLine(Screen.X + Size, Screen.Y, Screen.X, Screen.Y + Size, Gold, 2.f);
-	DrawLine(Screen.X, Screen.Y + Size, Screen.X - Size, Screen.Y, Gold, 2.f);
-	DrawLine(Screen.X - Size, Screen.Y, Screen.X, Screen.Y - Size, Gold, 2.f);
+	// Far away the ground diamond shrinks to a sliver. Keep it at least MarkerMinScreenPx so it reads at a glance.
+	const float MinPx = Tuning.MarkerMinScreenPx * (1.f + Tuning.MarkerPulseGrow * Pulse);
+	const float SpanPx = bAll ? 0.5f * static_cast<float>(FMath::Max(FVector2D::Distance(Screen[0], Screen[2]), FVector2D::Distance(Screen[1], Screen[3]))) : 0.f;
+	if (bCenter && (!bAll || SpanPx < MinPx))
+	{
+		Screen[0] = Center + FVector2D(0.f, -MinPx * 0.6f);
+		Screen[1] = Center + FVector2D(MinPx, 0.f);
+		Screen[2] = Center + FVector2D(0.f, MinPx * 0.6f);
+		Screen[3] = Center + FVector2D(-MinPx, 0.f);
+		bAll = true;
+	}
+	if (bAll && (OnScreen(Center) || OnScreen(Screen[0]) || OnScreen(Screen[1]) || OnScreen(Screen[2]) || OnScreen(Screen[3])))
+	{
+		auto Ring = [this, &Screen](const FLinearColor& Color, float Width, float Shrink, const FVector2D& Mid)
+		{
+			for (int32 Index = 0; Index < 4; ++Index)
+			{
+				const FVector2D A = Mid + (Screen[Index] - Mid) * Shrink;
+				const FVector2D B = Mid + (Screen[(Index + 1) % 4] - Mid) * Shrink;
+				DrawLine(A.X, A.Y, B.X, B.Y, Color, Width);
+			}
+		};
+		const FVector2D Mid = (Screen[0] + Screen[1] + Screen[2] + Screen[3]) * 0.25f;
+		const float Grow = 1.f + 0.4f * Pulse;
+		Ring(Tuning.MarkerOutlineColor, Tuning.MarkerOutlineWidthPx * Grow, 1.f, Mid);
+		Ring(Tuning.MarkerColor, Tuning.MarkerLineWidthPx * Grow, 1.f, Mid);
+		Ring(Tuning.MarkerOutlineColor, Tuning.MarkerOutlineWidthPx * 0.5f, 0.55f, Mid);
+		Ring(FLinearColor(1.f, 1.f, 1.f, 0.95f), FMath::Max(2.f, Tuning.MarkerLineWidthPx * 0.5f), 0.55f, Mid);
+	}
+
+	// Beacon: a down chevron over the tile, found from hop height and over a crest where the face itself is hidden.
+	FVector2D Beacon = FVector2D::ZeroVector;
+	if (Controller->ProjectWorldLocationToScreen(Top + FVector(0.0, 0.0, Tuning.MarkerBeaconHeightCm), Beacon, true) && OnScreen(Beacon))
+	{
+		const float Size = Tuning.MarkerBeaconSizePx * (1.f + 0.3f * Pulse);
+		const FVector2D Left = Beacon + FVector2D(-Size, -Size * 0.7f);
+		const FVector2D Right = Beacon + FVector2D(Size, -Size * 0.7f);
+		const FVector2D Tip = Beacon + FVector2D(0.f, Size * 0.5f);
+		DrawLine(Left.X, Left.Y, Tip.X, Tip.Y, Tuning.MarkerOutlineColor, Tuning.MarkerOutlineWidthPx);
+		DrawLine(Tip.X, Tip.Y, Right.X, Right.Y, Tuning.MarkerOutlineColor, Tuning.MarkerOutlineWidthPx);
+		DrawLine(Left.X, Left.Y, Tip.X, Tip.Y, Tuning.MarkerColor, Tuning.MarkerLineWidthPx);
+		DrawLine(Tip.X, Tip.Y, Right.X, Right.Y, Tuning.MarkerColor, Tuning.MarkerLineWidthPx);
+	}
 }
 
 void AGFHUD::DrawZoneLabel()
