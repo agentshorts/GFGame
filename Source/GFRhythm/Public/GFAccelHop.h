@@ -230,6 +230,8 @@ struct GFRHYTHM_API FGFHopTileSlot
 {
 	float Along = 0.f;
 	EGFHopTileKind Kind = EGFHopTileKind::Standard;
+	/** #348: false keeps this tile out of the lit pick (the tutorial's beat and steer lessons). */
+	bool bCanLight = true;
 };
 
 /** The road's lit target, replicated from the server (#342). Index into the road's sorted tile list; -1 is none. */
@@ -257,7 +259,8 @@ struct GFRHYTHM_API FGFAccelHopLitRules
 
 	/**
 	 * The tile to light: within MinAheadHops..MaxAheadHops hops ahead of AnchorAlong in Direction (sign only), weight
-	 * scaled by 0.5..1 Jitter, then a small pull toward PreferAheadHops. Skips AvoidIndex and weight 0 kinds. -1 when
+	 * scaled by 0.5..1 Jitter, then a small pull toward PreferAheadHops. Skips AvoidIndex, weight 0 kinds and slots with
+	 * bCanLight off (#348). -1 when
 	 * nothing is in the window (the end of the road).
 	 */
 	static int32 PickLitIndex(const TArray<FGFHopTileSlot>& Slots, float AnchorAlong, float Direction, int32 AvoidIndex, int32 Seed, const FGFAccelHopLitTuning& Tuning);

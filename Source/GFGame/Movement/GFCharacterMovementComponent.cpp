@@ -701,6 +701,8 @@ void UGFCharacterMovementComponent::PollAccelHopLanding()
 	HandleAccelHopLanding(Tile, Clock->GetCurrentBeat(), Clock->GetBPM(), Mode);
 }
 
+FGFOnAccelHopLanded UGFCharacterMovementComponent::OnAccelHopLanded;
+
 bool UGFCharacterMovementComponent::HandleAccelHopLanding(AGFAccelHopTile* Tile, double NowBeat, float Bpm, EGFBeatHopMode Mode)
 {
 	if (!Tile)
@@ -733,6 +735,15 @@ bool UGFCharacterMovementComponent::HandleAccelHopLanding(AGFAccelHopTile* Tile,
 	if (CharacterOwner && !CharacterOwner->HasAuthority())
 	{
 		ServerAccelHop(Tile, Hit, BeatSeconds);
+	}
+	if (OnAccelHopLanded.IsBound())
+	{
+		FGFAccelHopLandingEvent Event;
+		Event.Tile = Tile;
+		Event.Hit = Hit;
+		Event.bLit = bLit && bChanged;
+		Event.bApplied = bChanged;
+		OnAccelHopLanded.Broadcast(this, Event);
 	}
 	return bChanged;
 }

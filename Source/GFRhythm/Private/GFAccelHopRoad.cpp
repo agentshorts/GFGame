@@ -186,6 +186,7 @@ TArray<FGFHopTileSlot> AGFAccelHopRoad::BuildSlots() const
 		{
 			Slot.Along = AlongOf(Tile->GetActorLocation());
 			Slot.Kind = Tile->GetKind();
+			Slot.bCanLight = Tile->CanBeLit();
 		}
 		Slots.Add(Slot);
 	}

@@ -173,7 +173,7 @@ int32 FGFAccelHopLitRules::PickLitIndex(const TArray<FGFHopTileSlot>& Slots, flo
 	float BestScore = -1.f;
 	for (int32 Index = 0; Index < Slots.Num(); ++Index)
 	{
-		if (Index == AvoidIndex)
+		if (Index == AvoidIndex || !Slots[Index].bCanLight)
 		{
 			continue;
 		}

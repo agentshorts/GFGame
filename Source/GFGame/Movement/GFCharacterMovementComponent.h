@@ -44,6 +44,20 @@ struct GFGAME_API FGFWalkRefusal
 	bool bFaceTopWalkable = false;
 };
 
+/** One judged hop tile landing on the owning machine (#348: the tutorial prompts listen to these). */
+struct GFGAME_API FGFAccelHopLandingEvent
+{
+	TWeakObjectPtr<AGFAccelHopTile> Tile;
+	FGFAccelHopHit Hit;
+	/** The landing paid the lit target. */
+	bool bLit = false;
+	/** The boost took it (false for a second landing on the same beat). */
+	bool bApplied = false;
+};
+
+class UGFCharacterMovementComponent;
+DECLARE_MULTICAST_DELEGATE_TwoParams(FGFOnAccelHopLanded, const UGFCharacterMovementComponent* /*Movement*/, const FGFAccelHopLandingEvent& /*Event*/);
+
 UCLASS()
 class GFGAME_API UGFCharacterMovementComponent : public UCharacterMovementComponent
 {
@@ -198,6 +212,12 @@ public:
 	 * tell the server. Returns true when the boost changed. TickComponent calls it; tests call it directly.
 	 */
 	bool HandleAccelHopLanding(AGFAccelHopTile* Tile, double NowBeat, float Bpm, EGFBeatHopMode Mode);
+
+	/**
+	 * #348: fires on the owning machine after every judged hop tile landing (HandleAccelHopLanding), for every
+	 * character. Listeners filter by world and pawn. Never fires for a server's copy of a remote player's hop.
+	 */
+	static FGFOnAccelHopLanded OnAccelHopLanded;
 
 	/** Server side of a reported hop: checks the tile is under the pawn and the rate limit, then applies it. */
 	bool ApplyServerAccelHop(AGFAccelHopTile* Tile, const FGFAccelHopHit& Hit, float BeatSeconds);

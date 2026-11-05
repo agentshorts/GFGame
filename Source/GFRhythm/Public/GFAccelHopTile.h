@@ -49,6 +49,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GF|AccelHop")
 	bool IsLitVisual() const { return bLitVisual; }
 
+	/** #348: can the road pick this tile as its lit target? The tutorial map turns it off on its first two lessons. */
+	UFUNCTION(BlueprintPure, Category = "GF|AccelHop")
+	bool CanBeLit() const { return bCanBeLit; }
+
+	UFUNCTION(BlueprintCallable, Category = "GF|AccelHop")
+	void SetCanBeLit(bool bOn) { bCanBeLit = bOn; }
+
 	/** The per-tile BeatPulse last written while lit (0 when unlit). */
 	float GetLitPulse() const { return LitPulse; }
 
@@ -58,6 +65,10 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop")
 	EGFHopTileKind Kind = EGFHopTileKind::Standard;
+
+	/** #348: off keeps the tile out of the road's lit pick. On by default, so the world road is unchanged. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop")
+	bool bCanBeLit = true;
 
 private:
 	void ApplyKind();
