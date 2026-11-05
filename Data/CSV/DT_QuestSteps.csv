@@ -1,0 +1,7 @@
+# Side quest steps (QL-a). One row per step; row name is LineId_StepId. Builtin in FGFSideQuestCatalog must match these rows.
+# QL-a ships only step 1 (Accept) of each line, so no line is offered yet (a line needs 3 steps). QL-c, QL-d and QL-e append the rest.
+# AdvanceKind is an EGFSideQuestEventKind. Items is the accepted item list for TurnIn, HeldDelivered and item-filtered steps.
+---,LineId,StepId,Order,Title,Hint,Goal,Items,AdvanceKind
+VerdantRootward_Accept,VerdantRootward,Accept,1,Town task,The elder has a task for you.,1,,TalkAccepted
+RimeIceSpan_Accept,RimeIceSpan,Accept,1,Town task,The elder has a task for you.,1,,TalkAccepted
+CinderEmberAscent_Accept,CinderEmberAscent,Accept,1,Town task,The elder has a task for you.,1,,TalkAccepted

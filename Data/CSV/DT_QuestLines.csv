@@ -1,0 +1,7 @@
+# Side quest lines (QL-a). Row name is the LineId. PLACEHOLDER ids and titles until the canon answers land.
+# TownId is the town that offers the line. New side data says Cinderwright; the board matches it to the Cinderwrights faction id.
+# UnlockRank default Member (ASK CANON: Champion instead?). Builtin in FGFSideQuestCatalog must match these rows.
+---,TownId,Title,UnlockRank,Sort
+VerdantRootward,Verdant,Rootward Run,Member,1
+RimeIceSpan,Rime,Ice Span,Member,2
+CinderEmberAscent,Cinderwright,Ember Ascent,Member,3

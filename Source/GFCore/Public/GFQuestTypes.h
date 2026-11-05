@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
 #include "GFItemTypes.h"
+#include "GFSideQuestTypes.h"
 #include "GFQuestTypes.generated.h"
 
 /** One step of The Elder's Errand. The order is the order of the line. */
@@ -166,6 +167,9 @@ struct GFCORE_API FGFQuestSave
 	GENERATED_BODY()
 
 	UPROPERTY(SaveGame) TArray<FGFQuestRecord> Records;
+
+	/** Side quest boards (QL-a). Blobs saved before this field load with no boards. No save version bump. */
+	UPROPERTY(SaveGame) TArray<FGFSideQuestBoardRecord> SideBoards;
 };
 
 /**

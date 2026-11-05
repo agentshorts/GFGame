@@ -83,6 +83,12 @@ struct GFCORE_API FGFQuestLine
 	 */
 	static bool IsStrandedAtEscape(const FGFQuestProgress& Progress, bool bHasLiveHeat);
 
+	/**
+	 * Turn-in rule shared with the side quest board. Fills Charge with exactly Goal of the Accepted items, in
+	 * offer order. False leaves Charge empty and sets OutReason to Short or WrongItem.
+	 */
+	static bool ChargeOffer(const TArray<FGFItemStack>& Offer, const TArray<FName>& Accepted, int32 Goal, TArray<FGFItemStack>& Charge, FName& OutReason);
+
 private:
 	const FGFQuestCatalog& ActiveRules() const;
 	FGFQuestApplyResult ApplyCrystal(const FGFQuestEvent& Event);

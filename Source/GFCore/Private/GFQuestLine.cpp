@@ -355,6 +355,11 @@ FGFQuestApplyResult FGFQuestLine::Apply(const FGFQuestEvent& Event)
 	}
 }
 
+bool FGFQuestLine::ChargeOffer(const TArray<FGFItemStack>& Offer, const TArray<FName>& Accepted, int32 Goal, TArray<FGFItemStack>& Charge, FName& OutReason)
+{
+	return GFQuestLinePrivate::ChargeOffer(Offer, Accepted, Goal, Charge, OutReason);
+}
+
 bool FGFQuestLine::IsStrandedAtEscape(const FGFQuestProgress& Progress, bool bHasLiveHeat)
 {
 	return Progress.Step == EGFQuestStep::Escape && !bHasLiveHeat;
