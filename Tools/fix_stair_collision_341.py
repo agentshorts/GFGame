@@ -1,14 +1,18 @@
-"""Issue 341: stairs and porches on L_World_Factions_A feel like an invisible wall.
+"""Issue 341 / 353: stairs and porches on L_World_Factions_A feel like an invisible wall.
 
 Cause: several town meshes import one UCX hull from the ground to the roof. The render mesh shows a step, porch
 or plinth in front of the walls, but the hull starts at (or past) the step's outer lip, so the capsule meets a
 flat wall where the eye sees a tread. The engine step and the riser assist both see a face many metres tall and
 refuse it, and the old StairRefused log only named stair-like faces, so the playtest log stayed empty.
 
-Fix: the meshes in Data/Town/stair_collision_341_v1.json ("fix") use their render triangles as collision
-(CTF_UseComplexAsSimple), so the capsule walks on the steps it sees. The UCX elements stay in the asset; revert
-mode puts the hull back. Only mesh assets are edited and saved; the map is loaded, read and never saved, so a map
-rebuild with Tools/place_towns_v2.py keeps the fix. Rerun this after reimporting any of those meshes.
+Fix: the meshes in Data/Town/stair_collision_341_v2.json ("fix") use their render triangles as collision
+(CTF_UseComplexAsSimple), so the capsule walks on the steps it sees. v2 keeps the original #341 six and adds the
+walkable buried-tread meshes from issue #353 (canal bridges, house porches, factory steps, fountain rim, stalls).
+Towers, fences, trees, walls, pipes, wagons and props stay on simple collision (audit_only). The UCX elements stay
+in the asset; revert mode puts the hull back. Only mesh assets are edited and saved; the map is loaded, read and
+never saved, so a map rebuild with Tools/place_towns_v2.py keeps the fix. Rerun this after reimporting any of those
+meshes. The existing six uassets already applied for #341 stay; apply only flips new fix-list meshes that are still
+on their hull.
 
 Every unique static mesh placed on the map is audited with UGFStairCollisionLibrary.find_buried_treads (render
 treads within one step of the ground that the blocking collision covers while the render mesh shows air, and that
@@ -36,7 +40,7 @@ import json, os, shutil, time
 import unreal
 
 PROJ = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
-DATA = os.path.join(PROJ, "Data", "Town", "stair_collision_341_v1.json")
+DATA = os.path.join(PROJ, "Data", "Town", "stair_collision_341_v2.json")
 OUT = os.path.join(PROJ, "Saved", "StairCollision")
 STAMP = time.strftime("%Y%m%d_%H%M%S")
 MODE = (os.environ.get("GFSTAIR_MODE", "").strip() or "audit").lower()

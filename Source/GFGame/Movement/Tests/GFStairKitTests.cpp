@@ -587,7 +587,7 @@ namespace GFStairKitTestsDetail
 {
 	constexpr const TCHAR* ControlCubePath = TEXT("/Engine/BasicShapes/Cube.Cube");
 	constexpr float TownSpacingCm = 4000.f;
-	/** The Board Hall side plinth and door threshold are 25 cm treads in the source FBX (Data/Town/stair_collision_341_v1.json). */
+	/** The Board Hall side plinth and door threshold are 25 cm treads in the source FBX (Data/Town/stair_collision_341_v2.json). */
 	constexpr float BoardHallPlinthCm = 25.f;
 
 	struct FTownFix
@@ -596,10 +596,10 @@ namespace GFStairKitTestsDetail
 		FString Path;
 	};
 
-	/** The #341 fix list, shared with Tools/fix_stair_collision_341.py. */
+	/** The #341/#353 fix list, shared with Tools/fix_stair_collision_341.py. */
 	bool LoadTownFixes(TArray<FTownFix>& Out, FString& OutError)
 	{
-		const FString File = FPaths::Combine(FPaths::ProjectDir(), TEXT("Data/Town/stair_collision_341_v1.json"));
+		const FString File = FPaths::Combine(FPaths::ProjectDir(), TEXT("Data/Town/stair_collision_341_v2.json"));
 		FString Text;
 		if (!FFileHelper::LoadFileToString(Text, *File))
 		{
@@ -668,7 +668,7 @@ namespace GFStairKitTestsDetail
 }
 
 /**
- * #341: the town meshes on the fix list must not hide a tread inside their collision. Fails until
+ * #341/#353: the town meshes on the fix list must not hide a tread inside their collision. Fails until
  * Tools/fix_stair_collision_341.py (GFSTAIR_MODE=apply) has switched them to complex as simple; the failure lists the
  * buried tread heights, which is also the proof that the probe sees the old hull. An engine cube is the clean control.
  * The gate is: complex as simple on and FindBuriedTreads == 0 (it returns 0 for complex as simple, -1 when it cannot
@@ -686,7 +686,7 @@ bool FGFStairKitTownCollisionTest::RunTest(const FString&)
 	}
 	TArray<FTownFix> Fixes;
 	FString Error;
-	if (!TestTrue(*FString::Printf(TEXT("Read the #341 fix list (%s)"), *Error), LoadTownFixes(Fixes, Error)))
+	if (!TestTrue(*FString::Printf(TEXT("Read the #341/#353 fix list (%s)"), *Error), LoadTownFixes(Fixes, Error)))
 	{
 		return false;
 	}
@@ -737,7 +737,7 @@ bool FGFStairKitTownCollisionTest::RunTest(const FString&)
 		TArray<float> Heights;
 		const int32 Buried = UGFStairCollisionLibrary::FindBuriedTreads(Actor->GetStaticMeshComponent(), MaxStep, Points, Heights);
 		const FString Blocker = UGFStairCollisionLibrary::DescribeTreadAuditBlocker(Actor->GetStaticMeshComponent());
-		AddInfo(FString::Printf(TEXT("#341 evidence: %s: %d buried tread samples at %s cm (triangles from %s%s%s); %s"),
+		AddInfo(FString::Printf(TEXT("#341/#353 evidence: %s: %d buried tread samples at %s cm (triangles from %s%s%s); %s"),
 			*Fix.Name, Buried, *HeightsOf(Heights), *UGFStairCollisionLibrary::DescribeTreadSource(Actor->GetStaticMeshComponent()),
 			Blocker.IsEmpty() ? TEXT("") : TEXT(", cannot measure: "), *Blocker, *UGFStairCollisionLibrary::DescribeSimpleCollision(Mesh)));
 		TestTrue(*FString::Printf(TEXT("%s uses its render mesh as collision (run Tools/fix_stair_collision_341.py with GFSTAIR_MODE=apply)"), *Fix.Name),

@@ -1,3 +1,10 @@
+Stair collision v2: walkable buried treads (issue 353)
+
+Where: the world map (L_World_Factions_A), after Tools/fix_stair_collision_341.py has been run with GFSTAIR_MODE=apply on this branch.
+The six #341 meshes (Board Hall, Counting House, Theatre, Smelter, Crane, Caravan Tent) stay as they are; apply only flips the new fix-list meshes.
+Walk canal bridges and canal corner lips, house porches (town_v1, Cinderwright, Rime), factory front steps, the Glacier Water Works platforms, the fountain rim, and market stalls (town_v1 and Cinderwright).
+Towers, fences, trees, walls, pipes, wagons and props stay on simple collision on purpose.
+
 Acceleration Hop tutorial: Accel Hop 101 (issue 348)
 
 Where: the hub (L_Hub). A new pink gate, "Accel Hop 101", stands beside the Beat Hop portal, past the jukebox. Walk in.
