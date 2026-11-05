@@ -2,6 +2,7 @@
 
 #include "GFArenaDirector.h"
 #include "GFBeatHopCourse.h"
+#include "GFAccelHopTutorial.h"
 #include "GFBeatHopMapGates.h"
 #include "GFLog.h"
 #include "GFDepthsDirector.h"
@@ -213,6 +214,32 @@ void AGFHubGateDirector::Place(const FString& WorldPackage, const FVector& InRim
 			if (BeatCourse)
 			{
 				GFBeatHopMapGates::Refresh(BeatCourse);
+			}
+		}
+	}
+
+	// Side gates (#348): map modes beside a ring portal. The hub gets the portal; their own map gets the marker, the
+	// placed actor and the way home, like a ring map mode.
+	for (const FGFMiniGameEntry& Entry : FGFMiniGameCatalog::Extras())
+	{
+		if (bHub)
+		{
+			FVector At;
+			FRotator Facing;
+			if (FGFMiniGameCatalog::ExtraGateTransform(Entry, InRimeCenter, At, Facing))
+			{
+				EnsureGate(World, Entry, EGFMiniGameGateRole::Portal, At, Facing, InRimeCenter);
+			}
+		}
+		else if (Entry.HasMap() && FGFMiniGameCatalog::WorldIs(WorldPackage, Entry.Map))
+		{
+			EnsureGate(World, Entry, EGFMiniGameGateRole::Marker, FVector(-500.f, 0.f, 0.f), FRotator::ZeroRotator, InRimeCenter);
+			AActor* Placed = EnsureClass(World, Entry.PlacedClass, FVector::ZeroVector, false);
+			EnsureReturn(World, Entry.Id, AGFReturnGate::MapLocation(), InRimeCenter, true);
+			// After the canonical return gate, so AGFReturnGate::Find still returns that one; the finish gate is tagged.
+			if (AGFAccelHopTutorial* Tutorial = Cast<AGFAccelHopTutorial>(Placed))
+			{
+				Tutorial->PlaceFinishGate();
 			}
 		}
 	}

@@ -217,6 +217,13 @@ namespace
 				return true;
 			}
 		}
+		for (const FGFMiniGameEntry& Entry : FGFMiniGameCatalog::Extras())
+		{
+			if (Entry.HasMap() && FGFMiniGameCatalog::WorldIs(Package, Entry.Map))
+			{
+				return true;
+			}
+		}
 		return false;
 	}
 

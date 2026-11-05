@@ -101,6 +101,24 @@ const TArray<FGFMiniGameEntry>& FGFMiniGameCatalog::All()
 	return Entries;
 }
 
+const TArray<FGFMiniGameEntry>& FGFMiniGameCatalog::Extras()
+{
+	// Acceleration Hop tutorial (#348): its own versioned map, built from L_Beat by Tools/create_accel_hop_tutorial_map.py.
+	// The portal reuses the shared sim gate dyed hop pink and stands on the Beat Hop portal's left, past the jukebox.
+	// No pictogram sign yet (the visual pass can add one through SignObject).
+	static const TArray<FGFMiniGameEntry> Entries = []
+	{
+		FGFMiniGameEntry Tutorial = MapMode(TEXT("AccelHopTutorial"), TEXT("Accel Hop 101"), TEXT("/Game/Maps/L_AccelHop_Tutorial_v1"),
+			FGFMiniGameCatalog::SimGateObject,
+			FLinearColor(1.00f, 0.25f, 0.85f), true, INDEX_NONE,
+			TEXT("/Script/GFGame.GFAccelHopTutorial"));
+		Tutorial.BesideId = TEXT("BeatHop");
+		Tutorial.BesideOffset = FVector(0.f, -FGFMiniGameCatalog::AccelHopTutorialBesideCm, 0.f);
+		return TArray<FGFMiniGameEntry>{ Tutorial };
+	}();
+	return Entries;
+}
+
 const FGFMiniGameEntry* FGFMiniGameCatalog::Find(FName Id)
 {
 	for (const FGFMiniGameEntry& Entry : All())
@@ -110,7 +128,35 @@ const FGFMiniGameEntry* FGFMiniGameCatalog::Find(FName Id)
 			return &Entry;
 		}
 	}
+	for (const FGFMiniGameEntry& Entry : Extras())
+	{
+		if (Entry.Id == Id)
+		{
+			return &Entry;
+		}
+	}
 	return nullptr;
+}
+
+bool FGFMiniGameCatalog::ExtraGateTransform(const FGFMiniGameEntry& Entry, const FVector& RimeCenter, FVector& OutLocation, FRotator& OutFacing)
+{
+	const FGFMiniGameEntry* Parent = nullptr;
+	for (const FGFMiniGameEntry& Ring : All())
+	{
+		if (Ring.Id == Entry.BesideId)
+		{
+			Parent = &Ring;
+			break;
+		}
+	}
+	if (Entry.BesideId.IsNone() || !Parent)
+	{
+		return false;
+	}
+	const FVector ParentAt = GateLocation(RimeCenter, Parent->RingIndex, All().Num());
+	OutFacing = GateFacing(ParentAt, RimeCenter);
+	OutLocation = ParentAt + OutFacing.RotateVector(Entry.BesideOffset);
+	return true;
 }
 
 FName FGFMiniGameCatalog::HubMap()

@@ -1,6 +1,7 @@
 #include "GFMiniGameGate.h"
 
 #include "GFAssetMap.h"
+#include "GFAccelHopTutorialGateSubsystem.h"
 #include "GFBeatHopGateSubsystem.h"
 #include "GFFashionGateSubsystem.h"
 #include "GFMiniGameCatalog.h"
@@ -39,6 +40,10 @@ namespace
 		if (Id == FName(TEXT("BeatHop")))
 		{
 			return GI->GetSubsystem<UGFBeatHopGateSubsystem>();
+		}
+		if (Id == FGFMiniGameCatalog::AccelHopTutorialId())
+		{
+			return GI->GetSubsystem<UGFAccelHopTutorialGateSubsystem>();
 		}
 		return nullptr;
 	}

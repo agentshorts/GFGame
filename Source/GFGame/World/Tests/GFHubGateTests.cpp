@@ -413,7 +413,8 @@ bool FGFHubGatePlaceTest::RunTest(const FString&)
 	const FVector Rime = FVector::ZeroVector;
 	Director->Place(TEXT("/Game/Maps/L_Hub"), Rime);
 	Director->Place(TEXT("/Game/Maps/UEDPIE_0_L_Hub"), Rime);
-	TestEqual(TEXT("One portal per mini-game"), CountRole(Scope.World, EGFMiniGameGateRole::Portal), FGFMiniGameCatalog::All().Num());
+	// Side gates (#348) add their portal beside a ring portal; the ring itself stays at All().Num().
+	TestEqual(TEXT("One portal per mini-game"), CountRole(Scope.World, EGFMiniGameGateRole::Portal), FGFMiniGameCatalog::All().Num() + FGFMiniGameCatalog::Extras().Num());
 	TestEqual(TEXT("One marker per mapless sim"), CountRole(Scope.World, EGFMiniGameGateRole::Marker), 4);
 
 	for (const FGFMiniGameEntry& Entry : FGFMiniGameCatalog::All())

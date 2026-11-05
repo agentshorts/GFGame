@@ -33,6 +33,12 @@ struct GFCORE_API FGFMiniGameEntry
 	FString DirectorClass;
 	/** /Script/Module.Class spawned on the mode map. Empty when the map has no stage actor yet. */
 	FString PlacedClass;
+	/**
+	 * Side gates only (#348): the ring entry this portal stands beside, and its offset in that portal's own frame
+	 * (X toward Rime, Y to its right). None for ring entries.
+	 */
+	FName BesideId;
+	FVector BesideOffset = FVector::ZeroVector;
 
 	bool HasMap() const { return !Map.IsNone(); }
 	bool HasSim() const { return !SimMode.IsNone(); }
@@ -69,8 +75,27 @@ struct GFCORE_API FGFMiniGameCatalog
 	/** Mode sign beside a hub portal, on the gate's right (actor +Y), same yaw as the gate (cm). */
 	static constexpr float SignRightCm = 300.f;
 
+	/** The ring: one portal per entry, evenly spaced. The gate tests lock this list (eight entries). */
 	static const TArray<FGFMiniGameEntry>& All();
+
+	/**
+	 * Side gates (#348): map modes whose hub portal stands beside a ring portal instead of taking a ring slot, so the
+	 * ring layout does not move. Today only the Acceleration Hop tutorial, beside Beat Hop.
+	 */
+	static const TArray<FGFMiniGameEntry>& Extras();
+
+	/** Ring entries, then side gates. */
 	static const FGFMiniGameEntry* Find(FName Id);
+
+	/** Acceleration Hop tutorial (#348): gate id and its versioned map. */
+	static FName AccelHopTutorialId() { return TEXT("AccelHopTutorial"); }
+	static FName AccelHopTutorialMap() { return TEXT("/Game/Maps/L_AccelHop_Tutorial_v1"); }
+
+	/** Gate-local offset of the tutorial portal from the Beat Hop portal: past the jukebox on the portal's left (cm). */
+	static constexpr float AccelHopTutorialBesideCm = 750.f;
+
+	/** Hub location and facing of a side gate: its parent ring portal's frame plus BesideOffset. False when Entry has no parent. */
+	static bool ExtraGateTransform(const FGFMiniGameEntry& Entry, const FVector& RimeCenter, FVector& OutLocation, FRotator& OutFacing);
 	static FName HubMap();
 
 	/** PIE packages look like /Game/Maps/UEDPIE_0_L_Hub. Match the short map name. */
