@@ -17,6 +17,8 @@ tiled with the 64 m GroundSlab mesh), lights only with GFTOWN_LIGHTS=placed, a p
 PlayerStart_Clearing in the Verdant woods clearing from Tools/town_clearing.py, with the trees inside it left out; also
 the basket ferry stations just outside the Verdant and Rime walls, TargetPoints tagged GFFerryStop + stop id that
 AGFFerryDirector flies between), and one StaticMeshActor per placement in outliner folders by group. Writes Saved/ArtImport/towns_v2_layout_report.json.
+The world also gets the issue 334 Acceleration Hop tiles and road box (Tools/place_acceleration_hop.py; needs
+Tools/import_acceleration_hop.py first; GFTOWN_ACCEL_HOP=0 leaves them out).
 """
 import collections, json, math, os, sys
 import unreal
@@ -247,9 +249,25 @@ def build(map_name, layout_name, ground, paths):
     rep["cleared_trees"] = cut
     rep["placed_matches_expected"] = rep["placed"] + cut == rep["expected"]
     rep["extent_cm"] = [x0, x1, y0, y1]
+    if layout_name.startswith("World") and os.environ.get("GFTOWN_ACCEL_HOP", "1") != "0":
+        # ISSUE 334: Acceleration Hop tiles on the Verdant to Cinderwright road (Tools/place_acceleration_hop.py),
+        # so a rebuilt world keeps them. A missing tile import is logged and the town build carries on.
+        rep["accel_hop"] = accel_hop(map_name)
     les.save_current_level()
     report["maps"][map_name] = rep
     log("{}: placed {} of {}; missing {}".format(map_name, rep["placed"], rep["expected"], rep["missing_assets"]))
+
+
+def accel_hop(map_name):
+    os.environ["GFHOP_LIB"] = "1"
+    try:
+        import place_acceleration_hop
+        return place_acceleration_hop.place_in_current_level(KIT)
+    except Exception as e:
+        log("{}: acceleration hop tiles skipped: {}".format(map_name, e))
+        return {"error": str(e)}
+    finally:
+        os.environ.pop("GFHOP_LIB", None)
 
 
 def main():

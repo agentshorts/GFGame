@@ -59,7 +59,8 @@ def default_layouts(kit):
 
 
 def load(path):
-    return json.load(io.open(path, encoding="utf-8"))
+    with io.open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def _angle_diff(a, b):

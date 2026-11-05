@@ -1,3 +1,14 @@
+Acceleration Hop (issue 334)
+
+Where: the world map (L_World_Factions_A), on the long straight road from the Verdant fountain toward Cinderwright.
+The road is unchanged. Glowing hop tiles sit on its straights, two per 4 m road piece.
+Step onto the road and a song starts. The tiles pulse on the beat.
+Jump and land on a tile on the beat: a good landing adds 10% run speed, a perfect one 18%.
+Downbeat tiles (pink) add 8% more when you land on the bar line. Boost tiles (orange chevrons) add 15% more.
+Chain hops to stack it, up to 1.8x. Each boost lasts 4 beats and fades over 1. Sprint stacks on top; dash stays the same.
+Landing tiles (green) at both ends hold your speed and close the chain. Miss a beat and the chain resets.
+Walk off the road and the song stops after 3 seconds.
+
 Beat Hop courses (sprint 3)
 
 Where: hub gate into Beat Hop (L_Beat). On the start pad, the MAP row sits between DIFFICULTY and COURSE.
