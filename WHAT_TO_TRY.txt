@@ -1,3 +1,19 @@
+Acceleration Hop tutorial: Accel Hop 101 (issue 348)
+
+Where: the hub (L_Hub). A new pink gate, "Accel Hop 101", stands beside the Beat Hop portal, past the jukebox. Walk in.
+It opens a new map, L_AccelHop_Tutorial_v1, a copy of the Beat Hop test map. L_Beat itself is unchanged and the Beat Hop portal still opens it.
+Before the map script has run on the build machine the gate says "Under construction", like any missing map.
+A panel at the top of the screen walks you through four lessons along one straight course, one song and one beat for the whole run:
+1/4 Hop on the beat: land on the thump 4 times (misses do not count, they do not have to be in a row). No lit tile yet.
+2/4 Steer in the air: tiles zigzag left and right. Mid-hop, look where you want to land. 3 switches from one side to the other.
+3/4 Hit the lit tile: the magenta diamond shows up from here on. Land on it twice.
+4/4 Put it all together: strip, zigzag, strip. A chain of 6 on-beat hops (a miss resets the chain), at least one zigzag and one lit landing.
+Each finished lesson flashes "Nice!" and moves on. Done says "Hop certified".
+Walk ahead onto a later lesson's tiles and it skips to that lesson. Walking back never rewinds.
+Two HUB gates: one by the start (behind you at the spawn) and one just past the last tile. Both take you back to the hub.
+Sprint and stamina work here like on the world road.
+Co-op: every player has their own prompts and progress. The lit tile is shared, as on the world road.
+
 Acceleration Hop v3: aim steering and the lit-tile diamond (issue 347)
 
 Where: any Acceleration Hop road on the world map (L_World_Factions_A).
