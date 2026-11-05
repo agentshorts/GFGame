@@ -14,6 +14,8 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/GameModeBase.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "CollisionQueryParams.h"
 #include "Engine/OverlapResult.h"
@@ -825,6 +827,15 @@ namespace GFRiserAssistDetail
 	/** A face this square to the move is a riser. Grazing a side wall is not. */
 	constexpr float MinIntoFaceDot = 0.25f;
 	constexpr double LogEverySeconds = 2.0;
+	/** A refused face whose walkable top is within this many step heights is logged as a stair, not a wall. */
+	constexpr float TallRiserShare = 1.5f;
+
+	/** The static mesh behind a hit, so a playtest log names the kit piece and not just the placed actor. */
+	FString MeshNameOf(const FHitResult& Hit)
+	{
+		const UStaticMeshComponent* MeshComponent = Cast<UStaticMeshComponent>(Hit.GetComponent());
+		return MeshComponent && MeshComponent->GetStaticMesh() ? MeshComponent->GetStaticMesh()->GetName() : FString(TEXT("none"));
+	}
 }
 
 bool UGFCharacterMovementComponent::StepUp(const FVector& GravDir, const FVector& Delta, const FHitResult& Hit, FStepDownResult* OutStepDownResult)
@@ -833,12 +844,25 @@ bool UGFCharacterMovementComponent::StepUp(const FVector& GravDir, const FVector
 	{
 		return true;
 	}
-	return TryRiserAssist(GravDir, Delta, Hit, OutStepDownResult);
+	const TCHAR* Why = nullptr;
+	float Rise = -1.f;
+	if (TryRiserAssist(GravDir, Delta, Hit, OutStepDownResult, Why, Rise))
+	{
+		return true;
+	}
+	if (Why)
+	{
+		NoteStairRefusal(Hit, Why, Rise);
+	}
+	return false;
 }
 
-bool UGFCharacterMovementComponent::TryRiserAssist(const FVector& GravDir, const FVector& Delta, const FHitResult& Hit, FStepDownResult* OutStepDownResult)
+bool UGFCharacterMovementComponent::TryRiserAssist(const FVector& GravDir, const FVector& Delta, const FHitResult& Hit, FStepDownResult* OutStepDownResult,
+	const TCHAR*& OutWhy, float& OutRise)
 {
 	using namespace GFRiserAssistDetail;
+	OutWhy = nullptr;
+	OutRise = -1.f;
 	if (!bRiserAssist || !CharacterOwner || !UpdatedComponent || !GetWorld() || GravDir.IsNearlyZero())
 	{
 		return false;
@@ -891,9 +915,21 @@ bool UGFCharacterMovementComponent::TryRiserAssist(const FVector& GravDir, const
 		|| Tread.bStartPenetrating
 		|| FVector::DotProduct(Tread.ImpactNormal, Up) < GetWalkableFloorZ())
 	{
+		// No tread within one step. Diagnostic only: a walkable top a little higher (up to TallRiserShare step heights) is a
+		// stair the kit made too tall, which the #341 log names. Anything higher is a wall and stays quiet.
+		const FVector TallTop = ProbeAt + Up * (FeetUp + MaxStepHeight * TallRiserShare + 1.0 - ProbeUp);
+		const FVector TallBottom = ProbeAt + Up * (FeetUp + MaxStepHeight - ProbeUp);
+		FHitResult Tall;
+		if (GetWorld()->LineTraceSingleByChannel(Tall, TallTop, TallBottom, UpdatedComponent->GetCollisionObjectType(), Params, Response)
+			&& !Tall.bStartPenetrating && FVector::DotProduct(Tall.ImpactNormal, Up) >= GetWalkableFloorZ())
+		{
+			OutWhy = TEXT("riser taller than MaxStepHeight");
+			OutRise = static_cast<float>(FVector::DotProduct(Tall.ImpactPoint, Up) - FeetUp);
+		}
 		return false;
 	}
 	const float Rise = static_cast<float>(FVector::DotProduct(Tread.ImpactPoint, Up) - FeetUp);
+	OutRise = Rise;
 	if (Rise <= 1.f || Rise > MaxStepHeight)
 	{
 		return false;
@@ -908,7 +944,8 @@ bool UGFCharacterMovementComponent::TryRiserAssist(const FVector& GravDir, const
 	if (UpHit.bStartPenetrating || FVector::DotProduct(UpdatedComponent->GetComponentLocation() - Start, Up) < Rise + 0.5f)
 	{
 		ScopedAssist.RevertMove();
-		return false; // no headroom over the tread
+		OutWhy = TEXT("no headroom over the tread");
+		return false;
 	}
 
 	const float Forward = FMath::Max(static_cast<float>(Planar.Size()), Radius * MinForwardRadiusShare);
@@ -917,7 +954,8 @@ bool UGFCharacterMovementComponent::TryRiserAssist(const FVector& GravDir, const
 	if (ForwardHit.bStartPenetrating || (ForwardHit.bBlockingHit && ForwardHit.Time <= KINDA_SMALL_NUMBER))
 	{
 		ScopedAssist.RevertMove();
-		return false; // the tread is too shallow or the next riser is right there
+		OutWhy = TEXT("tread too shallow or the next riser is too close");
+		return false;
 	}
 
 	FHitResult DownHit(1.f);
@@ -926,6 +964,7 @@ bool UGFCharacterMovementComponent::TryRiserAssist(const FVector& GravDir, const
 	if (!DownHit.bBlockingHit || DownHit.bStartPenetrating || !IsWalkable(DownHit) || Landed <= 0.5f || Landed > MaxStepHeight)
 	{
 		ScopedAssist.RevertMove();
+		OutWhy = TEXT("no walkable landing past the lip");
 		return false;
 	}
 	if (OutStepDownResult)
@@ -934,6 +973,7 @@ bool UGFCharacterMovementComponent::TryRiserAssist(const FVector& GravDir, const
 		if (!OutStepDownResult->FloorResult.IsWalkableFloor())
 		{
 			ScopedAssist.RevertMove();
+			OutWhy = TEXT("landing is not a walkable floor");
 			return false;
 		}
 	}
@@ -945,10 +985,26 @@ bool UGFCharacterMovementComponent::TryRiserAssist(const FVector& GravDir, const
 	if (Now - RiserAssistLoggedAt >= LogEverySeconds)
 	{
 		RiserAssistLoggedAt = Now;
-		UE_LOG(LogGF, Log, TEXT("StairAssist: engine step refused a %.1f cm riser on %s, lifted onto the tread (count %d)"),
-			Rise, *GetNameSafe(Hit.GetActor()), RiserAssistCount);
+		UE_LOG(LogGF, Log, TEXT("StairAssist: engine step refused a %.1f cm riser on %s (mesh %s), lifted onto the tread (count %d)"),
+			Rise, *GetNameSafe(Hit.GetActor()), *GFRiserAssistDetail::MeshNameOf(Hit), RiserAssistCount);
 	}
 	return true;
+}
+
+void UGFCharacterMovementComponent::NoteStairRefusal(const FHitResult& Hit, const TCHAR* Why, float Rise)
+{
+	++StairRefusalCount;
+	const UWorld* World = GetWorld();
+	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	if (Now - StairRefusalLoggedAt < GFRiserAssistDetail::LogEverySeconds)
+	{
+		return;
+	}
+	StairRefusalLoggedAt = Now;
+	const FVector Feet = UpdatedComponent ? UpdatedComponent->GetComponentLocation() : FVector::ZeroVector;
+	UE_LOG(LogGF, Log, TEXT("StairRefused: %s, riser %.1f cm on %s (component %s, mesh %s) at %s, pawn at %s (count %d)"),
+		Why, Rise, *GetNameSafe(Hit.GetActor()), *GetNameSafe(Hit.GetComponent()), *GFRiserAssistDetail::MeshNameOf(Hit),
+		*Hit.ImpactPoint.ToCompactString(), *Feet.ToCompactString(), StairRefusalCount);
 }
 
 void UGFCharacterMovementComponent::OnRep_StaminaGate()

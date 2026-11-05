@@ -59,6 +59,13 @@ public:
 	/** How many times the riser assist lifted this pawn since spawn. Each count is a step the engine refused. */
 	int32 GetRiserAssistCount() const { return RiserAssistCount; }
 
+	/**
+	 * How many stair-like risers both the engine step and the assist refused since spawn (a walkable top within 1.5
+	 * step heights, or a tread with no headroom, depth or landing). Plain walls do not count. Each one also writes a
+	 * rate-limited LogGF "StairRefused:" line naming the actor, component and static mesh, so a playtest names the piece.
+	 */
+	int32 GetStairRefusalCount() const { return StairRefusalCount; }
+
 	/** Copies BaseRunSpeed onto MaxWalkSpeed. Does not include the sprint multiplier. */
 	void ApplyBaseRunSpeed();
 
@@ -221,7 +228,10 @@ private:
 	void ApplyFlipPose(float TimeLeft);
 	void PollAccelHopLanding();
 	/** The #341 fallback behind StepUp. Same up, forward, down shape as the engine step, sized to the tread it found. */
-	bool TryRiserAssist(const FVector& GravDir, const FVector& Delta, const FHitResult& Hit, FStepDownResult* OutStepDownResult);
+	/** OutWhy names a stair-like refusal for the #341 log (null for a plain wall); OutRise is the riser it measured. */
+	bool TryRiserAssist(const FVector& GravDir, const FVector& Delta, const FHitResult& Hit, FStepDownResult* OutStepDownResult,
+		const TCHAR*& OutWhy, float& OutRise);
+	void NoteStairRefusal(const FHitResult& Hit, const TCHAR* Why, float Rise);
 	double AccelHopNow() const;
 
 	FGFStaminaState Sim;
@@ -265,6 +275,8 @@ private:
 	FGFAccelHopHit LastAccelHopHit;
 	int32 RiserAssistCount = 0;
 	double RiserAssistLoggedAt = -1000.0;
+	int32 StairRefusalCount = 0;
+	double StairRefusalLoggedAt = -1000.0;
 	bool bAccelHopWasFalling = false;
 	bool bLastAccelHopLit = false;
 };

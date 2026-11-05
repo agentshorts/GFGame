@@ -184,6 +184,7 @@ namespace GFStairKitTestsDetail
 		float FeetZ = 0.f;
 		float MaxFeetZ = 0.f;
 		int32 Assists = 0;
+		int32 Refusals = 0;
 		int32 Mode = 0;
 		const TCHAR* Why = TEXT("not run");
 	};
@@ -204,6 +205,7 @@ namespace GFStairKitTestsDetail
 		}
 		Move->StopMovementImmediately();
 		const int32 AssistsBefore = Move->GetRiserAssistCount();
+		const int32 RefusalsBefore = Move->GetStairRefusalCount();
 		Move->SetSprintHeld(bSprint);
 		float Previous = FVector::DotProduct(Pawn->GetActorLocation() - Origin, Dir);
 		Out.MaxFeetZ = FeetOf(Pawn);
@@ -242,12 +244,140 @@ namespace GFStairKitTestsDetail
 		Move->SetSprintHeld(false);
 		Move->StopMovementImmediately();
 		Out.Assists = Move->GetRiserAssistCount() - AssistsBefore;
+		Out.Refusals = Move->GetStairRefusalCount() - RefusalsBefore;
 		return Out;
 	}
 
 	FString Describe(const FClimb& C)
 	{
-		return FString::Printf(TEXT("%s, along %.0f, feet %.1f (max %.1f), mode %d, assists %d"), C.Why, C.Along, C.FeetZ, C.MaxFeetZ, C.Mode, C.Assists);
+		return FString::Printf(TEXT("%s, along %.0f, feet %.1f (max %.1f), mode %d, assists %d, stair refusals %d"),
+			C.Why, C.Along, C.FeetZ, C.MaxFeetZ, C.Mode, C.Assists, C.Refusals);
+	}
+
+	/** Where the court's front step is, in world space, and how the probe found it (for the #341 evidence line). */
+	struct FCourtStep
+	{
+		bool bFound = false;
+		FVector Axis = FVector::ZeroVector; // unit world axis from the court out through the step (one of +-X, +-Y)
+		FVector Centre = FVector::ZeroVector; // step box centre, world
+		float TopCm = 0.f;
+		float OuterCm = 0.f; // outer face distance from the court pivot along Axis
+		float InnerCm = 0.f; // inner face (terrace side) distance along Axis
+		FString How;
+	};
+
+	FVector SnapToAxis(const FVector& Planar)
+	{
+		return FMath::Abs(Planar.X) >= FMath::Abs(Planar.Y) ? FVector(FMath::Sign(Planar.X), 0.f, 0.f) : FVector(0.f, FMath::Sign(Planar.Y), 0.f);
+	}
+
+	/**
+	 * Reads the imported UCX boxes (BodySetup AggGeom) instead of guessing where Blender -Y landed. Static meshes import
+	 * with Force Front X, so the court front comes in on +X, not on +-Y where the first probe looked. The front step is
+	 * the ground-standing element with a walkable top (within one step) whose centre is farthest out from the mesh
+	 * bounds centre. No AggGeom match falls back to a down-trace band over all four axes.
+	 */
+	FCourtStep FindCourtStep(UWorld* World, const UStaticMeshComponent* Component, float MaxStepCm)
+	{
+		FCourtStep Out;
+		const UStaticMesh* Mesh = Component ? Component->GetStaticMesh() : nullptr;
+		const UBodySetup* Body = Mesh ? Mesh->GetBodySetup() : nullptr;
+		if (!World || !Body)
+		{
+			return Out;
+		}
+		const FTransform ToWorld = Component->GetComponentTransform();
+		const FVector Pivot = ToWorld.GetLocation();
+		const float GroundZ = static_cast<float>(Pivot.Z);
+		const FVector BoundsCentre = Mesh->GetBoundingBox().TransformBy(ToWorld).GetCenter();
+
+		struct FElem
+		{
+			FBox Box;
+			FString Name;
+		};
+		TArray<FElem> Elems;
+		for (int32 Index = 0; Index < Body->AggGeom.ConvexElems.Num(); ++Index)
+		{
+			const FKConvexElem& Convex = Body->AggGeom.ConvexElems[Index];
+			Elems.Add({ Convex.ElemBox.TransformBy(Convex.GetTransform()).TransformBy(ToWorld), FString::Printf(TEXT("convex %d"), Index) });
+		}
+		for (int32 Index = 0; Index < Body->AggGeom.BoxElems.Num(); ++Index)
+		{
+			Elems.Add({ Body->AggGeom.BoxElems[Index].CalcAABB(FTransform::Identity, 1.f).TransformBy(ToWorld), FString::Printf(TEXT("box %d"), Index) });
+		}
+
+		float BestOut = -1.f;
+		for (const FElem& Elem : Elems)
+		{
+			const float Top = static_cast<float>(Elem.Box.Max.Z) - GroundZ;
+			if (!Elem.Box.IsValid || Elem.Box.Min.Z - GroundZ > 10.f || Top <= 10.f || Top > MaxStepCm)
+			{
+				continue;
+			}
+			const FVector Planar(Elem.Box.GetCenter().X - BoundsCentre.X, Elem.Box.GetCenter().Y - BoundsCentre.Y, 0.f);
+			const float OutBy = static_cast<float>(Planar.Size());
+			if (OutBy <= BestOut || Planar.IsNearlyZero())
+			{
+				continue;
+			}
+			BestOut = OutBy;
+			Out.bFound = true;
+			Out.Axis = SnapToAxis(Planar);
+			Out.Centre = Elem.Box.GetCenter();
+			Out.TopCm = Top;
+			const float A = static_cast<float>(FVector::DotProduct(Elem.Box.Min - Pivot, Out.Axis));
+			const float B = static_cast<float>(FVector::DotProduct(Elem.Box.Max - Pivot, Out.Axis));
+			Out.OuterCm = FMath::Max(A, B);
+			Out.InnerCm = FMath::Min(A, B);
+			Out.How = FString::Printf(TEXT("AggGeom %s of %d elements"), *Elem.Name, Elems.Num());
+		}
+
+		if (!Out.bFound)
+		{
+			// Fallback: down-traces 600 to 1000 cm out on each axis, first hit that stands one step proud of the ground.
+			const FVector Axes[] = { FVector(1.f, 0.f, 0.f), FVector(-1.f, 0.f, 0.f), FVector(0.f, 1.f, 0.f), FVector(0.f, -1.f, 0.f) };
+			for (const FVector& Axis : Axes)
+			{
+				for (float Dist = 1000.f; Dist >= 600.f && !Out.bFound; Dist -= 12.5f)
+				{
+					const FVector Probe = Pivot + Axis * Dist + FVector(0.f, 0.f, 400.f);
+					FHitResult Hit;
+					if (World->LineTraceSingleByChannel(Hit, Probe, Probe - FVector(0.f, 0.f, 500.f), ECC_Pawn) && Hit.GetComponent() == Component)
+					{
+						const float Top = static_cast<float>(Hit.ImpactPoint.Z) - GroundZ;
+						if (Top > 10.f && Top <= MaxStepCm)
+						{
+							Out.bFound = true;
+							Out.Axis = Axis;
+							Out.Centre = Pivot + Axis * (Dist - 75.f);
+							Out.TopCm = Top;
+							Out.OuterCm = Dist;
+							Out.InnerCm = Dist - 150.f;
+							Out.How = FString::Printf(TEXT("fallback down-trace band (AggGeom had %d elements, none matched)"), Elems.Num());
+						}
+					}
+				}
+				if (Out.bFound)
+				{
+					break;
+				}
+			}
+		}
+
+		if (Out.bFound)
+		{
+			// Sanity check: the collision really is there where the probe says.
+			FHitResult Hit;
+			const FVector Probe(Out.Centre.X, Out.Centre.Y, GroundZ + 400.f);
+			if (!World->LineTraceSingleByChannel(Hit, Probe, Probe - FVector(0.f, 0.f, 500.f), ECC_Pawn)
+				|| !FMath::IsNearlyEqual(static_cast<float>(Hit.ImpactPoint.Z) - GroundZ, Out.TopCm, 3.f))
+			{
+				Out.How += TEXT(", but the down-trace at its centre disagrees");
+				Out.bFound = false;
+			}
+		}
+		return Out;
 	}
 }
 
@@ -344,6 +474,15 @@ bool FGFStairKitWallTest::RunTest(const FString&)
 		TestFalse(*FString::Printf(TEXT("%s is not walked up (%s)"), Kit.Id, *Describe(Result)), Result.bReached);
 		TestTrue(*FString::Printf(TEXT("%s feet stay on the ground"), Kit.Id), Result.MaxFeetZ < 10.f);
 		TestEqual(*FString::Printf(TEXT("%s gets no assist"), Kit.Id), Result.Assists, 0);
+		// The #341 map diagnostic: a riser just past the step height is logged as a refused stair, a 2 m wall is not.
+		if (Index == 0)
+		{
+			TestTrue(*FString::Printf(TEXT("%s logs a StairRefused line (%s)"), Kit.Id, *Describe(Result)), Result.Refusals > 0);
+		}
+		else
+		{
+			TestEqual(*FString::Printf(TEXT("%s is a wall, not a refused stair"), Kit.Id), Result.Refusals, 0);
+		}
 		Pawn->Destroy();
 	}
 	return true;
@@ -382,25 +521,34 @@ bool FGFStairKitCourtTest::RunTest(const FString&)
 	Court->GetStaticMeshComponent()->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
 	TestTrue(TEXT("Court mesh has simple collision (the UCX boxes)"), Mesh->GetBodySetup() && Mesh->GetBodySetup()->AggGeom.GetElementCount() > 0);
 
-	// The front step box sits 700 to 850 cm out from the centre. Blender -Y may import as either UE sign, so probe both.
-	float Sign = 0.f;
-	for (const float Try : { -1.f, 1.f })
-	{
-		FHitResult Hit;
-		const FVector Probe(0.f, Try * 775.f, 400.f);
-		if (World->LineTraceSingleByChannel(Hit, Probe, Probe - FVector(0.f, 0.f, 500.f), ECC_Pawn)
-			&& FMath::IsNearlyEqual(static_cast<float>(Hit.ImpactPoint.Z), 50.f, 6.f))
-		{
-			Sign = Try;
-			break;
-		}
-	}
-	if (!TestTrue(TEXT("Found the 50 cm front step box"), Sign != 0.f))
+	const float MaxStep = GetDefault<AGFCharacter>()->PlayerMaxStepHeight;
+	const FCourtStep Step = FindCourtStep(World, Court->GetStaticMeshComponent(), MaxStep);
+	const FString Probe = FString::Printf(TEXT("%s, axis %s%s, step centre %s, top %.1f cm, faces %.0f to %.0f cm out"),
+		*Step.How, Step.Axis.X != 0.f ? TEXT("X") : TEXT("Y"), (Step.Axis.X + Step.Axis.Y) > 0.f ? TEXT("+") : TEXT("-"),
+		*Step.Centre.ToCompactString(), Step.TopCm, Step.InnerCm, Step.OuterCm);
+	AddInfo(FString::Printf(TEXT("#341 evidence: SovereignCourt probe: %s"), *Probe));
+	if (!TestTrue(*FString::Printf(TEXT("Found the court front step (%s)"), *Probe), Step.bFound))
 	{
 		return false;
 	}
-	const FVector Dir(0.f, -Sign, 0.f);
-	const FVector Start(0.f, Sign * 1000.f, 0.f);
+	// Authored as a 50 cm step box then the 75 cm terrace. Scale both by the step the probe found, so a modest import
+	// scale still checks the same climb.
+	const float Scale = Step.TopCm / 50.f;
+	TestTrue(*FString::Printf(TEXT("Front step is about 50 cm at scale 1 (%.1f cm)"), Step.TopCm), Scale > 0.75f && Scale < 1.5f);
+	const float Depth = Step.OuterCm - Step.InnerCm;
+	const FVector Pivot = Court->GetActorLocation();
+	const FVector Lateral = FVector(Step.Centre.X - Pivot.X, Step.Centre.Y - Pivot.Y, 0.f) - Step.Axis * FVector::DotProduct(Step.Centre - Pivot, Step.Axis);
+	const FVector Dir = -Step.Axis;
+	const FVector Start = FVector(Pivot.X, Pivot.Y, 0.f) + Lateral + Step.Axis * (Step.OuterCm + ApproachCm);
+	// 1.2 step depths past the inner face is on the terrace and short of the dais (180 cm at scale 1: 520 cm out).
+	const float GoalOut = Step.InnerCm - Depth * 1.2f;
+	const float GoalAlong = Step.OuterCm + ApproachCm - GoalOut;
+	FHitResult TerraceHit;
+	const FVector GoalAt = Start + Dir * GoalAlong;
+	const float TerraceTop = World->LineTraceSingleByChannel(TerraceHit, GoalAt + FVector(0.f, 0.f, 400.f), GoalAt - FVector(0.f, 0.f, 100.f), ECC_Pawn)
+		? static_cast<float>(TerraceHit.ImpactPoint.Z) : -1.f;
+	TestTrue(*FString::Printf(TEXT("Goal is on the 75 cm terrace (%.1f vs %.1f)"), TerraceTop, 75.f * Scale), FMath::IsNearlyEqual(TerraceTop, 75.f * Scale, 10.f));
+
 	for (const bool bAssist : { false, true })
 	{
 		AGFCharacter* Pawn = SpawnPlayer(World, Start, Dir.Rotation());
@@ -410,16 +558,17 @@ bool FGFStairKitCourtTest::RunTest(const FString&)
 			return false;
 		}
 		Move->bRiserAssist = bAssist;
-		// 450 cm in is past the step box (850..700 out) and onto the 75 cm terrace, short of the dais at 450.
-		const FClimb Result = Climb(Pawn, Start, Dir, 1000.f - 520.f, false);
+		const FClimb Result = Climb(Pawn, Start, Dir, GoalAlong, false);
 		if (bAssist)
 		{
 			TestTrue(*FString::Printf(TEXT("Court front steps climbed (%s)"), *Describe(Result)), Result.bReached);
-			TestTrue(*FString::Printf(TEXT("Feet on the terrace (%.1f)"), Result.FeetZ), Result.bReached && FMath::IsNearlyEqual(Result.FeetZ, 75.f, 15.f));
+			TestTrue(*FString::Printf(TEXT("Feet on the terrace (%.1f vs %.1f)"), Result.FeetZ, TerraceTop),
+				Result.bReached && FMath::IsNearlyEqual(Result.FeetZ, TerraceTop, 15.f));
 		}
 		else
 		{
-			AddInfo(FString::Printf(TEXT("#341 evidence: SovereignCourt, engine step only: %s"), *Describe(Result)));
+			AddInfo(FString::Printf(TEXT("#341 evidence: SovereignCourt, engine step only, walked %.0f cm along %s: %s"),
+				GoalAlong, *Dir.ToCompactString(), *Describe(Result)));
 		}
 		Pawn->Destroy();
 	}
