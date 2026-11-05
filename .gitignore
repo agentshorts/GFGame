@@ -96,6 +96,12 @@ venv/
 # This repo is public and those licenses forbid redistribution, so never commit them.
 /Content/LicensedAnims/
 
+# Local music for Acceleration Hop (issue 343): each player's own licensed tracks, read at runtime.
+# Never commit music: the repo is public. Both the project folder and the one next to a packaged game.
+/Content/LicensedMusic/
+/LicensedMusic/
+/Tools/hop_music_out/
+
 # Unreal MCP client configs written by ModelContextProtocol.GenerateClientConfig
 /.mcp.json
 /.cursor/mcp.json

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
 #include "GFWasapiLoopback.h"
+#include "GFHopMusic.h"
 #include "GFRhythmSettings.generated.h"
 
 /**
@@ -33,6 +34,13 @@ public:
 	/** Short quiet clicks on hits in live mode (off by default so loopback does not hear the game). */
 	UPROPERTY(config, EditAnywhere, BlueprintReadWrite, Category = "Live mode")
 	bool bLiveHitSounds = false;
+
+	/**
+	 * Acceleration Hop playlist (issue 343): the tracks found in this machine's LicensedMusic/AccelHop folder, which
+	 * play and in what order, the play mode, Resume, and where the last track stopped. Local to this player only.
+	 */
+	UPROPERTY(config, EditAnywhere, BlueprintReadWrite, Category = "Acceleration Hop", meta = (DisplayName = "Beat Hop playlist"))
+	FGFHopPlaylistPrefs AccelHopPlaylist;
 
 	UFUNCTION(BlueprintPure, Category = "GF|Rhythm")
 	bool UsesSystemDefault() const { return ListenDeviceId.IsEmpty(); }
