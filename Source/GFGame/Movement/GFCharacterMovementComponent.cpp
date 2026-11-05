@@ -610,6 +610,7 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 		Command.WallKickSpeedOverride = GFBeatHopNinja::SpeedForBeats(BeatHopProfile.WallKickBeats, BeatHopRefSpeed, BeatTuning.DashDuration);
 		Command.JumpsPerAirtimeOverride = GFBeatHopNinja::JumpsFor(BeatHopDifficulty, BeatHopProfile);
 	}
+	Command.bWallClimbAllowed = bWallClimbAllowed;
 	ApplyBeatHopMoveMask(Command);
 	Sim = GFStaminaSim::Step(Sim, Command, GetTuning());
 	// Substeps share this frame's start so a rope, yank, or orbit lands on TravelLocation.

@@ -95,6 +95,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Movement|Stairs")
 	bool bRiserAssist = true;
 
+	/** #355: tests and modes that must not climb can clear this. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Movement|WallClimb")
+	bool bWallClimbAllowed = true;
+
 	/** How many times the riser assist lifted this pawn since spawn. Each count is a step the engine refused. */
 	int32 GetRiserAssistCount() const { return RiserAssistCount; }
 

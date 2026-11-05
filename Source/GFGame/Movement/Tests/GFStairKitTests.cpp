@@ -476,6 +476,8 @@ bool FGFStairKitWallTest::RunTest(const FString&)
 			return false;
 		}
 		Move->bRiserAssist = true;
+		// #355: this test measures stair refusal on a wall. Climb must stay off so the assist is what is under test.
+		Move->bWallClimbAllowed = false;
 		const FClimb Result = Climb(Pawn, Origin, FVector::ForwardVector, Kit.RunCm() * 0.5f, false);
 		TestFalse(*FString::Printf(TEXT("%s is not walked up (%s)"), Kit.Id, *Describe(Result)), Result.bReached);
 		TestTrue(*FString::Printf(TEXT("%s feet stay on the ground"), Kit.Id), Result.MaxFeetZ < 10.f);
