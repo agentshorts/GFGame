@@ -1,4 +1,4 @@
-// The Elder's Errand: the pure line, turn-ins, the quest CSV, and a save/load round trip.
+// The Elder's Errand: the pure line, turn-ins, the quest CSV, a save/load round trip, and a reload stranded at Escape.
 #include "Misc/AutomationTest.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -12,6 +12,7 @@
 #include "GFPlayerState.h"
 #include "GFSaveSubsystem.h"
 #include "GFSaveGame.h"
+#include "GFTheftDirector.h"
 #include "GFModeTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -911,6 +912,104 @@ bool FGFQuestSaveRoundTripTest::RunTest(const FString&)
 		TestEqual(TEXT("Rejoin faction"), Again->FactionId, Verdant);
 		TestTrue(TEXT("B untouched by the rejoin"), B->QuestStep == EGFQuestStep::Done);
 	}
+	Save->RemoveFromRoot();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFQuestSaveStrandedEscapeTest, "GFGame.Quest.Save.StrandedEscapeReload", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFQuestSaveStrandedEscapeTest::RunTest(const FString&)
+{
+	using namespace GFQuestTest;
+	FWorld World;
+	if (!World.Init(*this, TEXT("GFQuestStrandedEscape")))
+	{
+		return false;
+	}
+	AGFPlayerState* A = World.Add(TEXT("A"));
+	AGFPlayerState* B = World.Add(TEXT("B"));
+	AGFPlayerState* C = World.Add(TEXT("C"));
+	if (!TestNotNull(TEXT("A"), A) || !TestNotNull(TEXT("B"), B) || !TestNotNull(TEXT("C"), C))
+	{
+		return false;
+	}
+	TestEqual(TEXT("C founds Verdant"), World.GS->ServerClaimFaction(C, Verdant), FName(TEXT("Ok")));
+
+	// Mid-state: A broke a Rime crystal and is running. B is mid-hunt in Verdant as a control.
+	TestTrue(TEXT("A took the crystal"), World.Quest->ApplyEvent(FGFQuestEvents::CrystalTaken(TEXT("A"), Rime)).Result == EGFQuestResult::Ok);
+	TestTrue(TEXT("B joined Verdant"), World.Quest->ApplyEvent(FGFQuestEvents::ElderAccepted(TEXT("B"), Verdant)).Result == EGFQuestResult::Ok);
+	const FGFQuestProgress* ALive = World.Quest->FindProgress(TEXT("A"));
+	const FGFQuestProgress* BLive = World.Quest->FindProgress(TEXT("B"));
+	if (!TestNotNull(TEXT("A line"), ALive) || !TestNotNull(TEXT("B line"), BLive))
+	{
+		return false;
+	}
+	const FGFQuestProgress AAtSave = *ALive;
+	const FGFQuestProgress BAtSave = *BLive;
+	TestTrue(TEXT("A is at Escape"), AAtSave.Step == EGFQuestStep::Escape);
+	TestTrue(TEXT("A carries Rime heat"), AAtSave.HeatFactions.Contains(Rime));
+	TestTrue(TEXT("B is hunting hide"), BAtSave.Step == EGFQuestStep::HuntHide);
+
+	// Save mid-state.
+	UGFSaveGame* Save = UGFSaveSubsystem::CaptureWorld(World.World);
+	if (!TestNotNull(TEXT("Save"), Save))
+	{
+		return false;
+	}
+	Save->AddToRoot();
+	const FGFModeBlob* Blob = Save->ModeStates.Find(UGFQuestSubsystem::ModeName);
+	FGFQuestSave Decoded;
+	const bool bDecoded = TestNotNull(TEXT("Quest blob"), Blob) && Blob && FGFModeBytes::Read(Decoded, Blob->Bytes);
+	TestTrue(TEXT("Blob decodes"), bDecoded);
+	if (bDecoded)
+	{
+		const FGFQuestRecord* SavedA = Decoded.Records.FindByPredicate([](const FGFQuestRecord& Record) { return Record.PlayerKey == TEXT("A"); });
+		TestTrue(TEXT("The save holds A at Escape with Rime heat"), SavedA && SavedA->Progress == AAtSave);
+	}
+
+	// Play on past the save, so the reload has something to undo.
+	TestTrue(TEXT("A's heat clears before the reload"), World.Quest->ApplyEvent(FGFQuestEvents::HeatCleared(TEXT("A"), Rime)).Result == EGFQuestResult::Ok);
+	TestTrue(TEXT("A walks back to the elder"), World.Quest->FindProgress(TEXT("A"))->Step == EGFQuestStep::TalkToElder);
+
+	// Reload. The restored state matches the save exactly.
+	TestTrue(TEXT("Apply the save"), UGFSaveSubsystem::ApplyToWorld(World.World, Save));
+	const FGFQuestProgress* ABack = World.Quest->FindProgress(TEXT("A"));
+	const FGFQuestProgress* BBack = World.Quest->FindProgress(TEXT("B"));
+	if (!TestNotNull(TEXT("A restored"), ABack) || !TestNotNull(TEXT("B restored"), BBack))
+	{
+		Save->RemoveFromRoot();
+		return false;
+	}
+	TestTrue(TEXT("A restored to the saved progress"), *ABack == AAtSave);
+	TestTrue(TEXT("A view restored to Escape"), A->QuestStep == EGFQuestStep::Escape);
+	TestTrue(TEXT("B restored to the saved progress"), *BBack == BAtSave);
+
+	// The restart: a fresh theft director holds no heat for anyone. Its first tick settles A instead of leaving A stuck.
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AGFTheftDirector* Theft = World.World->SpawnActor<AGFTheftDirector>(AGFTheftDirector::StaticClass(), FTransform::Identity, Params);
+	if (!TestNotNull(TEXT("Theft director"), Theft))
+	{
+		Save->RemoveFromRoot();
+		return false;
+	}
+	TestTrue(TEXT("Before the tick A still waits at Escape"), World.Quest->FindProgress(TEXT("A"))->Step == EGFQuestStep::Escape);
+	Theft->Tick(0.25f);
+	const FGFQuestProgress* ASettled = World.Quest->FindProgress(TEXT("A"));
+	TestTrue(TEXT("A is sent back to the elder"), ASettled && ASettled->Step == EGFQuestStep::TalkToElder);
+	TestTrue(TEXT("A has no heat left"), ASettled && ASettled->HeatFactions.Num() == 0);
+	TestTrue(TEXT("A view follows"), A->QuestStep == EGFQuestStep::TalkToElder);
+	TestTrue(TEXT("B is untouched by the settle"), *World.Quest->FindProgress(TEXT("B")) == BAtSave);
+
+	// A second tick finds nothing stranded and changes nothing.
+	const FGFQuestProgress AAfterSettle = *World.Quest->FindProgress(TEXT("A"));
+	Theft->Tick(0.25f);
+	TestTrue(TEXT("A second tick leaves A as it was"), *World.Quest->FindProgress(TEXT("A")) == AAfterSettle);
+	TestTrue(TEXT("A second tick leaves B as it was"), *World.Quest->FindProgress(TEXT("B")) == BAtSave);
+
+	// From the elder the line carries on as normal after the reload.
+	TestTrue(TEXT("A can join after the settle"), World.Quest->ApplyEvent(FGFQuestEvents::ElderAccepted(TEXT("A"), Verdant)).Result == EGFQuestResult::Ok);
+	TestTrue(TEXT("A hunts hide"), World.Quest->FindProgress(TEXT("A"))->Step == EGFQuestStep::HuntHide);
+
 	Save->RemoveFromRoot();
 	return true;
 }
