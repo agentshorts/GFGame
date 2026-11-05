@@ -275,4 +275,42 @@ bool FGFAccelHopLitRoadTest::RunTest(const FString&)
 	return true;
 }
 
+// #347: the lit-tile diamond. Sized from the real tile, a floor so it reads from hop height, pulse grows it, the
+// corners sit flat on the tile pointing down the road, and its color can never be read as the landing ring.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFAccelHopLitMarkerTest, "GFGame.AccelHop.Lit.Marker", GFAccelHopLitTestsPrivate::AccelHopLitFlags)
+bool FGFAccelHopLitMarkerTest::RunTest(const FString&)
+{
+	const FGFAccelHopLitTuning Tuning;
+	TestTrue(TEXT("Fills most of a 4 m tile (85% of the 200 cm half)"), FMath::IsNearlyEqual(FGFAccelHopLitRules::LitMarkerHalfCm(200.f, 200.f, 0.f, Tuning), 170.f, 0.01f));
+	TestTrue(TEXT("Uses the narrow side of a long tile"), FMath::IsNearlyEqual(FGFAccelHopLitRules::LitMarkerHalfCm(400.f, 150.f, 0.f, Tuning), 127.5f, 0.01f));
+	TestTrue(TEXT("A small tile (or none) still gets the 110 cm floor"), FMath::IsNearlyEqual(FGFAccelHopLitRules::LitMarkerHalfCm(50.f, 50.f, 0.f, Tuning), 110.f, 0.01f));
+	TestTrue(TEXT("Negative scale reads as size"), FMath::IsNearlyEqual(FGFAccelHopLitRules::LitMarkerHalfCm(-200.f, 200.f, 0.f, Tuning), 170.f, 0.01f));
+	TestTrue(TEXT("Full pulse grows it 20%"), FMath::IsNearlyEqual(FGFAccelHopLitRules::LitMarkerHalfCm(200.f, 200.f, 1.f, Tuning), 204.f, 0.01f));
+	TestTrue(TEXT("Pulse is clamped"), FMath::IsNearlyEqual(FGFAccelHopLitRules::LitMarkerHalfCm(200.f, 200.f, 5.f, Tuning), 204.f, 0.01f));
+	TestTrue(TEXT("Bigger than the old 60 cm screen-ish diamond by a lot"), FGFAccelHopLitRules::LitMarkerHalfCm(0.f, 0.f, 0.f, Tuning) > 100.f);
+
+	const FVector Center(1000.0, 500.0, 37.0);
+	FVector Corners[4];
+	FGFAccelHopLitRules::LitMarkerCorners(Center, FVector(0.0, 2.0, 0.5), 100.f, Corners);
+	TestTrue(TEXT("Tip points down the road (+Y here)"), Corners[0].Equals(Center + FVector(0.0, 100.0, 0.0), 1.0e-3));
+	TestTrue(TEXT("Then right of it"), Corners[1].Equals(Center + FVector(-100.0, 0.0, 0.0), 1.0e-3));
+	TestTrue(TEXT("Then behind"), Corners[2].Equals(Center + FVector(0.0, -100.0, 0.0), 1.0e-3));
+	TestTrue(TEXT("Then left"), Corners[3].Equals(Center + FVector(100.0, 0.0, 0.0), 1.0e-3));
+	bool bFlat = true;
+	for (const FVector& Corner : Corners)
+	{
+		bFlat &= FMath::IsNearlyEqual(Corner.Z, Center.Z, 1.0e-6);
+	}
+	TestTrue(TEXT("Flat on the tile top (a road tilt in Forward is ignored)"), bFlat);
+	FGFAccelHopLitRules::LitMarkerCorners(Center, FVector::ZeroVector, 50.f, Corners);
+	TestTrue(TEXT("No forward falls back to +X"), Corners[0].Equals(Center + FVector(50.0, 0.0, 0.0), 1.0e-3));
+
+	// The landing ring is gold when on a lit tile (B 0.25) and green otherwise (G 0.92). The diamond is magenta.
+	TestTrue(TEXT("Diamond color is not gold"), Tuning.MarkerColor.B > 0.6f);
+	TestTrue(TEXT("Diamond color is not green"), Tuning.MarkerColor.G < 0.4f);
+	TestTrue(TEXT("Dark outline for contrast on any floor"), Tuning.MarkerOutlineColor.GetLuminance() < 0.1f && Tuning.MarkerOutlineColor.A > 0.5f);
+	TestTrue(TEXT("Outline is wider than the stroke"), Tuning.MarkerOutlineWidthPx > Tuning.MarkerLineWidthPx);
+	return true;
+}
+
 #endif
