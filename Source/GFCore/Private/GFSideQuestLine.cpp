@@ -87,6 +87,27 @@ namespace GFSideQuestLinePrivate
 			MakeStep(TEXT("HandIn"), 5, TEXT("Hand in"), TEXT("Bring crystal to the elder."), 4, K::TurnIn, { Crystal }),
 		};
 	}
+
+	/**
+	 * Cinderwright town task (QL-e, #365). PLACEHOLDER title. Generic strings only (canon #368).
+	 * VeinBreak counts CrystalTaken only while Active (adapter CreditCrystalTaken already skips outsiders).
+	 * HopDrill Items list Boost and Downbeat so either tile kind advances; Standard and Landing are refused.
+	 * HotbarDeliver needs a held Crystal at the elder (SideHandIn / HeldDelivered).
+	 */
+	static TArray<FGFSideQuestStepRule> CinderSteps()
+	{
+		using K = EGFSideQuestEventKind;
+		const FName Crystal(TEXT("Crystal"));
+		const FName Boost(TEXT("Boost"));
+		const FName Downbeat(TEXT("Downbeat"));
+		return {
+			Accept(),
+			MakeStep(TEXT("VeinBreak"), 2, TEXT("Vein break"), TEXT("Break crystals in town."), 2, K::CrystalTaken),
+			MakeStep(TEXT("HopDrill"), 3, TEXT("Hop drill"), TEXT("Land hops on boost or downbeat tiles."), 3, K::HopLanded, { Boost, Downbeat }),
+			MakeStep(TEXT("KilnClimb"), 4, TEXT("Lookout climb"), TEXT("Climb the lookout in town."), 1, K::ClimbMantled),
+			MakeStep(TEXT("HotbarDeliver"), 5, TEXT("Hand in"), TEXT("Hold crystal and talk to the elder."), 1, K::HeldDelivered, { Crystal }),
+		};
+	}
 }
 
 int32 FGFSideQuestLineRule::IndexOf(FName StepId) const
@@ -102,8 +123,7 @@ const FGFSideQuestStepRule* FGFSideQuestLineRule::FindStep(FName StepId) const
 
 const FGFSideQuestCatalog& FGFSideQuestCatalog::Builtin()
 {
-	// PLACEHOLDER ids and titles (canon Q1). Verdant (QL-c) and Rime (QL-d) ship in full. Cinderwright still ships
-	// only step 1 (Accept), so it stays Locked (MinSteps) until QL-e appends the rest to the CSV and here.
+	// PLACEHOLDER ids and titles (canon Q1). Verdant (QL-c), Rime (QL-d) and Cinderwright (QL-e) ship in full.
 	static const FGFSideQuestCatalog Catalog = []()
 	{
 		FGFSideQuestCatalog Built;
@@ -120,7 +140,7 @@ const FGFSideQuestCatalog& FGFSideQuestCatalog::Builtin()
 		};
 		Line(TEXT("VerdantRootward"), TEXT("Verdant"), TEXT("Rootward Run"), 1, GFSideQuestLinePrivate::VerdantSteps());
 		Line(TEXT("RimeIceSpan"), TEXT("Rime"), TEXT("Ice Span"), 2, GFSideQuestLinePrivate::RimeSteps());
-		Line(TEXT("CinderEmberAscent"), TEXT("Cinderwright"), TEXT("Ember Ascent"), 3, { GFSideQuestLinePrivate::Accept() });
+		Line(TEXT("CinderEmberAscent"), TEXT("Cinderwright"), TEXT("Ember Ascent"), 3, GFSideQuestLinePrivate::CinderSteps());
 		Built.Normalize();
 		return Built;
 	}();
