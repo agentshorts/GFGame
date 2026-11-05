@@ -1,7 +1,15 @@
+Rest area start (issue 335)
+
+Where: the world map (L_World_Factions_A). A new player now starts at the rest area halfway between Verdant and Cinderwright, not in the woods clearing.
+The road has a T junction there. A short spur runs south into a plaza with a campfire (it glows), a notice board, a covered wagon and two tents.
+The caravan has moved here: its pen and both carts are at the rest area. Verdant no longer has a caravan yard.
+The Acceleration Hop now has two runs, one each side of the T, each with green Landing tiles at its ends. No tiles sit on the junction.
+Once a player has a home they spawn there instead. Nothing in the game sets a home yet; that comes with the home quest.
+
 Acceleration Hop (issue 334)
 
 Where: the world map (L_World_Factions_A), on the long straight road from the Verdant fountain toward Cinderwright.
-The road is unchanged. Glowing hop tiles sit on its straights, two per 4 m road piece.
+Glowing hop tiles sit on its straights (the rest area T splits the road into two runs), two per 4 m road piece.
 Step onto the road and a song starts. The tiles pulse on the beat.
 Jump and land on a tile on the beat: a good landing adds 10% run speed, a perfect one 18%.
 Downbeat tiles (pink) add 8% more when you land on the bar line. Boost tiles (orange chevrons) add 15% more.
