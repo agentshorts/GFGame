@@ -28,11 +28,11 @@ None. Facing, scale, offset, and which clip plays are cells in `Data/CSV/DT_Asse
 
 `GFGame.Visuals.*` (`EditorContext | EngineFilter`), in `Source/GFTests/Private/GFVisualsTests.cpp`:
 
-- `AssetMapColumns` — 13 columns, old ones first, every row has them all.
-- `Rows` — `Player.Base` parses; art rows point at skeletal meshes and their idle/move keys exist; Raptor's old colour and placeholder scale still parse; Nipper, Sailback, Rex, and Hornback stay empty.
-- `MissingSkeletalFallsBack` — a CSV whose skeletal path does not exist parses, does not load, and the static mesh becomes the row's sphere.
-- `ChooseAnim` — idle at 20 cm/s and below, move above that, idle when there is no move clip.
-- `Wiring` — player, dino, and giant components; `Player.Base` shows the mesh and hides the sphere.
+- `AssetMapColumns`: 13 columns, old ones first, every row has them all.
+- `Rows`: `Player.Base` parses; art rows point at skeletal meshes and their idle/move keys exist; Raptor's old colour and placeholder scale still parse; Nipper, Sailback, Rex, and Hornback stay empty.
+- `MissingSkeletalFallsBack`: a CSV whose skeletal path does not exist parses, does not load, and the static mesh becomes the row's sphere.
+- `ChooseAnim`: idle at 20 cm/s and below, move above that, idle when there is no move clip.
+- `Wiring`: player, dino, and giant components; `Player.Base` shows the mesh and hides the sphere.
 
 ```
 UnrealEditor-Cmd GFGame.uproject -ExecCmds="Automation RunTests GFGame.Visuals;Quit" -unattended -nullrhi
