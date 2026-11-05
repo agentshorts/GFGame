@@ -14,6 +14,7 @@
 #include "GFSaveGame.h"
 #include "GFTheftDirector.h"
 #include "GFModeTypes.h"
+#include "GFSideQuestTestTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -1011,6 +1012,109 @@ bool FGFQuestSaveStrandedEscapeTest::RunTest(const FString&)
 	TestTrue(TEXT("A hunts hide"), World.Quest->FindProgress(TEXT("A"))->Step == EGFQuestStep::HuntHide);
 
 	Save->RemoveFromRoot();
+	return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSideQuestSaveSubsystemTest, "GFGame.SideQuest.Save.Subsystem", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFSideQuestSaveSubsystemTest::RunTest(const FString&)
+{
+	// The "Quest" blob through the subsystem: errand and side board restore together, the Active side line reaches
+	// the player state, capture writes both back, and a blob from before the side board still restores the errand.
+	using namespace GFQuestTest;
+	FWorld World;
+	if (!World.Init(*this, TEXT("GFSideQuestSave")))
+	{
+		return false;
+	}
+	AGFPlayerState* A = World.Add(TEXT("A"));
+	AGFPlayerState* B = World.Add(TEXT("B"));
+	if (!TestNotNull(TEXT("A"), A) || !TestNotNull(TEXT("B"), B))
+	{
+		return false;
+	}
+	const FGFSideQuestCatalog& Side = World.Quest->GetSideCatalog();
+	if (!TestTrue(TEXT("Side catalog has lines"), Side.Lines.Num() > 0))
+	{
+		return false;
+	}
+	const FGFSideQuestLineRule& First = Side.Lines[0];
+
+	FGFQuestRecord Errand;
+	Errand.PlayerKey = TEXT("A");
+	Errand.Progress.Step = EGFQuestStep::HuntSkins;
+	Errand.Progress.FactionId = First.TownId;
+	Errand.Progress.Rank = EGFFactionRank::Member;
+
+	FGFSideQuestBoardRecord Board;
+	Board.PlayerKey = TEXT("A");
+	FGFSideQuestProgress Active;
+	Active.LineId = First.LineId;
+	Active.StepId = First.Steps.Num() > 0 ? First.Steps[0].StepId : NAME_None;
+	Active.Count = 0;
+	Active.Status = EGFSideQuestStatus::Active;
+	Board.Board.Lines.Add(Active);
+	Board.Board.ActiveLineId = First.LineId;
+
+	{
+		FGFQuestSave Save;
+		Save.Records.Add(Errand);
+		Save.SideBoards.Add(Board);
+		TArray<uint8> Bytes;
+		FGFModeBytes::Write(Save, Bytes);
+		World.Quest->RestoreModeState(Bytes);
+	}
+	const FGFQuestProgress* AErrand = World.Quest->FindProgress(TEXT("A"));
+	TestTrue(TEXT("Errand restored"), AErrand && *AErrand == Errand.Progress);
+	const FGFSideQuestBoard* ABoard = World.Quest->FindSideBoard(TEXT("A"));
+	if (!TestNotNull(TEXT("A side board"), ABoard))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Active line restored"), ABoard->ActiveLineId, First.LineId);
+	TestEqual(TEXT("Board filled from the catalog"), ABoard->Lines.Num(), Side.Lines.Num());
+	TestEqual(TEXT("A side line replicated"), A->ActiveSideLineId, First.LineId);
+	TestEqual(TEXT("A side step replicated"), A->ActiveSideStepId, Active.StepId);
+	TestTrue(TEXT("A side status replicated"), A->ActiveSideStatus == EGFSideQuestStatus::Active);
+	TestTrue(TEXT("B has no side line"), B->ActiveSideLineId.IsNone() && B->ActiveSideStatus == EGFSideQuestStatus::Locked);
+
+	{
+		TArray<uint8> Out;
+		World.Quest->CaptureModeState(Out);
+		FGFQuestSave Back;
+		TestTrue(TEXT("Capture reads"), FGFModeBytes::Read(Back, Out));
+		TestEqual(TEXT("Capture errand"), Back.Records.Num(), 1);
+		const FGFSideQuestBoardRecord* Saved = Back.SideBoards.FindByPredicate([](const FGFSideQuestBoardRecord& R) { return R.PlayerKey == TEXT("A"); });
+		TestTrue(TEXT("Capture side board"), Saved && Saved->Board == *ABoard);
+		TestTrue(TEXT("Untouched boards are not saved"), Back.SideBoards.FindByPredicate([](const FGFSideQuestBoardRecord& R) { return R.PlayerKey == TEXT("B"); }) == nullptr);
+	}
+
+	{
+		FGFQuestSaveBeforeSideBoard Old;
+		Old.Records.Add(Errand);
+		TArray<uint8> Bytes;
+		FGFModeBytes::Write(Old, Bytes);
+		World.Quest->RestoreModeState(Bytes);
+	}
+	AErrand = World.Quest->FindProgress(TEXT("A"));
+	TestTrue(TEXT("Old blob restores the errand"), AErrand && *AErrand == Errand.Progress);
+	ABoard = World.Quest->FindSideBoard(TEXT("A"));
+	TestTrue(TEXT("Old blob: no Active side line"), !ABoard || ABoard->ActiveLineId.IsNone());
+	TestTrue(TEXT("Old blob: side board is fresh"), !ABoard || ABoard->IsDefault());
+	TestTrue(TEXT("Old blob: player state cleared"), A->ActiveSideLineId.IsNone() && A->ActiveSideStatus == EGFSideQuestStatus::Locked);
+
+	// Shipped lines are stubs until their steps land, so the elder cannot hand one out yet.
+	if (!First.IsPlayable())
+	{
+		const FGFSideQuestApplyResult Stub = World.Quest->ApplySideEvent(FGFSideQuestEvents::TalkAccepted(TEXT("A"), First.LineId, First.TownId));
+		TestEqual(TEXT("Stub line not ready"), Stub.Reason, FGFSideQuestCodes::NotReady);
+		TestTrue(TEXT("Stub accept leaves the player state"), A->ActiveSideLineId.IsNone());
+	}
+	const FGFSideQuestApplyResult NoKey = World.Quest->ApplySideEvent(FGFSideQuestEvent());
+	TestEqual(TEXT("Empty key"), NoKey.Reason, FGFQuestCodes::Unknown);
+
+	World.Quest->RestoreModeState(TArray<uint8>());
+	TestTrue(TEXT("Empty blob clears side boards"), World.Quest->FindSideBoard(TEXT("A")) == nullptr);
 	return true;
 }
 
