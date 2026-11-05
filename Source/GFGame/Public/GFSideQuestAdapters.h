@@ -73,7 +73,7 @@ public:
 	virtual void Deinitialize() override;
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 
-	/** Lips used when the map has no actor tagged GFQuestClimb_<TownId> for a town (offset from the town anchor). DefaultGame.ini ships Verdant and Rime. */
+	/** Lips used when the map has no actor tagged GFQuestClimb_<TownId> for a town (offset from the town anchor). DefaultGame.ini ships Verdant, Rime and Cinderwright. */
 	UPROPERTY(Config, EditAnywhere, Category = "GF|Quest")
 	TArray<FGFQuestClimbLipConfig> ClimbLipFallbacks;
 
