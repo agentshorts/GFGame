@@ -258,8 +258,16 @@ struct GFCOMPANION_API FGFTameMachine
 	UPROPERTY() float CalmUntil = -1000.f;
 	/** An elder hire holds it. Only another hire can retarget it until ReleaseHire (or a tame) lets go. */
 	UPROPERTY() bool bHired = false;
+	/**
+	 * Server time of the last hire call. The theft director renews it every tick while the case holds this dino.
+	 * When nobody renews it for HireLeaseSeconds (the director went away mid-hunt) the hire lapses.
+	 * A very small value means the caller passed no clock, and the hire never lapses on its own.
+	 */
+	UPROPERTY() float HiredAt = -1.0e9f;
 
 	static constexpr float CalmingMistSeconds = 10.f;
+	/** A hire nobody renews for this long is let go (see HiredAt). The director renews about every 0.25s. */
+	static constexpr float HireLeaseSeconds = 5.f;
 
 	/** Advances timers and reacts to who is around. Returns true if State changed. */
 	bool Tick(const FDinoDietRow& Row, float Now, float Dt, const TArray<FGFTamerView>& Players);
@@ -278,6 +286,8 @@ struct GFCOMPANION_API FGFTameMachine
 	EGFForceHostile ForceHostile(const FString& Key, bool bHire = false, float Now = -1.0e9f);
 	/** Drop a hire and return to Wild. A tamed dino stays tamed, and a fled one keeps running. */
 	void ReleaseHire();
+	/** True when a clocked hire has gone HireLeaseSeconds without a renewal. Tick releases it. */
+	bool IsHireLapsed(float Now) const;
 	/** Spawn option: Hostile with no target yet, so the first threat in range becomes the target. Tamed refuses. */
 	bool Rouse();
 	/** Calming Mist: a Threat or Hostile dino settles to Alert and stays calm for Seconds. False if tamed or fled. */

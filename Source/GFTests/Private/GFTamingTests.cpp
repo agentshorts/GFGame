@@ -513,4 +513,72 @@ bool FGFTameForceHostileHireTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFTameHireLeaseTest, "GFGame.Tame.Hire.Lease", TameFlags)
+bool FGFTameHireLeaseTest::RunTest(const FString&)
+{
+	const FDinoDietRow* RowPtr = DietRow(TEXT("Raptor"));
+	if (!TestNotNull(TEXT("Raptor row"), RowPtr))
+	{
+		return false;
+	}
+	const FDinoDietRow& Row = *RowPtr;
+	const TArray<FGFTamerView> Nobody;
+	const FString Thief(TEXT("Thief"));
+
+	// While the director renews the hire every quarter second, the hire holds.
+	FGFTameMachine Held;
+	float Now = 10.f;
+	TestEqual(TEXT("Hired"), E(Held.ForceHostile(Thief, true, Now)), E(EGFForceHostile::Engaged));
+	TestEqual(TEXT("Hire clock stamped"), Held.HiredAt, 10.f);
+	for (int32 Step = 0; Step < 40; ++Step)
+	{
+		TickFor(Held, Row, Now, 0.2f, Nobody);
+		Held.ForceHostile(Thief, true, Now);
+	}
+	TestTrue(TEXT("Renewed hire still held"), Held.bHired);
+	TestFalse(TEXT("Renewed hire has not lapsed"), Held.IsHireLapsed(Now));
+	TestEqual(TEXT("A pack call still cannot steal it"), E(Held.ForceHostile(TEXT("Other"))), E(EGFForceHostile::Refused));
+
+	// The director goes away mid-hunt. Nothing renews the hire any more.
+	TickFor(Held, Row, Now, FGFTameMachine::HireLeaseSeconds - 0.5f, Nobody);
+	TestTrue(TEXT("Inside the lease the hire holds"), Held.bHired);
+	TestEqual(TEXT("Inside the lease a pack call is refused"), E(Held.ForceHostile(TEXT("Other"))), E(EGFForceHostile::Refused));
+	TickFor(Held, Row, Now, 1.f, Nobody);
+	TestFalse(TEXT("Past the lease the hire lapses"), Held.bHired);
+	TestNotEqual(TEXT("Lapsed hire is not left hostile at the thief"), Held.TargetKey, Thief);
+	TestNotEqual(TEXT("A pack call reaches it again"), E(Held.ForceHostile(TEXT("Other"))), E(EGFForceHostile::Refused));
+	TestEqual(TEXT("Aimed at the pack caller"), Held.TargetKey, FString(TEXT("Other")));
+
+	// A hire that fled and was never released also lapses, and keeps running.
+	FGFTameMachine Ran;
+	Now = 100.f;
+	Ran.ForceHostile(Thief, true, Now);
+	Ran.Flee();
+	TickFor(Ran, Row, Now, FGFTameMachine::HireLeaseSeconds + 0.5f, Nobody);
+	TestFalse(TEXT("Fled hire lapses"), Ran.bHired);
+	TestEqual(TEXT("Fled hire keeps running"), E(Ran.State), E(EGFTameState::Fled));
+	TickFor(Ran, Row, Now, FGFTameMachine::FledRecoverSeconds, Nobody);
+	TestEqual(TEXT("Recovers to wild"), E(Ran.State), E(EGFTameState::Wild));
+	TestEqual(TEXT("Then answers a pack call"), E(Ran.ForceHostile(TEXT("Other"))), E(EGFForceHostile::Engaged));
+
+	// A hire with no clock (rule tests, old callers) never lapses on its own.
+	FGFTameMachine Clockless;
+	Clockless.ForceHostile(Thief, true);
+	Now = 0.f;
+	TickFor(Clockless, Row, Now, 30.f, Nobody);
+	TestTrue(TEXT("A clockless hire holds"), Clockless.bHired);
+	TestFalse(TEXT("And never reports a lapse"), Clockless.IsHireLapsed(1.0e6f));
+
+	// Release clears the clock, so a later hire starts a fresh lease.
+	FGFTameMachine Again;
+	Again.ForceHostile(Thief, true, 5.f);
+	Again.ReleaseHire();
+	TestFalse(TEXT("Released"), Again.bHired);
+	TestFalse(TEXT("A released hire reports no lapse"), Again.IsHireLapsed(1000.f));
+	Again.ForceHostile(Thief, true, 1000.f);
+	TestFalse(TEXT("Fresh lease"), Again.IsHireLapsed(1000.f + FGFTameMachine::HireLeaseSeconds - 0.1f));
+	TestTrue(TEXT("Fresh lease runs out too"), Again.IsHireLapsed(1000.f + FGFTameMachine::HireLeaseSeconds + 0.1f));
+	return true;
+}
+
 #endif

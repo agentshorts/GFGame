@@ -30,7 +30,9 @@ private:
 	void StandDown(int32 CaseIndex);
 	void ClearPlayer(const FString& PlayerKey, FName TownId);
 	/** Lets go of every dino the case still holds (see FGFTheftRules::ReleaseFor). */
-	void LetGoAll(int32 CaseIndex);
+	void LetGoAll(int32 CaseIndex, bool bWorldEnding = false);
+	/** The director is leaving with cases still open: every hire it holds is let go so none stays hired. */
+	void LetGoEveryCase(bool bWorldEnding);
 	/** A quest left at Escape with no live heat here (a reload, a restart) is cleared rather than stuck. */
 	void SettleStrandedEscapes();
 	/** Push each heat snapshot to that player's controller. The rules stay on this actor. */

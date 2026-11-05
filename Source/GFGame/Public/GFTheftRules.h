@@ -4,6 +4,7 @@
 // One break seen by several villagers hires once. An unseen break hires nobody.
 
 #include "CoreMinimal.h"
+#include "Engine/EngineTypes.h"
 #include "GFDinoTypes.h"
 #include "GFTerritoryTypes.h"
 #include "GFTownsfolkTypes.h"
@@ -127,6 +128,16 @@ struct GFGAME_API FGFTheftRules
 	/** The case keeps re-aiming a hire each tick, but never a tamed dino or one that fled. */
 	static bool ShouldRehire(EGFTameState State);
 
-	/** On stand down, or when a hire flees: release a borrowed dino, despawn a hire spawn, keep a tame. */
-	static EGFHireRelease ReleaseFor(bool bSpawnedByHire, EGFTameState State);
+	/**
+	 * On stand down, when a hire flees, or when the director goes away: release a borrowed dino, despawn a hire
+	 * spawn, keep a tame. bWorldEnding: the whole world is tearing down and takes every body with it, so a hire
+	 * spawn is only released, never destroyed from inside teardown.
+	 */
+	static EGFHireRelease ReleaseFor(bool bSpawnedByHire, EGFTameState State, bool bWorldEnding = false);
+
+	/**
+	 * True when the director's EndPlay comes from the whole world going away (a level change, PIE end, quit).
+	 * Destroyed and RemovedFromWorld leave the world running, so its hires must be let go for real.
+	 */
+	static bool IsWorldEnding(EEndPlayReason::Type Reason);
 };

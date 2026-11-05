@@ -218,6 +218,34 @@ namespace GFTheftPrivate
 		return Alive;
 	}
 
+	/** One hire leaves its case. Despawn, release, or keep, per FGFTheftRules::ReleaseFor. */
+	void LetGo(AGFDino* Dino, bool bSpawned, bool bWorldEnding)
+	{
+		if (!Dino || Dino->IsActorBeingDestroyed())
+		{
+			return;
+		}
+		const EGFTameState State = Dino->Taming ? Dino->Taming->GetTameState() : EGFTameState::Wild;
+		switch (FGFTheftRules::ReleaseFor(bSpawned, State, bWorldEnding))
+		{
+		case EGFHireRelease::Despawn:
+			// A downed or dead spawn keeps its own body lifecycle (loot, harvest). Only a live one goes now.
+			if (Dino->GetLife() == EGFDinoLife::Alive)
+			{
+				Dino->Destroy();
+			}
+			break;
+		case EGFHireRelease::Release:
+			if (Dino->Taming)
+			{
+				Dino->Taming->ServerReleaseHire();
+			}
+			break;
+		default:
+			break;
+		}
+	}
+
 	AGFDino* SpawnHired(UWorld* World, const FVector& Center, FName Species, float Range)
 	{
 		if (!World || Species.IsNone())
@@ -267,6 +295,11 @@ void AGFTheftDirector::BeginPlay()
 
 void AGFTheftDirector::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (HasAuthority())
+	{
+		// Without this, a dino hired mid-hunt keeps its hire after the director is gone and ignores pack calls.
+		LetGoEveryCase(FGFTheftRules::IsWorldEnding(EndPlayReason));
+	}
 	if (CrystalHandle.IsValid())
 	{
 		FGFTownNodeEvents::OnCrystalTaken().Remove(CrystalHandle);
@@ -544,14 +577,7 @@ void AGFTheftDirector::Refresh(float DeltaSeconds)
 			{
 				// It ran. The ring has already let go of it, so the case lets go too instead of hiring it back.
 				Case.Hired.RemoveAt(HireIndex);
-				if (FGFTheftRules::ReleaseFor(Hire.bSpawned, State) == EGFHireRelease::Despawn)
-				{
-					Dino->Destroy();
-				}
-				else
-				{
-					Dino->Taming->ServerReleaseHire();
-				}
+				GFTheftPrivate::LetGo(Dino, Hire.bSpawned, false);
 				continue;
 			}
 			if (FGFTheftRules::ShouldRehire(State))
@@ -607,7 +633,7 @@ void AGFTheftDirector::StandDown(int32 CaseIndex)
 	LetGoAll(CaseIndex);
 }
 
-void AGFTheftDirector::LetGoAll(int32 CaseIndex)
+void AGFTheftDirector::LetGoAll(int32 CaseIndex, bool bWorldEnding)
 {
 	if (!Cases.IsValidIndex(CaseIndex))
 	{
@@ -616,32 +642,19 @@ void AGFTheftDirector::LetGoAll(int32 CaseIndex)
 	FCase& Case = Cases[CaseIndex];
 	for (const FCase::FHire& Hire : Case.Hired)
 	{
-		AGFDino* Dino = Hire.Dino.Get();
-		if (!Dino || Dino->IsActorBeingDestroyed())
-		{
-			continue;
-		}
-		const EGFTameState State = Dino->Taming ? Dino->Taming->GetTameState() : EGFTameState::Wild;
-		switch (FGFTheftRules::ReleaseFor(Hire.bSpawned, State))
-		{
-		case EGFHireRelease::Despawn:
-			// A downed or dead spawn keeps its own body lifecycle (loot, harvest). Only a live one goes now.
-			if (Dino->GetLife() == EGFDinoLife::Alive)
-			{
-				Dino->Destroy();
-			}
-			break;
-		case EGFHireRelease::Release:
-			if (Dino->Taming)
-			{
-				Dino->Taming->ServerReleaseHire();
-			}
-			break;
-		default:
-			break;
-		}
+		GFTheftPrivate::LetGo(Hire.Dino.Get(), Hire.bSpawned, bWorldEnding);
 	}
 	Case.Hired.Reset();
+}
+
+void AGFTheftDirector::LetGoEveryCase(bool bWorldEnding)
+{
+	for (int32 Index = 0; Index < Cases.Num(); ++Index)
+	{
+		LetGoAll(Index, bWorldEnding);
+		Cases[Index].bClosed = true;
+	}
+	Cases.Reset();
 }
 
 void AGFTheftDirector::SettleStrandedEscapes()

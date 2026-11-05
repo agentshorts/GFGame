@@ -142,13 +142,18 @@ bool FGFTheftRules::ShouldRehire(EGFTameState State)
 	return State != EGFTameState::Tamed && State != EGFTameState::Fled;
 }
 
-EGFHireRelease FGFTheftRules::ReleaseFor(bool bSpawnedByHire, EGFTameState State)
+EGFHireRelease FGFTheftRules::ReleaseFor(bool bSpawnedByHire, EGFTameState State, bool bWorldEnding)
 {
 	if (State == EGFTameState::Tamed)
 	{
 		return EGFHireRelease::Keep;
 	}
-	return bSpawnedByHire ? EGFHireRelease::Despawn : EGFHireRelease::Release;
+	return (bSpawnedByHire && !bWorldEnding) ? EGFHireRelease::Despawn : EGFHireRelease::Release;
+}
+
+bool FGFTheftRules::IsWorldEnding(EEndPlayReason::Type Reason)
+{
+	return Reason == EEndPlayReason::LevelTransition || Reason == EEndPlayReason::EndPlayInEditor || Reason == EEndPlayReason::Quit;
 }
 
 FGFTheftHeat& FGFTheftHeatBook::FindOrAdd(const FString& Player, FName Town)

@@ -258,6 +258,19 @@ bool FGFTheftHireOwnershipTest::RunTest(const FString&)
 	TestEqual(TEXT("A tamed spawn is kept"), R(FGFTheftRules::ReleaseFor(true, EGFTameState::Tamed)), R(EGFHireRelease::Keep));
 	TestEqual(TEXT("A tamed borrowed dino is kept"), R(FGFTheftRules::ReleaseFor(false, EGFTameState::Tamed)), R(EGFHireRelease::Keep));
 
+	// The director goes away mid-hunt. Inside a live world its hires are let go for real.
+	TestEqual(TEXT("Director gone: a borrowed dino is released"), R(FGFTheftRules::ReleaseFor(false, EGFTameState::Hostile, false)), R(EGFHireRelease::Release));
+	TestEqual(TEXT("Director gone: a hire spawn is despawned"), R(FGFTheftRules::ReleaseFor(true, EGFTameState::Hostile, false)), R(EGFHireRelease::Despawn));
+	// The whole world is ending. Nothing is destroyed from inside teardown, but no hire is left set.
+	TestEqual(TEXT("World ending: a hire spawn is only released"), R(FGFTheftRules::ReleaseFor(true, EGFTameState::Hostile, true)), R(EGFHireRelease::Release));
+	TestEqual(TEXT("World ending: a borrowed dino is released"), R(FGFTheftRules::ReleaseFor(false, EGFTameState::Alert, true)), R(EGFHireRelease::Release));
+	TestEqual(TEXT("World ending: a tame is kept"), R(FGFTheftRules::ReleaseFor(true, EGFTameState::Tamed, true)), R(EGFHireRelease::Keep));
+	TestTrue(TEXT("A level change ends the world"), FGFTheftRules::IsWorldEnding(EEndPlayReason::LevelTransition));
+	TestTrue(TEXT("PIE end ends the world"), FGFTheftRules::IsWorldEnding(EEndPlayReason::EndPlayInEditor));
+	TestTrue(TEXT("Quit ends the world"), FGFTheftRules::IsWorldEnding(EEndPlayReason::Quit));
+	TestFalse(TEXT("A destroyed director leaves the world running"), FGFTheftRules::IsWorldEnding(EEndPlayReason::Destroyed));
+	TestFalse(TEXT("A streamed out director leaves the world running"), FGFTheftRules::IsWorldEnding(EEndPlayReason::RemovedFromWorld));
+
 	TestTrue(TEXT("Re-aim a hostile hire"), FGFTheftRules::ShouldRehire(EGFTameState::Hostile));
 	TestTrue(TEXT("Re-aim a calmed hire"), FGFTheftRules::ShouldRehire(EGFTameState::Alert));
 	TestFalse(TEXT("Never re-hire a fled dino"), FGFTheftRules::ShouldRehire(EGFTameState::Fled));

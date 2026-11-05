@@ -264,6 +264,7 @@ EGFForceHostile FGFTameMachine::ForceHostile(const FString& Key, bool bHire, flo
 	if (bHire)
 	{
 		bHired = true;
+		HiredAt = Now;
 	}
 	const bool bWasHostile = State == EGFTameState::Hostile;
 	const bool bWasFled = State == EGFTameState::Fled;
@@ -294,9 +295,15 @@ EGFForceHostile FGFTameMachine::ForceHostile(const FString& Key, bool bHire, flo
 	return EGFForceHostile::Engaged;
 }
 
+bool FGFTameMachine::IsHireLapsed(float Now) const
+{
+	return bHired && HiredAt > -1.0e8f && Now - HiredAt > HireLeaseSeconds;
+}
+
 void FGFTameMachine::ReleaseHire()
 {
 	bHired = false;
+	HiredAt = -1.0e9f;
 	if (State == EGFTameState::Tamed || State == EGFTameState::Fled)
 	{
 		return;
@@ -353,6 +360,15 @@ bool FGFTameMachine::Tick(const FDinoDietRow& Row, float Now, float Dt, const TA
 	if (State == EGFTameState::Tamed)
 	{
 		return false;
+	}
+	if (IsHireLapsed(Now))
+	{
+		// Nobody renewed the hire (its director went away). Let go so pack calls and noise reach it again.
+		ReleaseHire();
+		if (State != Before)
+		{
+			return true;
+		}
 	}
 	if (State == EGFTameState::Fled)
 	{
