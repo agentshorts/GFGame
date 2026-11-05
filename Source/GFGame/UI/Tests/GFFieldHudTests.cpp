@@ -5,6 +5,7 @@
 #include "GFHUD.h"
 #include "GFHUDFormat.h"
 #include "GFQuestLine.h"
+#include "GFSideQuestLine.h"
 #include "GFTheftRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -78,6 +79,95 @@ bool FGFQuestTrackerFormatTest::RunTest(const FString&)
 	const FGFQuestTrackerView Blocked = GFFormatQuestTracker(Catalog, EGFQuestStep::TakeCrystal, 0, EGFFactionRank::Member, false);
 	TestFalse(TEXT("A closed field HUD drops the body"), Blocked.bVisible);
 	TestEqual(TEXT("A closed field HUD drops the lines"), Blocked.Lines.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFSideQuestTrackerFormatTest, "GFGame.HUD.SideQuestTracker.Format", FieldHudFlags)
+bool FGFSideQuestTrackerFormatTest::RunTest(const FString&)
+{
+	const FGFQuestCatalog& Errand = FGFQuestCatalog::Builtin();
+	const FGFSideQuestCatalog& SideRows = FGFSideQuestCatalog::Builtin();
+	const FGFSideQuestLineRule* Line = nullptr;
+	const FGFSideQuestStepRule* Counted = nullptr;
+	for (const FGFSideQuestLineRule& Candidate : SideRows.Lines)
+	{
+		for (const FGFSideQuestStepRule& StepRule : Candidate.Steps)
+		{
+			if (!Counted && Candidate.IsPlayable() && StepRule.Goal > 1)
+			{
+				Line = &Candidate;
+				Counted = &StepRule;
+			}
+		}
+	}
+	if (!TestNotNull(TEXT("A shipped side line has a counted step"), Counted))
+	{
+		return false;
+	}
+
+	FGFSideTrackerInput Active;
+	Active.Status = EGFSideQuestStatus::Active;
+	Active.LineId = Line->LineId;
+	Active.StepId = Counted->StepId;
+	Active.Count = 1;
+
+	const FGFQuestTrackerView Mid = GFFormatSideQuestTracker(Errand, EGFQuestStep::HuntHide, 3, EGFFactionRank::Initiate, SideRows, Active, true);
+	const FGFQuestTrackerView ErrandOnly = GFFormatQuestTracker(Errand, EGFQuestStep::HuntHide, 3, EGFFactionRank::Initiate, true);
+	TestTrue(TEXT("Errand mid-line wins over an Active side line"), Mid.Lines == ErrandOnly.Lines);
+	TestEqual(TEXT("Errand title stays"), Mid.LineTitle, FString(TEXT("The Elder's Errand")));
+	TestEqual(TEXT("Errand progress stays"), Mid.Progress, FString(TEXT("3/6")));
+
+	const FGFQuestTrackerView Side = GFFormatSideQuestTracker(Errand, EGFQuestStep::Done, 0, EGFFactionRank::Member, SideRows, Active, true);
+	TestTrue(TEXT("Side body shows after the errand"), Side.bVisible);
+	TestEqual(TEXT("Side line title"), Side.LineTitle, Line->Title);
+	TestEqual(TEXT("Side step title"), Side.StepTitle, Counted->Title);
+	TestEqual(TEXT("Side progress"), Side.Progress, FString::Printf(TEXT("1/%d"), Counted->Goal));
+	TestEqual(TEXT("Side hint"), Side.Hint, Counted->Hint);
+	TestEqual(TEXT("Rank badge stays the errand rank"), Side.Rank, FString(TEXT("Member")));
+	TestTrue(TEXT("Side lines lead with the rank"), Side.Lines.Num() > 0 && Side.Lines[0] == Side.Rank);
+	TestTrue(TEXT("Side lines carry the title"), Side.Lines.Contains(Line->Title));
+	TestTrue(TEXT("Side lines fit the tracker"), Side.Lines.Num() <= 5);
+
+	FGFSideTrackerInput Over = Active;
+	Over.Count = Counted->Goal + 4;
+	TestEqual(TEXT("Side progress clamps at the goal"), GFFormatSideQuestTracker(Errand, EGFQuestStep::Done, 0, EGFFactionRank::Member, SideRows, Over, true).Progress,
+		FString::Printf(TEXT("%d/%d"), Counted->Goal, Counted->Goal));
+
+	const FGFSideQuestStepRule* Single = nullptr;
+	for (const FGFSideQuestStepRule& StepRule : Line->Steps)
+	{
+		if (!Single && StepRule.Goal <= 1)
+		{
+			Single = &StepRule;
+		}
+	}
+	if (Single)
+	{
+		FGFSideTrackerInput One = Active;
+		One.StepId = Single->StepId;
+		One.Count = 0;
+		TestTrue(TEXT("A one-shot step has no n/m"), GFFormatSideQuestTracker(Errand, EGFQuestStep::Done, 0, EGFFactionRank::Member, SideRows, One, true).Progress.IsEmpty());
+	}
+
+	const FGFQuestTrackerView DoneNone = GFFormatSideQuestTracker(Errand, EGFQuestStep::Done, 0, EGFFactionRank::Leader, SideRows, FGFSideTrackerInput(), true);
+	TestFalse(TEXT("Done with no side line collapses"), DoneNone.bVisible);
+	TestEqual(TEXT("Collapse keeps the rank badge"), DoneNone.Lines.Num(), 1);
+	TestEqual(TEXT("Collapse rank"), DoneNone.Rank, FString(TEXT("Leader")));
+
+	FGFSideTrackerInput Offered = Active;
+	Offered.Status = EGFSideQuestStatus::Available;
+	TestEqual(TEXT("Available is not tracked"), GFFormatSideQuestTracker(Errand, EGFQuestStep::Done, 0, EGFFactionRank::Member, SideRows, Offered, true).Lines.Num(), 1);
+	FGFSideTrackerInput Finished = Active;
+	Finished.Status = EGFSideQuestStatus::Done;
+	TestEqual(TEXT("A finished side line is not tracked"), GFFormatSideQuestTracker(Errand, EGFQuestStep::Done, 0, EGFFactionRank::Member, SideRows, Finished, true).Lines.Num(), 1);
+	FGFSideTrackerInput Unknown = Active;
+	Unknown.LineId = TEXT("NoSuchLine");
+	TestEqual(TEXT("An unknown line collapses"), GFFormatSideQuestTracker(Errand, EGFQuestStep::Done, 0, EGFFactionRank::Member, SideRows, Unknown, true).Lines.Num(), 1);
+
+	const FGFQuestTrackerView Hidden = GFFormatSideQuestTracker(Errand, EGFQuestStep::Done, 0, EGFFactionRank::Member, SideRows, Active, false);
+	TestFalse(TEXT("bAllow false hides the side body"), Hidden.bVisible);
+	TestEqual(TEXT("bAllow false hides the rank too"), Hidden.Lines.Num(), 0);
+
 	return true;
 }
 
@@ -186,6 +276,40 @@ bool FGFFieldHudLayoutTest::RunTest(const FString&)
 			TestTrue(*FString::Printf(TEXT("%s slot sits in the hotbar band"), *Tag), Box.Y >= Hotbar.Y - 0.05f && Box.Bottom() <= Hotbar.Bottom() + 0.05f);
 			TestFalse(*FString::Printf(TEXT("%s slot misses the tracker"), *Tag), FieldOverlap(Box, Layout.Tracker));
 			TestFalse(*FString::Printf(TEXT("%s slot misses the prompt"), *Tag), FieldOverlap(Box, Layout.Interact));
+		}
+
+		// Side line tracker: rank, line title, step title, n/m, hint (5), and the shorter shapes without progress or hint.
+		for (int32 SideLines = 2; SideLines <= 5; ++SideLines)
+		{
+			const FGFFieldHudLayout Side = GFLayoutFieldHud(W, H, SideLines, true, true);
+			const FString SideTag = FString::Printf(TEXT("%s side tracker %d lines"), *Tag, SideLines);
+			TestTrue(*FString::Printf(TEXT("%s placed"), *SideTag), !Side.Tracker.IsEmpty());
+			TestTrue(*FString::Printf(TEXT("%s inside"), *SideTag), GFHudRectInside(Side.Tracker, W, H));
+			TestFalse(*FString::Printf(TEXT("%s misses the hotbar"), *SideTag), FieldOverlap(Side.Tracker, Hotbar));
+			TestFalse(*FString::Printf(TEXT("%s misses the stamina arc"), *SideTag), FieldOverlap(Side.Tracker, Stamina));
+			TestFalse(*FString::Printf(TEXT("%s misses the crosshair"), *SideTag), FieldOverlap(Side.Tracker, Cross));
+			TestFalse(*FString::Printf(TEXT("%s misses the banner"), *SideTag), FieldOverlap(Side.Tracker, Side.Spotted));
+			TestFalse(*FString::Printf(TEXT("%s misses the prompt"), *SideTag), FieldOverlap(Side.Tracker, Side.Interact));
+		}
+		const FGFSideQuestCatalog& SideRows = FGFSideQuestCatalog::Builtin();
+		for (const FGFSideQuestLineRule& Line : SideRows.Lines)
+		{
+			for (const FGFSideQuestStepRule& StepRule : Line.Steps)
+			{
+				FGFSideTrackerInput Input;
+				Input.Status = EGFSideQuestStatus::Active;
+				Input.LineId = Line.LineId;
+				Input.StepId = StepRule.StepId;
+				const FGFQuestTrackerView View = GFFormatSideQuestTracker(FGFQuestCatalog::Builtin(), EGFQuestStep::Done, 0, EGFFactionRank::Member, SideRows, Input, true);
+				const FGFFieldHudLayout Shipped = GFLayoutFieldHud(W, H, View.Lines.Num(), true, true);
+				const FString ShipTag = FString::Printf(TEXT("%s %s %s"), *Tag, *Line.LineId.ToString(), *StepRule.StepId.ToString());
+				TestTrue(*FString::Printf(TEXT("%s fits five lines"), *ShipTag), View.Lines.Num() <= 5);
+				TestTrue(*FString::Printf(TEXT("%s inside"), *ShipTag), GFHudRectInside(Shipped.Tracker, W, H));
+				TestFalse(*FString::Printf(TEXT("%s misses the hotbar"), *ShipTag), FieldOverlap(Shipped.Tracker, Hotbar));
+				TestFalse(*FString::Printf(TEXT("%s misses the crosshair"), *ShipTag), FieldOverlap(Shipped.Tracker, Cross));
+				TestFalse(*FString::Printf(TEXT("%s misses the stamina arc"), *ShipTag), FieldOverlap(Shipped.Tracker, Stamina));
+				TestFalse(*FString::Printf(TEXT("%s misses the banner"), *ShipTag), FieldOverlap(Shipped.Tracker, Shipped.Spotted));
+			}
 		}
 
 		const FGFFieldHudLayout Chip = GFLayoutFieldHud(W, H, 1, false, false);
