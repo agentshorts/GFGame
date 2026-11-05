@@ -68,6 +68,25 @@ namespace GFSideQuestLinePrivate
 			MakeStep(TEXT("HireEscort"), 6, TEXT("Escort"), TEXT("A hire will walk with you."), 1, K::HireSpawned),
 		};
 	}
+
+	/**
+	 * Rime town task (QL-d, #364). PLACEHOLDER title. Generic strings only (canon #368, Q8).
+	 * FerryCrossing takes any finished flight whose departure stop is Rime-side; a stop with no anchor (thin metadata)
+	 * raises the event with no town, which Apply accepts while the line is Active. CrystalHaul counts the receiving
+	 * player's own crystal drops in Rime or the wild. No ferry pass reward; fares are unchanged.
+	 */
+	static TArray<FGFSideQuestStepRule> RimeSteps()
+	{
+		using K = EGFSideQuestEventKind;
+		const FName Crystal(TEXT("Crystal"));
+		return {
+			Accept(),
+			MakeStep(TEXT("FerryCrossing"), 2, TEXT("Ferry crossing"), TEXT("Fly the ferry from the town stop."), 1, K::FerryArrived),
+			MakeStep(TEXT("CrystalHaul"), 3, TEXT("Crystal haul"), TEXT("Gather crystal in town or the wild."), 4, K::CrystalGathered, { Crystal }),
+			MakeStep(TEXT("WatchClimb"), 4, TEXT("Lookout climb"), TEXT("Climb the lookout in town."), 1, K::ClimbMantled),
+			MakeStep(TEXT("HandIn"), 5, TEXT("Hand in"), TEXT("Bring crystal to the elder."), 4, K::TurnIn, { Crystal }),
+		};
+	}
 }
 
 int32 FGFSideQuestLineRule::IndexOf(FName StepId) const
@@ -83,8 +102,8 @@ const FGFSideQuestStepRule* FGFSideQuestLineRule::FindStep(FName StepId) const
 
 const FGFSideQuestCatalog& FGFSideQuestCatalog::Builtin()
 {
-	// PLACEHOLDER ids and titles (canon Q1). Verdant ships in full (QL-c). Rime and Cinderwright still ship only
-	// step 1 (Accept), so they stay Locked (MinSteps) until QL-d and QL-e append the rest to the CSV and here.
+	// PLACEHOLDER ids and titles (canon Q1). Verdant (QL-c) and Rime (QL-d) ship in full. Cinderwright still ships
+	// only step 1 (Accept), so it stays Locked (MinSteps) until QL-e appends the rest to the CSV and here.
 	static const FGFSideQuestCatalog Catalog = []()
 	{
 		FGFSideQuestCatalog Built;
@@ -100,7 +119,7 @@ const FGFSideQuestCatalog& FGFSideQuestCatalog::Builtin()
 			Built.Lines.Add(Rule);
 		};
 		Line(TEXT("VerdantRootward"), TEXT("Verdant"), TEXT("Rootward Run"), 1, GFSideQuestLinePrivate::VerdantSteps());
-		Line(TEXT("RimeIceSpan"), TEXT("Rime"), TEXT("Ice Span"), 2, { GFSideQuestLinePrivate::Accept() });
+		Line(TEXT("RimeIceSpan"), TEXT("Rime"), TEXT("Ice Span"), 2, GFSideQuestLinePrivate::RimeSteps());
 		Line(TEXT("CinderEmberAscent"), TEXT("Cinderwright"), TEXT("Ember Ascent"), 3, { GFSideQuestLinePrivate::Accept() });
 		Built.Normalize();
 		return Built;

@@ -1,5 +1,5 @@
 # Side quest steps (QL-a). One row per step; row name is LineId_StepId. Builtin in FGFSideQuestCatalog must match these rows.
-# Verdant ships in full (QL-c). Rime and Cinderwright ship only step 1 (Accept), so they are not offered yet (a line needs 3 steps). QL-d and QL-e append the rest.
+# Verdant (QL-c) and Rime (QL-d) ship in full. Cinderwright ships only step 1 (Accept), so it is not offered yet (a line needs 3 steps). QL-e appends the rest.
 # Shipped Title and Hint text stays generic (canon #368): no elder motives and no setting lore.
 # AdvanceKind is an EGFSideQuestEventKind. Items is the accepted item list for TurnIn, HeldDelivered and item-filtered steps.
 ---,LineId,StepId,Order,Title,Hint,Goal,Items,AdvanceKind
@@ -10,4 +10,8 @@ VerdantRootward_ScoutClimb,VerdantRootward,ScoutClimb,4,Scout climb,Climb the lo
 VerdantRootward_HandIn,VerdantRootward,HandIn,5,Hand in,Bring planks to the elder.,6,"(""WoodPlank"")",TurnIn
 VerdantRootward_HireEscort,VerdantRootward,HireEscort,6,Escort,A hire will walk with you.,1,,HireSpawned
 RimeIceSpan_Accept,RimeIceSpan,Accept,1,Town task,The elder has a task for you.,1,,TalkAccepted
+RimeIceSpan_FerryCrossing,RimeIceSpan,FerryCrossing,2,Ferry crossing,Fly the ferry from the town stop.,1,,FerryArrived
+RimeIceSpan_CrystalHaul,RimeIceSpan,CrystalHaul,3,Crystal haul,Gather crystal in town or the wild.,4,"(""Crystal"")",CrystalGathered
+RimeIceSpan_WatchClimb,RimeIceSpan,WatchClimb,4,Lookout climb,Climb the lookout in town.,1,,ClimbMantled
+RimeIceSpan_HandIn,RimeIceSpan,HandIn,5,Hand in,Bring crystal to the elder.,4,"(""Crystal"")",TurnIn
 CinderEmberAscent_Accept,CinderEmberAscent,Accept,1,Town task,The elder has a task for you.,1,,TalkAccepted
