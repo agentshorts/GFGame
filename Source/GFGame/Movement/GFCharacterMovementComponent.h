@@ -46,6 +46,18 @@ public:
 	virtual void PerformMovement(float DeltaTime) override;
 	virtual float GetMaxSpeed() const override;
 	virtual float GetGravityZ() const override;
+	virtual bool StepUp(const FVector& GravDir, const FVector& Delta, const FHitResult& Hit, FStepDownResult* OutStepDownResult = nullptr) override;
+
+	/**
+	 * Riser assist (#341). When the engine StepUp refuses a riser that is plainly a stair (a walkable tread within
+	 * MaxStepHeight just past the face, with room for the capsule on top), lift the capsule onto the tread anyway.
+	 * Off falls back to the stock engine step. Tests flip it to compare the two.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Movement|Stairs")
+	bool bRiserAssist = true;
+
+	/** How many times the riser assist lifted this pawn since spawn. Each count is a step the engine refused. */
+	int32 GetRiserAssistCount() const { return RiserAssistCount; }
 
 	/** Copies BaseRunSpeed onto MaxWalkSpeed. Does not include the sprint multiplier. */
 	void ApplyBaseRunSpeed();
@@ -208,6 +220,8 @@ private:
 	void GatherLiveContact(FGFTraversalContact& Contact);
 	void ApplyFlipPose(float TimeLeft);
 	void PollAccelHopLanding();
+	/** The #341 fallback behind StepUp. Same up, forward, down shape as the engine step, sized to the tread it found. */
+	bool TryRiserAssist(const FVector& GravDir, const FVector& Delta, const FHitResult& Hit, FStepDownResult* OutStepDownResult);
 	double AccelHopNow() const;
 
 	FGFStaminaState Sim;
@@ -249,6 +263,8 @@ private:
 	bool bMeshRestCaptured = false;
 	FGFAccelHopBoost AccelHop;
 	FGFAccelHopHit LastAccelHopHit;
+	int32 RiserAssistCount = 0;
+	double RiserAssistLoggedAt = -1000.0;
 	bool bAccelHopWasFalling = false;
 	bool bLastAccelHopLit = false;
 };

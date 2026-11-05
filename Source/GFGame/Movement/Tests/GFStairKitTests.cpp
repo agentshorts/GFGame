@@ -1,0 +1,429 @@
+// #341: the player walks up box-collision stair kits on the world-map movement path (stamina on).
+// Town and voxel stairs are UCX boxes (BlockAll), not the hub's ramp flights, so these kits are boxes too:
+// risers on the 6.25 cm voxel grid, the Sovereign Court front steps, and one-block (100 cm) Stairwell steps.
+// Each kit is walked with the engine step alone (reported, not asserted) and with the riser assist (asserted).
+// Run: UnrealEditor-Cmd GFGame.uproject -ExecCmds="Automation RunTests GFGame.Movement.StairKit;Quit" -unattended -nullrhi
+#include "Misc/AutomationTest.h"
+#include "GFCharacter.h"
+#include "GFCharacterMovementComponent.h"
+#include "Components/BoxComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/CollisionProfile.h"
+#include "Engine/Engine.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/World.h"
+#include "GameFramework/WorldSettings.h"
+#include "PhysicsEngine/BodySetup.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+namespace GFStairKitTestsDetail
+{
+	constexpr EAutomationTestFlags Flags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
+	constexpr float Dt = 1.f / 60.f;
+	constexpr float KitWidthCm = 300.f;
+	constexpr float ApproachCm = 150.f;
+	constexpr float KitSpacingCm = 1500.f;
+	constexpr const TCHAR* CourtMeshPath = TEXT("/Game/Art/Town/Rime/SM_Town_Rime_SovereignCourt.SM_Town_Rime_SovereignCourt");
+
+	struct FKitStep
+	{
+		float TopCm = 0.f;
+		float DepthCm = 0.f;
+	};
+
+	struct FKit
+	{
+		const TCHAR* Id = TEXT("");
+		TArray<FKitStep> Steps;
+
+		float RunCm() const
+		{
+			float Run = 0.f;
+			for (const FKitStep& Step : Steps)
+			{
+				Run += Step.DepthCm;
+			}
+			return Run;
+		}
+		float TopCm() const { return Steps.Num() ? Steps.Last().TopCm : 0.f; }
+		float LastDepthCm() const { return Steps.Num() ? Steps.Last().DepthCm : 0.f; }
+	};
+
+	/** Box kits. Heights are cm above the ground, each step a solid box from the ground up, like the town UCX boxes. */
+	TArray<FKit> Kits()
+	{
+		TArray<FKit> Out;
+		// Sovereign Court UCX: step box 0..50 (150 deep), terrace 0..75, dais 75..125.
+		Out.Add({ TEXT("CourtFront"), { { 50.f, 150.f }, { 75.f, 350.f }, { 125.f, 250.f } } });
+		// Every riser on the 6.25 cm voxel grid from one tick up to three quarters of a block.
+		Out.Add({ TEXT("VoxelGrid"), { { 6.25f, 100.f }, { 18.75f, 100.f }, { 43.75f, 100.f }, { 81.25f, 100.f }, { 131.25f, 100.f }, { 206.25f, 150.f } } });
+		// A tight kit flight: 12.5 cm risers on 37.5 cm treads.
+		{
+			FKit Tight{ TEXT("TightFlight"), {} };
+			for (int32 Index = 1; Index <= 8; ++Index)
+			{
+				Tight.Steps.Add({ 12.5f * Index, Index == 8 ? 150.f : 37.5f });
+			}
+			Out.Add(Tight);
+		}
+		// House stoop: 25 cm plinth, then another 25.
+		Out.Add({ TEXT("Stoop"), { { 25.f, 60.f }, { 50.f, 150.f } } });
+		// Stairwell Call and voxel terrain: whole 100 cm blocks.
+		Out.Add({ TEXT("BlockStairs"), { { 100.f, 100.f }, { 200.f, 100.f }, { 300.f, 150.f } } });
+		return Out;
+	}
+
+	struct FWorldScope
+	{
+		UWorld* World = nullptr;
+		explicit FWorldScope(UWorld* InWorld) : World(InWorld) {}
+		~FWorldScope()
+		{
+			if (World && GEngine)
+			{
+				GEngine->DestroyWorldContext(World);
+				World->DestroyWorld(false);
+			}
+		}
+	};
+
+	UWorld* MakeWorld(const TCHAR* Name)
+	{
+		UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, Name);
+		if (!World)
+		{
+			return nullptr;
+		}
+		FWorldContext& Context = GEngine->CreateNewWorldContext(EWorldType::Game);
+		Context.SetCurrentWorld(World);
+		World->InitializeActorsForPlay(FURL());
+		World->BeginPlay();
+		if (!World->HasBegunPlay() && World->GetWorldSettings())
+		{
+			World->GetWorldSettings()->NotifyBeginPlay();
+		}
+		return World;
+	}
+
+	/** One BlockAll box from Min to Max, the same collision a UCX box imports as. */
+	AActor* SpawnBox(UWorld* World, const FVector& Min, const FVector& Max, const FString& Label)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AActor* Block = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, Params);
+		if (!Block)
+		{
+			return nullptr;
+		}
+		UBoxComponent* Box = NewObject<UBoxComponent>(Block, *Label);
+		Box->SetBoxExtent((Max - Min) * 0.5f, false);
+		Box->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+		Box->SetMobility(EComponentMobility::Static);
+		Block->SetRootComponent(Box);
+		Box->SetWorldLocation((Min + Max) * 0.5f);
+		Box->RegisterComponent();
+		Block->AddInstanceComponent(Box);
+		return Block;
+	}
+
+	/** Ground slab with its top at Z 0 (the town slabs), then the kit steps going +X from Origin. */
+	void SpawnKit(UWorld* World, const FKit& Kit, const FVector& Origin)
+	{
+		const float Half = KitWidthCm * 0.5f;
+		SpawnBox(World, Origin + FVector(-ApproachCm - 300.f, -Half - 300.f, -20.f), Origin + FVector(Kit.RunCm() + 300.f, Half + 300.f, 0.f),
+			FString::Printf(TEXT("%s_Ground"), Kit.Id));
+		float X = 0.f;
+		int32 Index = 0;
+		for (const FKitStep& Step : Kit.Steps)
+		{
+			SpawnBox(World, Origin + FVector(X, -Half, 0.f), Origin + FVector(X + Step.DepthCm, Half, Step.TopCm),
+				FString::Printf(TEXT("%s_Step%d"), Kit.Id, Index++));
+			X += Step.DepthCm;
+		}
+	}
+
+	AGFCharacter* SpawnPlayer(UWorld* World, const FVector& Feet, const FRotator& Facing)
+	{
+		const AGFCharacter* Defaults = GetDefault<AGFCharacter>();
+		const float Half = Defaults->GetCapsuleComponent() ? Defaults->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : 88.f;
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AGFCharacter* Pawn = World->SpawnActor<AGFCharacter>(AGFCharacter::StaticClass(), FTransform(Facing, Feet + FVector(0.f, 0.f, Half + 2.f)), Params);
+		if (!Pawn)
+		{
+			return nullptr;
+		}
+		Pawn->SetActorTickEnabled(false);
+		if (UCharacterMovementComponent* Move = Pawn->GetCharacterMovement())
+		{
+			// A pawn with no controller never runs Restart, so the mode stays None and nothing walks.
+			Move->bRunPhysicsWithNoController = true;
+			Move->SetComponentTickEnabled(true);
+			if (Move->MovementMode == MOVE_None)
+			{
+				Move->SetDefaultMovementMode();
+			}
+			Move->StopMovementImmediately();
+		}
+		return Pawn;
+	}
+
+	float FeetOf(const ACharacter* Pawn)
+	{
+		const float Half = Pawn->GetCapsuleComponent() ? Pawn->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : 0.f;
+		return Pawn->GetActorLocation().Z - Half;
+	}
+
+	struct FClimb
+	{
+		bool bReached = false;
+		float Along = 0.f;
+		float FeetZ = 0.f;
+		float MaxFeetZ = 0.f;
+		int32 Assists = 0;
+		int32 Mode = 0;
+		const TCHAR* Why = TEXT("not run");
+	};
+
+	/** Holds forward along Dir until the pawn is GoalAlong past Origin, stalls for 0.4 s, falls, or 8 s pass. */
+	FClimb Climb(AGFCharacter* Pawn, const FVector& Origin, const FVector& Dir, float GoalAlong, bool bSprint)
+	{
+		FClimb Out;
+		UGFCharacterMovementComponent* Move = Pawn ? Cast<UGFCharacterMovementComponent>(Pawn->GetCharacterMovement()) : nullptr;
+		if (!Move)
+		{
+			Out.Why = TEXT("no GF movement");
+			return Out;
+		}
+		for (int32 Index = 0; Index < 30; ++Index)
+		{
+			Move->TickComponent(Dt, LEVELTICK_All, nullptr); // settle on the ground
+		}
+		Move->StopMovementImmediately();
+		const int32 AssistsBefore = Move->GetRiserAssistCount();
+		Move->SetSprintHeld(bSprint);
+		float Previous = FVector::DotProduct(Pawn->GetActorLocation() - Origin, Dir);
+		Out.MaxFeetZ = FeetOf(Pawn);
+		int32 Stall = 0;
+		for (int32 Index = 0; Index < 480; ++Index)
+		{
+			Pawn->AddMovementInput(Dir, 1.f);
+			Move->TickComponent(Dt, LEVELTICK_All, nullptr);
+			Out.Along = FVector::DotProduct(Pawn->GetActorLocation() - Origin, Dir);
+			Out.FeetZ = FeetOf(Pawn);
+			Out.MaxFeetZ = FMath::Max(Out.MaxFeetZ, Out.FeetZ);
+			Out.Mode = static_cast<int32>(Move->MovementMode);
+			if (Out.FeetZ < Origin.Z - 60.f)
+			{
+				Out.Why = TEXT("fell through");
+				break;
+			}
+			if (Out.Along >= GoalAlong)
+			{
+				Out.bReached = true;
+				Out.Why = TEXT("reached");
+				break;
+			}
+			Stall = Out.Along - Previous < 1.f ? Stall + 1 : 0;
+			Previous = Out.Along;
+			if (Stall >= 24)
+			{
+				Out.Why = TEXT("stalled at a riser");
+				break;
+			}
+		}
+		if (!Out.bReached && FCString::Strcmp(Out.Why, TEXT("not run")) == 0)
+		{
+			Out.Why = TEXT("timed out");
+		}
+		Move->SetSprintHeld(false);
+		Move->StopMovementImmediately();
+		Out.Assists = Move->GetRiserAssistCount() - AssistsBefore;
+		return Out;
+	}
+
+	FString Describe(const FClimb& C)
+	{
+		return FString::Printf(TEXT("%s, along %.0f, feet %.1f (max %.1f), mode %d, assists %d"), C.Why, C.Along, C.FeetZ, C.MaxFeetZ, C.Mode, C.Assists);
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFStairKitWalkTest, "GFGame.Movement.StairKit.Walk", GFStairKitTestsDetail::Flags)
+bool FGFStairKitWalkTest::RunTest(const FString&)
+{
+	using namespace GFStairKitTestsDetail;
+	if (!TestNotNull(TEXT("Engine"), GEngine))
+	{
+		return false;
+	}
+	UWorld* World = MakeWorld(TEXT("GFStairKitWalk"));
+	FWorldScope Scope(World);
+	if (!TestNotNull(TEXT("World"), World))
+	{
+		return false;
+	}
+
+	const TArray<FKit> AllKits = Kits();
+	for (int32 KitIndex = 0; KitIndex < AllKits.Num(); ++KitIndex)
+	{
+		const FKit& Kit = AllKits[KitIndex];
+		const FVector Origin(0.f, KitIndex * KitSpacingCm, 0.f);
+		SpawnKit(World, Kit, Origin);
+		// Fully on the last tread: half its depth in, so the 40 cm radius capsule is clear of the lip.
+		const float Goal = Kit.RunCm() - Kit.LastDepthCm() * 0.5f;
+
+		for (const bool bSprint : { false, true })
+		{
+			for (const bool bAssist : { false, true })
+			{
+				AGFCharacter* Pawn = SpawnPlayer(World, Origin + FVector(-ApproachCm, 0.f, 0.f), FRotator::ZeroRotator);
+				UGFCharacterMovementComponent* Move = Pawn ? Cast<UGFCharacterMovementComponent>(Pawn->GetCharacterMovement()) : nullptr;
+				if (!TestNotNull(*FString::Printf(TEXT("%s player"), Kit.Id), Move))
+				{
+					return false;
+				}
+				TestTrue(*FString::Printf(TEXT("%s runs the world-map movement (stamina on)"), Kit.Id), Move->IsStaminaEnabled());
+				TestTrue(*FString::Printf(TEXT("%s step height covers a block"), Kit.Id), Move->MaxStepHeight >= 100.f);
+				Move->bRiserAssist = bAssist;
+
+				const FClimb Result = Climb(Pawn, Origin, FVector::ForwardVector, Goal, bSprint);
+				const FString Label = FString::Printf(TEXT("%s %s, %s"), Kit.Id, bSprint ? TEXT("sprint") : TEXT("walk"), bAssist ? TEXT("riser assist") : TEXT("engine step only"));
+				if (bAssist)
+				{
+					TestTrue(*FString::Printf(TEXT("%s climbs (%s)"), *Label, *Describe(Result)), Result.bReached);
+					TestTrue(*FString::Printf(TEXT("%s feet on the top tread (%.1f vs %.1f)"), *Label, Result.FeetZ, Kit.TopCm()),
+						Result.bReached && FMath::IsNearlyEqual(Result.FeetZ, Kit.TopCm(), 15.f));
+				}
+				else
+				{
+					// The engine-only run is the #341 evidence: which kits the stock StepUp refuses on its own.
+					AddInfo(FString::Printf(TEXT("#341 evidence: %s: %s"), *Label, *Describe(Result)));
+					TestEqual(*FString::Printf(TEXT("%s with the assist off never assists"), *Label), Result.Assists, 0);
+				}
+				Pawn->Destroy();
+			}
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFStairKitWallTest, "GFGame.Movement.StairKit.WallStaysAWall", GFStairKitTestsDetail::Flags)
+bool FGFStairKitWallTest::RunTest(const FString&)
+{
+	using namespace GFStairKitTestsDetail;
+	if (!TestNotNull(TEXT("Engine"), GEngine))
+	{
+		return false;
+	}
+	UWorld* World = MakeWorld(TEXT("GFStairKitWall"));
+	FWorldScope Scope(World);
+	if (!TestNotNull(TEXT("World"), World))
+	{
+		return false;
+	}
+	// 112.5 cm is past the 105 cm step: a wall, assist or not. A 2 m wall is plainly a wall.
+	const FKit Ledge{ TEXT("Ledge"), { { 112.5f, 300.f } } };
+	const FKit Wall{ TEXT("Wall"), { { 200.f, 300.f } } };
+	const FKit Walls[] = { Ledge, Wall };
+	for (int32 Index = 0; Index < 2; ++Index)
+	{
+		const FKit& Kit = Walls[Index];
+		const FVector Origin(0.f, Index * KitSpacingCm, 0.f);
+		SpawnKit(World, Kit, Origin);
+		AGFCharacter* Pawn = SpawnPlayer(World, Origin + FVector(-ApproachCm, 0.f, 0.f), FRotator::ZeroRotator);
+		UGFCharacterMovementComponent* Move = Pawn ? Cast<UGFCharacterMovementComponent>(Pawn->GetCharacterMovement()) : nullptr;
+		if (!TestNotNull(*FString::Printf(TEXT("%s player"), Kit.Id), Move))
+		{
+			return false;
+		}
+		Move->bRiserAssist = true;
+		const FClimb Result = Climb(Pawn, Origin, FVector::ForwardVector, Kit.RunCm() * 0.5f, false);
+		TestFalse(*FString::Printf(TEXT("%s is not walked up (%s)"), Kit.Id, *Describe(Result)), Result.bReached);
+		TestTrue(*FString::Printf(TEXT("%s feet stay on the ground"), Kit.Id), Result.MaxFeetZ < 10.f);
+		TestEqual(*FString::Printf(TEXT("%s gets no assist"), Kit.Id), Result.Assists, 0);
+		Pawn->Destroy();
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFStairKitCourtTest, "GFGame.Movement.StairKit.SovereignCourt", GFStairKitTestsDetail::Flags)
+bool FGFStairKitCourtTest::RunTest(const FString&)
+{
+	using namespace GFStairKitTestsDetail;
+	if (!TestNotNull(TEXT("Engine"), GEngine))
+	{
+		return false;
+	}
+	UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, CourtMeshPath, nullptr, LOAD_NoWarn);
+	if (!Mesh)
+	{
+		AddWarning(FString::Printf(TEXT("%s did not load, so the imported stair kit was not walked"), CourtMeshPath));
+		return true;
+	}
+	UWorld* World = MakeWorld(TEXT("GFStairKitCourt"));
+	FWorldScope Scope(World);
+	if (!TestNotNull(TEXT("World"), World))
+	{
+		return false;
+	}
+	SpawnBox(World, FVector(-2000.f, -2000.f, -20.f), FVector(2000.f, 2000.f, 0.f), TEXT("CourtGround"));
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AStaticMeshActor* Court = World->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FTransform::Identity, Params);
+	if (!TestNotNull(TEXT("Court actor"), Court))
+	{
+		return false;
+	}
+	Court->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+	Court->GetStaticMeshComponent()->SetStaticMesh(Mesh);
+	Court->GetStaticMeshComponent()->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+	TestTrue(TEXT("Court mesh has simple collision (the UCX boxes)"), Mesh->GetBodySetup() && Mesh->GetBodySetup()->AggGeom.GetElementCount() > 0);
+
+	// The front step box sits 700 to 850 cm out from the centre. Blender -Y may import as either UE sign, so probe both.
+	float Sign = 0.f;
+	for (const float Try : { -1.f, 1.f })
+	{
+		FHitResult Hit;
+		const FVector Probe(0.f, Try * 775.f, 400.f);
+		if (World->LineTraceSingleByChannel(Hit, Probe, Probe - FVector(0.f, 0.f, 500.f), ECC_Pawn)
+			&& FMath::IsNearlyEqual(static_cast<float>(Hit.ImpactPoint.Z), 50.f, 6.f))
+		{
+			Sign = Try;
+			break;
+		}
+	}
+	if (!TestTrue(TEXT("Found the 50 cm front step box"), Sign != 0.f))
+	{
+		return false;
+	}
+	const FVector Dir(0.f, -Sign, 0.f);
+	const FVector Start(0.f, Sign * 1000.f, 0.f);
+	for (const bool bAssist : { false, true })
+	{
+		AGFCharacter* Pawn = SpawnPlayer(World, Start, Dir.Rotation());
+		UGFCharacterMovementComponent* Move = Pawn ? Cast<UGFCharacterMovementComponent>(Pawn->GetCharacterMovement()) : nullptr;
+		if (!TestNotNull(TEXT("Court player"), Move))
+		{
+			return false;
+		}
+		Move->bRiserAssist = bAssist;
+		// 450 cm in is past the step box (850..700 out) and onto the 75 cm terrace, short of the dais at 450.
+		const FClimb Result = Climb(Pawn, Start, Dir, 1000.f - 520.f, false);
+		if (bAssist)
+		{
+			TestTrue(*FString::Printf(TEXT("Court front steps climbed (%s)"), *Describe(Result)), Result.bReached);
+			TestTrue(*FString::Printf(TEXT("Feet on the terrace (%.1f)"), Result.FeetZ), Result.bReached && FMath::IsNearlyEqual(Result.FeetZ, 75.f, 15.f));
+		}
+		else
+		{
+			AddInfo(FString::Printf(TEXT("#341 evidence: SovereignCourt, engine step only: %s"), *Describe(Result)));
+		}
+		Pawn->Destroy();
+	}
+	return true;
+}
+
+#endif

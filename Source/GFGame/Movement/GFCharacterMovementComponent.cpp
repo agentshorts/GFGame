@@ -10,6 +10,7 @@
 #include "GFStairMovement.h"
 #include "GFMovementWorldSubsystem.h"
 #include "GFStaminaMode.h"
+#include "GFLog.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/GameModeBase.h"
 #include "Components/CapsuleComponent.h"
@@ -813,6 +814,141 @@ void UGFCharacterMovementComponent::HandleImpact(const FHitResult& Hit, float Ti
 	PendingImpactNormal = Hit.ImpactNormal;
 	PendingSpeedBefore = DashPlanarSpeed > 0.f ? DashPlanarSpeed : GetTuning().DashSpeed;
 	PendingSpeedAfter = static_cast<float>(FVector(Velocity.X, Velocity.Y, 0.0).Size());
+}
+
+namespace GFRiserAssistDetail
+{
+	/** How far past the riser face the tread probe looks. A few cm is enough to land on the tread, not the next riser. */
+	constexpr float ProbePastFaceCm = 4.f;
+	/** The forward leg clears at least this share of the capsule radius, so the down sweep lands on the tread, not its lip. */
+	constexpr float MinForwardRadiusShare = 0.5f;
+	/** A face this square to the move is a riser. Grazing a side wall is not. */
+	constexpr float MinIntoFaceDot = 0.25f;
+	constexpr double LogEverySeconds = 2.0;
+}
+
+bool UGFCharacterMovementComponent::StepUp(const FVector& GravDir, const FVector& Delta, const FHitResult& Hit, FStepDownResult* OutStepDownResult)
+{
+	if (Super::StepUp(GravDir, Delta, Hit, OutStepDownResult))
+	{
+		return true;
+	}
+	return TryRiserAssist(GravDir, Delta, Hit, OutStepDownResult);
+}
+
+bool UGFCharacterMovementComponent::TryRiserAssist(const FVector& GravDir, const FVector& Delta, const FHitResult& Hit, FStepDownResult* OutStepDownResult)
+{
+	using namespace GFRiserAssistDetail;
+	if (!bRiserAssist || !CharacterOwner || !UpdatedComponent || !GetWorld() || GravDir.IsNearlyZero())
+	{
+		return false;
+	}
+	if (!IsMovingOnGround() || !CurrentFloor.IsWalkableFloor() || !Hit.IsValidBlockingHit() || Hit.bStartPenetrating || IsWalkable(Hit))
+	{
+		return false;
+	}
+	const UPrimitiveComponent* HitComponent = Hit.GetComponent();
+	if (HitComponent && !HitComponent->CanCharacterStepUp(CharacterOwner))
+	{
+		return false;
+	}
+	const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent();
+	if (!Capsule)
+	{
+		return false;
+	}
+
+	const FVector Up = -GravDir.GetSafeNormal();
+	const FVector Face = FVector::VectorPlaneProject(Hit.ImpactNormal, Up).GetSafeNormal();
+	const FVector Planar = FVector::VectorPlaneProject(Delta, Up);
+	if (Face.IsNearlyZero() || Planar.SizeSquared() < KINDA_SMALL_NUMBER)
+	{
+		return false;
+	}
+	const FVector MoveDir = Planar.GetSafeNormal();
+	if (FVector::DotProduct(MoveDir, -Face) < MinIntoFaceDot)
+	{
+		return false;
+	}
+
+	float Radius = 0.f;
+	float HalfHeight = 0.f;
+	Capsule->GetScaledCapsuleSize(Radius, HalfHeight);
+	const FVector Start = UpdatedComponent->GetComponentLocation();
+	const float FloorDist = FMath::Max(0.f, CurrentFloor.GetDistanceToFloor());
+	const double FeetUp = FVector::DotProduct(Start, Up) - HalfHeight - FloorDist;
+
+	// Is there a tread just past the face, within one step, that a pawn may stand on?
+	const FVector ProbeAt = Hit.ImpactPoint - Face * ProbePastFaceCm;
+	const double ProbeUp = FVector::DotProduct(ProbeAt, Up);
+	const FVector ProbeTop = ProbeAt + Up * (FeetUp + MaxStepHeight + 1.0 - ProbeUp);
+	const FVector ProbeBottom = ProbeAt + Up * (FeetUp + 0.5 - ProbeUp);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GFRiserAssist), false, CharacterOwner);
+	FCollisionResponseParams Response;
+	InitCollisionParams(Params, Response);
+	FHitResult Tread;
+	if (!GetWorld()->LineTraceSingleByChannel(Tread, ProbeTop, ProbeBottom, UpdatedComponent->GetCollisionObjectType(), Params, Response)
+		|| Tread.bStartPenetrating
+		|| FVector::DotProduct(Tread.ImpactNormal, Up) < GetWalkableFloorZ())
+	{
+		return false;
+	}
+	const float Rise = static_cast<float>(FVector::DotProduct(Tread.ImpactPoint, Up) - FeetUp);
+	if (Rise <= 1.f || Rise > MaxStepHeight)
+	{
+		return false;
+	}
+
+	// Same three legs as the engine step (up, forward, down), sized to the tread instead of the full step height.
+	FScopedMovementUpdate ScopedAssist(UpdatedComponent, EScopedUpdate::DeferredUpdates);
+	const FQuat Rotation = UpdatedComponent->GetComponentQuat();
+	const float Lift = Rise + MAX_FLOOR_DIST;
+	FHitResult UpHit(1.f);
+	MoveUpdatedComponent(Up * Lift, Rotation, true, &UpHit);
+	if (UpHit.bStartPenetrating || FVector::DotProduct(UpdatedComponent->GetComponentLocation() - Start, Up) < Rise + 0.5f)
+	{
+		ScopedAssist.RevertMove();
+		return false; // no headroom over the tread
+	}
+
+	const float Forward = FMath::Max(static_cast<float>(Planar.Size()), Radius * MinForwardRadiusShare);
+	FHitResult ForwardHit(1.f);
+	MoveUpdatedComponent(MoveDir * Forward, Rotation, true, &ForwardHit);
+	if (ForwardHit.bStartPenetrating || (ForwardHit.bBlockingHit && ForwardHit.Time <= KINDA_SMALL_NUMBER))
+	{
+		ScopedAssist.RevertMove();
+		return false; // the tread is too shallow or the next riser is right there
+	}
+
+	FHitResult DownHit(1.f);
+	MoveUpdatedComponent(-Up * (Lift + MAX_FLOOR_DIST * 2.f), Rotation, true, &DownHit);
+	const float Landed = DownHit.bBlockingHit ? static_cast<float>(FVector::DotProduct(DownHit.ImpactPoint, Up) - FeetUp) : -1.f;
+	if (!DownHit.bBlockingHit || DownHit.bStartPenetrating || !IsWalkable(DownHit) || Landed <= 0.5f || Landed > MaxStepHeight)
+	{
+		ScopedAssist.RevertMove();
+		return false;
+	}
+	if (OutStepDownResult)
+	{
+		FindFloor(UpdatedComponent->GetComponentLocation(), OutStepDownResult->FloorResult, false, &DownHit);
+		if (!OutStepDownResult->FloorResult.IsWalkableFloor())
+		{
+			ScopedAssist.RevertMove();
+			return false;
+		}
+	}
+
+	// The forward leg may be longer than this frame's delta. Keep the walk velocity instead of deriving it from the jump.
+	bJustTeleported = true;
+	++RiserAssistCount;
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now - RiserAssistLoggedAt >= LogEverySeconds)
+	{
+		RiserAssistLoggedAt = Now;
+		UE_LOG(LogGF, Log, TEXT("StairAssist: engine step refused a %.1f cm riser on %s, lifted onto the tread (count %d)"),
+			Rise, *GetNameSafe(Hit.GetActor()), RiserAssistCount);
+	}
+	return true;
 }
 
 void UGFCharacterMovementComponent::OnRep_StaminaGate()
