@@ -6,6 +6,7 @@
 #include "GFQuestSubsystem.h"
 #include "GFSideQuestLine.h"
 #include "GFTamingComponent.h"
+#include "GFWanderComponent.h"
 #include "GFTheftDirector.h"
 #include "Stats/Stats.h"
 
@@ -272,6 +273,11 @@ void UGFSideQuestEscorts::EscortStep(int32 Index, APawn* Body, float DeltaSecond
 	if (Hire->Taming && FGFSideQuestEscortRules::ShouldRenewCalm(World->GetTimeSeconds(), Hire->Taming->CalmedUntil))
 	{
 		Hire->Taming->ServerEscortCalm(FGFSideQuestEscortRules::CalmSeconds);
+	}
+	// Its idle wander roams around the player instead of where it spawned.
+	if (Hire->Wander)
+	{
+		Hire->Wander->SetHome(Body->GetActorLocation());
 	}
 	const FVector ToPlayer = Body->GetActorLocation() - Hire->GetActorLocation();
 	Escort.bFollowing = FGFSideQuestEscortRules::ShouldFollow(Escort.bFollowing, ToPlayer.Size2D());
