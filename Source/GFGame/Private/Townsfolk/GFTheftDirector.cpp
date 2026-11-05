@@ -221,7 +221,8 @@ namespace GFTheftPrivate
 	/** One hire leaves its case. Despawn, release, or keep, per FGFTheftRules::ReleaseFor. */
 	void LetGo(AGFDino* Dino, bool bSpawned, bool bWorldEnding)
 	{
-		if (!Dino || Dino->IsActorBeingDestroyed())
+		// A body that already ended play (the world is tearing down around it) has nothing left to let go of.
+		if (!Dino || Dino->IsActorBeingDestroyed() || !Dino->HasActorBegunPlay())
 		{
 			return;
 		}
