@@ -2,6 +2,7 @@
 // Run: UnrealEditor-Cmd GFGame.uproject -ExecCmds="Automation RunTests GFGame.Theft;Quit" -unattended -nullrhi
 
 #include "Misc/AutomationTest.h"
+#include "GFDinoKill.h"
 #include "GFDinoTypes.h"
 #include "GFTerritoryTypes.h"
 #include "GFTheftRules.h"
@@ -270,6 +271,14 @@ bool FGFTheftHireOwnershipTest::RunTest(const FString&)
 	TestTrue(TEXT("Quit ends the world"), FGFTheftRules::IsWorldEnding(EEndPlayReason::Quit));
 	TestFalse(TEXT("A destroyed director leaves the world running"), FGFTheftRules::IsWorldEnding(EEndPlayReason::Destroyed));
 	TestFalse(TEXT("A streamed out director leaves the world running"), FGFTheftRules::IsWorldEnding(EEndPlayReason::RemovedFromWorld));
+
+	// A hire spawn that goes down is the case's to clean up. A live or dead one goes now, a downed one after its delay.
+	TestEqual(TEXT("A live spawn goes now"), FGFTheftRules::DespawnDelay(EGFDinoLife::Alive), 0.f);
+	TestEqual(TEXT("A dead spawn goes now"), FGFTheftRules::DespawnDelay(EGFDinoLife::Dead), 0.f);
+	TestEqual(TEXT("A downed spawn keeps its down pose, then goes"), FGFTheftRules::DespawnDelay(EGFDinoLife::Downed),
+		FGFDinoKill::DownedSeconds + FGFTheftRules::DownedCleanupGraceSeconds);
+	TestTrue(TEXT("The cleanup is never shorter than the down delay"), FGFTheftRules::DespawnDelay(EGFDinoLife::Downed) > FGFDinoKill::DownedSeconds);
+	TestEqual(TEXT("A downed borrowed dino drops the hire"), R(FGFTheftRules::ReleaseFor(false, EGFTameState::Hostile)), R(EGFHireRelease::Release));
 
 	TestTrue(TEXT("Re-aim a hostile hire"), FGFTheftRules::ShouldRehire(EGFTameState::Hostile));
 	TestTrue(TEXT("Re-aim a calmed hire"), FGFTheftRules::ShouldRehire(EGFTameState::Alert));

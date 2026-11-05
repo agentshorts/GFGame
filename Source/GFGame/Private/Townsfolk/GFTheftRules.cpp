@@ -156,6 +156,11 @@ bool FGFTheftRules::IsWorldEnding(EEndPlayReason::Type Reason)
 	return Reason == EEndPlayReason::LevelTransition || Reason == EEndPlayReason::EndPlayInEditor || Reason == EEndPlayReason::Quit;
 }
 
+float FGFTheftRules::DespawnDelay(EGFDinoLife Life)
+{
+	return Life == EGFDinoLife::Downed ? FGFDinoKill::DownedSeconds + DownedCleanupGraceSeconds : 0.f;
+}
+
 FGFTheftHeat& FGFTheftHeatBook::FindOrAdd(const FString& Player, FName Town)
 {
 	if (FGFTheftHeat* Found = Find(Player, Town))

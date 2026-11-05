@@ -229,12 +229,20 @@ namespace GFTheftPrivate
 		switch (FGFTheftRules::ReleaseFor(bSpawned, State, bWorldEnding))
 		{
 		case EGFHireRelease::Despawn:
-			// A downed or dead spawn keeps its own body lifecycle (loot, harvest). Only a live one goes now.
-			if (Dino->GetLife() == EGFDinoLife::Alive)
+		{
+			// The case owns a hire spawn's body. A live or dead one goes now. A downed one has paid its loot,
+			// keeps its down pose for the delay, and is then removed even if its own tick never gets there.
+			const float Delay = FGFTheftRules::DespawnDelay(Dino->GetLife());
+			if (Delay <= 0.f)
 			{
 				Dino->Destroy();
 			}
+			else
+			{
+				Dino->SetLifeSpan(Delay);
+			}
 			break;
+		}
 		case EGFHireRelease::Release:
 			if (Dino->Taming)
 			{
@@ -568,7 +576,20 @@ void AGFTheftDirector::Refresh(float DeltaSeconds)
 		{
 			const FCase::FHire Hire = Case.Hired[HireIndex];
 			AGFDino* Dino = Hire.Dino.Get();
-			if (!Dino || !Dino->Taming || Dino->GetLife() != EGFDinoLife::Alive)
+			if (!Dino || Dino->IsActorBeingDestroyed())
+			{
+				Case.Hired.RemoveAt(HireIndex);
+				continue;
+			}
+			if (Dino->GetLife() != EGFDinoLife::Alive)
+			{
+				// It went down. The case lets go on this tick instead of holding the body until stand down,
+				// so a downed hire spawn is cleaned up and a downed borrowed dino drops the hire.
+				Case.Hired.RemoveAt(HireIndex);
+				GFTheftPrivate::LetGo(Dino, Hire.bSpawned, false);
+				continue;
+			}
+			if (!Dino->Taming)
 			{
 				continue;
 			}

@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/EngineTypes.h"
+#include "GFDinoKill.h"
 #include "GFDinoTypes.h"
 #include "GFTerritoryTypes.h"
 #include "GFTownsfolkTypes.h"
@@ -88,6 +89,8 @@ struct GFGAME_API FGFTheftRules
 	/** Spawn only when fewer than this many wild dinos are already in the ring. */
 	static constexpr int32 SpawnBelow = 2;
 	static constexpr float DefaultHireRangeCm = 1500.f;
+	/** A downed hire spawn keeps its down pose this long past FGFDinoKill::DownedSeconds, then the case removes it. */
+	static constexpr float DownedCleanupGraceSeconds = 1.f;
 
 	/** A villager within SightCm who can see the break. Elders do not witness. */
 	static bool Sees(EGFTownsfolkRole Role, float DistanceCm, bool bLineOfSight, float RangeCm = SightCm);
@@ -140,4 +143,11 @@ struct GFGAME_API FGFTheftRules
 	 * Destroyed and RemovedFromWorld leave the world running, so its hires must be let go for real.
 	 */
 	static bool IsWorldEnding(EEndPlayReason::Type Reason);
+
+	/**
+	 * When a hire spawn the case is despawning goes. 0 means now: a live body, or a dead one that is only waiting to be
+	 * destroyed. A downed body has already paid its loot, so it keeps the down delay plus a little grace and then goes,
+	 * even when its own tick never gets there.
+	 */
+	static float DespawnDelay(EGFDinoLife Life);
 };
