@@ -1,7 +1,8 @@
-// Animation ownership: the priority stack in UGFSimpleAnimComponent (ferry seat > fist scope > emote > mining > Beat Hop >
-// locomotion). Pure data plus the component's claim API, no world or mesh needed.
+// Animation ownership: the priority stack in UGFSimpleAnimComponent (ferry seat > mantling > wall run > climbing >
+// fist scope > emote > mining > Beat Hop > locomotion). Pure data plus the component's claim API, no world or mesh needed.
 // Run: UnrealEditor-Cmd GFGame.uproject -ExecCmds="Automation RunTests GFGame.Visuals.AnimOwner;Quit" -unattended -nullrhi
 #include "Misc/AutomationTest.h"
+#include "GFAnimMap.h"
 #include "GFAnimOwnerStack.h"
 #include "GFSimpleAnimComponent.h"
 #include "UObject/Package.h"
@@ -37,6 +38,10 @@ namespace GFAnimOwnerTestsPrivate
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFAnimOwnerPriorityOrderTest, "GFGame.Visuals.AnimOwner.PriorityOrder", GFAnimOwnerTestsPrivate::Flags)
 bool FGFAnimOwnerPriorityOrderTest::RunTest(const FString&)
 {
+	TestTrue(TEXT("ferry seat above mantling"), EGFAnimOwner::FerrySeat > EGFAnimOwner::Mantling);
+	TestTrue(TEXT("mantling above wall run"), EGFAnimOwner::Mantling > EGFAnimOwner::WallRun);
+	TestTrue(TEXT("wall run above climbing"), EGFAnimOwner::WallRun > EGFAnimOwner::Climbing);
+	TestTrue(TEXT("climbing above fist scope"), EGFAnimOwner::Climbing > EGFAnimOwner::FistScope);
 	TestTrue(TEXT("ferry seat above fist scope"), EGFAnimOwner::FerrySeat > EGFAnimOwner::FistScope);
 	TestTrue(TEXT("fist scope above emote"), EGFAnimOwner::FistScope > EGFAnimOwner::Emote);
 	TestTrue(TEXT("emote above mining"), EGFAnimOwner::Emote > EGFAnimOwner::Mining);
@@ -232,6 +237,80 @@ bool FGFAnimOwnerReleaseKeyTest::RunTest(const FString&)
 	TestFalse(TEXT("component ignores another key"), Anim->ReleaseClaimKey(EGFAnimOwner::Mining, Wave));
 	TestTrue(TEXT("component releases the matching key"), Anim->ReleaseClaimKey(EGFAnimOwner::Mining, Hop));
 	TestEqual(TEXT("back to locomotion"), Own(Anim->GetTopOwner()), Own(EGFAnimOwner::Locomotion));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFAnimOwnerTraversalTest, "GFGame.Visuals.AnimOwner.Traversal", GFAnimOwnerTestsPrivate::Flags)
+bool FGFAnimOwnerTraversalTest::RunTest(const FString&)
+{
+	using namespace GFAnimOwnerTestsPrivate;
+	static const FName ClimbLoop = TEXT("Player.WallClimb_Loop");
+	static const FName RunL = TEXT("Player.WallRun_Loop_L");
+	static const FName Mantle = TEXT("Player.Mantle_Up");
+	FGFAnimOwnerStack S;
+	// A held fist scope and mining loop under a climb come back when the climb lets go; a timed emote expires underneath.
+	S.Claim(EGFAnimOwner::Mining, TEXT("Player.Mine_Field_Loop"), true);
+	S.Claim(EGFAnimOwner::FistScope, Fist, true);
+	S.Claim(EGFAnimOwner::Emote, Wave, false, 0.5f);
+	TestTrue(TEXT("climb takes the body over the fist scope"), S.Claim(EGFAnimOwner::Climbing, ClimbLoop, true));
+	TestTrue(TEXT("wall run over a climb"), S.Claim(EGFAnimOwner::WallRun, RunL, true));
+	TestTrue(TEXT("mantle over a wall run"), S.Claim(EGFAnimOwner::Mantling, Mantle, false));
+	S.Tick(1.f);
+	TestFalse(TEXT("emote expired underneath"), S.Has(EGFAnimOwner::Emote));
+	S.Release(EGFAnimOwner::Mantling);
+	TestEqual(TEXT("mantle released -> wall run"), TopKey(S), RunL);
+	S.Release(EGFAnimOwner::WallRun);
+	TestEqual(TEXT("wall run released -> climb"), TopKey(S), ClimbLoop);
+	S.Release(EGFAnimOwner::Climbing);
+	TestEqual(TEXT("climb released -> fist scope"), TopKey(S), Fist);
+	S.Release(EGFAnimOwner::FistScope);
+	TestEqual(TEXT("then the mining loop"), Own(S.TopOwner()), Own(EGFAnimOwner::Mining));
+
+	// Seated keeps the sit over any traversal claim.
+	S.Reset();
+	S.Claim(EGFAnimOwner::FerrySeat, Sit, true);
+	TestFalse(TEXT("climb while seated is not on top"), S.Claim(EGFAnimOwner::Climbing, ClimbLoop, true));
+	TestFalse(TEXT("mantle while seated is not on top"), S.Claim(EGFAnimOwner::Mantling, Mantle, false));
+	TestEqual(TEXT("sit kept"), TopKey(S), Sit);
+
+	TestEqual(TEXT("owner names"), FString(GFAnimOwnerName(EGFAnimOwner::WallRun)), FString(TEXT("WallRun")));
+	TestEqual(TEXT("owner names (mantling)"), FString(GFAnimOwnerName(EGFAnimOwner::Mantling)), FString(TEXT("Mantling")));
+	TestEqual(TEXT("owner names (climbing)"), FString(GFAnimOwnerName(EGFAnimOwner::Climbing)), FString(TEXT("Climbing")));
+	return true;
+}
+
+// #356 DT_AnimMap rows for the wallclimb_anims_v1 clips. The clips are not imported yet, so only the row data is checked.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFAnimOwnerTraversalRowsTest, "GFGame.Visuals.AnimOwner.TraversalRows", GFAnimOwnerTestsPrivate::Flags)
+bool FGFAnimOwnerTraversalRowsTest::RunTest(const FString&)
+{
+	struct FExpect { const TCHAR* Key; bool bLoop; float NaturalSpeedCms; };
+	const FExpect Rows[] = {
+		{ TEXT("Player.WallClimb_Enter"), false, 0.f },
+		{ TEXT("Player.WallClimb_Loop"), true, 350.f },
+		{ TEXT("Player.WallClimb_Exit_Fall"), false, 0.f },
+		{ TEXT("Player.Mantle_Up"), false, 0.f },
+		{ TEXT("Player.WallRun_Loop_L"), true, 450.f },
+		{ TEXT("Player.WallRun_Loop_R"), true, 450.f },
+	};
+	for (const FExpect& E : Rows)
+	{
+		const FGFAnimMapRow* Row = FGFAnimMap::Find(E.Key);
+		if (!TestNotNull(FString::Printf(TEXT("%s row"), E.Key), Row))
+		{
+			continue;
+		}
+		TestEqual(FString::Printf(TEXT("%s loop"), E.Key), Row->bLoop, E.bLoop);
+		TestFalse(FString::Printf(TEXT("%s does not hold its last frame"), E.Key), Row->bHoldLastFrame);
+		TestEqual(FString::Printf(TEXT("%s natural speed"), E.Key), Row->NaturalSpeedCms, E.NaturalSpeedCms);
+		TestFalse(FString::Printf(TEXT("%s names a clip path"), E.Key), Row->Anim.IsNull());
+	}
+	TestNull(TEXT("Low mantle key is reserved, no row yet"), FGFAnimMap::Find(TEXT("Player.Mantle_Up_Low")));
+	TestEqual(TEXT("climb at 350 plays at 1.0"), FGFAnimMap::PlayRateFor(TEXT("Player.WallClimb_Loop"), 350.f), 1.f);
+	TestEqual(TEXT("wall run at 900 plays at 2.0"), FGFAnimMap::PlayRateFor(TEXT("Player.WallRun_Loop_R"), 900.f), 2.f);
+	TestEqual(TEXT("wall run clamps"), FGFAnimMap::PlayRateFor(TEXT("Player.WallRun_Loop_L"), 50.f), 0.25f);
+	TestEqual(TEXT("Enter has no natural speed"), FGFAnimMap::PlayRateFor(TEXT("Player.WallClimb_Enter"), 350.f), 1.f);
+	TestEqual(TEXT("row natural speed wins over the fallback"), FGFAnimMap::NaturalSpeedFor(TEXT("Player.WallClimb_Loop"), 1.f), 350.f);
+	TestEqual(TEXT("no row uses the fallback"), FGFAnimMap::NaturalSpeedFor(TEXT("Player.Mantle_Up_Low"), 42.f), 42.f);
 	return true;
 }
 
