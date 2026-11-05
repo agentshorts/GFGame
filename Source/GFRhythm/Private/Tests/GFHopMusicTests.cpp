@@ -11,6 +11,8 @@
 #include "Misc/Guid.h"
 #include "Misc/Paths.h"
 #include "GFAccelHopRoad.h"
+#include "GFAccelHopTile.h"
+#include "GFBeatmap.h"
 #include "GFBeatClockSubsystem.h"
 #include "GFHopMusic.h"
 #include "GFRhythmSettings.h"
@@ -547,6 +549,159 @@ bool FGFHopMusicRoadTest::RunTest(const FString&)
 	Road->StopMusicNow();
 	Director.SetPrefsOverride(nullptr);
 	Director.SetFolderOverride(FString());
+	return true;
+}
+
+namespace GFHopMusicTestsPrivate
+{
+	/** What the client machine (a listen host here, so its clock is the server's) is playing while the server picks. */
+	enum class ELitClientMusic : uint8
+	{
+		None,
+		LocalTrack100,
+		Clock175,
+	};
+
+	/** Everything the lit pick decided in one run, to compare across runs. */
+	struct FLitPickRun
+	{
+		bool bOk = false;
+		float PickBeatSeconds = 0.f;
+		TArray<int64> Beats;
+		TArray<int32> Indices;
+		TArray<int32> Serials;
+		bool bOffGridLandingPays = false;
+		double ClientBpm = 0.0;
+	};
+
+	/**
+	 * The same road, tiles and anchor steps as GFGame.AccelHop.Lit.Road, with the given music on this machine's
+	 * clock. Records the pick beat counter and the pick at fixed server times.
+	 */
+	static FLitPickRun RunLitPicks(FAutomationTestBase& Test, ELitClientMusic Music, const TCHAR* WorldName)
+	{
+		FLitPickRun Run;
+		FHopMusicTestWorld W(WorldName);
+		if (!Test.TestNotNull(TEXT("World"), W.World))
+		{
+			return Run;
+		}
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		const EGFHopTileKind Kinds[] = { EGFHopTileKind::Standard, EGFHopTileKind::Boost, EGFHopTileKind::Standard, EGFHopTileKind::Downbeat, EGFHopTileKind::Standard, EGFHopTileKind::Landing };
+		const float Xs[] = { 1400.f, 1200.f, 200.f, 1000.f, 600.f, 1800.f };
+		for (int32 Index = 0; Index < 6; ++Index)
+		{
+			AGFAccelHopTile* Tile = W.World->SpawnActor<AGFAccelHopTile>(AGFAccelHopTile::StaticClass(), FTransform(FVector(Xs[Index], 0.0, 0.0)), Params);
+			if (!Test.TestNotNull(TEXT("Tile"), Tile))
+			{
+				return Run;
+			}
+			Tile->SetKind(Kinds[Index]);
+		}
+		AGFAccelHopRoad* Road = W.World->SpawnActor<AGFAccelHopRoad>(AGFAccelHopRoad::StaticClass(), FTransform(FVector(1000.0, 0.0, 0.0)), Params);
+		UGFBeatClockSubsystem* Beat = W.World->GetSubsystem<UGFBeatClockSubsystem>();
+		if (!Test.TestNotNull(TEXT("Road"), Road) || !Test.TestNotNull(TEXT("Clock"), Beat))
+		{
+			return Run;
+		}
+		Road->SetAutoPick(false);
+		Road->RefreshTiles();
+
+		const FHopMusicTempFolder Folder(TEXT("LitPick"));
+		FGFHopPlaylistPrefs Prefs;
+		FGFHopMusicDirector& Director = Road->GetMusicDirector();
+		Director.SetPrefsOverride(&Prefs);
+		Director.SetFolderOverride(Folder.Path);
+		if (Music == ELitClientMusic::LocalTrack100)
+		{
+			Test.TestTrue(TEXT("Write a 100 BPM click track"), Folder.AddWav(TEXT("Click 100bpm.wav"), 30.f, 100.f));
+			Road->StartMusicNow();
+			Test.TestTrue(TEXT("The local track plays"), Road->IsPlayingLocalTrack());
+		}
+		else if (Music == ELitClientMusic::Clock175)
+		{
+			FGFBeatmap Map;
+			Map.SongId = FName(TEXT("LitPickTest175"));
+			Map.Bpm = 175.f;
+			Test.TestTrue(TEXT("A 175 BPM clock runs"), Beat->StartBeatmap(Map));
+		}
+		Run.ClientBpm = Beat->IsRunning() ? static_cast<double>(Beat->GetBPM()) : 0.0;
+
+		Run.PickBeatSeconds = Road->GetLitPickBeatSeconds();
+		const double Times[] = { 5.0, 5.3, 5.7, 6.2, 7.9, 12.34 };
+		for (const double Now : Times)
+		{
+			Run.Beats.Add(Road->GetLitPickBeatIndex(Now));
+		}
+
+		// Anchor steps along the road, each at a server time off any beat grid.
+		const float AnchorXs[] = { 200.f, 400.f, 700.f, 1000.f, 1300.f };
+		double Now = 5.13;
+		for (const float X : AnchorXs)
+		{
+			Road->ServerPickFrom(Road->AlongOf(FVector(X, 0.0, 0.0)), 1.f, Now);
+			Run.Indices.Add(Road->GetLitIndex());
+			Run.Serials.Add(Road->GetLitState().Serial);
+			Now += 0.37;
+		}
+
+		// Land on the lit tile half a pick step off the server's grid: the server still calls it a lit landing.
+		Road->ServerPickFrom(Road->AlongOf(FVector(200.0, 0.0, 0.0)), 1.f, Now);
+		const AGFAccelHopTile* Lit = Road->GetLitTile();
+		const double Step = static_cast<double>(Run.PickBeatSeconds);
+		const double OffGrid = (FMath::FloorToDouble(Now / Step) + 0.5) * Step;
+		Run.bOffGridLandingPays = Lit && Road->GetLitPickBeatIndex(OffGrid) == Road->GetLitPickBeatIndex(Now) && Road->ServerIsLitLanding(Lit, OffGrid);
+
+		Road->StopMusicNow();
+		Beat->StopClock();
+		Director.SetPrefsOverride(nullptr);
+		Director.SetFolderOverride(FString());
+		Run.bOk = true;
+		return Run;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFHopMusicLitPickIgnoresClientBpmTest, "GFGame.HopMusic.LitPickIgnoresClientBpm", GFHopMusicTestsPrivate::HopMusicFlags)
+bool FGFHopMusicLitPickIgnoresClientBpmTest::RunTest(const FString&)
+{
+	using namespace GFHopMusicTestsPrivate;
+	const FLitPickRun Quiet = RunLitPicks(*this, ELitClientMusic::None, TEXT("GFHopMusicLitPickQuiet"));
+	const FLitPickRun Local = RunLitPicks(*this, ELitClientMusic::LocalTrack100, TEXT("GFHopMusicLitPickLocal"));
+	const FLitPickRun Fast = RunLitPicks(*this, ELitClientMusic::Clock175, TEXT("GFHopMusicLitPickFast"));
+	if (!Quiet.bOk || !Local.bOk || !Fast.bOk)
+	{
+		return false;
+	}
+	TestEqual(TEXT("No music: no client clock"), Quiet.ClientBpm, 0.0);
+	TestEqual(TEXT("The local track drives this machine's clock at 100 BPM"), Local.ClientBpm, 100.0, 0.01);
+	TestEqual(TEXT("The other clock runs at 175 BPM"), Fast.ClientBpm, 175.0, 0.01);
+
+	// The pick step is the road song's committed beat (the fallback song's 130 BPM), whatever this machine plays.
+	TestEqual(TEXT("Pick step: the committed 130 BPM"), Quiet.PickBeatSeconds, 60.f / 130.f, 0.001f);
+	TestEqual(TEXT("Pick step ignores a 100 BPM local track"), Local.PickBeatSeconds, Quiet.PickBeatSeconds, 0.0001f);
+	TestEqual(TEXT("Pick step ignores a 175 BPM clock"), Fast.PickBeatSeconds, Quiet.PickBeatSeconds, 0.0001f);
+	bool bGrid = Quiet.Beats.Num() == 6;
+	for (int32 Index = 0; bGrid && Index < Quiet.Beats.Num(); ++Index)
+	{
+		const double Times[] = { 5.0, 5.3, 5.7, 6.2, 7.9, 12.34 };
+		bGrid &= Quiet.Beats[Index] == static_cast<int64>(FMath::FloorToDouble(Times[Index] / (60.0 / 130.0)));
+	}
+	TestTrue(TEXT("Pick beats are the server's own 130 BPM grid"), bGrid);
+	TestTrue(TEXT("Same pick beats with a 100 BPM local track"), Local.Beats == Quiet.Beats);
+	TestTrue(TEXT("Same pick beats with a 175 BPM clock"), Fast.Beats == Quiet.Beats);
+
+	// The pick counts hops ahead of the anchor: the same tiles, in the same order, with the same serials.
+	TestTrue(TEXT("Something was lit"), Quiet.Indices.ContainsByPredicate([](int32 I) { return I != INDEX_NONE; }));
+	TestTrue(TEXT("Same lit tiles with a 100 BPM local track"), Local.Indices == Quiet.Indices);
+	TestTrue(TEXT("Same lit tiles with a 175 BPM clock"), Fast.Indices == Quiet.Indices);
+	TestTrue(TEXT("Same serials with a 100 BPM local track"), Local.Serials == Quiet.Serials);
+	TestTrue(TEXT("Same serials with a 175 BPM clock"), Fast.Serials == Quiet.Serials);
+
+	// Off the server's beat still pays the lit boost: the server checks the tile, not the beat.
+	TestTrue(TEXT("Off-grid lit landing counts (no music)"), Quiet.bOffGridLandingPays);
+	TestTrue(TEXT("Off-grid lit landing counts (100 BPM local track)"), Local.bOffGridLandingPays);
+	TestTrue(TEXT("Off-grid lit landing counts (175 BPM clock)"), Fast.bOffGridLandingPays);
 	return true;
 }
 
