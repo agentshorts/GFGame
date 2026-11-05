@@ -587,6 +587,8 @@ namespace GFStairKitTestsDetail
 {
 	constexpr const TCHAR* ControlCubePath = TEXT("/Engine/BasicShapes/Cube.Cube");
 	constexpr float TownSpacingCm = 4000.f;
+	/** The Board Hall side plinth and door threshold are 25 cm treads in the source FBX (Data/Town/stair_collision_341_v1.json). */
+	constexpr float BoardHallPlinthCm = 25.f;
 
 	struct FTownFix
 	{
@@ -669,7 +671,10 @@ namespace GFStairKitTestsDetail
  * #341: the town meshes on the fix list must not hide a tread inside their collision. Fails until
  * Tools/fix_stair_collision_341.py (GFSTAIR_MODE=apply) has switched them to complex as simple; the failure lists the
  * buried tread heights, which is also the proof that the probe sees the old hull. An engine cube is the clean control.
- * Then walks the Board Hall from its +X front (Force Front X) and reports what stopped the pawn.
+ * The gate is: complex as simple on and FindBuriedTreads == 0 (it returns 0 for complex as simple, -1 when it cannot
+ * measure, and -1 always fails here). Then walks the Board Hall from its +X side onto the 25 cm side plinth: on the
+ * old hull a stall must write a StairRefused line; on complex as simple the pawn must get onto the plinth, and where it
+ * stops after that (the hall wall) is reported, not asserted.
  */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFStairKitTownCollisionTest, "GFGame.Movement.StairKit.TownCollision", GFStairKitTestsDetail::Flags)
 bool FGFStairKitTownCollisionTest::RunTest(const FString&)
@@ -695,14 +700,17 @@ bool FGFStairKitTownCollisionTest::RunTest(const FString&)
 	const float Reach = (Fixes.Num() + 1) * TownSpacingCm;
 	SpawnBox(World, FVector(-TownSpacingCm, -TownSpacingCm, -20.f), FVector(Reach, TownSpacingCm, 0.f), TEXT("TownGround"));
 
-	// Control: a cube's box collision is its render mesh, so its top face is not buried.
+	// Control: a cube's box collision is its render mesh, so its top face is not buried. The cube keeps its default
+	// trace flag, so this also proves the overlap-vs-air test (not the complex as simple shortcut) reads 0 on a clean mesh.
 	if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, ControlCubePath, nullptr, LOAD_NoWarn))
 	{
 		AStaticMeshActor* Control = SpawnMesh(World, Cube, FVector(0.f, 0.f, 50.f));
 		TArray<FVector> Points;
 		TArray<float> Heights;
 		const int32 Buried = Control ? UGFStairCollisionLibrary::FindBuriedTreads(Control->GetStaticMeshComponent(), MaxStep, Points, Heights) : -1;
-		TestEqual(TEXT("Control cube has no buried tread (-1 means no CPU triangles or physics)"), Buried, 0);
+		const FString Blocker = Control ? UGFStairCollisionLibrary::DescribeTreadAuditBlocker(Control->GetStaticMeshComponent()) : FString(TEXT("no actor"));
+		TestFalse(TEXT("Control cube is on its default trace flag"), UGFStairCollisionLibrary::UsesComplexAsSimple(Cube));
+		TestEqual(*FString::Printf(TEXT("Control cube has no buried tread (-1 means it cannot measure: %s)"), *Blocker), Buried, 0);
 	}
 	else
 	{
@@ -728,8 +736,10 @@ bool FGFStairKitTownCollisionTest::RunTest(const FString&)
 		TArray<FVector> Points;
 		TArray<float> Heights;
 		const int32 Buried = UGFStairCollisionLibrary::FindBuriedTreads(Actor->GetStaticMeshComponent(), MaxStep, Points, Heights);
-		AddInfo(FString::Printf(TEXT("#341 evidence: %s: %d buried tread samples at %s cm; %s"),
-			*Fix.Name, Buried, *HeightsOf(Heights), *UGFStairCollisionLibrary::DescribeSimpleCollision(Mesh)));
+		const FString Blocker = UGFStairCollisionLibrary::DescribeTreadAuditBlocker(Actor->GetStaticMeshComponent());
+		AddInfo(FString::Printf(TEXT("#341 evidence: %s: %d buried tread samples at %s cm (triangles from %s%s%s); %s"),
+			*Fix.Name, Buried, *HeightsOf(Heights), *UGFStairCollisionLibrary::DescribeTreadSource(Actor->GetStaticMeshComponent()),
+			Blocker.IsEmpty() ? TEXT("") : TEXT(", cannot measure: "), *Blocker, *UGFStairCollisionLibrary::DescribeSimpleCollision(Mesh)));
 		TestTrue(*FString::Printf(TEXT("%s uses its render mesh as collision (run Tools/fix_stair_collision_341.py with GFSTAIR_MODE=apply)"), *Fix.Name),
 			UGFStairCollisionLibrary::UsesComplexAsSimple(Mesh));
 		TestEqual(*FString::Printf(TEXT("%s hides no tread inside its collision (heights %s cm)"), *Fix.Name, *HeightsOf(Heights)), Buried, 0);
@@ -739,7 +749,10 @@ bool FGFStairKitTownCollisionTest::RunTest(const FString&)
 		}
 	}
 
-	// Walk at the Board Hall front. Reported, not asserted: the climb depends on the art, the buried check above is the gate.
+	// Walk at the Board Hall +X side, across the 25 cm side plinth toward the hall's middle, so the pawn always ends on
+	// the hall wall. On the old hull that wall stands at the plinth lip and a stall must write StairRefused. On complex
+	// as simple the plinth is a real step: the pawn must get onto it, and the stall at the wall behind it is expected
+	// and silent (a wall is not a refused stair), so it is reported, not asserted.
 	if (BoardHall)
 	{
 		const FBox Bounds = BoardHall->GetStaticMeshComponent()->Bounds.GetBox();
@@ -753,7 +766,18 @@ bool FGFStairKitTownCollisionTest::RunTest(const FString&)
 			const FGFWalkRefusal& Line = Move->GetLastWalkRefusal();
 			AddInfo(FString::Printf(TEXT("#341 evidence: Board Hall front walk: %s; last StairRefused: %s, face top %.1f cm, component %s, at %s"),
 				*Describe(Result), *Line.Reason, Line.FaceTopCm, *Line.Component, *Line.ImpactPoint.ToCompactString()));
-			if (!Result.bReached)
+			const bool bComplex = UGFStairCollisionLibrary::UsesComplexAsSimple(BoardHall->GetStaticMeshComponent()->GetStaticMesh());
+			if (bComplex)
+			{
+				TestTrue(*FString::Printf(TEXT("Board Hall on complex as simple: the pawn steps onto the side plinth (%s)"), *Describe(Result)),
+					Result.MaxFeetZ >= BoardHallPlinthCm * 0.5f);
+				if (!Result.bReached)
+				{
+					AddInfo(FString::Printf(TEXT("#341 evidence: Board Hall walk stopped at the hall wall after the plinth (along %.0f, feet %.1f, max %.1f, refused %d)"),
+						Result.Along, Result.FeetZ, Result.MaxFeetZ, Result.Refusals));
+				}
+			}
+			else if (!Result.bReached)
 			{
 				TestTrue(TEXT("A stalled walk at the Board Hall wrote a StairRefused line"), Result.Refusals > 0 && !Line.Reason.IsEmpty());
 			}

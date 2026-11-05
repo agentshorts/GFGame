@@ -14,13 +14,19 @@ Every unique static mesh placed on the map is audited with UGFStairCollisionLibr
 treads within one step of the ground that the blocking collision covers while the render mesh shows air, and that
 a player can reach from outside). Apply mode only edits meshes on the fix list; the rest are reported.
 
+Buried counts: N > 0 buried samples, 0 clean, -1 unmeasurable (the line says why, e.g. no physics state). -1 is never
+read as clean: a fix-list mesh at -1 is still applied from the json. A mesh already on complex as simple reads 0 (its
+collision is its render triangles, so no hull can bury a tread). The library reads triangles from the LOD0 render
+buffers, or from the LOD0 mesh description when the render copy is not CPU readable (town meshes do not set
+bAllowCPUAccess), so the audit no longer goes blind on those.
+
   UnrealEditor-Cmd.exe GFGame.uproject -run=pythonscript -script="<abs>/Tools/fix_stair_collision_341.py" -unattended -nullrhi -nosplash
 
 Env:
   GFSTAIR_MODE    audit (default, changes nothing), apply, or revert
   GFSTAIR_MAP     default /Game/Maps/L_World_Factions_A
   GFSTAIR_MESHES  comma list of mesh names to use instead of the json fix list (apply and revert only)
-  GFSTAIR_FORCE   1 applies to listed meshes even when the live audit finds no buried tread
+  GFSTAIR_FORCE   1 applies to listed meshes even when the live audit measures 0 buried treads
 
 Before saving, each edited .uasset is copied to Saved/StairCollision/backup_<time>/. Writes
 Saved/StairCollision/stair_collision_341_report_<mode>_<time>.json and logs "[gfstair]" lines.
@@ -86,8 +92,9 @@ def placed_meshes():
 
 
 def audit_one(mesh, comps, step):
-    """Buried treads on each distinct placement scale, from the first component of each."""
+    """Buried treads on up to four placements. buried is the worst measured count, or -1 when none could be measured."""
     best = None
+    blockers = []
     for comp in comps[:4]:
         count, points, heights = LIB.find_buried_treads(comp, step)
         row = {
@@ -95,10 +102,25 @@ def audit_one(mesh, comps, step):
             "buried": count,
             "heights_cm": sorted(set(round(h, 1) for h in heights))[:12],
             "points": [[round(p.x, 1), round(p.y, 1), round(p.z, 1)] for p in points[:8]],
+            "triangles_from": LIB.describe_tread_source(comp),
+            "unmeasurable_why": "",
         }
+        if count < 0:
+            row["unmeasurable_why"] = LIB.describe_tread_audit_blocker(comp) or "unknown"
+            blockers.append(row["unmeasurable_why"])
         if best is None or count > best["buried"]:
             best = row
-    return best or {"actor": "", "buried": -1, "heights_cm": [], "points": []}
+    if best is None:
+        return {"actor": "", "buried": -1, "heights_cm": [], "points": [], "triangles_from": "none", "unmeasurable_why": "no placed component"}
+    if best["buried"] < 0 and not best["unmeasurable_why"]:
+        best["unmeasurable_why"] = "; ".join(sorted(set(blockers))) or "unknown"
+    return best
+
+
+def describe_count(audit):
+    if audit["buried"] < 0:
+        return "unmeasurable (%s)" % audit["unmeasurable_why"]
+    return "%d" % audit["buried"]
 
 
 def main():
@@ -137,9 +159,12 @@ def main():
             "audit_only_reason": audit_only.get(name, ""),
         }
         report["meshes"].append(row)
-        if before["buried"] != 0:
-            log("%s x%d: %d buried tread samples at %s cm (%s); %s" % (
-                name, len(comps), before["buried"], before["heights_cm"], before["actor"], row["collision"][:300]))
+        if before["buried"] > 0:
+            log("%s x%d: %d buried tread samples at %s cm (%s, triangles from %s); %s" % (
+                name, len(comps), before["buried"], before["heights_cm"], before["actor"], before["triangles_from"], row["collision"][:300]))
+        elif before["buried"] < 0:
+            warn("%s x%d: buried treads unmeasurable, not clean: %s%s" % (
+                name, len(comps), before["unmeasurable_why"], " (on the fix list, apply uses the json)" if row["on_fix_list"] else ""))
 
     folder = os.path.join(OUT, "backup_" + STAMP)
     if MODE in ("apply", "revert"):
@@ -156,9 +181,11 @@ def main():
                 report["skipped"].append({"name": name, "why": "already set"})
                 continue
             if want and row["before"]["buried"] == 0 and not FORCE:
-                log("%s: live audit finds no buried tread, left alone (GFSTAIR_FORCE=1 to apply anyway)" % name)
-                report["skipped"].append({"name": name, "why": "no buried tread found live"})
+                log("%s: live audit measures 0 buried treads, left alone (GFSTAIR_FORCE=1 to apply anyway)" % name)
+                report["skipped"].append({"name": name, "why": "live audit measured 0 buried treads"})
                 continue
+            if want and row["before"]["buried"] < 0:
+                warn("%s: live audit cannot measure (%s); applying from the json fix list anyway" % (name, row["before"]["unmeasurable_why"]))
             saved = backup(path, folder)
             if not LIB.set_use_complex_as_simple(mesh, want):
                 warn("%s: set_use_complex_as_simple failed" % name)
@@ -166,8 +193,8 @@ def main():
                 continue
             after = audit_one(mesh, comps, step)
             ok = EAL.save_loaded_asset(mesh, False)
-            log("%s: %s, buried %d -> %d, saved %s, backup %s" % (
-                name, "complex as simple" if want else "back on its UCX hull", row["before"]["buried"], after["buried"], ok, saved))
+            log("%s: %s, buried %s -> %s, saved %s, backup %s" % (
+                name, "complex as simple" if want else "back on its UCX hull", describe_count(row["before"]), describe_count(after), ok, saved))
             report["changed"].append({"name": name, "path": path, "complex_as_simple": want, "before": row["before"]["buried"],
                                       "after": after["buried"], "after_detail": after, "saved": bool(ok), "backup": saved})
 
@@ -175,8 +202,11 @@ def main():
     with open(out, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=1)
     flagged = [r["name"] for r in report["meshes"] if r["before"]["buried"] > 0]
-    log("done: %d meshes with buried treads (%s); changed %d; report %s" % (
-        len(flagged), ", ".join(flagged), len(report["changed"]), out))
+    blind = [r["name"] for r in report["meshes"] if r["before"]["buried"] < 0]
+    log("done: %d meshes with buried treads (%s); %d unmeasurable (%s); changed %d; report %s" % (
+        len(flagged), ", ".join(flagged), len(blind), ", ".join(blind), len(report["changed"]), out))
+    if blind:
+        warn("unmeasurable is not clean: check the unmeasurable_why lines above, then run the StairKit tests, which measure in a test world")
     if MODE == "apply":
         log("map not saved (only mesh assets changed). Rebuild navigation if the map has a nav mesh, then run the StairKit tests.")
 
