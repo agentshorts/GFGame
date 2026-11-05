@@ -118,6 +118,9 @@ struct GFCORE_API FGFSideQuestLine
 	/** Adds a board entry for every catalog line and sets Locked / Available on lines that are neither Active nor Done. */
 	void Refresh();
 
+	/** The Active line's current step (null when no line is Active). */
+	const FGFSideQuestStepRule* ActiveStep() const;
+
 	/** Available test for one line, from standing alone. */
 	static bool IsUnlocked(const FGFSideQuestLineRule& Line, FName FactionId, EGFFactionRank Rank);
 

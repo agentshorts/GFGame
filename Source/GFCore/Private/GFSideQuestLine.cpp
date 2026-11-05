@@ -32,16 +32,41 @@ namespace GFSideQuestLinePrivate
 		return Out;
 	}
 
-	static FGFSideQuestStepRule Accept()
+	static FGFSideQuestStepRule MakeStep(const TCHAR* StepId, int32 Order, const TCHAR* Title, const TCHAR* Hint, int32 Goal,
+		EGFSideQuestEventKind Kind, TArray<FName> Items = {})
 	{
 		FGFSideQuestStepRule Step;
-		Step.StepId = TEXT("Accept");
-		Step.Order = 1;
-		Step.Title = TEXT("Town task");
-		Step.Hint = TEXT("The elder has a task for you.");
-		Step.Goal = 1;
-		Step.AdvanceKind = EGFSideQuestEventKind::TalkAccepted;
+		Step.StepId = StepId;
+		Step.Order = Order;
+		Step.Title = Title;
+		Step.Hint = Hint;
+		Step.Goal = Goal;
+		Step.Items = MoveTemp(Items);
+		Step.AdvanceKind = Kind;
 		return Step;
+	}
+
+	static FGFSideQuestStepRule Accept()
+	{
+		return MakeStep(TEXT("Accept"), 1, TEXT("Town task"), TEXT("The elder has a task for you."), 1, EGFSideQuestEventKind::TalkAccepted);
+	}
+
+	/**
+	 * Verdant town task (QL-c, #363). PLACEHOLDER title. Generic strings only (canon #368).
+	 * Six Apply steps for the five plan beats: the hand-in is followed by a short escort hire, and HireEscort
+	 * finishes when that hire spawns (UGFSideQuestEscorts raises HireSpawned).
+	 */
+	static TArray<FGFSideQuestStepRule> VerdantSteps()
+	{
+		using K = EGFSideQuestEventKind;
+		return {
+			Accept(),
+			MakeStep(TEXT("GatherWood"), 2, TEXT("Gather wood"), TEXT("Break trees in town."), 3, K::TreeBroken),
+			MakeStep(TEXT("RoadHops"), 3, TEXT("Road hops"), TEXT("Land good hops on the road."), 5, K::HopLanded),
+			MakeStep(TEXT("ScoutClimb"), 4, TEXT("Scout climb"), TEXT("Climb the lookout in town."), 1, K::ClimbMantled),
+			MakeStep(TEXT("HandIn"), 5, TEXT("Hand in"), TEXT("Bring planks to the elder."), 6, K::TurnIn, { FName(TEXT("WoodPlank")) }),
+			MakeStep(TEXT("HireEscort"), 6, TEXT("Escort"), TEXT("A hire will walk with you."), 1, K::HireSpawned),
+		};
 	}
 }
 
@@ -58,12 +83,12 @@ const FGFSideQuestStepRule* FGFSideQuestLineRule::FindStep(FName StepId) const
 
 const FGFSideQuestCatalog& FGFSideQuestCatalog::Builtin()
 {
-	// PLACEHOLDER ids and titles until the canon answers land. QL-a ships only step 1 (Accept) of each line, so no
-	// line is playable yet (MinSteps). QL-c, QL-d and QL-e append the rest of each table to the CSV and here.
+	// PLACEHOLDER ids and titles (canon Q1). Verdant ships in full (QL-c). Rime and Cinderwright still ship only
+	// step 1 (Accept), so they stay Locked (MinSteps) until QL-d and QL-e append the rest to the CSV and here.
 	static const FGFSideQuestCatalog Catalog = []()
 	{
 		FGFSideQuestCatalog Built;
-		auto Line = [&Built](const TCHAR* LineId, const TCHAR* TownId, const TCHAR* Title, int32 Sort)
+		auto Line = [&Built](const TCHAR* LineId, const TCHAR* TownId, const TCHAR* Title, int32 Sort, TArray<FGFSideQuestStepRule> Steps)
 		{
 			FGFSideQuestLineRule Rule;
 			Rule.LineId = LineId;
@@ -71,12 +96,12 @@ const FGFSideQuestCatalog& FGFSideQuestCatalog::Builtin()
 			Rule.Title = Title;
 			Rule.UnlockRank = EGFFactionRank::Member;
 			Rule.Sort = Sort;
-			Rule.Steps.Add(GFSideQuestLinePrivate::Accept());
+			Rule.Steps = MoveTemp(Steps);
 			Built.Lines.Add(Rule);
 		};
-		Line(TEXT("VerdantRootward"), TEXT("Verdant"), TEXT("Rootward Run"), 1);
-		Line(TEXT("RimeIceSpan"), TEXT("Rime"), TEXT("Ice Span"), 2);
-		Line(TEXT("CinderEmberAscent"), TEXT("Cinderwright"), TEXT("Ember Ascent"), 3);
+		Line(TEXT("VerdantRootward"), TEXT("Verdant"), TEXT("Rootward Run"), 1, GFSideQuestLinePrivate::VerdantSteps());
+		Line(TEXT("RimeIceSpan"), TEXT("Rime"), TEXT("Ice Span"), 2, { GFSideQuestLinePrivate::Accept() });
+		Line(TEXT("CinderEmberAscent"), TEXT("Cinderwright"), TEXT("Ember Ascent"), 3, { GFSideQuestLinePrivate::Accept() });
 		Built.Normalize();
 		return Built;
 	}();
@@ -207,6 +232,13 @@ void FGFSideQuestCatalog::Normalize()
 const FGFSideQuestCatalog& FGFSideQuestLine::ActiveRules() const
 {
 	return Catalog ? *Catalog : FGFSideQuestCatalog::Builtin();
+}
+
+const FGFSideQuestStepRule* FGFSideQuestLine::ActiveStep() const
+{
+	const FGFSideQuestProgress* Progress = Board.Active();
+	const FGFSideQuestLineRule* Rule = Progress && Progress->Status == EGFSideQuestStatus::Active ? ActiveRules().FindLine(Progress->LineId) : nullptr;
+	return Rule ? Rule->FindStep(Progress->StepId) : nullptr;
 }
 
 bool FGFSideQuestLine::IsUnlocked(const FGFSideQuestLineRule& Line, FName InFactionId, EGFFactionRank InRank)
