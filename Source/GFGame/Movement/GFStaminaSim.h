@@ -6,6 +6,7 @@
 // Dash direction is horizontal: move input, or camera yaw when the stick is idle.
 
 #include "CoreMinimal.h"
+#include "Templates/Function.h"
 #include "GFMovementTuning.h"
 
 /** World facts for one step. The movement component fills this from traces. Tests fill it directly. */
@@ -114,6 +115,21 @@ struct GFGAME_API FGFLandingPrediction
 	FVector Point = FVector::ZeroVector;
 };
 
+/** The flight state the landing target is predicted from (#342). Built fresh every frame. */
+struct GFGAME_API FGFFlightProbe
+{
+	FVector Origin = FVector::ZeroVector;
+	FVector Velocity = FVector::ZeroVector;
+	/** Sideways acceleration the player is steering with in the air (input x air control), cm/s^2. Z is ignored. */
+	FVector LateralAccel = FVector::ZeroVector;
+	/** Gravity for the flight, cm/s^2. Negative is down. */
+	float GravityZ = -980.f;
+	/** Steering never pushes the flat speed past this (or past the speed already carried, if higher). */
+	float MaxLateralSpeed = 0.f;
+	float Lookahead = 2.5f;
+	float SampleSeconds = 0.08f;
+};
+
 namespace GFStaminaSim
 {
 	GFGAME_API FGFStaminaState Step(const FGFStaminaState& State, const FGFStaminaCommand& Command, const UGFMovementTuning& Tuning);
@@ -155,4 +171,16 @@ namespace GFTraversalSim
 
 	/** First positive root of the parabola against a flat floor. */
 	GFGAME_API FGFLandingPrediction PredictLandingOnPlane(const FVector& Origin, const FVector& Velocity, float GravityZ, float FloorZ, float MaxTime);
+
+	/**
+	 * One step of the predicted flight (#342): gravity exact, steering added to the flat velocity and clamped to
+	 * max(MaxLateralSpeed, speed carried in). With no steering it lands on BallisticPoint exactly.
+	 */
+	GFGAME_API void StepFlight(FVector& Position, FVector& Velocity, const FVector& LateralAccel, float GravityZ, float MaxLateralSpeed, float Dt);
+
+	/**
+	 * Walks the flight in SampleSeconds steps out to Lookahead and asks Trace(From, To, OutHitPoint) for the first
+	 * floor. The movement component traces the world; tests pass a flat floor.
+	 */
+	GFGAME_API FGFLandingPrediction PredictFlightLanding(const FGFFlightProbe& Probe, TFunctionRef<bool(const FVector&, const FVector&, FVector&)> Trace);
 }

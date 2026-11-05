@@ -181,6 +181,50 @@ FGFLandingPrediction GFTraversalSim::PredictLandingOnPlane(const FVector& Origin
 	return Result;
 }
 
+void GFTraversalSim::StepFlight(FVector& Position, FVector& Velocity, const FVector& LateralAccel, float GravityZ, float MaxLateralSpeed, float Dt)
+{
+	const double T = static_cast<double>(FMath::Max(0.f, Dt));
+	const FVector FlatBefore(Velocity.X, Velocity.Y, 0.0);
+	FVector FlatAfter = FlatBefore + FVector(LateralAccel.X, LateralAccel.Y, 0.0) * T;
+	const double Cap = FMath::Max(static_cast<double>(FMath::Max(0.f, MaxLateralSpeed)), FlatBefore.Size());
+	if (FlatAfter.SizeSquared() > Cap * Cap)
+	{
+		FlatAfter = FlatAfter.GetSafeNormal() * Cap;
+	}
+	const double Gravity = static_cast<double>(GravityZ);
+	Position.X += 0.5 * (FlatBefore.X + FlatAfter.X) * T;
+	Position.Y += 0.5 * (FlatBefore.Y + FlatAfter.Y) * T;
+	Position.Z += Velocity.Z * T + 0.5 * Gravity * T * T;
+	Velocity = FVector(FlatAfter.X, FlatAfter.Y, Velocity.Z + Gravity * T);
+}
+
+FGFLandingPrediction GFTraversalSim::PredictFlightLanding(const FGFFlightProbe& Probe, TFunctionRef<bool(const FVector&, const FVector&, FVector&)> Trace)
+{
+	FGFLandingPrediction Result;
+	const float Lookahead = FMath::Max(0.05f, Probe.Lookahead);
+	const float Sample = FMath::Max(Probe.SampleSeconds, 0.02f);
+	const int32 Steps = FMath::Clamp(FMath::CeilToInt(Lookahead / Sample), 1, 64);
+	const float StepTime = Lookahead / static_cast<float>(Steps);
+	FVector Position = Probe.Origin;
+	FVector Velocity = Probe.Velocity;
+	for (int32 Index = 1; Index <= Steps; ++Index)
+	{
+		const FVector Previous = Position;
+		StepFlight(Position, Velocity, Probe.LateralAccel, Probe.GravityZ, Probe.MaxLateralSpeed, StepTime);
+		FVector Hit = FVector::ZeroVector;
+		if (Trace(Previous, Position, Hit))
+		{
+			const double Segment = FVector::Dist(Previous, Position);
+			const double Along = Segment > 1.0e-6 ? FMath::Clamp(FVector::Dist(Previous, Hit) / Segment, 0.0, 1.0) : 1.0;
+			Result.bHit = true;
+			Result.Point = Hit;
+			Result.Time = StepTime * (static_cast<float>(Index - 1) + static_cast<float>(Along));
+			return Result;
+		}
+	}
+	return Result;
+}
+
 bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Command, const UGFMovementTuning& Tuning)
 {
 	const float Dt = GFTraversalDetail::GFTraversalNonNegative(Command.DeltaSeconds);

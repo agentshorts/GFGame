@@ -17,6 +17,19 @@
 class UGFMovementTuning;
 class AGFAccelHopTile;
 
+/** Where this flight comes down (#342), recomputed every frame from the live flight state. */
+struct GFGAME_API FGFLandingTarget
+{
+	bool bValid = false;
+	FVector Point = FVector::ZeroVector;
+	/** Seconds from now until the landing. */
+	float Time = 0.f;
+	/** The hop tile under the landing point, if any. */
+	TWeakObjectPtr<AGFAccelHopTile> Tile;
+	/** That tile is the road's lit target on this machine. */
+	bool bLit = false;
+};
+
 UCLASS()
 class GFGAME_API UGFCharacterMovementComponent : public UCharacterMovementComponent
 {
@@ -84,6 +97,12 @@ public:
 	/** Ballistic ground point. False when the marker should stay hidden or the trace misses. */
 	bool GetLandingMarker(FVector& OutPoint) const;
 
+	/**
+	 * v2 (#342): the landing target, worked out from this frame's position, velocity, steering and gravity, so it
+	 * tracks the whole flight. Names the hop tile it lands on and whether that tile is the road's lit target.
+	 */
+	FGFLandingTarget GetLandingTarget() const;
+
 	/** Looks for a Beat Hop run that opted into the traversal kit (#277). */
 	void RefreshBeatHop();
 
@@ -110,6 +129,8 @@ public:
 	int32 GetAccelHopChain() const { return AccelHop.Chain; }
 
 	const FGFAccelHopHit& GetLastAccelHopHit() const { return LastAccelHopHit; }
+	/** The last applied hop landed on the road's lit target (#342). */
+	bool WasLastAccelHopLit() const { return bLastAccelHopLit; }
 	const FGFAccelHopBoost& GetAccelHopBoost() const { return AccelHop; }
 
 	/**
@@ -229,4 +250,5 @@ private:
 	FGFAccelHopBoost AccelHop;
 	FGFAccelHopHit LastAccelHopHit;
 	bool bAccelHopWasFalling = false;
+	bool bLastAccelHopLit = false;
 };

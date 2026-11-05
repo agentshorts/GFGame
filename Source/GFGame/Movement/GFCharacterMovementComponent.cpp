@@ -1,6 +1,7 @@
 #include "GFCharacterMovementComponent.h"
 #include "GFBeatHopCourse.h"
 #include "GFAccelHopTile.h"
+#include "GFAccelHopRoad.h"
 #include "GFBeatClockSubsystem.h"
 #include "GFCharacter.h"
 #include "GFKindleRing.h"
@@ -686,7 +687,21 @@ bool UGFCharacterMovementComponent::HandleAccelHopLanding(AGFAccelHopTile* Tile,
 	}
 	LastAccelHopHit = Hit;
 	const float BeatSeconds = FGFAccelHopRules::ClampBeatSeconds(Bpm > 0.f ? 60.f / Bpm : 0.5f);
-	const bool bChanged = FGFAccelHopRules::ApplyHit(AccelHop, Hit, Tile->GetKind(), AccelHopNow(), BeatSeconds, Hop);
+	const double Now = AccelHopNow();
+	// v2 (#342): the lit target pays LitBoostScale. The server (or a solo / host player) checks its own pick and
+	// spends it; a remote client predicts from the replicated pick and the server's copy decides for real.
+	const bool bAuthority = !CharacterOwner || CharacterOwner->HasAuthority();
+	AGFAccelHopRoad* Road = Tile->GetRoad();
+	const bool bLit = Road && (bAuthority ? Road->ServerIsLitLanding(Tile, Now) : Road->IsTileLit(Tile));
+	const bool bChanged = FGFAccelHopRules::ApplyHit(AccelHop, Hit, Tile->GetKind(), Now, BeatSeconds, Hop, bLit);
+	if (bChanged)
+	{
+		bLastAccelHopLit = bLit;
+		if (bLit && bAuthority)
+		{
+			Road->ServerConsumeLit(Tile, Now);
+		}
+	}
 	if (CharacterOwner && !CharacterOwner->HasAuthority())
 	{
 		ServerAccelHop(Tile, Hit, BeatSeconds);
@@ -714,7 +729,19 @@ bool UGFCharacterMovementComponent::ApplyServerAccelHop(AGFAccelHopTile* Tile, c
 	FGFAccelHopHit Checked = Hit;
 	Checked.bOnBarLine = Hit.BeatIndex >= 0 && Hit.BeatIndex % FMath::Max(1, Hop.BeatsPerBar) == 0;
 	LastAccelHopHit = Checked;
-	return FGFAccelHopRules::ApplyHit(AccelHop, Checked, Tile->GetKind(), Now, FGFAccelHopRules::ClampBeatSeconds(BeatSeconds), Hop);
+	// The server's own lit pick, never the client's word (#342).
+	AGFAccelHopRoad* Road = Tile->GetRoad();
+	const bool bLit = Road && Road->ServerIsLitLanding(Tile, Now);
+	const bool bChanged = FGFAccelHopRules::ApplyHit(AccelHop, Checked, Tile->GetKind(), Now, FGFAccelHopRules::ClampBeatSeconds(BeatSeconds), Hop, bLit);
+	if (bChanged)
+	{
+		bLastAccelHopLit = bLit;
+		if (bLit)
+		{
+			Road->ServerConsumeLit(Tile, Now);
+		}
+	}
+	return bChanged;
 }
 
 void UGFCharacterMovementComponent::ServerAccelHop_Implementation(AGFAccelHopTile* Tile, const FGFAccelHopHit& Hit, float BeatSeconds)
@@ -1009,42 +1036,81 @@ namespace GFCharacterMovementLanding
 
 bool UGFCharacterMovementComponent::GetLandingMarker(FVector& OutPoint) const
 {
-	if (bBeatHopRun && !GFBeatHopNinja::Allows(BeatHopDifficulty, EGFBeatHopKitMove::LandingMarker, BeatHopProfile))
+	const FGFLandingTarget Target = GetLandingTarget();
+	if (!Target.bValid)
 	{
 		return false;
 	}
+	OutPoint = Target.Point;
+	return true;
+}
+
+FGFLandingTarget UGFCharacterMovementComponent::GetLandingTarget() const
+{
+	FGFLandingTarget Target;
+	if (bBeatHopRun && !GFBeatHopNinja::Allows(BeatHopDifficulty, EGFBeatHopKitMove::LandingMarker, BeatHopProfile))
+	{
+		return Target;
+	}
 	if (!CharacterOwner || !GFTraversalSim::ShouldShowLandingMarker(Sim, IsMovingOnGround(), bStaminaEnabled))
 	{
-		return false;
+		return Target;
 	}
 	UWorld* World = GetWorld();
 	if (!World)
 	{
-		return false;
+		return Target;
 	}
 	const UGFMovementTuning& Tuning = GetTuning();
-	const float Sample = FMath::Max(Tuning.LandingSampleSeconds, 0.02f);
-	const int32 Steps = FMath::Clamp(FMath::CeilToInt(Tuning.LandingLookahead / Sample), 1, 64);
-	const float StepTime = Tuning.LandingLookahead / static_cast<float>(Steps);
-	FVector Origin = CharacterOwner->GetActorLocation();
+	// v2 (#342): built from this frame's flight, every frame, steering included. The v1 marker was a pure parabola off
+	// the velocity, so air steering never reached it until it had already bent the path, and the ring sat where the
+	// jump had aimed it.
+	FGFFlightProbe Probe;
+	Probe.Origin = CharacterOwner->GetActorLocation();
 	if (const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent())
 	{
-		Origin.Z -= static_cast<double>(Capsule->GetScaledCapsuleHalfHeight());
+		Probe.Origin.Z -= static_cast<double>(Capsule->GetScaledCapsuleHalfHeight());
 	}
-	const float Gravity = Super::GetGravityZ();
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(GFLanding), false, CharacterOwner);
-	FVector Previous = Origin;
-	for (int32 Index = 1; Index <= Steps; ++Index)
+	Probe.Velocity = Velocity;
+	// Engine gravity, not GetGravityZ: a swing or a dash zeroes the scale only while it lasts, and the marker shows
+	// where you come down after it.
+	Probe.GravityZ = Super::GetGravityZ();
+	if (!Sim.bSwinging && !Sim.bOverrideVelocity)
 	{
-		const FVector Next = GFTraversalSim::BallisticPoint(Origin, Velocity, Gravity, StepTime * static_cast<float>(Index));
+		// The falling step adds input acceleration times air control; predict the same push.
+		Probe.LateralAccel = FVector(Acceleration.X, Acceleration.Y, 0.0) * static_cast<double>(FMath::Max(0.f, AirControl));
+	}
+	Probe.MaxLateralSpeed = GetMaxSpeed();
+	Probe.Lookahead = Tuning.LandingLookahead;
+	Probe.SampleSeconds = Tuning.LandingSampleSeconds;
+
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GFLanding), false, CharacterOwner);
+	AActor* HitActor = nullptr;
+	const float MinNormalZ = Tuning.LandingMinFloorNormalZ;
+	const FGFLandingPrediction Landing = GFTraversalSim::PredictFlightLanding(Probe, [World, &Params, &HitActor, MinNormalZ](const FVector& From, const FVector& To, FVector& OutHit)
+	{
 		FHitResult Hit;
-		if (World->LineTraceSingleByChannel(Hit, Previous, Next, ECC_Visibility, Params)
-			&& GFCharacterMovementLanding::GFMovementFloorNormal(Hit.ImpactNormal, Tuning.LandingMinFloorNormalZ))
+		if (World->LineTraceSingleByChannel(Hit, From, To, ECC_Visibility, Params)
+			&& GFCharacterMovementLanding::GFMovementFloorNormal(Hit.ImpactNormal, MinNormalZ))
 		{
-			OutPoint = Hit.ImpactPoint;
+			OutHit = Hit.ImpactPoint;
+			HitActor = Hit.GetActor();
 			return true;
 		}
-		Previous = Next;
+		return false;
+	});
+	if (!Landing.bHit)
+	{
+		return Target;
 	}
-	return false;
+	Target.bValid = true;
+	Target.Point = Landing.Point;
+	Target.Time = Landing.Time;
+	if (AGFAccelHopTile* Tile = Cast<AGFAccelHopTile>(HitActor))
+	{
+		Target.Tile = Tile;
+		const AGFAccelHopRoad* Road = Tile->GetRoad();
+		Target.bLit = Road && Road->IsTileLit(Tile);
+	}
+	return Target;
 }

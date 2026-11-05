@@ -1,4 +1,5 @@
 // Acceleration Hop (issue 334) on the movement component: a hop tile landing on the beat raises the run speed.
+// v2 (issue 342): landing on the road's lit target tile pays LitBoostScale times the gain, once.
 // Run: UnrealEditor-Cmd GFGame.uproject -ExecCmds="Automation RunTests GFGame.AccelHop;Quit" -unattended -nullrhi
 #include "Misc/AutomationTest.h"
 #include "Engine/Engine.h"
@@ -6,6 +7,7 @@
 #include "GameFramework/WorldSettings.h"
 #include "GFAccelHop.h"
 #include "GFAccelHopTile.h"
+#include "GFAccelHopRoad.h"
 #include "GFCharacterMovementComponent.h"
 #include "GFMovementTuning.h"
 #include "UObject/Package.h"
@@ -112,6 +114,71 @@ bool FGFAccelHopMaxSpeedTest::RunTest(const FString&)
 
 	TestFalse(TEXT("The server path needs a character"), Move->ApplyServerAccelHop(Boost, Move->GetLastAccelHopHit(), 0.5f));
 	TestFalse(TEXT("And a tile"), Move->ApplyServerAccelHop(nullptr, Move->GetLastAccelHopHit(), 0.5f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFAccelHopLitLandingTest, "GFGame.AccelHop.Lit.Landing", GFAccelHopMoveTestsPrivate::AccelHopMoveFlags)
+bool FGFAccelHopLitLandingTest::RunTest(const FString&)
+{
+	using namespace GFAccelHopMoveTestsPrivate;
+	FAccelHopMoveWorld W(TEXT("GFAccelHopLitMoveWorld"));
+	if (!TestNotNull(TEXT("World"), W.World))
+	{
+		return false;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AGFAccelHopTile* Near = W.World->SpawnActor<AGFAccelHopTile>(AGFAccelHopTile::StaticClass(), FTransform(FVector(200.0, 0.0, 0.0)), Params);
+	AGFAccelHopTile* Target = W.World->SpawnActor<AGFAccelHopTile>(AGFAccelHopTile::StaticClass(), FTransform(FVector(1200.0, 0.0, 0.0)), Params);
+	AGFAccelHopTile* Other = W.World->SpawnActor<AGFAccelHopTile>(AGFAccelHopTile::StaticClass(), FTransform(FVector(1400.0, 0.0, 0.0)), Params);
+	AGFAccelHopRoad* Road = W.World->SpawnActor<AGFAccelHopRoad>(AGFAccelHopRoad::StaticClass(), FTransform(FVector(1000.0, 0.0, 0.0)), Params);
+	if (!TestNotNull(TEXT("Near"), Near) || !TestNotNull(TEXT("Target"), Target) || !TestNotNull(TEXT("Other"), Other) || !TestNotNull(TEXT("Road"), Road))
+	{
+		return false;
+	}
+	Target->SetKind(EGFHopTileKind::Boost);
+	Other->SetKind(EGFHopTileKind::Boost);
+	Road->SetAutoPick(false);
+	Road->RefreshTiles();
+	Road->ServerPickFrom(Road->AlongOf(Near->GetActorLocation()), 1.f, 0.0);
+	AGFAccelHopTile* Lit = Road->GetLitTile();
+	if (!TestNotNull(TEXT("A Boost tile ahead is lit"), Lit))
+	{
+		return false;
+	}
+	AGFAccelHopTile* Unlit = Lit == Target ? Other : Target;
+
+	// Two runners, same Perfect landing on a Boost tile: one on the lit tile, one beside it.
+	UGFCharacterMovementComponent* OnLit = AccelHopBareMove();
+	UGFCharacterMovementComponent* OnPlain = AccelHopBareMove();
+	const FGFAccelHopTuning& Hop = OnLit->GetTuning().AccelHop;
+	const float Base = OnLit->GetMaxSpeed();
+	TestTrue(TEXT("The plain Boost tile lands"), OnPlain->HandleAccelHopLanding(Unlit, 9.0, 120.f, EGFBeatHopMode::Songs));
+	TestFalse(TEXT("Not a lit landing"), OnPlain->WasLastAccelHopLit());
+	TestTrue(TEXT("Missing the lit tile leaves it lit"), Road->GetLitTile() == Lit);
+	TestTrue(TEXT("The lit tile lands"), OnLit->HandleAccelHopLanding(Lit, 9.0, 120.f, EGFBeatHopMode::Songs));
+	TestTrue(TEXT("A lit landing"), OnLit->WasLastAccelHopLit());
+
+	const float Normal = Base * (1.f + Hop.PerfectBoost + Hop.BoostTileBonus);
+	const float Boosted = Base * (1.f + (Hop.PerfectBoost + Hop.BoostTileBonus) * Hop.LitBoostScale);
+	TestTrue(*FString::Printf(TEXT("Plain tile: the v1 boost (%.1f, want %.1f)"), OnPlain->GetMaxSpeed(), Normal), FMath::IsNearlyEqual(OnPlain->GetMaxSpeed(), Normal, 0.5f));
+	TestTrue(*FString::Printf(TEXT("Lit tile: 1.5x the boost (%.1f, want %.1f)"), OnLit->GetMaxSpeed(), Boosted), FMath::IsNearlyEqual(OnLit->GetMaxSpeed(), Boosted, 0.5f));
+	TestTrue(TEXT("Lit beats plain"), OnLit->GetMaxSpeed() > OnPlain->GetMaxSpeed() + 1.f);
+
+	TestNull(TEXT("Paid out: the tile goes dark"), Road->GetLitTile());
+	TestFalse(TEXT("And is drawn dark"), Lit->IsLitVisual());
+	UGFCharacterMovementComponent* Late = AccelHopBareMove();
+	TestTrue(TEXT("A second runner on the same tile still hops"), Late->HandleAccelHopLanding(Lit, 9.0, 120.f, EGFBeatHopMode::Songs));
+	TestFalse(TEXT("But not lit: it paid once"), Late->WasLastAccelHopLit());
+	TestTrue(TEXT("And gets the normal boost"), FMath::IsNearlyEqual(Late->GetMaxSpeed(), Normal, 0.5f));
+
+	TestTrue(TEXT("A Miss on a lit tile pays nothing"), [&]()
+	{
+		Road->ServerSetLit(Unlit->GetRoadIndex(), 1.0);
+		UGFCharacterMovementComponent* Missed = AccelHopBareMove();
+		const bool bChanged = Missed->HandleAccelHopLanding(Unlit, 9.5, 120.f, EGFBeatHopMode::Songs);
+		return !bChanged && FMath::IsNearlyEqual(Missed->GetMaxSpeed(), Base, 0.5f) && Road->GetLitTile() == Unlit;
+	}());
 	return true;
 }
 
