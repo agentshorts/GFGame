@@ -3,6 +3,7 @@ Acceleration Hop v3: aim steering and the lit-tile diamond (issue 347)
 Where: any Acceleration Hop road on the world map (L_World_Factions_A).
 Jump on the road and turn the mouse mid-air: the hop curves toward where you look. Speed stays the same, only the direction turns, up to 90 degrees a second.
 The landing ring moves with the turn while you are still in the air. Hold the aim and you come down inside it.
+A hop that takes off on the road now steers all the way down, even when a hard turn carries you off the side of the road, and even over the top of a double or triple jump. Before this fix the steering switched off as soon as the pawn left the road's music box (its sides are under 6 m from the road's middle and its top 4 m up), and the ring froze where the jump had aimed it. Try a sharp mouse turn mid-hop and a triple jump: the ring should follow the camera the whole way.
 Look back over your shoulder (more than 150 degrees off your flight) and nothing turns, so a glance behind never spins you round. Very slow hops (under 1.5 m/s) do not turn either.
 Off the road, air control is the same as before. The stick still nudges as it did.
 The lit tile now has a big magenta diamond lying flat on the tile itself, with a black outline and a white core, about the size of the tile. It pulses with the beat. A magenta arrow floats above it so you can find it from far off or from the top of a hop.
