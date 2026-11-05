@@ -5,11 +5,35 @@
 #include "GFCharacterMovementComponent.h"
 #include "GFMiniGameCatalog.h"
 #include "GFMovementWorldSubsystem.h"
+#include "GFLog.h"
 #include "GFReturnToHub.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
+#include "Misc/PackageName.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
+
+namespace
+{
+	/** The tile top sits this far above the tile actor (fx_hooks_v1). */
+	const FVector GFHopTileTopOffset(0.f, 0.f, 6.25f);
+
+	void LogMissingHopFXOnce(const FString& Path)
+	{
+		static TSet<FString> Logged;
+		if (Path.IsEmpty() || Logged.Contains(Path))
+		{
+			return;
+		}
+		Logged.Add(Path);
+		UE_LOG(LogGF, Warning, TEXT("Accel Hop FX: %s did not load as a Niagara system"), *Path);
+	}
+}
 
 AGFAccelHopTutorial::AGFAccelHopTutorial()
 {
@@ -58,6 +82,12 @@ void AGFAccelHopTutorial::BeginPlay()
 
 void AGFAccelHopTutorial::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (UNiagaraComponent* Idle = LitIdleFX.Get())
+	{
+		Idle->DestroyComponent();
+	}
+	LitIdleFX.Reset();
+	LitIdleTile.Reset();
 	UGFCharacterMovementComponent::OnAccelHopLanded.Remove(LandedHandle);
 	LandedHandle.Reset();
 	Super::EndPlay(EndPlayReason);
@@ -158,6 +188,118 @@ void AGFAccelHopTutorial::HandleLanded(const UGFCharacterMovementComponent* Move
 		return;
 	}
 	ApplyLanding(DescribeLanding(Event.Tile.Get(), Event.Hit.Judgement, Event.bLit));
+	PlayLandingFX(Pawn, Event);
+}
+
+const TCHAR* AGFAccelHopTutorial::BoostFXPath()
+{
+	return TEXT("/Game/FX/AccelHop/NS_HopBoost_v1.NS_HopBoost_v1");
+}
+
+const TCHAR* AGFAccelHopTutorial::LitPopFXPath()
+{
+	return TEXT("/Game/FX/AccelHop/NS_HopLitPop_v1.NS_HopLitPop_v1");
+}
+
+const TCHAR* AGFAccelHopTutorial::LitIdleFXPath()
+{
+	return TEXT("/Game/FX/AccelHop/NS_HopLitIdle_v1.NS_HopLitIdle_v1");
+}
+
+UNiagaraSystem* AGFAccelHopTutorial::LoadFXSystem(const TCHAR* SystemPath)
+{
+	const FString Path = SystemPath ? FString(SystemPath) : FString();
+	const FSoftObjectPath Soft(Path);
+	if (Soft.IsNull())
+	{
+		LogMissingHopFXOnce(Path);
+		return nullptr;
+	}
+	const FString Package = Soft.GetLongPackageName();
+	if (Package.IsEmpty() || !FPackageName::DoesPackageExist(Package))
+	{
+		LogMissingHopFXOnce(Path);
+		return nullptr;
+	}
+	UNiagaraSystem* System = Cast<UNiagaraSystem>(Soft.TryLoad());
+	if (!System)
+	{
+		LogMissingHopFXOnce(Path);
+	}
+	return System;
+}
+
+bool AGFAccelHopTutorial::PlaysFX() const
+{
+	const UWorld* World = GetWorld();
+	return World && GetNetMode() != NM_DedicatedServer;
+}
+
+void AGFAccelHopTutorial::PlayLandingFX(const APawn* Pawn, const FGFAccelHopLandingEvent& Event)
+{
+	// Local cosmetics only: no RPC, nothing replicates.
+	if (!Event.bApplied || !Event.Tile.IsValid() || !PlaysFX())
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	const AGFAccelHopTile* Tile = Event.Tile.Get();
+	const EGFHopTileKind Kind = Tile->GetKind();
+	if (Pawn && (Event.bLit || Kind == EGFHopTileKind::Boost))
+	{
+		FVector Feet = Pawn->GetActorLocation();
+		if (const ACharacter* Character = Cast<ACharacter>(Pawn))
+		{
+			if (const UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
+			{
+				Feet.Z -= Capsule->GetScaledCapsuleHalfHeight();
+			}
+		}
+		if (UNiagaraSystem* Boost = LoadFXSystem(BoostFXPath()))
+		{
+			if (UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, Boost, Feet))
+			{
+				++FXSpawnCount;
+			}
+		}
+	}
+	if (Event.bLit)
+	{
+		if (UNiagaraSystem* Pop = LoadFXSystem(LitPopFXPath()))
+		{
+			if (UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, Pop, Tile->GetActorLocation() + GFHopTileTopOffset))
+			{
+				++FXSpawnCount;
+			}
+		}
+	}
+}
+
+void AGFAccelHopTutorial::UpdateLitIdleFX()
+{
+	AGFAccelHopTile* Lit = Road.IsValid() ? Road->GetLitTile() : nullptr;
+	if (Lit == LitIdleTile.Get() && (Lit == nullptr || LitIdleFX.IsValid()))
+	{
+		return;
+	}
+	if (UNiagaraComponent* Old = LitIdleFX.Get())
+	{
+		Old->Deactivate();
+		Old->DestroyComponent();
+	}
+	LitIdleFX.Reset();
+	LitIdleTile = Lit;
+	UStaticMeshComponent* Mesh = Lit ? Lit->GetMesh() : nullptr;
+	if (!Mesh || !PlaysFX())
+	{
+		return;
+	}
+	if (UNiagaraSystem* Idle = LoadFXSystem(LitIdleFXPath()))
+	{
+		LitIdleFX = UNiagaraFunctionLibrary::SpawnSystemAttached(Idle, Mesh, NAME_None, GFHopTileTopOffset, FRotator::ZeroRotator,
+			EAttachLocation::KeepRelativeOffset, true);
+		FXSpawnCount += LitIdleFX.IsValid() ? 1 : 0;
+	}
 }
 
 bool AGFAccelHopTutorial::LocalPawnLocation(FVector& Out) const
@@ -176,6 +318,7 @@ bool AGFAccelHopTutorial::LocalPawnLocation(FVector& Out) const
 void AGFAccelHopTutorial::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	UpdateLitIdleFX();
 	NextReachCheck -= DeltaSeconds;
 	if (NextReachCheck > 0.f)
 	{

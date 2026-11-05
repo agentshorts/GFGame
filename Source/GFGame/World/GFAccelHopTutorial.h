@@ -6,6 +6,8 @@
 // - Walking onto a later lesson's stretch skips ahead to it.
 // - Puts a second HUB return gate at the finish (FinishGateLocation, set by the map script), after the canonical one.
 // - Opts the map into stamina, so sprint works like it does on the world road.
+// - Plays the hop FX on this machine only (fx_hooks_v1): a boost burst at the feet on an applied lit or Boost landing,
+//   a pop on the lit tile, and one idle shimmer attached to the road's lit tile. Skipped on a dedicated server.
 // The HUD (AGFHUD::DrawAccelHopTutorial) draws GetPrompt.
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -14,6 +16,9 @@
 
 class AGFAccelHopRoad;
 class AGFAccelHopTile;
+class APawn;
+class UNiagaraComponent;
+class UNiagaraSystem;
 class UGFCharacterMovementComponent;
 struct FGFAccelHopLandingEvent;
 
@@ -54,6 +59,23 @@ public:
 	FGFAccelHopTutorialPrompt GetPrompt() const { return FGFAccelHopTutorialRules::PromptFor(Progress); }
 	const TArray<float>& GetLessonStarts() const { return LessonStartAlong; }
 
+	/** Soft paths of the hop FX systems (/Game/FX/AccelHop). */
+	static const TCHAR* BoostFXPath();
+	static const TCHAR* LitPopFXPath();
+	static const TCHAR* LitIdleFXPath();
+
+	/** Loads a Niagara system by soft path, or null (logs once per path) when the package is missing. */
+	static UNiagaraSystem* LoadFXSystem(const TCHAR* SystemPath);
+
+	/** Spawns the landing FX for Pawn (HandleLanded calls this for the local pawn). Nothing unless Event.bApplied. */
+	void PlayLandingFX(const APawn* Pawn, const FGFAccelHopLandingEvent& Event);
+
+	/** Niagara systems this director has spawned (landing bursts and idle shimmers). */
+	int32 GetFXSpawnCount() const { return FXSpawnCount; }
+
+	/** The idle shimmer on the lit tile, or null. */
+	UNiagaraComponent* GetLitIdleFX() const { return LitIdleFX.Get(); }
+
 	/** World seconds of the last lesson change (the HUD flashes "Nice!" for a moment), or a large negative. */
 	double GetLastAdvanceTime() const { return LastAdvanceTime; }
 
@@ -73,6 +95,8 @@ private:
 	AGFAccelHopRoad* FindRoad() const;
 	bool LocalPawnLocation(FVector& Out) const;
 	void NoteChange(bool bChanged);
+	bool PlaysFX() const;
+	void UpdateLitIdleFX();
 
 	FGFAccelHopTutorialProgress Progress;
 	TArray<float> LessonStartAlong;
@@ -80,4 +104,8 @@ private:
 	float NextReachCheck = 0.f;
 	FDelegateHandle LandedHandle;
 	TWeakObjectPtr<AGFAccelHopRoad> Road;
+	/** The road's lit tile the idle shimmer is on, and the shimmer (at most one). */
+	TWeakObjectPtr<AGFAccelHopTile> LitIdleTile;
+	TWeakObjectPtr<UNiagaraComponent> LitIdleFX;
+	int32 FXSpawnCount = 0;
 };
