@@ -86,8 +86,7 @@ class PaletteTests(unittest.TestCase):
             for n in files:
                 if n.endswith((".py", ".md", ".json", ".txt", ".csv")):
                     with open(os.path.join(d, n), encoding="utf-8") as f:
-                        # The GitHub sign-off line is the one allowed exception (drafts only).
-                        text = "\n".join(l for l in f.read().splitlines() if l.strip() != "\u2014 Justin")
+                        text = f.read()
                         self.assertNotIn("\u2014", text, n)
 
 
