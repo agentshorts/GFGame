@@ -1,3 +1,13 @@
+Acceleration Hop v2: the lit tile (issue 342)
+
+Where: the same hop road on the world map (L_World_Factions_A).
+While you run the road, one tile a few hops ahead glows at full strength with a bright rim and a sharp pulse on the beat. A gold diamond floats over it so it reads from far off.
+That is where to land. It is usually a Boost tile, sometimes a Downbeat, now and then a plain one. Never a green Landing tile.
+Land on it on the beat and the boost is 1.5x what that tile would normally give. It then goes dark and the next beat lights a new one.
+Miss it and it stays lit until you run past it.
+Everyone on the road sees the same lit tile. The first player on the road (join order) is the one it is picked ahead of.
+The landing ring now follows you all the way down: steer in the air or dash and it moves. It turns gold with a second ring when you are coming down on the lit tile.
+
 Rest area start (issue 335)
 
 Where: the world map (L_World_Factions_A). A new player now starts at the rest area halfway between Verdant and Cinderwright, not in the woods clearing.
