@@ -23,7 +23,9 @@ float FGFAnimMap::PlayRateFor(FName Key, float GroundSpeedCms)
 float FGFAnimMap::NaturalSpeedFor(FName Key, float FallbackCms)
 {
 	const FGFAnimMapRow* Row = Find(Key);
-	return (Row && Row->NaturalSpeedCms > 0.f) ? Row->NaturalSpeedCms : FallbackCms;
+	// Row present: use its NaturalSpeedCms even when 0 (root-driven clips such as mantle).
+	// Fallback is only for a missing row (code default until the CSV lands).
+	return Row ? Row->NaturalSpeedCms : FallbackCms;
 }
 
 float FGFAnimMap::RateFromNaturalSpeed(float SpeedCms, float NaturalSpeedCms)

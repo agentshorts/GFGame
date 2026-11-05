@@ -433,6 +433,7 @@ bool FGFArtBatch7Test::RunTest(const FString&)
 	USkeleton* Human = LoadObject<USkeleton>(nullptr, TEXT("/Game/Art/Characters/Player/SKEL_GF_Humanoid.SKEL_GF_Humanoid"));
 	USkeleton* Raptor = LoadObject<USkeleton>(nullptr, TEXT("/Game/Art/Dinos/Raptor/SKEL_Dino_Raptor.SKEL_Dino_Raptor"));
 	TestNotNull(TEXT("SKEL_Dino_Raptor loads"), Raptor);
+	// Root Anims only (non-recursive): base player + mining. Wall-climb / traversal clips live under Anims/Traversal.
 	TestEqual(TEXT("SK_Player_Base v6 + mining_anims_v1: 47 clips"), GFArtCountAnims(TEXT("/Game/Art/Characters/Player/Anims"), Human), 47);
 	TestEqual(TEXT("SK_Dino_Raptor v5: 17 clips"), GFArtCountAnims(TEXT("/Game/Art/Dinos/Raptor/Anims"), Raptor), 17);
 	for (const TCHAR* Clip : { TEXT("Attack_Pounce"), TEXT("Attack_Rake"), TEXT("Call"), TEXT("Stunned"), TEXT("Cheer"), TEXT("Refuse") })

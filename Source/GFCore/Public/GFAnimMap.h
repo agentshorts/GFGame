@@ -44,7 +44,7 @@ struct GFCORE_API FGFAnimMap
 	/** Ground speed / the row's NaturalSpeedCms, clamped to [0.25, 3]; 1 when the key has no natural speed. */
 	static float PlayRateFor(FName Key, float GroundSpeedCms);
 
-	/** The row's NaturalSpeedCms when the row has one above zero, else Fallback (a code default for a row not in yet). */
+	/** The row's NaturalSpeedCms when the row exists (0 means play at 1.0 / no playrate scaling), else Fallback. */
 	static float NaturalSpeedFor(FName Key, float FallbackCms = 0.f);
 
 	/**
