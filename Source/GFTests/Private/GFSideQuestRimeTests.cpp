@@ -401,17 +401,11 @@ bool FGFSideQuestRimeTransitionsTest::RunTest(const FString&)
 	TestEqual(TEXT("Verdant line while busy: OtherActive"), Busy.Apply(FGFSideQuestEvents::TalkAccepted(TEXT("P"), VerdantLine, Verdant)).Reason, FGFSideQuestCodes::OtherActive);
 	TestTrue(TEXT("OtherActive keeps the board"), Busy.Board == BusyKept);
 
-	// Verdant stays whole; Cinderwright stays an Accept-only stub.
+	// Verdant and Cinderwright stay whole (QL-c / QL-e).
 	const FGFSideQuestLineRule* VerdantRule = Shipped.FindLine(VerdantLine);
 	TestTrue(TEXT("Verdant still playable"), VerdantRule && VerdantRule->IsPlayable() && VerdantRule->Steps.Num() == 6);
 	const FGFSideQuestLineRule* CinderRule = Shipped.FindLine(CinderLine);
-	if (TestNotNull(TEXT("Cinderwright shipped"), CinderRule))
-	{
-		TestEqual(TEXT("Cinderwright is Accept only"), CinderRule->Steps.Num(), 1);
-		FGFSideQuestLine Line = Player(CinderRule->TownId, EGFFactionRank::Leader);
-		TestTrue(TEXT("Cinderwright locked"), StatusOf(Line, CinderLine) == EGFSideQuestStatus::Locked);
-		TestEqual(TEXT("Cinderwright not ready"), Line.Apply(FGFSideQuestEvents::TalkAccepted(TEXT("P"), CinderLine, CinderRule->TownId)).Reason, FGFSideQuestCodes::NotReady);
-	}
+	TestTrue(TEXT("Cinderwright still playable"), CinderRule && CinderRule->IsPlayable() && CinderRule->Steps.Num() == 5);
 
 	// The preferred ferry path needs Rime-side stop metadata. The shipped Rime stop has it.
 	const AGFFerryDirector* Ferry = GetDefault<AGFFerryDirector>();

@@ -370,19 +370,11 @@ bool FGFSideQuestVerdantTransitionsTest::RunTest(const FString&)
 	TestEqual(TEXT("Rime line while busy: OtherActive"), Busy.Apply(FGFSideQuestEvents::TalkAccepted(TEXT("P"), RimeLine, Rime)).Reason, FGFSideQuestCodes::OtherActive);
 	TestTrue(TEXT("OtherActive keeps the board"), Busy.Board == BusyKept);
 
-	// Rime ships in full (QL-d, GFGame.SideQuest.Line.Rime.Transitions). Cinderwright stays an Accept-only stub.
-	for (const FName Stub : { CinderLine })
-	{
-		const FGFSideQuestLineRule* Rule = Shipped.FindLine(Stub);
-		if (!TestNotNull(*FString::Printf(TEXT("%s shipped"), *Stub.ToString()), Rule))
-		{
-			continue;
-		}
-		TestEqual(*FString::Printf(TEXT("%s is Accept only"), *Stub.ToString()), Rule->Steps.Num(), 1);
-		FGFSideQuestLine Line = Player(Rule->TownId, EGFFactionRank::Leader);
-		TestTrue(*FString::Printf(TEXT("%s locked"), *Stub.ToString()), StatusOf(Line, Stub) == EGFSideQuestStatus::Locked);
-		TestEqual(*FString::Printf(TEXT("%s not ready"), *Stub.ToString()), Line.Apply(FGFSideQuestEvents::TalkAccepted(TEXT("P"), Stub, Rule->TownId)).Reason, FGFSideQuestCodes::NotReady);
-	}
+	// Rime (QL-d) and Cinderwright (QL-e) ship in full; their Transitions tests walk them.
+	const FGFSideQuestLineRule* RimeRule = Shipped.FindLine(RimeLine);
+	TestTrue(TEXT("Rime still playable"), RimeRule && RimeRule->IsPlayable() && RimeRule->Steps.Num() == 5);
+	const FGFSideQuestLineRule* CinderRule = Shipped.FindLine(CinderLine);
+	TestTrue(TEXT("Cinderwright still playable"), CinderRule && CinderRule->IsPlayable() && CinderRule->Steps.Num() == 5);
 	return true;
 }
 

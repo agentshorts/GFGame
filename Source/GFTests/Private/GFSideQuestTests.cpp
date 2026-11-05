@@ -202,23 +202,20 @@ bool FGFSideQuestBoardUnlockTest::RunTest(const FString&)
 	Climber.Refresh();
 	TestTrue(TEXT("Champion: Cinder line available"), StatusOf(Climber, LineCinder) == EGFSideQuestStatus::Available);
 
-	// Shipped stub lines (Accept only) are never offered until their steps land. Verdant (QL-c) and Rime (QL-d) ship in
-	// full; GFGame.SideQuest.Line.Verdant.Transitions and GFGame.SideQuest.Line.Rime.Transitions walk them. Cinderwright stays a stub.
-	const FGFSideQuestCatalog& Stubs = FGFSideQuestCatalog::Builtin();
+	// Shipped town lines are playable (Verdant QL-c, Rime QL-d, Cinderwright QL-e). No Accept-only stubs remain.
+	const FGFSideQuestCatalog& Shipped = FGFSideQuestCatalog::Builtin();
 	int32 StubCount = 0;
-	for (const FGFSideQuestLineRule& Rule : Stubs.Lines)
+	for (const FGFSideQuestLineRule& Rule : Shipped.Lines)
 	{
-		if (FGFSideQuestCatalog::SameTown(Rule.TownId, Verdant) || FGFSideQuestCatalog::SameTown(Rule.TownId, Rime))
+		TestTrue(*FString::Printf(TEXT("%s line is playable"), *Rule.LineId.ToString()), Rule.IsPlayable());
+		FGFSideQuestLine Line = Player(Rule.TownId, EGFFactionRank::Leader, &Shipped);
+		TestTrue(*FString::Printf(TEXT("%s available at Leader"), *Rule.LineId.ToString()), StatusOf(Line, Rule.LineId) == EGFSideQuestStatus::Available);
+		if (!Rule.IsPlayable())
 		{
-			TestTrue(*FString::Printf(TEXT("%s line is playable"), *Rule.LineId.ToString()), Rule.IsPlayable());
-			continue;
+			++StubCount;
 		}
-		++StubCount;
-		FGFSideQuestLine Line = Player(Rule.TownId, EGFFactionRank::Leader, &Stubs);
-		TestTrue(*FString::Printf(TEXT("Stub %s locked"), *Rule.LineId.ToString()), StatusOf(Line, Rule.LineId) == EGFSideQuestStatus::Locked);
-		TestEqual(*FString::Printf(TEXT("Stub %s not ready"), *Rule.LineId.ToString()), Line.Apply(FGFSideQuestEvents::TalkAccepted(TEXT("P"), Rule.LineId, Rule.TownId)).Reason, FGFSideQuestCodes::NotReady);
 	}
-	TestEqual(TEXT("Only Cinderwright stays a stub"), StubCount, 1);
+	TestEqual(TEXT("No town line stays a stub"), StubCount, 0);
 	return true;
 }
 
