@@ -10,6 +10,7 @@ class AGFVoxelWorld;
 /**
  * Hub game mode. On L_Hub the voxel plot is the territory overworld: faction ground, a wild skirt,
  * surface top at world Z=0. Other maps keep the 64x64x32 starter plot centred on the origin.
+ * Mini-game and tutorial maps get no starter plot (same reason as the mining range: the map owns its floor).
  * A start point is spawned when the map has none. Data tables are handed to the systems.
  * Listen-server ready (PLAN.md section 4.1): AGFGameState / AGFMagicPlayerState, player keys and colours at login,
  * the server keeps a guest's character at logout.

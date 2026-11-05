@@ -62,6 +62,8 @@ If there is no wall ahead, a side `bWallContact` that the input pushes into also
 - Gravity is off while climbing or mantling; the landing marker is hidden.
 - Beat Hop runs never climb (the kit list does not include it).
 - Mini-games that turn stamina off clear the climb like every other traversal state.
+- `UGFCharacterMovementComponent::bWallClimbAllowed` (default true) is copied onto `FGFStaminaCommand` before the Beat Hop mask. `GFGame.Movement.StairKit.WallStaysAWall` clears it so the test still measures stair refusal on a wall, not climb.
+- `AGFGameMode::EnsureVoxelWorld` skips the starter voxel plot on mini-game and tutorial maps (and on the mining range), so a grass top at z=0 does not z-fight the map floor.
 
 ### Velocity hand-off in the CMC
 

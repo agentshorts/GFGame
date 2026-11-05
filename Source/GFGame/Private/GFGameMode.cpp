@@ -260,7 +260,8 @@ AGFVoxelWorld* AGFGameMode::EnsureVoxelWorld()
 	}
 
 	// The mining range director owns this grid. A starter plot here would be a second voxel world.
-	if (GFMiningMaps::IsMiningRange(GetWorld()))
+	// Mini-game and tutorial maps own their floor; a grass top at z=0 z-fights that floor.
+	if (GFMiningMaps::IsMiningRange(GetWorld()) || GFMovementPolicy::IsMiniGameWorld(GetWorld()))
 	{
 		return nullptr;
 	}
