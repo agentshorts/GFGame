@@ -10,10 +10,12 @@
 #include "CoreMinimal.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GFBeatHopNinja.h"
+#include "GFAccelHop.h"
 #include "GFStaminaSim.h"
 #include "GFCharacterMovementComponent.generated.h"
 
 class UGFMovementTuning;
+class AGFAccelHopTile;
 
 UCLASS()
 class GFGAME_API UGFCharacterMovementComponent : public UCharacterMovementComponent
@@ -99,6 +101,26 @@ public:
 
 	const UGFMovementTuning& GetTuning() const;
 
+	/** Acceleration Hop (#334): run speed multiplier from hop tiles right now (1 = no boost). */
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	float GetAccelHopMultiplier() const;
+
+	/** In-time hop tiles in a row (for the HUD). */
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	int32 GetAccelHopChain() const { return AccelHop.Chain; }
+
+	const FGFAccelHopHit& GetLastAccelHopHit() const { return LastAccelHopHit; }
+	const FGFAccelHopBoost& GetAccelHopBoost() const { return AccelHop; }
+
+	/**
+	 * The owning machine landed on a hop tile: judge it on the local beat clock (NowBeat, Bpm), apply the boost, and
+	 * tell the server. Returns true when the boost changed. TickComponent calls it; tests call it directly.
+	 */
+	bool HandleAccelHopLanding(AGFAccelHopTile* Tile, double NowBeat, float Bpm, EGFBeatHopMode Mode);
+
+	/** Server side of a reported hop: checks the tile is under the pawn and the rate limit, then applies it. */
+	bool ApplyServerAccelHop(AGFAccelHopTile* Tile, const FGFAccelHopHit& Hit, float BeatSeconds);
+
 	void RefreshKindleOverlaps();
 
 	/** Saved-move replay. Not for gameplay code. */
@@ -131,6 +153,10 @@ protected:
 	UFUNCTION()
 	void OnRep_FlipTime();
 
+	/** A client landed on a hop tile. The server cannot hear the client's music, so it takes the judgement and checks the rest. */
+	UFUNCTION(Server, Reliable)
+	void ServerAccelHop(AGFAccelHopTile* Tile, const FGFAccelHopHit& Hit, float BeatSeconds);
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GF|Movement")
 	TObjectPtr<UGFMovementTuning> TuningAsset;
 
@@ -160,6 +186,8 @@ private:
 	FVector LiveCameraForward() const;
 	void GatherLiveContact(FGFTraversalContact& Contact);
 	void ApplyFlipPose(float TimeLeft);
+	void PollAccelHopLanding();
+	double AccelHopNow() const;
 
 	FGFStaminaState Sim;
 	FGFStaminaState SimAtMoveStart;
@@ -198,4 +226,7 @@ private:
 	float ProxyFlipTimeLeft = 0.f;
 	FRotator MeshRestRotation = FRotator::ZeroRotator;
 	bool bMeshRestCaptured = false;
+	FGFAccelHopBoost AccelHop;
+	FGFAccelHopHit LastAccelHopHit;
+	bool bAccelHopWasFalling = false;
 };

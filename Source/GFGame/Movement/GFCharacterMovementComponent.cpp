@@ -1,5 +1,7 @@
 #include "GFCharacterMovementComponent.h"
 #include "GFBeatHopCourse.h"
+#include "GFAccelHopTile.h"
+#include "GFBeatClockSubsystem.h"
 #include "GFCharacter.h"
 #include "GFKindleRing.h"
 #include "GFMovementPolicy.h"
@@ -636,7 +638,88 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 
 float UGFCharacterMovementComponent::GetMaxSpeed() const
 {
-	return GFStaminaSim::HorizontalSpeed(Sim, GetTuning(), Super::GetMaxSpeed());
+	// Acceleration Hop scales the live walk speed, so sprint stacks on it; a dash keeps its own fixed speed.
+	return GFStaminaSim::HorizontalSpeed(Sim, GetTuning(), Super::GetMaxSpeed() * GetAccelHopMultiplier());
+}
+
+double UGFCharacterMovementComponent::AccelHopNow() const
+{
+	const UWorld* World = GetWorld();
+	return World ? World->GetTimeSeconds() : 0.0;
+}
+
+float UGFCharacterMovementComponent::GetAccelHopMultiplier() const
+{
+	return FGFAccelHopRules::MultiplierAt(AccelHop, AccelHopNow());
+}
+
+void UGFCharacterMovementComponent::PollAccelHopLanding()
+{
+	const bool bFalling = IsFalling();
+	const bool bLanded = bAccelHopWasFalling && !bFalling && CurrentFloor.IsWalkableFloor();
+	bAccelHopWasFalling = bFalling;
+	if (!bLanded || !CharacterOwner || !CharacterOwner->IsLocallyControlled())
+	{
+		return;
+	}
+	AGFAccelHopTile* Tile = AGFAccelHopTile::FromFloor(CurrentFloor.HitResult.GetComponent());
+	const UGFBeatClockSubsystem* Clock = Tile && GetWorld() ? GetWorld()->GetSubsystem<UGFBeatClockSubsystem>() : nullptr;
+	if (!Clock || !Clock->IsRunning())
+	{
+		return; // no music on this machine (off the road box): a hop tile is just floor
+	}
+	const EGFBeatHopMode Mode = Clock->GetBeatSource() == EGFBeatSource::Live ? EGFBeatHopMode::Live : EGFBeatHopMode::Songs;
+	HandleAccelHopLanding(Tile, Clock->GetCurrentBeat(), Clock->GetBPM(), Mode);
+}
+
+bool UGFCharacterMovementComponent::HandleAccelHopLanding(AGFAccelHopTile* Tile, double NowBeat, float Bpm, EGFBeatHopMode Mode)
+{
+	if (!Tile)
+	{
+		return false;
+	}
+	const FGFAccelHopTuning& Hop = GetTuning().AccelHop;
+	const FGFAccelHopHit Hit = FGFAccelHopRules::JudgeLanding(NowBeat, Bpm, FGFAccelHopRules::WindowsFor(Mode, Hop), Hop.BeatsPerBar);
+	if (Hit.Judgement == EGFJudgement::None)
+	{
+		return false;
+	}
+	LastAccelHopHit = Hit;
+	const float BeatSeconds = FGFAccelHopRules::ClampBeatSeconds(Bpm > 0.f ? 60.f / Bpm : 0.5f);
+	const bool bChanged = FGFAccelHopRules::ApplyHit(AccelHop, Hit, Tile->GetKind(), AccelHopNow(), BeatSeconds, Hop);
+	if (CharacterOwner && !CharacterOwner->HasAuthority())
+	{
+		ServerAccelHop(Tile, Hit, BeatSeconds);
+	}
+	return bChanged;
+}
+
+bool UGFCharacterMovementComponent::ApplyServerAccelHop(AGFAccelHopTile* Tile, const FGFAccelHopHit& Hit, float BeatSeconds)
+{
+	if (!Tile || !CharacterOwner)
+	{
+		return false;
+	}
+	const FGFAccelHopTuning& Hop = GetTuning().AccelHop;
+	if (FVector::Dist2D(Tile->GetActorLocation(), CharacterOwner->GetActorLocation()) > Hop.ServerCheckRadiusCm)
+	{
+		return false; // the reported tile is not under this pawn
+	}
+	const double Now = AccelHopNow();
+	const bool bInTime = Hit.Judgement == EGFJudgement::Perfect || Hit.Judgement == EGFJudgement::Good;
+	if (bInTime && !FGFAccelHopRules::ServerAccepts(AccelHop, Now, Hop))
+	{
+		return false;
+	}
+	FGFAccelHopHit Checked = Hit;
+	Checked.bOnBarLine = Hit.BeatIndex >= 0 && Hit.BeatIndex % FMath::Max(1, Hop.BeatsPerBar) == 0;
+	LastAccelHopHit = Checked;
+	return FGFAccelHopRules::ApplyHit(AccelHop, Checked, Tile->GetKind(), Now, FGFAccelHopRules::ClampBeatSeconds(BeatSeconds), Hop);
+}
+
+void UGFCharacterMovementComponent::ServerAccelHop_Implementation(AGFAccelHopTile* Tile, const FGFAccelHopHit& Hit, float BeatSeconds)
+{
+	ApplyServerAccelHop(Tile, Hit, BeatSeconds);
 }
 
 float UGFCharacterMovementComponent::GetGravityZ() const
@@ -745,6 +828,7 @@ void UGFCharacterMovementComponent::TickComponent(float DeltaTime, ELevelTick Ti
 {
 	PrepareControllerlessWalk();
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	PollAccelHopLanding();
 	if (CharacterOwner && CharacterOwner->GetLocalRole() == ROLE_SimulatedProxy)
 	{
 		ProxyFlipTimeLeft = FMath::Max(0.f, ProxyFlipTimeLeft - DeltaTime);

@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "GFBeatHopNinja.h"
+#include "GFAccelHop.h"
 #include "GFMovementTuning.generated.h"
 
 UCLASS(BlueprintType)
@@ -241,6 +242,13 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "BeatHop")
 	FGFBeatHopTraversalProfile BeatHop;
+
+	/**
+	 * Acceleration Hop (#334): hop tiles on the Verdant to Cinderwright road. Boost sizes, cap, length in beats,
+	 * which Beat Hop windows judge a landing, and the server's checks.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AccelerationHop")
+	FGFAccelHopTuning AccelHop;
 
 	/**
 	 * Tallest ledge a dino walks up without jumping, cm. Copied onto CharacterMovement MaxStepHeight.
