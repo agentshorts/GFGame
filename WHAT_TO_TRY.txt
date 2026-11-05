@@ -1,3 +1,16 @@
+Acceleration Hop: your own music (issue 343)
+
+Where: any Acceleration Hop road, plus Esc, Settings, "Beat Hop playlist".
+Drop your own .wav files into Content/LicensedMusic/AccelHop (an editor checkout) or GFGame/LicensedMusic/AccelHop next to a packaged game. Git ignores both folders: never commit music.
+Each track needs a BPM: put it in the file name ("Night Drive 128bpm.wav") or in a sidecar Night Drive.json with {"bpm": 128, "offset_ms": 40}.
+mp3, ogg and flac don't play in game. Convert them with: python3 Tools/hop_music_prep.py add song.mp3 --analyse (needs ffmpeg; --analyse finds the BPM).
+Step onto the road: your first track plays and the tiles pulse on its BPM. Hops judge on that tempo too.
+Open the playlist: tick tracks in or out, move them Up or Down, pick In Order, Shuffle or Repeat One.
+Resume on (default): leave the road and come back, the same track carries on where it stopped. Resume off: the next track starts.
+Empty the folder, or untick everything: the built-in song plays as before.
+Co-op: each player hears their own playlist. Nothing is shared.
+The lit tile (issue 342) is the same for everyone and moves on at the road's own steady pace, not your track's tempo. Your music sets only your beat and your pulses. Land on the lit tile on your own beat and you get its boost.
+
 Acceleration Hop v2: the lit tile (issue 342)
 
 Where: the same hop road on the world map (L_World_Factions_A).
