@@ -1,0 +1,845 @@
+{
+  "issue": 353,
+  "map": "/Game/Maps/L_World_Factions_A",
+  "step_height_cm": 105,
+  "note": "v2 expands the fix list for walkable buried treads after the #341 six. Live audit source: stair_collision_341_report_audit_20261105_063452.json (L_World_Factions_A after the six #341 meshes are already complex-as-simple). The original six keep their Blender FBX scan numbers (x/y/z/buried_cm and hull). New fix entries use live-audit heights only (scan z values and live_audit_buried); no fake Blender hull numbers. Meshes whose simple collision (one UCX hull from the ground up) covers a tread the render mesh shows. Tools/fix_stair_collision_341.py switches the fix list to complex as simple; GFGame.Movement.StairKit.TownCollision asserts it. Towers, fences, trees, walls, pipes, wagons and props stay on simple collision (audit_only).",
+  "fix": [
+    {
+      "name": "SM_Town_Cinderwright_BoardHall",
+      "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_BoardHall",
+      "placed": 1,
+      "why": "one hull UCX_00 0 to 831 cm over the 25 cm side plinth (37.5 cm of it on each side) and the 25 cm door threshold",
+      "hull": [
+        -512.5,
+        512.5,
+        -300.0,
+        400.0,
+        0.0,
+        831.2
+      ],
+      "scan": [
+        {
+          "z": 25.0,
+          "x": [
+            -525,
+            -475
+          ],
+          "y": [
+            -438,
+            438
+          ],
+          "buried_cm": 37.5
+        },
+        {
+          "z": 25.0,
+          "x": [
+            -75,
+            75
+          ],
+          "y": [
+            -300,
+            -275
+          ],
+          "buried_cm": 25.0
+        },
+        {
+          "z": 25.0,
+          "x": [
+            475,
+            525
+          ],
+          "y": [
+            -300,
+            400
+          ],
+          "buried_cm": 37.5
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Cinderwright_CountingHouse",
+      "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_CountingHouse",
+      "placed": 6,
+      "why": "one hull UCX_00 0 to 875 cm starts 12.5 cm in front of the four 12.5 cm porch steps, so half of each step is inside it",
+      "hull": [
+        -275.0,
+        275.0,
+        -262.5,
+        275.0,
+        0.0,
+        875.0
+      ],
+      "scan": [
+        {
+          "z": 12.5,
+          "x": [
+            -225,
+            -150
+          ],
+          "y": [
+            -262,
+            -238
+          ],
+          "buried_cm": 25.0
+        },
+        {
+          "z": 12.5,
+          "x": [
+            -100,
+            -25
+          ],
+          "y": [
+            -262,
+            -238
+          ],
+          "buried_cm": 25.0
+        },
+        {
+          "z": 12.5,
+          "x": [
+            25,
+            100
+          ],
+          "y": [
+            -262,
+            -238
+          ],
+          "buried_cm": 25.0
+        },
+        {
+          "z": 12.5,
+          "x": [
+            150,
+            225
+          ],
+          "y": [
+            -262,
+            -238
+          ],
+          "buried_cm": 25.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Cinderwright_Theatre",
+      "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Theatre",
+      "placed": 1,
+      "why": "one hull UCX_00 0 to 937 cm starts at the outer lip of the 12.5 cm front step, so the whole step is a 9 m wall, plus the side plinths",
+      "hull": [
+        -475.0,
+        475.0,
+        -525.0,
+        600.0,
+        0.0,
+        937.5
+      ],
+      "scan": [
+        {
+          "z": 12.5,
+          "x": [
+            -112,
+            112
+          ],
+          "y": [
+            -525,
+            -500
+          ],
+          "buried_cm": 25.0
+        },
+        {
+          "z": 12.5,
+          "x": [
+            -488,
+            -450
+          ],
+          "y": [
+            -450,
+            -375
+          ],
+          "buried_cm": 25.0
+        },
+        {
+          "z": 12.5,
+          "x": [
+            450,
+            488
+          ],
+          "y": [
+            -450,
+            -375
+          ],
+          "buried_cm": 25.0
+        },
+        {
+          "z": 12.5,
+          "x": [
+            -488,
+            -462
+          ],
+          "y": [
+            -375,
+            625
+          ],
+          "buried_cm": 12.5
+        },
+        {
+          "z": 12.5,
+          "x": [
+            462,
+            488
+          ],
+          "y": [
+            -375,
+            625
+          ],
+          "buried_cm": 12.5
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Cinderwright_Smelter",
+      "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Smelter",
+      "placed": 9,
+      "why": "one hull UCX_00 0 to 406 cm covers half of the 37.5 cm front step",
+      "hull": [
+        -300.0,
+        300.0,
+        -250.0,
+        350.0,
+        0.0,
+        406.2
+      ],
+      "scan": [
+        {
+          "z": 37.5,
+          "x": [
+            -125,
+            125
+          ],
+          "y": [
+            -262,
+            -238
+          ],
+          "buried_cm": 12.5
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Cinderwright_Crane",
+      "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Crane",
+      "placed": 2,
+      "why": "one hull UCX_00 0 to 1387 cm over the whole 31 cm base plate, up to 94 cm in front of the mast",
+      "hull": [
+        -100.0,
+        100.0,
+        -100.0,
+        100.0,
+        0.0,
+        1387.5
+      ],
+      "scan": [
+        {
+          "z": 31.2,
+          "x": [
+            -75,
+            100
+          ],
+          "y": [
+            -25,
+            69
+          ],
+          "buried_cm": 93.8
+        },
+        {
+          "z": 31.2,
+          "x": [
+            -100,
+            -75
+          ],
+          "y": [
+            -100,
+            100
+          ],
+          "buried_cm": 25.0
+        },
+        {
+          "z": 31.2,
+          "x": [
+            -75,
+            100
+          ],
+          "y": [
+            -100,
+            -75
+          ],
+          "buried_cm": 25.0
+        },
+        {
+          "z": 31.2,
+          "x": [
+            -75,
+            100
+          ],
+          "y": [
+            75,
+            100
+          ],
+          "buried_cm": 25.0
+        },
+        {
+          "z": 31.2,
+          "x": [
+            75,
+            100
+          ],
+          "y": [
+            -75,
+            -25
+          ],
+          "buried_cm": 25.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Caravan_Tent",
+      "path": "/Game/Art/Town/Outskirts/Caravan/SM_Town_Caravan_Tent",
+      "placed": 2,
+      "why": "one box UCX_00 0 to 244 cm over the whole stepped tent: the 50 and 94 cm tiers are a flat-sided bounding box",
+      "hull": [
+        -175.0,
+        175.0,
+        -175.0,
+        175.0,
+        0.0,
+        243.8
+      ],
+      "scan": [
+        {
+          "z": 50.0,
+          "x": [
+            -175,
+            -138
+          ],
+          "y": [
+            -175,
+            175
+          ],
+          "buried_cm": 37.5
+        },
+        {
+          "z": 50.0,
+          "x": [
+            138,
+            175
+          ],
+          "y": [
+            -175,
+            175
+          ],
+          "buried_cm": 37.5
+        },
+        {
+          "z": 93.8,
+          "x": [
+            -138,
+            -100
+          ],
+          "y": [
+            -175,
+            175
+          ],
+          "buried_cm": 37.5
+        },
+        {
+          "z": 93.8,
+          "x": [
+            100,
+            138
+          ],
+          "y": [
+            -175,
+            175
+          ],
+          "buried_cm": 37.5
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Canal_Bridge",
+      "path": "/Game/Art/Town/Canal/SM_Town_Canal_Bridge",
+      "placed": 4,
+      "why": "canal bridge deck and steps",
+      "live_audit_buried": 214,
+      "scan": [
+        {
+          "z": 12.5
+        },
+        {
+          "z": 25.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Canal_Corner",
+      "path": "/Game/Art/Town/Canal/SM_Town_Canal_Corner",
+      "placed": 4,
+      "why": "canal corner walk lip",
+      "live_audit_buried": 2,
+      "scan": [
+        {
+          "z": 12.5
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_House_Large",
+      "path": "/Game/Art/Town/Homes/SM_Town_House_Large",
+      "placed": 4,
+      "why": "town_v1 porch step",
+      "live_audit_buried": 62,
+      "scan": [
+        {
+          "z": 25.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_House_Med",
+      "path": "/Game/Art/Town/Homes/SM_Town_House_Med",
+      "placed": 6,
+      "why": "town_v1 porch step",
+      "live_audit_buried": 72,
+      "scan": [
+        {
+          "z": 25.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_House_Small",
+      "path": "/Game/Art/Town/Homes/SM_Town_House_Small",
+      "placed": 11,
+      "why": "town_v1 porch step",
+      "live_audit_buried": 72,
+      "scan": [
+        {
+          "z": 25.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Cinderwright_House_Large",
+      "path": "/Game/Art/Town/Cinderwright/Homes/SM_Town_Cinderwright_House_Large",
+      "placed": 29,
+      "why": "porch step (25); 93.8/100 are interior floors that complex-as-simple will match to the render",
+      "live_audit_buried": 227,
+      "scan": [
+        {
+          "z": 25.0
+        },
+        {
+          "z": 93.8
+        },
+        {
+          "z": 100.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Cinderwright_House_Med",
+      "path": "/Game/Art/Town/Cinderwright/Homes/SM_Town_Cinderwright_House_Med",
+      "placed": 25,
+      "why": "porch step (25); 93.8/100 are interior floors that complex-as-simple will match to the render",
+      "live_audit_buried": 192,
+      "scan": [
+        {
+          "z": 25.0
+        },
+        {
+          "z": 93.8
+        },
+        {
+          "z": 100.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Cinderwright_House_Small",
+      "path": "/Game/Art/Town/Cinderwright/Homes/SM_Town_Cinderwright_House_Small",
+      "placed": 16,
+      "why": "porch step (25); 93.8 are interior floors that complex-as-simple will match to the render",
+      "live_audit_buried": 123,
+      "scan": [
+        {
+          "z": 25.0
+        },
+        {
+          "z": 93.8
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Rime_House_Large",
+      "path": "/Game/Art/Town/Rime/Homes/SM_Town_Rime_House_Large",
+      "placed": 5,
+      "why": "porch step (25); 93.8 are interior floors that complex-as-simple will match to the render",
+      "live_audit_buried": 198,
+      "scan": [
+        {
+          "z": 25.0
+        },
+        {
+          "z": 93.8
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Rime_House_Med",
+      "path": "/Game/Art/Town/Rime/Homes/SM_Town_Rime_House_Med",
+      "placed": 8,
+      "why": "porch step (25); 93.8 are interior floors that complex-as-simple will match to the render",
+      "live_audit_buried": 112,
+      "scan": [
+        {
+          "z": 25.0
+        },
+        {
+          "z": 93.8
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Rime_House_Small",
+      "path": "/Game/Art/Town/Rime/Homes/SM_Town_Rime_House_Small",
+      "placed": 7,
+      "why": "porch step (25); 93.8 are interior floors that complex-as-simple will match to the render",
+      "live_audit_buried": 121,
+      "scan": [
+        {
+          "z": 25.0
+        },
+        {
+          "z": 93.8
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Cinderwright_Factory",
+      "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Factory",
+      "placed": 9,
+      "why": "factory front steps",
+      "live_audit_buried": 212,
+      "scan": [
+        {
+          "z": 12.5
+        },
+        {
+          "z": 25.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Rime_GlacierWaterWorks",
+      "path": "/Game/Art/Town/Rime/SM_Town_Rime_GlacierWaterWorks",
+      "placed": 1,
+      "why": "water-works steps and platforms",
+      "live_audit_buried": 134,
+      "scan": [
+        {
+          "z": 37.5
+        },
+        {
+          "z": 87.5
+        },
+        {
+          "z": 100.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Fountain",
+      "path": "/Game/Art/Town/TownV1/SM_Town_Fountain",
+      "placed": 1,
+      "why": "sittable/walkable rim (design); hull buries the rim",
+      "live_audit_buried": 1901,
+      "scan": [
+        {
+          "z": 6.3
+        },
+        {
+          "z": 37.5
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Stall_Coilback",
+      "path": "/Game/Art/Town/TownV1/SM_Town_Stall_Coilback",
+      "placed": 2,
+      "why": "market stall floor players walk into",
+      "live_audit_buried": 187,
+      "scan": [
+        {
+          "z": 6.3
+        },
+        {
+          "z": 75.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Stall_Emberhare",
+      "path": "/Game/Art/Town/TownV1/SM_Town_Stall_Emberhare",
+      "placed": 2,
+      "why": "market stall floor players walk into",
+      "live_audit_buried": 185,
+      "scan": [
+        {
+          "z": 6.3
+        },
+        {
+          "z": 75.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Stall_Frosthorn",
+      "path": "/Game/Art/Town/TownV1/SM_Town_Stall_Frosthorn",
+      "placed": 2,
+      "why": "market stall floor players walk into",
+      "live_audit_buried": 187,
+      "scan": [
+        {
+          "z": 6.3
+        },
+        {
+          "z": 75.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Stall_GlacierWater",
+      "path": "/Game/Art/Town/TownV1/SM_Town_Stall_GlacierWater",
+      "placed": 2,
+      "why": "market stall floor players walk into",
+      "live_audit_buried": 201,
+      "scan": [
+        {
+          "z": 6.3
+        },
+        {
+          "z": 75.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Cinderwright_Stall_Coilback",
+      "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Stall_Coilback",
+      "placed": 5,
+      "why": "market stall floor players walk into",
+      "live_audit_buried": 146,
+      "scan": [
+        {
+          "z": 6.3
+        },
+        {
+          "z": 75.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Cinderwright_Stall_Emberhare",
+      "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Stall_Emberhare",
+      "placed": 5,
+      "why": "market stall floor players walk into",
+      "live_audit_buried": 144,
+      "scan": [
+        {
+          "z": 6.3
+        },
+        {
+          "z": 75.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Cinderwright_Stall_Frosthorn",
+      "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Stall_Frosthorn",
+      "placed": 5,
+      "why": "market stall floor players walk into",
+      "live_audit_buried": 146,
+      "scan": [
+        {
+          "z": 6.3
+        },
+        {
+          "z": 75.0
+        }
+      ]
+    },
+    {
+      "name": "SM_Town_Cinderwright_Stall_GlacierWater",
+      "path": "/Game/Art/Town/TownsV2/Cinderwright/SM_Town_Cinderwright_Stall_GlacierWater",
+      "placed": 5,
+      "why": "market stall floor players walk into",
+      "live_audit_buried": 160,
+      "scan": [
+        {
+          "z": 6.3
+        },
+        {
+          "z": 75.0
+        }
+      ]
+    }
+  ],
+  "audit_only": [
+    {
+      "name": "SM_Town_Rime_SovereignCourt",
+      "why": "its UCX steps climb (the imported asset test passes); the SovereignCourt test reads its UCX boxes, so it keeps them"
+    },
+    {
+      "name": "SM_Town_Homestead_StarterHouse_Cinderwright",
+      "why": "12.5 cm plinth rim past the hull, under the wall line; not a hidden wall"
+    },
+    {
+      "name": "SM_Town_Homestead_StarterHouse_Rime",
+      "why": "12.5 cm plinth rim past the hull, under the wall line; not a hidden wall"
+    },
+    {
+      "name": "SM_Town_Homestead_StarterHouse_Verdant",
+      "why": "12.5 cm plinth rim past the hull, under the wall line; not a hidden wall"
+    },
+    {
+      "name": "SM_Town_Homestead_Glasshouse",
+      "why": "6 cm floor inside the glass walls"
+    },
+    {
+      "name": "SM_Town_Rime_Wall_Gate",
+      "why": "50 cm pillar plinths inside the pillar boxes; complex collision could close the gate if the render mesh draws a door"
+    },
+    {
+      "name": "SM_Town_Wall_Gate",
+      "why": "50 cm pillar plinths inside the pillar boxes; complex collision could close the gate if the render mesh draws a door"
+    },
+    {
+      "name": "SM_Town_Rime_Wall_Straight",
+      "why": "wall footing inside the wall box"
+    },
+    {
+      "name": "SM_Town_Wall_Straight",
+      "why": "wall footing inside the wall box"
+    },
+    {
+      "name": "SM_Town_Rime_Wall_Corner",
+      "why": "wall footing inside the wall box"
+    },
+    {
+      "name": "SM_Town_Wall_Corner",
+      "why": "wall footing inside the wall box"
+    },
+    {
+      "name": "SM_Town_Cinderwright_PowerPylon",
+      "why": "12.5 cm foot inside a 1 m pylon base"
+    },
+    {
+      "name": "SM_Town_PowerPylon",
+      "why": "12.5 cm foot inside a 1 m pylon base"
+    },
+    {
+      "name": "SM_Town_Rime_SnowPine_A",
+      "why": "root flare; trees stay on simple collision"
+    },
+    {
+      "name": "SM_Town_Rime_SnowPine_B",
+      "why": "root flare; trees stay on simple collision"
+    },
+    {
+      "name": "SM_Town_Cinderwright_AshTree_A",
+      "why": "root flare; trees stay on simple collision (same as snow pines)"
+    },
+    {
+      "name": "SM_Town_Cinderwright_AshTree_B",
+      "why": "root flare; trees stay on simple collision (same as snow pines)"
+    },
+    {
+      "name": "SM_Town_ForestTree_A",
+      "why": "root flare; trees stay on simple collision (same as snow pines)"
+    },
+    {
+      "name": "SM_Town_ForestTree_B",
+      "why": "root flare; trees stay on simple collision (same as snow pines)"
+    },
+    {
+      "name": "SM_Town_ForestTree_C",
+      "why": "root flare; trees stay on simple collision (same as snow pines)"
+    },
+    {
+      "name": "SM_Town_Homestead_Fence_Gate",
+      "why": "fence plinths, not walkable stairs"
+    },
+    {
+      "name": "SM_Town_Homestead_Fence_GateLeaf",
+      "why": "fence plinths, not walkable stairs"
+    },
+    {
+      "name": "SM_Town_Homestead_Fence_Post",
+      "why": "fence plinths, not walkable stairs"
+    },
+    {
+      "name": "SM_Town_Homestead_Fence_Straight",
+      "why": "fence plinths, not walkable stairs"
+    },
+    {
+      "name": "SM_Town_LampPost",
+      "why": "lamp foot, not a tread"
+    },
+    {
+      "name": "SM_Town_Cinderwright_CharcoalRock_A",
+      "why": "rock, not a tread"
+    },
+    {
+      "name": "SM_Town_Cinderwright_Pipe_Straight",
+      "why": "pipe bodies, not walkways"
+    },
+    {
+      "name": "SM_Town_Cinderwright_Pipe_Support",
+      "why": "pipe bodies, not walkways"
+    },
+    {
+      "name": "SM_Town_CaravanCart",
+      "why": "wagon props (earlier #341 left wagons alone)"
+    },
+    {
+      "name": "SM_Town_Caravan_CoveredWagon",
+      "why": "wagon props (earlier #341 left wagons alone)"
+    },
+    {
+      "name": "SM_Town_CaravanPen",
+      "why": "animal pen hulls, not a stair"
+    },
+    {
+      "name": "SM_Town_Caravan_Campfire",
+      "why": "props"
+    },
+    {
+      "name": "SM_Town_Caravan_NoticeBoard",
+      "why": "props"
+    },
+    {
+      "name": "SM_Town_Bench",
+      "why": "seat box; leave simple unless sit fails in playtest"
+    },
+    {
+      "name": "SM_Town_Planter",
+      "why": "decorative rim inside hull"
+    },
+    {
+      "name": "SM_Town_Rime_Tower_Watch",
+      "why": "likely interior footing; recheck if playtest cannot climb"
+    },
+    {
+      "name": "SM_Town_Tower_Spire",
+      "why": "likely interior footing; recheck if playtest cannot climb"
+    }
+  ]
+}
