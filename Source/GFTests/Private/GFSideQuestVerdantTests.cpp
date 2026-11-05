@@ -370,8 +370,8 @@ bool FGFSideQuestVerdantTransitionsTest::RunTest(const FString&)
 	TestEqual(TEXT("Rime line while busy: OtherActive"), Busy.Apply(FGFSideQuestEvents::TalkAccepted(TEXT("P"), RimeLine, Rime)).Reason, FGFSideQuestCodes::OtherActive);
 	TestTrue(TEXT("OtherActive keeps the board"), Busy.Board == BusyKept);
 
-	// Rime and Cinderwright stay Accept-only stubs.
-	for (const FName Stub : { RimeLine, CinderLine })
+	// Rime ships in full (QL-d, GFGame.SideQuest.Line.Rime.Transitions). Cinderwright stays an Accept-only stub.
+	for (const FName Stub : { CinderLine })
 	{
 		const FGFSideQuestLineRule* Rule = Shipped.FindLine(Stub);
 		if (!TestNotNull(*FString::Printf(TEXT("%s shipped"), *Stub.ToString()), Rule))
