@@ -303,7 +303,7 @@ bool FGFAccelHopRoadActorTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	TestFalse(TEXT("Road does not replicate"), Road->GetIsReplicated());
+	TestTrue(TEXT("Road replicates (v2: the shared lit tile, issue 342)"), Road->GetIsReplicated());
 	Road->SetRoadExtent(Half);
 	TestTrue(TEXT("Extent set"), Road->GetBounds()->GetUnscaledBoxExtent().Equals(Half));
 	Road->SetRoadExtent(FVector(1.0));
