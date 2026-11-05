@@ -13,6 +13,8 @@ public class GFTests : ModuleRules
 		PrivateIncludePaths.Add(System.IO.Path.Combine(ModuleDirectory, "../GFGame/Movement"));
 		// GFTownsfolkRules.h includes GFTerritoryTypes.h, which lives in GFGame's private Territory folder.
 		PrivateIncludePaths.Add(System.IO.Path.Combine(ModuleDirectory, "../GFGame/Territory"));
+		// GFFerryDirector.h (side quest ferry adapter tests) is in GFGame's private Ferry folder.
+		PrivateIncludePaths.Add(System.IO.Path.Combine(ModuleDirectory, "../GFGame/Ferry"));
 
 	}
 }
