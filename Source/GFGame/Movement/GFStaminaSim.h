@@ -207,6 +207,9 @@ namespace GFTraversalSim
 	 */
 	GFGAME_API bool IsIntoWall(const FVector& MoveDirection, const FVector& WallNormal, float MinDot);
 
+	/** QL-b: a mantle was running at the start of the step and is not at the end (arrived, timed out, or cut). */
+	GFGAME_API bool MantleFinished(const FGFStaminaState& Before, const FGFStaminaState& After);
+
 	/**
 	 * Grip, wall climb, mantle, wall run, swivel, and grapple for one step.
 	 * Returns true when stamina was spent. May clear a dash that just hit a wall or a pole.

@@ -16,6 +16,12 @@ class UAbilitySystemComponent;
 class AGFMagicFieldMarker;
 class APawn;
 
+/**
+ * Server only. One drop granted to this player's own caster (bag plus haul; the haul flushes into the bag later).
+ * Side quest credit (CrystalGathered) listens. Other players' drops never fire for this key.
+ */
+DECLARE_MULTICAST_DELEGATE_FiveParams(FGFOnMagicDropReceived, UWorld* /*World*/, const FString& /*PlayerKey*/, FName /*ItemId*/, int32 /*Count*/, FVector /*From*/);
+
 struct FMagicDeferredCast
 {
 	TArray<FIntVector> Cells;
@@ -115,6 +121,8 @@ public:
 
 	/** Bag first. Whatever does not fit waits in the haul and flushes when there is room. */
 	void ReceiveDrop(FName ItemId, int32 Count, const FVector& From);
+	/** Fired at the end of every ReceiveDrop that granted something. */
+	static FGFOnMagicDropReceived& OnDropReceived();
 
 	void SyncMarker(const FVector& At);
 	/** Authority only. A dry crystal stops the channel on the next step. */

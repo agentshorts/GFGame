@@ -68,6 +68,10 @@ enum class EGFWallClimbPhase : uint8
 
 class UGFCharacterMovementComponent;
 DECLARE_MULTICAST_DELEGATE_TwoParams(FGFOnAccelHopLanded, const UGFCharacterMovementComponent* /*Movement*/, const FGFAccelHopLandingEvent& /*Event*/);
+/** Server only. One hop tile landing the server applied or rejected, for the host's pawn and for remote players. */
+DECLARE_MULTICAST_DELEGATE_FourParams(FGFOnServerAccelHop, const UGFCharacterMovementComponent* /*Movement*/, const FGFAccelHopHit& /*Hit*/, EGFHopTileKind /*TileKind*/, bool /*bApplied*/);
+/** Server only. A climb-exit mantle ended this move. Lip is the mantle target. */
+DECLARE_MULTICAST_DELEGATE_TwoParams(FGFOnServerMantleFinished, const UGFCharacterMovementComponent* /*Movement*/, FVector /*Lip*/);
 
 UCLASS()
 class GFGAME_API UGFCharacterMovementComponent : public UCharacterMovementComponent
@@ -245,6 +249,15 @@ public:
 	 * character. Listeners filter by world and pawn. Never fires for a server's copy of a remote player's hop.
 	 */
 	static FGFOnAccelHopLanded OnAccelHopLanded;
+
+	/**
+	 * Fires on the server after every judged landing it handled: the host's own (HandleAccelHopLanding with authority)
+	 * and every remote player's report (ApplyServerAccelHop past the tile and rate checks). Side quest credit listens.
+	 */
+	static FGFOnServerAccelHop OnServerAccelHop;
+
+	/** Fires on the server when a mantle ends in an authoritative move (arrival or the mantle timer). */
+	static FGFOnServerMantleFinished OnServerMantleFinished;
 
 	/** Server side of a reported hop: checks the tile is under the pawn and the rate limit, then applies it. */
 	bool ApplyServerAccelHop(AGFAccelHopTile* Tile, const FGFAccelHopHit& Hit, float BeatSeconds);

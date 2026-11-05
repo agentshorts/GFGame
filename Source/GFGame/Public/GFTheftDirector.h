@@ -22,6 +22,9 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaSeconds) override;
 
+	/** The town a world point belongs to (its zone, else the nearest camp in reach). None in the wild. Read only. */
+	static FName TownAt(UWorld* World, const FVector& Location);
+
 private:
 	void HandleCrystal(UWorld* World, const FString& NodeKey, FVector Location, const TArray<FString>& ContributorKeys);
 	void HandleHireAsk(AActor* Villager);

@@ -26,8 +26,10 @@ struct FMagicGlob;
 struct FMagicSwing;
 struct FGFMiningSpellRow;
 
-/** Server only. One crystal break, once. Trees do not broadcast. */
+/** Server only. One crystal break, once. Trees broadcast OnTreeBroken instead. */
 DECLARE_MULTICAST_DELEGATE_FourParams(FGFOnTownCrystalTaken, UWorld* /*World*/, const FString& /*NodeKey*/, FVector /*Location*/, const TArray<FString>& /*ContributorKeys*/);
+/** Server only. One tree (non-crystal node) break, once. Same arguments as a crystal break. */
+DECLARE_MULTICAST_DELEGATE_FourParams(FGFOnTownTreeBroken, UWorld* /*World*/, const FString& /*NodeKey*/, FVector /*Location*/, const TArray<FString>& /*ContributorKeys*/);
 
 /**
  * The one-shot crystal break. Quest credit listens here and records the player key.
@@ -36,6 +38,8 @@ DECLARE_MULTICAST_DELEGATE_FourParams(FGFOnTownCrystalTaken, UWorld* /*World*/, 
 struct GFMAGIC_API FGFTownNodeEvents
 {
 	static FGFOnTownCrystalTaken& OnCrystalTaken();
+	/** Side quest tree credit (QL-b). The theft director does not listen here. */
+	static FGFOnTownTreeBroken& OnTreeBroken();
 };
 
 USTRUCT()

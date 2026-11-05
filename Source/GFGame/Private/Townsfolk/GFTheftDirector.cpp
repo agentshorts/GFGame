@@ -331,6 +331,11 @@ void AGFTheftDirector::Tick(float DeltaSeconds)
 	}
 }
 
+FName AGFTheftDirector::TownAt(UWorld* World, const FVector& Location)
+{
+	return GFTheftPrivate::TownAt(World, Location);
+}
+
 void AGFTheftDirector::HandleCrystal(UWorld* World, const FString& NodeKey, FVector Location, const TArray<FString>& ContributorKeys)
 {
 	if (!HasAuthority() || World != GetWorld())

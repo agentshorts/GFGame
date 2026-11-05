@@ -716,6 +716,19 @@ void UGFMagicComponent::ReceiveDrop(FName ItemId, int32 Count, const FVector& Fr
 	{
 		Owner->ForceNetUpdate();
 	}
+	if (const AGFPlayerState* Receiver = Cast<AGFPlayerState>(GetOwner()))
+	{
+		if (!Receiver->PlayerKey.IsEmpty())
+		{
+			OnDropReceived().Broadcast(GetWorld(), Receiver->PlayerKey, ItemId, Count, From);
+		}
+	}
+}
+
+FGFOnMagicDropReceived& UGFMagicComponent::OnDropReceived()
+{
+	static FGFOnMagicDropReceived Delegate;
+	return Delegate;
 }
 
 void UGFMagicComponent::SyncMarker(const FVector& At)

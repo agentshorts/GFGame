@@ -606,10 +606,6 @@ void FGFTownNodeField::CommitBreak(FNode& Node, const FMagicBreak& Break, const 
 		FGFTownNodeRules::Grant(Fallback, Break, At, Now);
 	}
 	UE_LOG(LogGF, Log, TEXT("Town node %s broke%s, drop %s x%d, regrow in %.0fs"), *Node.Key, Node.bPiece ? TEXT(" and took its piece down") : TEXT(""), *Break.DropItem.ToString(), Break.DropCount, RegrowSeconds);
-	if (!Node.bCrystal)
-	{
-		return;
-	}
 	UWorld* World = nullptr;
 	if (const AActor* Actor = Node.Actor.Get())
 	{
@@ -632,12 +628,25 @@ void FGFTownNodeField::CommitBreak(FNode& Node, const FMagicBreak& Break, const 
 			Keys.Add(FallbackKey);
 		}
 	}
-	FGFTownNodeEvents::OnCrystalTaken().Broadcast(World, Node.Key, At, Keys);
+	if (Node.bCrystal)
+	{
+		FGFTownNodeEvents::OnCrystalTaken().Broadcast(World, Node.Key, At, Keys);
+	}
+	else
+	{
+		FGFTownNodeEvents::OnTreeBroken().Broadcast(World, Node.Key, At, Keys);
+	}
 }
 
 FGFOnTownCrystalTaken& FGFTownNodeEvents::OnCrystalTaken()
 {
 	static FGFOnTownCrystalTaken Delegate;
+	return Delegate;
+}
+
+FGFOnTownTreeBroken& FGFTownNodeEvents::OnTreeBroken()
+{
+	static FGFOnTownTreeBroken Delegate;
 	return Delegate;
 }
 

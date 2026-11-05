@@ -15,6 +15,9 @@ class APawn;
 class UGFFerryRiderComponent;
 class UStaticMeshComponent;
 
+/** Server only. A flight landed its rider at the far stop (never for a lost craft, a lost controller, or teardown). */
+DECLARE_MULTICAST_DELEGATE_FourParams(FGFOnFerryArrived, UWorld* /*World*/, APawn* /*Rider*/, const FGFFerryStop& /*From*/, const FGFFerryStop& /*To*/);
+
 UCLASS(Config = Game)
 class GFGAME_API AGFFerryDirector : public AActor
 {
@@ -56,6 +59,9 @@ public:
 	/** Server. Burns the pass material and mints one pass. A failed mint rolls the burn back. */
 	FGFFerryResult BuyPass(APawn* Rider, FName AtStop, const FGuid& RequestId);
 
+	/** Side quest ferry credit (QL-b) listens here. */
+	static FGFOnFerryArrived& OnFlightArrived();
+
 	/** Test hook. The next StartFlight returns false and mints the fare back. Cleared when it trips. */
 	bool bFailNextFlight = false;
 
@@ -76,6 +82,9 @@ private:
 		TWeakObjectPtr<APawn> Rider;
 		TWeakObjectPtr<UGFFerryRiderComponent> Ride;
 		TWeakObjectPtr<UStaticMeshComponent> Basket;
+		/** The stops this flight joins, for the arrival broadcast. */
+		FGFFerryStop FromStop;
+		FGFFerryStop ToStop;
 		FVector From = FVector::ZeroVector;
 		FVector To = FVector::ZeroVector;
 		FVector Drop = FVector::ZeroVector;

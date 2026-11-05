@@ -91,6 +91,11 @@ bool GFTraversalSim::IsIntoWall(const FVector& MoveDirection, const FVector& Wal
 	return Into >= static_cast<double>(FMath::Max(0.f, MinDot)) && Into > Along;
 }
 
+bool GFTraversalSim::MantleFinished(const FGFStaminaState& Before, const FGFStaminaState& After)
+{
+	return Before.bMantling && !After.bMantling;
+}
+
 FName GFTraversalSim::SwivelTag()
 {
 	return FName(TEXT("Swivel"));

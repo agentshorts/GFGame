@@ -366,6 +366,8 @@ bool AGFFerryDirector::StartFlight(APawn* Rider, const FGFFerryStop& From, const
 	Flight.Rider = Rider;
 	Flight.Ride = Ride;
 	Flight.Basket = Basket;
+	Flight.FromStop = From;
+	Flight.ToStop = To;
 	Flight.From = Perch;
 	Flight.To = FGFFerryArt::PerchWorld(To.Location);
 	Flight.Drop = FGFFerryRules::DropPoint(From.Location, To.Location, RiderAt, Tuning.BoardRadius);
@@ -467,6 +469,7 @@ bool AGFFerryDirector::AdvanceFlight(FFlight& Flight, float DeltaSeconds)
 	if (bFinished || MoveAlpha >= 1.f - KINDA_SMALL_NUMBER)
 	{
 		FinishFlight(Flight);
+		OnFlightArrived().Broadcast(GetWorld(), Rider, Flight.FromStop, Flight.ToStop);
 		return true;
 	}
 	// The bird pitches on the way up. Keep the feet on the floor and the body upright with the basket.
@@ -475,6 +478,12 @@ bool AGFFerryDirector::AdvanceFlight(FFlight& Flight, float DeltaSeconds)
 		UGFFerryRiderComponent::SeatOnBasket(Rider, Basket);
 	}
 	return false;
+}
+
+FGFOnFerryArrived& AGFFerryDirector::OnFlightArrived()
+{
+	static FGFOnFerryArrived Delegate;
+	return Delegate;
 }
 
 void AGFFerryDirector::FinishFlight(FFlight& Flight)

@@ -657,6 +657,10 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 		{
 			ReplicatedWallClimbPhase = Phase;
 		}
+		if (GFTraversalSim::MantleFinished(SimAtMoveStart, Sim))
+		{
+			OnServerMantleFinished.Broadcast(this, SimAtMoveStart.MantleTarget);
+		}
 	}
 
 	// The step decides whether this press is a real hop. The engine jump runs inside Super.
@@ -739,6 +743,8 @@ void UGFCharacterMovementComponent::PollAccelHopLanding()
 }
 
 FGFOnAccelHopLanded UGFCharacterMovementComponent::OnAccelHopLanded;
+FGFOnServerAccelHop UGFCharacterMovementComponent::OnServerAccelHop;
+FGFOnServerMantleFinished UGFCharacterMovementComponent::OnServerMantleFinished;
 
 bool UGFCharacterMovementComponent::HandleAccelHopLanding(AGFAccelHopTile* Tile, double NowBeat, float Bpm, EGFBeatHopMode Mode)
 {
@@ -772,6 +778,10 @@ bool UGFCharacterMovementComponent::HandleAccelHopLanding(AGFAccelHopTile* Tile,
 	if (CharacterOwner && !CharacterOwner->HasAuthority())
 	{
 		ServerAccelHop(Tile, Hit, BeatSeconds);
+	}
+	else if (CharacterOwner)
+	{
+		OnServerAccelHop.Broadcast(this, Hit, Tile->GetKind(), bChanged);
 	}
 	if (OnAccelHopLanded.IsBound())
 	{
@@ -817,6 +827,7 @@ bool UGFCharacterMovementComponent::ApplyServerAccelHop(AGFAccelHopTile* Tile, c
 			Road->ServerConsumeLit(Tile, Now);
 		}
 	}
+	OnServerAccelHop.Broadcast(this, Checked, Tile->GetKind(), bChanged);
 	return bChanged;
 }
 
