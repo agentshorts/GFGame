@@ -32,8 +32,13 @@ enum class EGFSideQuestEventKind : uint8
 	FerryArrived,
 	HeldDelivered,
 	TurnIn,
-	HireSpawned
+	HireSpawned,
+	/** A member of the vein's town took a town crystal (QL-b). Separate from CrystalGathered so one break never counts twice. */
+	CrystalTaken
 };
+
+/** The highest EGFSideQuestEventKind. Bounds checks and test loops read this, so a new kind is one edit. */
+constexpr EGFSideQuestEventKind GFSideQuestLastKind = EGFSideQuestEventKind::CrystalTaken;
 
 /** One side line on one board. StepId and Count are only meaningful while Active. */
 USTRUCT(BlueprintType)
@@ -111,7 +116,8 @@ struct GFCORE_API FGFSideQuestBoard
 
 /**
  * One fact for the board.
- * TalkAccepted: LineId is the offered line, TownId is the elder's town.
+ * TalkAccepted: LineId is the offered line, TownId is the elder's town. For the Active line it is a check-in:
+ *   it advances a later TalkAccepted step only, and only at that line's elder.
  * TurnIn: Stacks is the offer. If Stacks is empty, ItemId and Count are one stack.
  * HeldDelivered: ItemId is the held item, TownId is the elder's town.
  * Other kinds: Count is how many (0 counts as 1). TownId, when set, must be the Active line's town.

@@ -10,6 +10,7 @@
 //   A line needs MinSteps steps before it is offered. Stub lines stay Locked until their content lands.
 //   TalkAccepted activates the line at its first step. When that step advances on TalkAccepted, the accept
 //   also completes it. Each later step advances on its own AdvanceKind until Count reaches Goal.
+//   A later TalkAccepted step is a check-in: TalkAccepted for the Active line at that line's elder finishes it.
 //   Unknown, out of order, or wrong town events come back Ignored or Refused and leave the board as it was.
 //   A step with Items only counts events (or turn-ins) of those items. HeldDelivered needs a held item.
 //   Locked and Done lines stay on the board. Done is final for v1.
@@ -135,7 +136,7 @@ struct GFCORE_API FGFSideQuestEvents
 	static void Raise(UWorld* World, const FGFSideQuestEvent& Event);
 
 	static FGFSideQuestEvent TalkAccepted(const FString& PlayerKey, FName LineId, FName TownId);
-	/** Count-style kinds (TreeBroken, CrystalGathered, HopLanded, ClimbMantled, FerryArrived, HireSpawned). */
+	/** Count-style kinds (TreeBroken, CrystalGathered, CrystalTaken, HopLanded, ClimbMantled, FerryArrived, HireSpawned). */
 	static FGFSideQuestEvent Progress(const FString& PlayerKey, EGFSideQuestEventKind Kind, FName TownId = NAME_None, int32 Count = 1);
 	static FGFSideQuestEvent TurnIn(const FString& PlayerKey, const TArray<FGFItemStack>& Offer, FName TownId = NAME_None);
 	static FGFSideQuestEvent HeldDelivered(const FString& PlayerKey, FName ItemId, FName TownId);

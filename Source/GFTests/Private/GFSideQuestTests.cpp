@@ -98,7 +98,7 @@ namespace GFSideQuestTest
 	static TArray<EGFSideQuestEventKind> Kinds()
 	{
 		TArray<EGFSideQuestEventKind> Out;
-		for (uint8 Value = 0; Value <= static_cast<uint8>(EGFSideQuestEventKind::HireSpawned); ++Value)
+		for (uint8 Value = 0; Value <= static_cast<uint8>(GFSideQuestLastKind); ++Value)
 		{
 			Out.Add(static_cast<EGFSideQuestEventKind>(Value));
 		}

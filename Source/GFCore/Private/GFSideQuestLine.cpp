@@ -166,7 +166,7 @@ bool FGFSideQuestCatalog::TryKind(FName Id, EGFSideQuestEventKind& Out)
 	{
 		Value = Enum->GetValueByName(Id);
 	}
-	if (Value == INDEX_NONE || Value > static_cast<int64>(EGFSideQuestEventKind::HireSpawned))
+	if (Value == INDEX_NONE || Value > static_cast<int64>(GFSideQuestLastKind))
 	{
 		return false;
 	}
@@ -239,7 +239,7 @@ void FGFSideQuestLine::Refresh()
 
 FGFSideQuestApplyResult FGFSideQuestLine::Apply(const FGFSideQuestEvent& Event)
 {
-	if (static_cast<uint8>(Event.Kind) > static_cast<uint8>(EGFSideQuestEventKind::HireSpawned))
+	if (static_cast<uint8>(Event.Kind) > static_cast<uint8>(GFSideQuestLastKind))
 	{
 		return GFSideQuestLinePrivate::Make(EGFQuestResult::Ignored, FGFQuestCodes::Unknown);
 	}
@@ -323,11 +323,23 @@ FGFSideQuestApplyResult FGFSideQuestLine::ApplyStep(const FGFSideQuestEvent& Eve
 	{
 		return Make(EGFQuestResult::Ignored, FGFQuestCodes::OutOfOrder, Rule->LineId);
 	}
+	const FGFSideQuestStepRule* Step = Rule->FindStep(Progress->StepId);
 	if (Event.Kind == EGFSideQuestEventKind::TalkAccepted)
 	{
-		return Make(EGFQuestResult::Ignored, FGFSideQuestCodes::Already, Rule->LineId);
+		// A check-in with the elder moves a later TalkAccepted step. The first step is only ever done by the accept.
+		const bool bCheckIn = Step && Step->AdvanceKind == EGFSideQuestEventKind::TalkAccepted && Rule->IndexOf(Step->StepId) > 0;
+		if (!bCheckIn)
+		{
+			return Make(EGFQuestResult::Ignored, FGFSideQuestCodes::Already, Rule->LineId);
+		}
+		if (!FGFSideQuestCatalog::SameTown(Event.TownId, Rule->TownId))
+		{
+			return Make(EGFQuestResult::Refused, FGFQuestCodes::WrongTown, Rule->LineId);
+		}
+		FGFSideQuestApplyResult CheckIn = Make(EGFQuestResult::Ok, FGFQuestCodes::Ok, Rule->LineId);
+		Advance(*Rule, *Progress, FMath::Max(1, Step->Goal), CheckIn);
+		return CheckIn;
 	}
-	const FGFSideQuestStepRule* Step = Rule->FindStep(Progress->StepId);
 	if (!Step || Event.Kind != Step->AdvanceKind)
 	{
 		return Make(EGFQuestResult::Ignored, FGFQuestCodes::OutOfOrder, Rule->LineId);
