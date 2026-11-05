@@ -39,9 +39,9 @@ Branch off `staging` at `fa4b4c3`. Big Grumble's director now spawns with the ga
 
 `Source/GFTests/Private/GFGiantPlaytestTests.cpp` (`EditorContext | EngineFilter`):
 
-- `GFGame.Giant.Playtest.DirectorStartup` — the startup list keeps social, paint, and the giant; after `AGFGameMode::InitGame` exactly one director exists and its event component is set; `Get` / `GetEvent` do not spawn another; a director already in the world is not spawned again.
-- `GFGame.Giant.Playtest.Start` — `GFGiantCheats::Start` (what `gf.Giant.Start` calls) refuses with nobody in, starts once one player has a pawn, spawns the body at `Sim.Location + (0, 0, 600)`, and `End` destroys that body.
-- `GFGame.Giant.Playtest.Maths` — `FGFGiantPlaytest::Advance`, `IsFirstEventDue`, and `HoldsOffNormalClock` with no world. 0 and negative stay off. The clock starts when the first player is in, is due at the threshold, keeps counting if they leave, and stops once a session event has started. `FGFGiantRules::ShouldTrigger` is still false on a fresh save while the playtest clock is due.
+- `GFGame.Giant.Playtest.DirectorStartup` - the startup list keeps social, paint, and the giant; after `AGFGameMode::InitGame` exactly one director exists and its event component is set; `Get` / `GetEvent` do not spawn another; a director already in the world is not spawned again.
+- `GFGame.Giant.Playtest.Start` - `GFGiantCheats::Start` (what `gf.Giant.Start` calls) refuses with nobody in, starts once one player has a pawn, spawns the body at `Sim.Location + (0, 0, 600)`, and `End` destroys that body.
+- `GFGame.Giant.Playtest.Maths` - `FGFGiantPlaytest::Advance`, `IsFirstEventDue`, and `HoldsOffNormalClock` with no world. 0 and negative stay off. The clock starts when the first player is in, is due at the threshold, keeps counting if they leave, and stops once a session event has started. `FGFGiantRules::ShouldTrigger` is still false on a fresh save while the playtest clock is due.
 
 ## Decision
 

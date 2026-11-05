@@ -55,7 +55,7 @@ The schema forbids `/` and `.` in node ids and restricts `effect_id` to `[a-z0-9
 
 `effect_id` values outside `[a-z0-9_]+` are a separate finding (F6), because the schema rejects them and the evaluator does not.
 
-## F1 — missing required keys raise KeyError
+## F1 - missing required keys raise KeyError
 
 `flatten` assumes `nodes` and `outputs` exist. `validate` raises `GraphError` for a missing key. `flatten` / `full_check` / `bake_key` do not.
 
@@ -64,49 +64,49 @@ The schema forbids `/` and `.` in node ids and restricts `effect_id` to `[a-z0-9
 - Repros: `findings/repro_missing_outputs_v1.json` (`KeyError: 'outputs'`), `findings/repro_missing_nodes_v1.json` (`KeyError: 'nodes'`).
 - An empty `outputs` object is handled and raises `GraphError` (`base_color` required).
 
-## F2 — a non-object node raises TypeError
+## F2 - a non-object node raises TypeError
 
 `check_exposed` builds `{node["id"]: node ...}` before it knows the node is an object. A node that is a JSON number fails with `TypeError: 'int' object is not subscriptable`.
 
 - Property: no exception other than `GraphError`.
 - Repro: `findings/repro_node_not_object_v1.json`.
 
-## F3 — vector min/max crashes
+## F3 - vector min/max crashes
 
 The schema says vector params are range-checked per component. `_check_value` compares each component with `<` against `min` / `max`. When `min` is itself an array, that comparison raises `TypeError: '<' not supported between instances of 'float' and 'list'`. Scalar min/max on a vector param works.
 
 - Property: no exception other than `GraphError`.
 - Repro: `findings/repro_vector_minmax_v1.json`.
 
-## F4 — deep arrays recurse out of `canonical_json`
+## F4 - deep arrays recurse out of `canonical_json`
 
 `canonical_json` walks arrays by recursion. Depth 480 still returns. Depth 500 and depth 10,000 raise `RecursionError` in well under 2 seconds (no hang). The same happens for a graph field that is never otherwise validated, because the content hash canonicalises the whole document except `rev` and `preview`.
 
 - Property: no exception other than `GraphError`.
 - Repro: `findings/repro_deep_nest_v1.json` (depth 500, small enough for `json.loads`). The depth-10,000 case is built in memory by `test_deep_nest_10000_is_graph_error` because a 10,000-deep JSON text is the same failure mode.
 
-## F5 — lone UTF-16 surrogate is not a GraphError
+## F5 - lone UTF-16 surrogate is not a GraphError
 
 A JSON string `\ud800` loads in Python as a lone surrogate. `content_hash` then does `encode("utf-8")` and raises `UnicodeEncodeError`. Hashing is therefore not defined for that input, rather than rejected as `GraphError`.
 
 - Property: no exception other than `GraphError`.
 - Repro: `findings/repro_lone_surrogate_v1.json`.
 
-## F6 — `effect_id` charset is not enforced
+## F6 - `effect_id` charset is not enforced
 
 Schema text: `effect_id` matches `[a-z0-9_]+`. `flatten` accepts `fx_café` (and the same path accepts NUL, bidi, and emoji ids). The content hash is still deterministic for those strings.
 
 - Property: expected reject, got accept.
 - Repro: `findings/repro_unicode_effect_id_v1.json`.
 
-## F7 — JSON booleans count as noise scale and seed
+## F7 - JSON booleans count as noise scale and seed
 
 `isinstance(True, int)` is true, so `"scale": true` and `"seed": true` pass the int range checks (`true` is 1). The schema asks for an int. A boolean const value is rejected; this hole is only the noise scale and seed.
 
 - Property: expected reject, got accept.
 - Repro: `findings/repro_bool_seed_v1.json`.
 
-## F8 — `rev.created` lowercase `z`
+## F8 - `rev.created` lowercase `z`
 
 The schema asks for `YYYY-MM-DDTHH:MM:SSZ`. `datetime.strptime` matches literal characters in the format case-insensitively on every platform, so a trailing lowercase `z` is accepted and `check_rev_meta` accepts it. February 31 and a numeric offset are rejected. The behaviour is deterministic, so the xfail is strict.
 

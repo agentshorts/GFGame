@@ -57,8 +57,8 @@ Unknown faction ids fall back to those three colours, then neutral grey. Hazard 
 
 ## Tests
 
-- `GFGame.World.OverworldCoversLayout` — every faction centre and hazard centre has ground, from `BuildShapes`, including the shipped layout. No world.
-- `GFGame.World.EnvironmentSkipsPlaced` — a world that already has a directional light does not get a second one. Missing sky atmosphere, sky light, and height fog are added once.
+- `GFGame.World.OverworldCoversLayout` - every faction centre and hazard centre has ground, from `BuildShapes`, including the shipped layout. No world.
+- `GFGame.World.EnvironmentSkipsPlaced` - a world that already has a directional light does not get a second one. Missing sky atmosphere, sky light, and height fog are added once.
 
 ## Dev PC steps
 

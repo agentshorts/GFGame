@@ -1,4 +1,4 @@
-# VoxelFinish effect graphs — schema v4 (combined-effect limits)
+# VoxelFinish effect graphs - schema v4 (combined-effect limits)
 
 **What changed from v3:** only the limits. Each authored graph is still capped at **32 nodes**
 (checked before any inlining). The flattened (combined) graph after SubEffect inlining may now use
@@ -18,7 +18,7 @@ plugin constants match (`VoxelFinish::MaxAuthoredNodes` 32, `MaxFlattenedNodes` 
 | flattened nodes | 32 | 64 |
 | flattened op cost | 64 | 128 |
 | SubEffect depth | 3 | 3 |
-| combined steps | — | 64 |
+| combined steps | - | 64 |
 
 Graphs that flatten to 33–64 nodes or 65–128 op cost were rejected under v3 and are accepted under v4.
 65 flattened nodes, 129 op cost, or an authored graph of 33 nodes are still rejected.
@@ -27,7 +27,7 @@ Graphs that flatten to 33–64 nodes or 65–128 op cost were rejected under v3 
 
 ## Full text (v3 with the v4 limits applied)
 
-### VoxelFinish effect graphs — revisions, SubEffects, bundles, AI hook
+### VoxelFinish effect graphs - revisions, SubEffects, bundles, AI hook
 
 Builds on `effects_schema_v1.md` (node types, ops, op costs, inputs, outputs) and `effects_schema_v2.md`
 (bakeable uv+time rules). Everything in those still holds. Reference implementation:
@@ -81,7 +81,7 @@ the registry goes by `effect_id` + `rev.number`, not by file name).
 Canonical JSON = RFC 8785 (JCS):
 - objects: keys sorted by UTF-16 code units, no whitespace anywhere (`,` and `:` only);
 - strings: JSON escapes only for `"`, `\`, and control chars (`\b \f \n \r \t`, others `\u00XX` lowercase hex); non-ASCII emitted raw as UTF-8;
-- numbers: ECMAScript `Number.prototype.toString` form — `1.0`→`1`, `0.5`→`0.5`, `1e-7`→`1e-7`, `1e21`→`1e+21`, shortest round-trip digits; NaN/Infinity are invalid;
+- numbers: ECMAScript `Number.prototype.toString` form - `1.0`→`1`, `0.5`→`0.5`, `1e-7`→`1e-7`, `1e21`→`1e+21`, shortest round-trip digits; NaN/Infinity are invalid;
 - arrays keep their order (node order is part of the content).
 
 `rev` is excluded so the hash describes content only (a **revert** therefore has the same hash as its
@@ -140,7 +140,7 @@ Rules: `args` keys must be exposed params, values in [min, max]; `wires` keys mu
 the wired node's type must match the declared type (a scalar may broadcast only where v1 broadcasting
 allows). Anything not exposed is private.
 
-### Compile-time inlining (flattening) — MUST
+### Compile-time inlining (flattening) - MUST
 
 1. Resolve `ref` through the registry (`"latest"` → highest rev). Check hash.
 2. Copy child nodes with ids prefixed `<subnode_id>/` (e.g. `spark/thr`); apply `args` to the const
@@ -155,7 +155,7 @@ allows). Anything not exposed is private.
    graph ≤ 32 nodes before inlining), types, outputs,
    bakeability (`block_world_pos` anywhere ⇒ not bakeable).
 
-### Bake key — what the stored hash pins
+### Bake key - what the stored hash pins
 
 `bake_key = sha256(canonical {"effect": effect_id, "hash": content_hash, "deps": sorted [{effect_id, rev, hash}]})`
 where `deps` lists every SubEffect revision actually used, **with `"latest"` resolved to the concrete rev
@@ -180,7 +180,7 @@ its own 7-node frost tint. The child revisions `fx_pulse_glow`, `fx_shimmer`, `f
 
 ---
 
-## (c) Bundles — `voxelfinish.bundle/1`
+## (c) Bundles - `voxelfinish.bundle/1`
 
 A bundle is one JSON file with `manifest` + `graphs`.
 
@@ -209,7 +209,7 @@ A bundle is one JSON file with `manifest` + `graphs`.
   bundle is made). `finish` items carry a full finish: `palette_a`, `palette_b` (`#RRGGBB`),
   `pattern_id` (0–15 or 255 = none), `glow_mask_id` (0–3 or 255), `strength` (0–8),
   `effect {effect_id, rev:int}`, `args` (exposed params of that effect). Finish hash = sha256 of its canonical JSON.
-- **closure**: automatically every graph needed — each item's effect plus all SubEffect revisions,
+- **closure**: automatically every graph needed - each item's effect plus all SubEffect revisions,
   recursively, deduplicated, sorted by (effect_id, rev). Max 64 graphs.
 - **purpose**: `ai_context` (needs `prompt`, ≤ 4000 chars; the bundle is context for the AI hook) or
   `mailbox` (send to another player/workshop; no prompt).
@@ -235,7 +235,7 @@ the next free rev number with `parent_rev` = the nearest shared rev and a note "
   Add `gitignore_snippet_v1.txt` lines to the repo's `.gitignore`. Keys are never committed, logged,
   put in bundles, or shown in screenshots. With no config, the feature is hidden.
 - Request = prompt + the bundle's graphs + this schema's rules (node/op list, limits).
-- Response is **untrusted data**: it goes through exactly the same path as a hand-made graph —
+- Response is **untrusted data**: it goes through exactly the same path as a hand-made graph -
   parse → schema check → hash/rev assigned locally (`make_rev`, new rev, note "ai draft") → flatten →
   validate (32 authored nodes, 64 flattened nodes / 128 ops, types, depth, cycles, bakeable) → preview. Rejected output shows the
   validator message; nothing is baked or saved until the player accepts it.

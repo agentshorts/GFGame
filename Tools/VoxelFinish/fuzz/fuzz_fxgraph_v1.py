@@ -1,9 +1,9 @@
 """Property and fuzz harness for VoxelFinish effect graphs.
 
 Stdlib random only. Limits are selected with VF_FUZZ_PROFILE:
-  current — flattened 32 nodes / 64 op cost (fxgraph_eval_v2)
-  target  — 32 authored nodes, flattened 64 nodes / 128 op cost (fxgraph_eval_v3)
-  both    — default; structured cases run on each profile
+  current - flattened 32 nodes / 64 op cost (fxgraph_eval_v2)
+  target  - 32 authored nodes, flattened 64 nodes / 128 op cost (fxgraph_eval_v3)
+  both    - default; structured cases run on each profile
 
 The independent oracle covers subeffect-free graphs. Combined-effect cases
 (depth, cycles, flat limits, bundles) carry an expected verdict per profile.

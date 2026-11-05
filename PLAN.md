@@ -34,7 +34,7 @@ Design pillars: the safe circle stays cozy, everything outside it is dangerous, 
 | Source | Primary yield | Secondary / rare | Used for |
 |---|---|---|---|
 | **Garden (hub)** | Flowers, Fruit, Fiber (cotton-like plant), Seeds | Rare bloom (1 in 10 harvests) | Dyes, dino treats, fabric, decor pots |
-| **Hub foraging** (M1 placeholder source) | Wood, Stone, Clay | — | Basic blocks and furniture. Stays as a trickle so players are never stuck |
+| **Hub foraging** (M1 placeholder source) | Wood, Stone, Clay | - | Basic blocks and furniture. Stays as a trickle so players are never stuck |
 | **A. Dino taming** | Scales, Bone, Amber, Dino Eggs (cosmetic) | Fossil (rare) | Sturdy furniture, lamps (amber), garden fences, dino beds |
 | **B. Mini-MOBA** | Crystal, Metal, Trophy Tokens | Banner patterns | Lights, glass blocks, metal furniture, trophy display decor |
 | **C. Fashion show** | Fabric, Ribbon, Glitter, Fans (score-based) | Outfit unlocks | Curtains, rugs, beds, wallpaper, wardrobe; new outfit pieces |
@@ -113,8 +113,8 @@ Scope, deliberately small: **1 lane, 3v3** (player + up to 2 tamed dinos as alli
 A rhythm game you play with your feet: an obby-style voxel course where you run and bunny-hop, and coloured bricks light up on the beat like notes on a note highway. Original design (mood refs: rhythm games with lanes, obby/bhop courses); no names, UI, songs or charts from any existing game.
 
 **Two modes:**
-- **Live mode ("Play to my music")** — the headline mode. Beat Hop listens to whatever is already playing on the player's PC (any app) through **WASAPI loopback** of an output device, tracks the beat live, and builds the course just ahead of the player. Details below.
-- **Songs mode** (kept) — a few built-in songs with hand-tuned charts, tighter timing and best-score tables. It doubles as the no-setup option, the silence fallback, and the test harness for the shared movement/judge/track code. Built first.
+- **Live mode ("Play to my music")** - the headline mode. Beat Hop listens to whatever is already playing on the player's PC (any app) through **WASAPI loopback** of an output device, tracks the beat live, and builds the course just ahead of the player. Details below.
+- **Songs mode** (kept) - a few built-in songs with hand-tuned charts, tighter timing and best-score tables. It doubles as the no-setup option, the silence fallback, and the test harness for the shared movement/judge/track code. Built first.
 
 **Core loop:** pick a song + difficulty at the hub Beat gate → the course loads with the song → run and **bunny-hop** along a voxel track 4–5 lanes wide → ahead of you, bricks **glow up in their lane colour on the beat** (they start dim about 2 beats early, flash fully on their beat) → **land on the lit brick in time** → judged **Perfect / Good / Miss** → hits build a **combo** (multiplier ×1 → ×4) → **misses**: the brick crumbles and you **drop** to a catch-floor/checkpoint (Normal/Hard) or just **lose speed** (Easy and "Cozy" no-fail mode) → song ends → score, grade (S/A/B/C), best combo → rewards. Runs are one song, **2–4 min**.
 - **Lanes:** 4 lanes on Easy/Normal, 5 on Hard. Each lane has a colour *and* a glyph (dot, bar, ring, diamond, star) so it reads for colour-blind players.
@@ -305,13 +305,13 @@ Keep everything clean so the project can be shown, devlogged or released.
 8. Should there be a shop/currency, or only crafting?
 9. Should gardens grow in **real time** while the game is closed (like a pet) or only while playing?
 10. **Easter eggs:** a message on the title screen, hidden extras, a photo frame furniture item?
-11. How competitive should the MOBA feel — easy and cute, or a real challenge? Is the MOBA a must-have or a nice-to-have?
+11. How competitive should the MOBA feel - easy and cute, or a real challenge? Is the MOBA a must-have or a nice-to-have?
 12. ~~**Beat Hop music:** what music, and should we make a track?~~ **Resolved (Oct 29):** Beat Hop's live mode syncs to whatever the player is playing on their PC via output-device loopback, so licensing isn't an issue and the player's own music is the soundtrack. Built-in Songs mode keeps a few licence-free tracks. (Keyboard vs controller for hopping folds into Q3.)
 
 ---
 
 ## 10. Next steps
-1. Answer Q1–Q4 (style, dinos, platform, deadline) — blocks art and the schedule.
+1. Answer Q1–Q4 (style, dinos, platform, deadline) - blocks art and the schedule.
 2. M0 (new repo, toolchain fix, smoke test).
 3. Art: style sheet + shared character skeleton + 1 test dino once Q1/Q2 are answered.
 4. Pick an AI 3D generator (paid plan) only if the artist needs base meshes; save terms PDFs and start the ledger.

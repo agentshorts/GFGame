@@ -467,7 +467,7 @@ If the arena gets cut (PLAN.md fallback: tower defence with dinos), the tower, c
 | `SM_Block_Beat_Hold` | uses lane colour via `_M` R | chevrons along its length | **1 × 3 blocks** (300 cm long, along X); Unreal scales to 2–4 |
 | `SM_Block_Beat_Pad` | uses lane colour via `_M` R | up-arrow | launch pad, top 4 mv lower with a spring rim |
 | `SM_Block_Beat_Switch` | uses lane colour via `_M` R | side arrow (mirrored in UE for left/right) | lane-change cue |
-| `SM_Block_Beat_Crumble_A/B/C` | none (rest colour) | — | **3 broken pieces** of one brick (each ≤ 50 cm), origin at the brick's bottom centre so Unreal can swap and drop them on a miss |
+| `SM_Block_Beat_Crumble_A/B/C` | none (rest colour) | - | **3 broken pieces** of one brick (each ≤ 50 cm), origin at the brick's bottom centre so Unreal can swap and drop them on a miss |
 
 Rules for beat bricks: top face = a **4 px bevel frame + the glyph** in `_E`; side faces glow only on a 2 px top band (so the lit lane reads from the run camera behind and above). The `_D` lane colour at rest uses the lane's mid shade; `_E` is pure greyscale (white = full glow) and Unreal tints it with the lane colour. Keep the five lanes distinguishable with glow off **and** in greyscale.
 

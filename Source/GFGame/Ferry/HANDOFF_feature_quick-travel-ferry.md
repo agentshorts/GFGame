@@ -22,5 +22,5 @@ The HUD draws the stand lines (fare, destinations, pass price, last result) whil
 
 `EditorContext | EngineFilter`.
 
-- `GFGame.Ferry.QuickTravel.Links` — one stand per safe zone, inside the 1-member disc, a route each way, pads inside the board disc and clear of drops, fare 3 basic blocks including Dirt, pass 12 Fizzberry, Rime spawn is not a stand, the ferry does not follow.
-- `GFGame.Ferry.QuickTravel.Trip` — a pad refuses a trip with no blocks, then burns 3 Dirt, flies, and drops at Verdant; the pass pad burns Fizzberry; the return is free; a destination-less trip from Rime still reaches Cinderwrights; parked birds do not move and still ignore damage.
+- `GFGame.Ferry.QuickTravel.Links` - one stand per safe zone, inside the 1-member disc, a route each way, pads inside the board disc and clear of drops, fare 3 basic blocks including Dirt, pass 12 Fizzberry, Rime spawn is not a stand, the ferry does not follow.
+- `GFGame.Ferry.QuickTravel.Trip` - a pad refuses a trip with no blocks, then burns 3 Dirt, flies, and drops at Verdant; the pass pad burns Fizzberry; the return is free; a destination-less trip from Rime still reaches Cinderwrights; parked birds do not move and still ignore damage.

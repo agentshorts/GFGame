@@ -46,11 +46,11 @@ The speed map is one assignment line. `+Key` lines do not parse as a `TMap`.
 
 Written, not run here (no Unreal build on this machine).
 
-- `GFGame.WildDino.Ring` — picker stays in `[MinRadius, Radius]`, including swapped and equal radii.
-- `GFGame.WildDino.SpawnTable` — the six rows, radii, cap, respawn, passive flag, and walk speeds parse from config.
-- `GFGame.WildDino.NearRime` — a game world spawns the director; at least one `AGFDino` is on the Rime ring; each spawn is on its anchor ring; Tusksaw has no diet row, stays Wild, and still picks a wander point. A second director with an unknown anchor uses `Location`.
-- `GFGame.WildDino.Wander` — disc points and the component's wander target stay inside `WanderRadius`. An attack target blocks a new pick.
-- `GFGame.WildDino.MissingDiet` — Raptor has a diet row; Tusksaw, Lanternmaw, and Scythepaw do not. Ticking them does not leave `Wild`, and Tusksaw still wanders.
+- `GFGame.WildDino.Ring` - picker stays in `[MinRadius, Radius]`, including swapped and equal radii.
+- `GFGame.WildDino.SpawnTable` - the six rows, radii, cap, respawn, passive flag, and walk speeds parse from config.
+- `GFGame.WildDino.NearRime` - a game world spawns the director; at least one `AGFDino` is on the Rime ring; each spawn is on its anchor ring; Tusksaw has no diet row, stays Wild, and still picks a wander point. A second director with an unknown anchor uses `Location`.
+- `GFGame.WildDino.Wander` - disc points and the component's wander target stay inside `WanderRadius`. An attack target blocks a new pick.
+- `GFGame.WildDino.MissingDiet` - Raptor has a diet row; Tusksaw, Lanternmaw, and Scythepaw do not. Ticking them does not leave `Wild`, and Tusksaw still wanders.
 
 Flags: `EditorContext | EngineFilter`.
 
