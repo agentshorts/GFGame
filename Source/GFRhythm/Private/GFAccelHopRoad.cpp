@@ -55,6 +55,11 @@ void AGFAccelHopRoad::SetRoadExtent(FVector HalfExtent)
 	Bounds->SetBoxExtent(HalfExtent.ComponentMax(FVector(50.f)));
 }
 
+bool AGFAccelHopRoad::ContainsPoint(const FVector& Point) const
+{
+	return Bounds && BoxContains(Bounds->GetComponentTransform(), Bounds->GetUnscaledBoxExtent(), Point);
+}
+
 bool AGFAccelHopRoad::BoxContains(const FTransform& BoxTransform, const FVector& HalfExtent, const FVector& Point)
 {
 	FTransform NoScale = BoxTransform;

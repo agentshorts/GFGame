@@ -225,3 +225,27 @@ float FGFAccelHopLitRules::LitPulse(double NowBeat, float PulseBeats)
 	const float Left = 1.f - Phase / Width;
 	return Left * Left;
 }
+
+float FGFAccelHopLitRules::LitMarkerHalfCm(float TileHalfX, float TileHalfY, float Pulse, const FGFAccelHopLitTuning& Tuning)
+{
+	const float Smaller = FMath::Min(FMath::Abs(TileHalfX), FMath::Abs(TileHalfY));
+	const float Base = FMath::Max(Smaller * FMath::Max(0.f, Tuning.MarkerTileFill), FMath::Max(0.f, Tuning.MarkerMinHalfCm));
+	return Base * (1.f + FMath::Max(0.f, Tuning.MarkerPulseGrow) * FMath::Clamp(Pulse, 0.f, 1.f));
+}
+
+void FGFAccelHopLitRules::LitMarkerCorners(const FVector& Center, const FVector& Forward, float HalfCm, FVector OutCorners[4])
+{
+	FVector Ahead(Forward.X, Forward.Y, 0.0);
+	Ahead = Ahead.GetSafeNormal();
+	if (Ahead.IsNearlyZero())
+	{
+		Ahead = FVector(1.0, 0.0, 0.0);
+	}
+	// Right of Ahead on the ground. UE looks down +X with +Y to the right.
+	const FVector Right(-Ahead.Y, Ahead.X, 0.0);
+	const double Half = static_cast<double>(FMath::Max(0.f, HalfCm));
+	OutCorners[0] = Center + Ahead * Half;
+	OutCorners[1] = Center + Right * Half;
+	OutCorners[2] = Center - Ahead * Half;
+	OutCorners[3] = Center - Right * Half;
+}

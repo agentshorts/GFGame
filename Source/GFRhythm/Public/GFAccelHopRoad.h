@@ -51,6 +51,9 @@ public:
 
 	UBoxComponent* GetBounds() const { return Bounds; }
 
+	/** #347: is a world point inside this road's box (the air steer scope)? */
+	bool ContainsPoint(const FVector& Point) const;
+
 	/** Pure: is P inside a box with this transform and half extent (scale ignored)? */
 	static bool BoxContains(const FTransform& BoxTransform, const FVector& HalfExtent, const FVector& Point);
 
