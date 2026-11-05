@@ -199,6 +199,8 @@ private:
 	void DrawCompass();
 	void DrawStaminaArc();
 	void DrawLandingMarker();
+	/** v2 (#342): a pulsing diamond over the road's lit target tile, so it reads even at a grazing angle. */
+	void DrawAccelHopLitMarker();
 	void DrawZoneLabel();
 	void DrawChat();
 	void DrawToasts();

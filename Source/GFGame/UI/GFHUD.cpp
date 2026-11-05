@@ -8,6 +8,8 @@
 #include "GFCrosshairPanel.h"
 #include "Aim/GFAimSim.h"
 #include "GFBeatHopCourse.h"
+#include "GFAccelHopRoad.h"
+#include "GFAccelHopTile.h"
 #include "GFMineSite.h"
 #include "GFRunwaySite.h"
 #include "GFRunwayStage.h"
@@ -285,6 +287,7 @@ void AGFHUD::DrawHUD()
 	DrawCompass();
 	DrawStaminaArc();
 	DrawLandingMarker();
+	DrawAccelHopLitMarker();
 	DrawZoneLabel();
 	DrawChat();
 	DrawToasts();
@@ -950,11 +953,13 @@ void AGFHUD::DrawLandingMarker()
 	{
 		return;
 	}
-	FVector WorldPoint = FVector::ZeroVector;
-	if (!Move->GetLandingMarker(WorldPoint))
+	// Recomputed every frame from the live flight (#342), so the ring follows steering all the way down.
+	const FGFLandingTarget Target = Move->GetLandingTarget();
+	if (!Target.bValid)
 	{
 		return;
 	}
+	const FVector WorldPoint = Target.Point;
 	APlayerController* Controller = GetOwningPlayerController();
 	FVector2D Screen = FVector2D::ZeroVector;
 	if (!Controller || !Controller->ProjectWorldLocationToScreen(WorldPoint, Screen, true))
@@ -966,21 +971,53 @@ void AGFHUD::DrawLandingMarker()
 		return;
 	}
 	const float Distance = static_cast<float>(FVector::Dist(Character->GetActorLocation(), WorldPoint));
-	const float Radius = FMath::Clamp(900.f / FMath::Max(Distance, 150.f) * 18.f, 6.f, 28.f);
-	const FLinearColor Color(0.45f, 0.92f, 0.55f, 0.9f);
+	float Radius = FMath::Clamp(900.f / FMath::Max(Distance, 150.f) * 18.f, 6.f, 28.f);
+	// Green for floor, gold and a second ring when the flight comes down on the lit target tile.
+	const FLinearColor Color = Target.bLit ? FLinearColor(1.f, 0.82f, 0.25f, 0.95f) : FLinearColor(0.45f, 0.92f, 0.55f, 0.9f);
 	const int32 Steps = 16;
 	const float Turn = 6.2831855f;
-	float PreviousX = Screen.X + Radius;
-	float PreviousY = Screen.Y;
-	for (int32 Index = 1; Index <= Steps; ++Index)
+	const int32 Rings = Target.bLit ? 2 : 1;
+	for (int32 Ring = 0; Ring < Rings; ++Ring)
 	{
-		const float Angle = Turn * static_cast<float>(Index) / static_cast<float>(Steps);
-		const float X = Screen.X + Radius * FMath::Cos(Angle);
-		const float Y = Screen.Y + Radius * FMath::Sin(Angle);
-		DrawLine(PreviousX, PreviousY, X, Y, Color, 2.f);
-		PreviousX = X;
-		PreviousY = Y;
+		float PreviousX = Screen.X + Radius;
+		float PreviousY = Screen.Y;
+		for (int32 Index = 1; Index <= Steps; ++Index)
+		{
+			const float Angle = Turn * static_cast<float>(Index) / static_cast<float>(Steps);
+			const float X = Screen.X + Radius * FMath::Cos(Angle);
+			const float Y = Screen.Y + Radius * FMath::Sin(Angle);
+			DrawLine(PreviousX, PreviousY, X, Y, Color, 2.f);
+			PreviousX = X;
+			PreviousY = Y;
+		}
+		Radius *= 1.45f;
 	}
+}
+
+void AGFHUD::DrawAccelHopLitMarker()
+{
+	const AGFAccelHopRoad* Road = AGFAccelHopRoad::FindLocalRoad(GetWorld());
+	const AGFAccelHopTile* Tile = Road ? Road->GetLitTile() : nullptr;
+	APlayerController* Controller = GetOwningPlayerController();
+	if (!Tile || !Controller || !Canvas)
+	{
+		return;
+	}
+	FVector2D Screen = FVector2D::ZeroVector;
+	if (!Controller->ProjectWorldLocationToScreen(Tile->GetActorLocation() + FVector(0.0, 0.0, 60.0), Screen, true))
+	{
+		return;
+	}
+	if (Screen.X < 0.f || Screen.Y < 0.f || Screen.X > Canvas->ClipX || Screen.Y > Canvas->ClipY)
+	{
+		return;
+	}
+	const float Size = 10.f + 8.f * Tile->GetLitPulse();
+	const FLinearColor Gold(1.f, 0.82f, 0.25f, 0.95f);
+	DrawLine(Screen.X, Screen.Y - Size, Screen.X + Size, Screen.Y, Gold, 2.f);
+	DrawLine(Screen.X + Size, Screen.Y, Screen.X, Screen.Y + Size, Gold, 2.f);
+	DrawLine(Screen.X, Screen.Y + Size, Screen.X - Size, Screen.Y, Gold, 2.f);
+	DrawLine(Screen.X - Size, Screen.Y, Screen.X, Screen.Y - Size, Gold, 2.f);
 }
 
 void AGFHUD::DrawZoneLabel()
