@@ -114,6 +114,7 @@ void UGFQuestSubsystem::OnModePlayerReady(AGFPlayerState* PS)
 	}
 	RefreshSide(PS->PlayerKey);
 	PushPlayer(PS);
+	AskHireIfWaiting(PS->PlayerKey);
 }
 
 void UGFQuestSubsystem::CaptureModeState(TArray<uint8>& Out) const
@@ -472,7 +473,43 @@ FGFSideQuestApplyResult UGFQuestSubsystem::ApplySideEvent(const FGFSideQuestEven
 	{
 		PushPlayer(PS);
 	}
+	// Ask for a hire only on the event that moved onto the hire step, not on every later event while it waits.
+	const FGFSideQuestProgress* WasActive = Before.Active();
+	const FGFSideQuestProgress* NowActive = Line.Board.Active();
+	const bool bMoved = NowActive && (!WasActive || WasActive->LineId != NowActive->LineId || WasActive->StepId != NowActive->StepId);
+	if (bMoved)
+	{
+		AskHireIfWaiting(Event.PlayerKey);
+	}
 	return Result;
+}
+
+bool UGFQuestSubsystem::WaitsOnHire(const FString& PlayerKey, FName& OutLineId, FName& OutTownId) const
+{
+	const FGFSideQuestLine* Line = SideLines.Find(PlayerKey);
+	const FGFSideQuestStepRule* Step = Line ? Line->ActiveStep() : nullptr;
+	if (!Step || Step->AdvanceKind != EGFSideQuestEventKind::HireSpawned)
+	{
+		return false;
+	}
+	const FGFSideQuestLineRule* Rule = SideCatalog.FindLine(Line->Board.ActiveLineId);
+	if (!Rule)
+	{
+		return false;
+	}
+	OutLineId = Rule->LineId;
+	OutTownId = Rule->TownId;
+	return true;
+}
+
+void UGFQuestSubsystem::AskHireIfWaiting(const FString& PlayerKey)
+{
+	FName LineId;
+	FName TownId;
+	if (!PlayerKey.IsEmpty() && WaitsOnHire(PlayerKey, LineId, TownId))
+	{
+		OnSideHireAsked.Broadcast(PlayerKey, LineId, TownId);
+	}
 }
 
 void UGFQuestSubsystem::PostSide(EGFElderKind Kind, const FString& PlayerKey, FName LineId) const

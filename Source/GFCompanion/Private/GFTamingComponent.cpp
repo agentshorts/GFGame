@@ -191,6 +191,23 @@ bool UGFTamingComponent::ServerCalm(UObject* TamerObj)
 	return true;
 }
 
+bool UGFTamingComponent::ServerEscortCalm(float Seconds)
+{
+	const AActor* Owner = GetOwner();
+	const UWorld* World = GetWorld();
+	if (!Owner || !Owner->HasAuthority() || !World || Seconds <= 0.f)
+	{
+		return false;
+	}
+	if (!Machine.ApplyCalm(World->GetTimeSeconds(), Seconds))
+	{
+		return false;
+	}
+	CalmedUntil = Machine.CalmUntil;
+	SyncReplicated();
+	return true;
+}
+
 void UGFTamingComponent::ServerForceHostile(const FString& Key)
 {
 	const UWorld* World = GetWorld();

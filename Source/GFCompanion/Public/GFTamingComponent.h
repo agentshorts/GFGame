@@ -62,6 +62,12 @@ public:
 	EGFForceHostile ServerHire(const FString& Key);
 	/** Server: a hired dino drops the chase and returns to Wild. A tamed dino stays tamed. */
 	void ServerReleaseHire();
+	/**
+	 * Server: keep this dino calm for Seconds with no tamer in reach and no item spent (a quest escort hire).
+	 * Same calm as Calming Mist: nobody counts as a threat, so it never turns on the player it walks with.
+	 * False if tamed or fled.
+	 */
+	bool ServerEscortCalm(float Seconds);
 	/** Server: spawn-hostile option. Hostile with no target until a threat comes in range. */
 	void ServerRouse();
 	/** True while an elder hire holds this dino. */

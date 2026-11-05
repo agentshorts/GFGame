@@ -255,14 +255,14 @@ namespace GFTheftPrivate
 		}
 	}
 
-	AGFDino* SpawnHired(UWorld* World, const FVector& Center, FName Species, float Range)
+	AGFDino* SpawnHiredOnRing(UWorld* World, const FVector& Center, FName Species, float MinCm, float MaxCm)
 	{
 		if (!World || Species.IsNone())
 		{
 			return nullptr;
 		}
 		FRandomStream Rng(FMath::Rand());
-		FVector Point = AGFWildDinoDirector::PickRingPoint(Center, FMath::Min(600.f, Range), Range, Rng);
+		FVector Point = AGFWildDinoDirector::PickRingPoint(Center, FMath::Min(MinCm, MaxCm), MaxCm, Rng);
 		Point.Z = Center.Z + 100.f;
 		const float Yaw = (Point - Center).GetSafeNormal2D().Rotation().Yaw;
 		FActorSpawnParameters Params;
@@ -279,6 +279,11 @@ namespace GFTheftPrivate
 			Dino->Wander->ApplyWalkSpeed();
 		}
 		return Dino;
+	}
+
+	AGFDino* SpawnHired(UWorld* World, const FVector& Center, FName Species, float Range)
+	{
+		return SpawnHiredOnRing(World, Center, Species, 600.f, Range);
 	}
 }
 
@@ -334,6 +339,16 @@ void AGFTheftDirector::Tick(float DeltaSeconds)
 FName AGFTheftDirector::TownAt(UWorld* World, const FVector& Location)
 {
 	return GFTheftPrivate::TownAt(World, Location);
+}
+
+AGFDino* AGFTheftDirector::SpawnHireBody(UWorld* World, const FVector& Center, FName Species, float MinCm, float MaxCm)
+{
+	return GFTheftPrivate::SpawnHiredOnRing(World, Center, Species, MinCm, MaxCm);
+}
+
+void AGFTheftDirector::LetGoHire(AGFDino* Dino, bool bSpawned, bool bWorldEnding)
+{
+	GFTheftPrivate::LetGo(Dino, bSpawned, bWorldEnding);
 }
 
 void AGFTheftDirector::HandleCrystal(UWorld* World, const FString& NodeKey, FVector Location, const TArray<FString>& ContributorKeys)
@@ -483,7 +498,8 @@ void AGFTheftDirector::CommitHire(int32 CaseIndex)
 	for (TActorIterator<AGFDino> It(World); It; ++It)
 	{
 		AGFDino* Dino = *It;
-		if (!Dino || !Dino->Taming || Dino->GetLife() != EGFDinoLife::Alive)
+		// A rental is somebody's ride or escort (a side quest hire walking with a player): never borrowed for a case.
+		if (!Dino || !Dino->Taming || Dino->GetLife() != EGFDinoLife::Alive || Dino->IsRental())
 		{
 			continue;
 		}

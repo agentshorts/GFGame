@@ -16,6 +16,8 @@ class AGFPlayerState;
 enum class EGFElderKind : uint8;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FGFOnQuestLeader, const FString& /*PlayerKey*/, FName /*FactionId*/);
+/** A side line reached a HireSpawned step for this player (UGFSideQuestEscorts spawns the hire). */
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FGFOnSideHireAsked, const FString& /*PlayerKey*/, FName /*LineId*/, FName /*TownId*/);
 
 UCLASS()
 class GFGAME_API UGFQuestSubsystem : public UWorldSubsystem, public IGFModeHandler
@@ -54,11 +56,20 @@ public:
 	 */
 	void SetSideCatalogForTests(const FGFSideQuestCatalog& InCatalog);
 
+	/** True when Key's Active side step advances on HireSpawned. Out gets the line and its town. */
+	bool WaitsOnHire(const FString& PlayerKey, FName& OutLineId, FName& OutTownId) const;
+
 	/**
 	 * Rank Leader was recorded for this player.
 	 * ServerSetFactionLeader has already run for this win. A player who is not a Champion of the faction does not take the seat.
 	 */
 	FGFOnQuestLeader OnQuestLeader;
+
+	/**
+	 * Server. Fires when an applied side event moves a player onto a HireSpawned step, and again when that player
+	 * comes back (OnModePlayerReady) still waiting on one, so a reload mid-line does not strand it.
+	 */
+	FGFOnSideHireAsked OnSideHireAsked;
 
 private:
 	void OnQuestEvent(UWorld* World, const FGFQuestEvent& Event);
@@ -68,6 +79,8 @@ private:
 	/** Re-derives Locked / Available after the errand standing moved. */
 	void RefreshSide(const FString& PlayerKey);
 	void PostSide(EGFElderKind Kind, const FString& PlayerKey, FName LineId) const;
+	/** Fires OnSideHireAsked when Key waits on a hire. */
+	void AskHireIfWaiting(const FString& PlayerKey);
 	void OnFactionLeaderSet(FName FactionId, const FString& PlayerKey, const FString& PreviousKey, FName Reason);
 	FGFQuestLine& LineFor(const FString& PlayerKey);
 	void PushPlayer(AGFPlayerState* PS) const;

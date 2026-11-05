@@ -25,6 +25,14 @@ public:
 	/** The town a world point belongs to (its zone, else the nearest camp in reach). None in the wild. Read only. */
 	static FName TownAt(UWorld* World, const FVector& Location);
 
+	/**
+	 * The hire spawn this director uses for its own cases: one AGFDino of Species on the ring MinCm..MaxCm around
+	 * Center, homed where it lands. Null when the world or species is missing. Starts no case and touches no heat.
+	 */
+	static AGFDino* SpawnHireBody(UWorld* World, const FVector& Center, FName Species, float MinCm, float MaxCm);
+	/** Lets one hire go the way a case does (FGFTheftRules::ReleaseFor): despawn a hire spawn, release a borrowed dino, keep a tame. */
+	static void LetGoHire(AGFDino* Dino, bool bSpawned, bool bWorldEnding = false);
+
 private:
 	void HandleCrystal(UWorld* World, const FString& NodeKey, FVector Location, const TArray<FString>& ContributorKeys);
 	void HandleHireAsk(AActor* Villager);
