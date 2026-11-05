@@ -62,6 +62,8 @@ public:
 protected:
 	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
 	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
+	/** A player with a home (AGFPlayerState::HasHome) re-picks a start on respawn, so ChoosePlayerStart can send them home. */
+	virtual bool ShouldSpawnAtStartSpot(AController* Player) override;
 	/** Spreads players out and lifts each one above the top solid block in its column, so a built-up hub never blocks a join. */
 	virtual APawn* SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayer, const FTransform& SpawnTransform) override;
 	/** Refuses banned players (by their net id) before they load in. */

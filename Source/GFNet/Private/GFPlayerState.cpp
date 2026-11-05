@@ -476,6 +476,16 @@ void AGFPlayerState::UnlockShardstone(FName StoneId)
 	MarkCharacterChanged();
 }
 
+void AGFPlayerState::SetHome(const FTransform& Home)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	bHasHome = true;
+	HomeTransform = Home;
+}
+
 void AGFPlayerState::NotifyLand(const FString& Notice)
 {
 	if (!HasAuthority() || bLoggedOut)

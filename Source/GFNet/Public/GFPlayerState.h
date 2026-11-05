@@ -230,6 +230,18 @@ public:
 	/** Server. Remembers a Shardstone on the character. */
 	void UnlockShardstone(FName StoneId);
 
+	/**
+	 * Server. Gives this player a home (issue 335 stub: the home-setting quest calls this later). Until a home is set,
+	 * the world map spawns the player at the rest area (FGFRestAreaSpawn). Not saved yet and not copied across travel.
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "GF|Home")
+	void SetHome(const FTransform& Home);
+	/** True once SetHome has run on the server for this player. */
+	UFUNCTION(BlueprintPure, Category = "GF|Home")
+	bool HasHome() const { return bHasHome; }
+	/** Where the player respawns once HasHome() (world map only). */
+	const FTransform& GetHomeTransform() const { return HomeTransform; }
+
 	/** Any mini-game mode request (arena, Depths, mine, lab, or "Player" settings). Returns the request id. */
 	UFUNCTION(BlueprintCallable, Category = "GF|Mode")
 	int32 RequestMode(FGFModeRequest Request);
@@ -402,4 +414,7 @@ protected:
 	FTimerHandle WriteBackTimer;
 	FGFCrosshairSettings StoredCrosshair;
 	FGFAimUserSettings StoredAimUser;
+	/** Server: issue 335 home stub (SetHome). */
+	bool bHasHome = false;
+	FTransform HomeTransform;
 };

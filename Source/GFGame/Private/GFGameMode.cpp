@@ -2,6 +2,7 @@
 #include "GFCharacter.h"
 #include "GFHUD.h"
 #include "GFFerrySpawn.h"
+#include "GFRestAreaSpawn.h"
 #include "GFPlayerController.h"
 #include "GFCraftingSubsystem.h"
 #include "GFVoxelWorld.h"
@@ -309,6 +310,16 @@ AGFVoxelWorld* AGFGameMode::EnsureVoxelWorld()
 	return Voxel;
 }
 
+bool AGFGameMode::ShouldSpawnAtStartSpot(AController* Player)
+{
+	const AGFPlayerState* PS = Player ? Player->GetPlayerState<AGFPlayerState>() : nullptr;
+	if (PS && PS->HasHome())
+	{
+		return false;
+	}
+	return Super::ShouldSpawnAtStartSpot(Player);
+}
+
 AActor* AGFGameMode::ChoosePlayerStart_Implementation(AController* Player)
 {
 	EnsureVoxelWorld();
@@ -348,6 +359,23 @@ AActor* AGFGameMode::ChoosePlayerStart_Implementation(AController* Player)
 		Row.Location = It->GetActorLocation();
 		Listed.Add(Row);
 		Starts.Add(*It);
+	}
+	// Issue 335: on the world map a player with no home starts at the rest area; with a home, at the home.
+	AGFPlayerState* HomePS = Player ? Player->GetPlayerState<AGFPlayerState>() : nullptr;
+	const FGFRestAreaSpawnChoice Choice = FGFRestAreaSpawn::Choose(Listed, HomePS && HomePS->HasHome(), DefaultSpawnAnchor);
+	if (Choice.Source == EGFSpawnSource::Home)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		if (APlayerStart* Home = GetWorld()->SpawnActor<APlayerStart>(APlayerStart::StaticClass(), HomePS->GetHomeTransform(), Params))
+		{
+			Home->SetLifeSpan(FGFRestAreaSpawn::HomeStartLifeSeconds);
+			return Home;
+		}
+	}
+	else if (Choice.Source == EGFSpawnSource::RestArea)
+	{
+		return Starts[Choice.Index];
 	}
 	const int32 Index = FGFPlayerStartRules::ChooseStartIndex(Listed, DefaultSpawnAnchor);
 	if (Index != INDEX_NONE)
