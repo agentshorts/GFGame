@@ -6,6 +6,12 @@
 #include "Misc/AutomationTest.h"
 #include "GFCharacter.h"
 #include "GFCharacterMovementComponent.h"
+#include "GFStairCollision.h"
+#include "Dom/JsonObject.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -573,6 +579,186 @@ bool FGFStairKitCourtTest::RunTest(const FString&)
 				GoalAlong, *Dir.ToCompactString(), *Describe(Result)));
 		}
 		Pawn->Destroy();
+	}
+	return true;
+}
+
+namespace GFStairKitTestsDetail
+{
+	constexpr const TCHAR* ControlCubePath = TEXT("/Engine/BasicShapes/Cube.Cube");
+	constexpr float TownSpacingCm = 4000.f;
+
+	struct FTownFix
+	{
+		FString Name;
+		FString Path;
+	};
+
+	/** The #341 fix list, shared with Tools/fix_stair_collision_341.py. */
+	bool LoadTownFixes(TArray<FTownFix>& Out, FString& OutError)
+	{
+		const FString File = FPaths::Combine(FPaths::ProjectDir(), TEXT("Data/Town/stair_collision_341_v1.json"));
+		FString Text;
+		if (!FFileHelper::LoadFileToString(Text, *File))
+		{
+			OutError = FString::Printf(TEXT("could not read %s"), *File);
+			return false;
+		}
+		TSharedPtr<FJsonObject> Root;
+		if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) || !Root.IsValid())
+		{
+			OutError = FString::Printf(TEXT("%s is not json"), *File);
+			return false;
+		}
+		const TArray<TSharedPtr<FJsonValue>>* Fixes = nullptr;
+		if (!Root->TryGetArrayField(TEXT("fix"), Fixes) || !Fixes)
+		{
+			OutError = FString::Printf(TEXT("%s has no fix list"), *File);
+			return false;
+		}
+		for (const TSharedPtr<FJsonValue>& Value : *Fixes)
+		{
+			const TSharedPtr<FJsonObject>* Entry = nullptr;
+			if (Value.IsValid() && Value->TryGetObject(Entry) && Entry && Entry->IsValid())
+			{
+				FTownFix Fix;
+				(*Entry)->TryGetStringField(TEXT("name"), Fix.Name);
+				(*Entry)->TryGetStringField(TEXT("path"), Fix.Path);
+				if (!Fix.Name.IsEmpty() && !Fix.Path.IsEmpty())
+				{
+					Out.Add(Fix);
+				}
+			}
+		}
+		return Out.Num() > 0;
+	}
+
+	AStaticMeshActor* SpawnMesh(UWorld* World, UStaticMesh* Mesh, const FVector& At)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FTransform(At), Params);
+		if (!Actor)
+		{
+			return nullptr;
+		}
+		Actor->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+		Actor->GetStaticMeshComponent()->SetStaticMesh(Mesh);
+		Actor->GetStaticMeshComponent()->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+		return Actor;
+	}
+
+	FString HeightsOf(const TArray<float>& Heights)
+	{
+		TArray<float> Unique;
+		for (const float Height : Heights)
+		{
+			Unique.AddUnique(FMath::RoundToFloat(Height * 10.f) / 10.f);
+		}
+		Unique.Sort();
+		TArray<FString> Parts;
+		for (int32 Index = 0; Index < Unique.Num() && Index < 8; ++Index)
+		{
+			Parts.Add(FString::Printf(TEXT("%.1f"), Unique[Index]));
+		}
+		return FString::Join(Parts, TEXT(", "));
+	}
+}
+
+/**
+ * #341: the town meshes on the fix list must not hide a tread inside their collision. Fails until
+ * Tools/fix_stair_collision_341.py (GFSTAIR_MODE=apply) has switched them to complex as simple; the failure lists the
+ * buried tread heights, which is also the proof that the probe sees the old hull. An engine cube is the clean control.
+ * Then walks the Board Hall from its +X front (Force Front X) and reports what stopped the pawn.
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFStairKitTownCollisionTest, "GFGame.Movement.StairKit.TownCollision", GFStairKitTestsDetail::Flags)
+bool FGFStairKitTownCollisionTest::RunTest(const FString&)
+{
+	using namespace GFStairKitTestsDetail;
+	if (!TestNotNull(TEXT("Engine"), GEngine))
+	{
+		return false;
+	}
+	TArray<FTownFix> Fixes;
+	FString Error;
+	if (!TestTrue(*FString::Printf(TEXT("Read the #341 fix list (%s)"), *Error), LoadTownFixes(Fixes, Error)))
+	{
+		return false;
+	}
+	UWorld* World = MakeWorld(TEXT("GFStairKitTown"));
+	FWorldScope Scope(World);
+	if (!TestNotNull(TEXT("World"), World))
+	{
+		return false;
+	}
+	const float MaxStep = GetDefault<AGFCharacter>()->PlayerMaxStepHeight;
+	const float Reach = (Fixes.Num() + 1) * TownSpacingCm;
+	SpawnBox(World, FVector(-TownSpacingCm, -TownSpacingCm, -20.f), FVector(Reach, TownSpacingCm, 0.f), TEXT("TownGround"));
+
+	// Control: a cube's box collision is its render mesh, so its top face is not buried.
+	if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, ControlCubePath, nullptr, LOAD_NoWarn))
+	{
+		AStaticMeshActor* Control = SpawnMesh(World, Cube, FVector(0.f, 0.f, 50.f));
+		TArray<FVector> Points;
+		TArray<float> Heights;
+		const int32 Buried = Control ? UGFStairCollisionLibrary::FindBuriedTreads(Control->GetStaticMeshComponent(), MaxStep, Points, Heights) : -1;
+		TestEqual(TEXT("Control cube has no buried tread (-1 means no CPU triangles or physics)"), Buried, 0);
+	}
+	else
+	{
+		AddWarning(FString::Printf(TEXT("%s did not load, so the clean control was not run"), ControlCubePath));
+	}
+
+	AStaticMeshActor* BoardHall = nullptr;
+	for (int32 Index = 0; Index < Fixes.Num(); ++Index)
+	{
+		const FTownFix& Fix = Fixes[Index];
+		const FString ObjectPath = Fix.Path + TEXT(".") + Fix.Name;
+		UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *ObjectPath, nullptr, LOAD_NoWarn);
+		if (!Mesh)
+		{
+			AddWarning(FString::Printf(TEXT("%s did not load, so its collision was not checked"), *ObjectPath));
+			continue;
+		}
+		AStaticMeshActor* Actor = SpawnMesh(World, Mesh, FVector((Index + 1) * TownSpacingCm, 0.f, 0.f));
+		if (!TestNotNull(*FString::Printf(TEXT("%s actor"), *Fix.Name), Actor))
+		{
+			continue;
+		}
+		TArray<FVector> Points;
+		TArray<float> Heights;
+		const int32 Buried = UGFStairCollisionLibrary::FindBuriedTreads(Actor->GetStaticMeshComponent(), MaxStep, Points, Heights);
+		AddInfo(FString::Printf(TEXT("#341 evidence: %s: %d buried tread samples at %s cm; %s"),
+			*Fix.Name, Buried, *HeightsOf(Heights), *UGFStairCollisionLibrary::DescribeSimpleCollision(Mesh)));
+		TestTrue(*FString::Printf(TEXT("%s uses its render mesh as collision (run Tools/fix_stair_collision_341.py with GFSTAIR_MODE=apply)"), *Fix.Name),
+			UGFStairCollisionLibrary::UsesComplexAsSimple(Mesh));
+		TestEqual(*FString::Printf(TEXT("%s hides no tread inside its collision (heights %s cm)"), *Fix.Name, *HeightsOf(Heights)), Buried, 0);
+		if (Fix.Name.Contains(TEXT("BoardHall")))
+		{
+			BoardHall = Actor;
+		}
+	}
+
+	// Walk at the Board Hall front. Reported, not asserted: the climb depends on the art, the buried check above is the gate.
+	if (BoardHall)
+	{
+		const FBox Bounds = BoardHall->GetStaticMeshComponent()->Bounds.GetBox();
+		const FVector Start(Bounds.Max.X + ApproachCm, Bounds.GetCenter().Y, 0.f);
+		const FVector Dir = -FVector::ForwardVector;
+		AGFCharacter* Pawn = SpawnPlayer(World, Start, Dir.Rotation());
+		UGFCharacterMovementComponent* Move = Pawn ? Cast<UGFCharacterMovementComponent>(Pawn->GetCharacterMovement()) : nullptr;
+		if (TestNotNull(TEXT("Board Hall player"), Move))
+		{
+			const FClimb Result = Climb(Pawn, Start, Dir, ApproachCm + Bounds.GetSize().X * 0.5f, false);
+			const FGFWalkRefusal& Line = Move->GetLastWalkRefusal();
+			AddInfo(FString::Printf(TEXT("#341 evidence: Board Hall front walk: %s; last StairRefused: %s, face top %.1f cm, component %s, at %s"),
+				*Describe(Result), *Line.Reason, Line.FaceTopCm, *Line.Component, *Line.ImpactPoint.ToCompactString()));
+			if (!Result.bReached)
+			{
+				TestTrue(TEXT("A stalled walk at the Board Hall wrote a StairRefused line"), Result.Refusals > 0 && !Line.Reason.IsEmpty());
+			}
+			Pawn->Destroy();
+		}
 	}
 	return true;
 }
