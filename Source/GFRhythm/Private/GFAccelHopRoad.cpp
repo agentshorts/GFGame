@@ -3,6 +3,8 @@
 #include "GFAccelHopTile.h"
 #include "GFBeatClockSubsystem.h"
 #include "GFBuiltInSongs.h"
+#include "GFHopMusicSubsystem.h"
+#include "GFLiveAudio.h"
 #include "GFLog.h"
 #include "Components/AudioComponent.h"
 #include "Components/BoxComponent.h"
@@ -21,7 +23,10 @@
 #include "Kismet/KismetMaterialLibrary.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialParameterCollection.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Sound/SoundBase.h"
+#include "Sound/SoundWaveProcedural.h"
 
 AGFAccelHopRoad::AGFAccelHopRoad()
 {
@@ -425,7 +430,17 @@ void AGFAccelHopRoad::Tick(float DeltaSeconds)
 		StopRoadMusic();
 	}
 
-	if (bOwnsClock && Beat && Beat->GetBeatSource() == EGFBeatSource::Song && SongSeconds > 0.f && Beat->GetSongTimeSec() >= SongSeconds)
+	if (bOwnsClock && IsPlayingLocalTrack() && GetLocalTrackPosition() >= LocalDurationSec)
+	{
+		// A local track ended: stopping notes it as played to the end, so the next start moves on through the playlist
+		// (Repeat One plays it again).
+		StopRoadMusic();
+		if (bLocalInside)
+		{
+			StartRoadMusic();
+		}
+	}
+	else if (bOwnsClock && Beat && Beat->GetBeatSource() == EGFBeatSource::Song && SongSeconds > 0.f && Beat->GetSongTimeSec() >= SongSeconds)
 	{
 		// The song ended: start it again from beat 0 so the clock and the audio stay together.
 		StopRoadMusic();
@@ -456,6 +471,11 @@ void AGFAccelHopRoad::StartRoadMusic()
 		SongSeconds = 0.f;
 		return;
 	}
+	if (StartLocalTrack(Beat, GetMusicDirector().ChooseOnEnter()))
+	{
+		return;
+	}
+	// No local track (empty or missing folder, everything excluded, or the file would not load): the committed song.
 	const FName Song = FGFBeatHopMusic::PickSong(EGFBeatHopMode::Songs, SongId, false, false);
 	if (!Beat->StartSong(Song, SongDifficulty))
 	{
@@ -482,8 +502,105 @@ void AGFAccelHopRoad::StartRoadMusic()
 	}
 }
 
+FGFHopMusicDirector& AGFAccelHopRoad::GetMusicDirector()
+{
+	if (FGFHopMusicDirector* Shared = UGFHopMusicSubsystem::FindDirector(this))
+	{
+		return *Shared;
+	}
+	if (!OwnDirector)
+	{
+		OwnDirector = MakeUnique<FGFHopMusicDirector>();
+	}
+	return *OwnDirector;
+}
+
+float AGFAccelHopRoad::GetLocalTrackPosition() const
+{
+	return IsPlayingLocalTrack() ? LocalStartSec + static_cast<float>(FGFAudioClock::Now() - LocalStartedAt) : 0.f;
+}
+
+bool AGFAccelHopRoad::StartLocalTrack(UGFBeatClockSubsystem* Beat, const FGFHopChoice& Choice)
+{
+	FGFHopMusicDirector& Director = GetMusicDirector();
+	const FGFHopTrack* Track = Choice.IsLocal() ? Director.FindTrack(Choice.Key) : nullptr;
+	if (!Beat || !Track)
+	{
+		return false;
+	}
+	TArray<uint8> Bytes;
+	FGFWavPcm Pcm;
+	FString Error;
+	if (!FFileHelper::LoadFileToArray(Bytes, *Track->Path))
+	{
+		Error = TEXT("could not be read");
+	}
+	else if (!FGFHopMusicLibrary::DecodeWav(Bytes, Pcm, Error))
+	{
+		Error = FString::Printf(TEXT("did not decode (%s)"), *Error);
+	}
+	if (!Error.IsEmpty())
+	{
+		UE_LOG(LogGF, Warning, TEXT("Acceleration Hop music: %s %s; playing the built-in song"), *Track->Key, *Error);
+		return false;
+	}
+	Bytes.Empty();
+	const double Duration = Pcm.DurationSec();
+	const double StartAt = Choice.StartSec > 0.f && Choice.StartSec < Duration - 0.25 ? Choice.StartSec : 0.0;
+
+	// The clock runs on the track's own tempo, so hops, the tile pulse and the boost length all follow it.
+	FGFBeatmap Map;
+	Map.SongId = FName(*FString::Printf(TEXT("LocalHop_%s"), *FPaths::GetBaseFilename(Track->Key)));
+	Map.Title = Track->Title;
+	Map.Difficulty = SongDifficulty;
+	Map.Bpm = Track->Bpm;
+	Map.OffsetMs = Track->OffsetMs;
+	if (!Beat->StartBeatmapAt(Map, StartAt))
+	{
+		return false;
+	}
+	bOwnsClock = true;
+	SongSeconds = 0.f;
+	LocalKey = Track->Key;
+	LocalStartSec = static_cast<float>(StartAt);
+	LocalStartedAt = FGFAudioClock::Now();
+	LocalDurationSec = static_cast<float>(Duration);
+	Director.NoteStarted(LocalKey, LocalStartSec);
+	UE_LOG(LogGF, Log, TEXT("Acceleration Hop music: %s at %.1f BPM from %.1f s%s"), *Track->Key, Track->Bpm, StartAt, Choice.bResumed ? TEXT(" (resumed)") : TEXT(""));
+
+	USoundWaveProcedural* Wave = NewObject<USoundWaveProcedural>(this);
+	Wave->SetSampleRate(Pcm.SampleRate);
+	Wave->NumChannels = Pcm.Channels;
+	Wave->Duration = INDEFINITELY_LOOPING_DURATION;
+	Wave->SoundGroup = SOUNDGROUP_Music;
+	Wave->bLooping = false;
+	const int64 FirstSample = FMath::Clamp<int64>(static_cast<int64>(StartAt * Pcm.SampleRate), 0, Pcm.NumFrames()) * Pcm.Channels;
+	const int64 QueueBytes = (Pcm.Samples.Num() - FirstSample) * static_cast<int64>(sizeof(int16));
+	if (QueueBytes > 0 && QueueBytes <= MAX_int32)
+	{
+		Wave->QueueAudio(reinterpret_cast<const uint8*>(Pcm.Samples.GetData() + FirstSample), static_cast<int32>(QueueBytes));
+	}
+	// Null without an audio device (-nosound): the clock keeps the beat anyway.
+	Music = UGameplayStatics::CreateSound2D(this, Wave, MusicVolume, 1.f, 0.f, nullptr, false, false);
+	if (Music)
+	{
+		Music->Play(0.f);
+	}
+	return true;
+}
+
 void AGFAccelHopRoad::StopRoadMusic()
 {
+	if (IsPlayingLocalTrack())
+	{
+		// Remember where the player left it (Resume), clamped to the end when the track ran out.
+		const FString Key = LocalKey;
+		const float Position = FMath::Min(GetLocalTrackPosition(), LocalDurationSec);
+		LocalKey.Reset();
+		LocalStartSec = 0.f;
+		LocalDurationSec = 0.f;
+		GetMusicDirector().NoteStopped(Key, Position);
+	}
 	if (Music)
 	{
 		Music->Stop();

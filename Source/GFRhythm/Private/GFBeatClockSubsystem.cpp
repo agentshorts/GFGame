@@ -42,6 +42,17 @@ bool UGFBeatClockSubsystem::StartBeatmap(const FGFBeatmap& Map)
 	return true;
 }
 
+bool UGFBeatClockSubsystem::StartBeatmapAt(const FGFBeatmap& Map, double StartAtSec)
+{
+	if (!StartBeatmap(Map))
+	{
+		return false;
+	}
+	StartSeconds -= FMath::Max(0.0, StartAtSec);
+	LastBeatIndex = -1;
+	return true;
+}
+
 TUniquePtr<IGFLiveAudioSource> UGFBeatClockSubsystem::MakeSource() const
 {
 	if (SourceFactory)

@@ -46,6 +46,12 @@ public:
 	bool StartBeatmap(const FGFBeatmap& Map);
 
 	/**
+	 * Same, with the audio already StartAtSec into the song (Acceleration Hop's Resume, issue 343): the beat grid is
+	 * where it would be had the song played from 0. StartAtSec 0 is exactly StartBeatmap.
+	 */
+	bool StartBeatmapAt(const FGFBeatmap& Map, double StartAtSec);
+
+	/**
 	 * Starts live mode on the device from UGFRhythmSettings (system default when empty). No mic. Waits (up to
 	 * LiveStartTimeoutSeconds) until the device is capturing; false if it couldn't be opened.
 	 */

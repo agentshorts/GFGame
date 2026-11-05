@@ -1,15 +1,18 @@
 #pragma once
 // Acceleration Hop (issue 334): one per hop road. While a local player is on the road it runs the music and the beat
-// clock on that machine (Beat Hop's built-in fallback song by default), pulses the tiles' glow on the beat through
-// MPC_GF_HopBeat, and adds the PP_GF_HopOutline ink outline. Each machine hears its own music and judges its own
-// landings; the server only checks and applies the boost (UGFCharacterMovementComponent).
+// clock on that machine, pulses the tiles' glow on the beat through MPC_GF_HopBeat, and adds the PP_GF_HopOutline ink
+// outline. Each machine hears its own music and judges its own landings; the server only checks and applies the boost
+// (UGFCharacterMovementComponent).
 // v2 (issue 342): the road also owns one lit target tile. The server picks it on the beat, a few hops ahead of the lead
 // player on the road, and replicates it (LitState) so every player sees the same tile. Landing on it in time gives
 // LitBoostScale times the normal gain.
+// Music (issue 343): the player's own tracks from the local LicensedMusic/AccelHop folder through their Beat Hop
+// playlist (GFHopMusic.h), each on its own BPM; with none, Beat Hop's committed fallback song as before.
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GFRhythmJudge.h"
 #include "GFAccelHop.h"
+#include "GFHopMusic.h"
 #include "GFAccelHopRoad.generated.h"
 
 class UBoxComponent;
@@ -97,6 +100,23 @@ public:
 	/** The road the local player is on in World, or null (the HUD reads the lit tile through it). */
 	static AGFAccelHopRoad* FindLocalRoad(const UWorld* World);
 
+	/** True while a track from the local music folder is playing (false on the committed fallback song). */
+	UFUNCTION(BlueprintPure, Category = "GF|AccelHop")
+	bool IsPlayingLocalTrack() const { return !LocalKey.IsEmpty(); }
+
+	/** File name of the local track playing, or empty. */
+	const FString& GetLocalTrackKey() const { return LocalKey; }
+
+	/** Seconds into the local track's audio (0 when none plays). */
+	float GetLocalTrackPosition() const;
+
+	/** The session's music state (UGFHopMusicSubsystem), or this road's own when there is no game instance (tests). */
+	FGFHopMusicDirector& GetMusicDirector();
+
+	/** Start or stop the road music now, as entering or leaving the road does (tests and the console). */
+	void StartMusicNow() { StartRoadMusic(); }
+	void StopMusicNow() { StopRoadMusic(); }
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GF|AccelHop")
 	TObjectPtr<UBoxComponent> Bounds;
@@ -165,6 +185,13 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialParameterCollection> BeatCollection;
 
+	/** The local track playing (issue 343): its key, where it started, when, and its length. */
+	FString LocalKey;
+	float LocalStartSec = 0.f;
+	double LocalStartedAt = 0.0;
+	float LocalDurationSec = 0.f;
+	TUniquePtr<FGFHopMusicDirector> OwnDirector;
+
 	TWeakObjectPtr<const class UDirectionalLightComponent> SunLight;
 	double NextSunSearch = 0.0;
 
@@ -172,6 +199,8 @@ private:
 	bool FindLocalPawnLocation(FVector& Out) const;
 	int32 PlayerCount() const;
 	void StartRoadMusic();
+	/** Plays Choice from the local folder on the clock. False (nothing started) when it is not local or won't load. */
+	bool StartLocalTrack(UGFBeatClockSubsystem* Beat, const FGFHopChoice& Choice);
 	void StopRoadMusic();
 	void UpdateCollection(float Pulse);
 };
