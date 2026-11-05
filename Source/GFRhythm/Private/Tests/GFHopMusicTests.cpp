@@ -293,7 +293,16 @@ bool FGFHopMusicScanTest::RunTest(const FString&)
 	const FGFHopLibraryScan First = FGFHopMusicLibrary::ScanFirstUsable({ Empty.Path, Folder.Path });
 	TestEqual(TEXT("First folder with tracks wins"), First.Folder, Folder.Path);
 	TestEqual(TEXT("Nothing anywhere"), FGFHopMusicLibrary::ScanFirstUsable({ Empty.Path }).Tracks.Num(), 0);
-	TestTrue(TEXT("Candidates end in the music folder"), FGFHopMusicLibrary::CandidateFolders().Num() >= 3 && FGFHopMusicLibrary::CandidateFolders().Last().EndsWith(TEXT("LicensedMusic/AccelHop")));
+	// LaunchDir and ProjectDir collapse to one path when the editor is started from the project folder,
+	// so CandidateFolders AddUnique can yield 2 roots instead of 3. Assert against that unique set.
+	TArray<FString> UniqueRoots;
+	for (const FString& Root : { FPaths::LaunchDir(), FPaths::ProjectDir(), FPaths::ProjectContentDir() })
+	{
+		UniqueRoots.AddUnique(FPaths::ConvertRelativePathToFull(FPaths::Combine(Root, FGFHopMusicLibrary::SubFolder)));
+	}
+	const TArray<FString> Candidates = FGFHopMusicLibrary::CandidateFolders();
+	TestTrue(TEXT("Candidates keep every unique music folder root"), Candidates.Num() >= UniqueRoots.Num());
+	TestTrue(TEXT("Candidates end in the music folder"), Candidates.Num() > 0 && Candidates.Last().EndsWith(TEXT("LicensedMusic/AccelHop")));
 	return true;
 }
 
