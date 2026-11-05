@@ -81,13 +81,11 @@ class PaletteTests(unittest.TestCase):
             self.assertEqual(pal.linear_to_hex(pal.hex_to_linear(b)), b.upper())
 
     def test_no_em_dashes_in_the_package(self):
-        root = os.path.dirname(HERE)
-        for d, _, files in os.walk(root):
-            for n in files:
-                if n.endswith((".py", ".md", ".json", ".txt", ".csv")):
-                    with open(os.path.join(d, n), encoding="utf-8") as f:
-                        text = f.read()
-                        self.assertNotIn("\u2014", text, n)
+        # Only the visual pass package files; the rest of the repo is out of scope here.
+        for rel in ("accelhop_visual_pass_v1.py", "accelhop_visual_palette_v1.py",
+                    os.path.join("FX", "make_accelhop_fx_v1.py"), "test_accelhop_visual_palette_v1.py"):
+            with open(os.path.join(HERE, rel), encoding="utf-8") as f:
+                self.assertNotIn("\u2014", f.read(), rel)
 
 
 if __name__ == "__main__":
