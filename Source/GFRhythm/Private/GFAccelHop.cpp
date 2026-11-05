@@ -38,7 +38,7 @@ FGFAccelHopHit FGFAccelHopRules::JudgeLanding(double NowBeat, float Bpm, const F
 	return Hit;
 }
 
-float FGFAccelHopRules::GainFor(const FGFAccelHopHit& Hit, EGFHopTileKind Kind, const FGFAccelHopTuning& Tuning)
+float FGFAccelHopRules::GainFor(const FGFAccelHopHit& Hit, EGFHopTileKind Kind, const FGFAccelHopTuning& Tuning, bool bLit)
 {
 	float Gain = 0.f;
 	switch (Hit.Judgement)
@@ -55,10 +55,14 @@ float FGFAccelHopRules::GainFor(const FGFAccelHopHit& Hit, EGFHopTileKind Kind, 
 	{
 		Gain += Tuning.DownbeatBonus;
 	}
+	if (bLit)
+	{
+		Gain *= FMath::Max(1.f, Tuning.LitBoostScale);
+	}
 	return FMath::Max(0.f, Gain);
 }
 
-bool FGFAccelHopRules::ApplyHit(FGFAccelHopBoost& State, const FGFAccelHopHit& Hit, EGFHopTileKind Kind, double Now, float BeatSeconds, const FGFAccelHopTuning& Tuning)
+bool FGFAccelHopRules::ApplyHit(FGFAccelHopBoost& State, const FGFAccelHopHit& Hit, EGFHopTileKind Kind, double Now, float BeatSeconds, const FGFAccelHopTuning& Tuning, bool bLit)
 {
 	if (Hit.Judgement == EGFJudgement::None)
 	{
@@ -78,7 +82,7 @@ bool FGFAccelHopRules::ApplyHit(FGFAccelHopBoost& State, const FGFAccelHopHit& H
 		return false; // the same beat twice (a bounce on the tile edge): one boost per beat
 	}
 	const float Current = MultiplierAt(State, Now);
-	const float Gain = GainFor(Hit, Kind, Tuning);
+	const float Gain = GainFor(Hit, Kind, Tuning, bLit);
 	const float Cap = FMath::Max(1.f, Tuning.MaxMultiplier);
 	if (Kind == EGFHopTileKind::Landing)
 	{
@@ -132,4 +136,92 @@ float FGFAccelHopRules::ClampBeatSeconds(float BeatSeconds)
 bool FGFAccelHopRules::ServerAccepts(const FGFAccelHopBoost& State, double Now, const FGFAccelHopTuning& Tuning)
 {
 	return Now - State.LastHopTime >= Tuning.MinHopGapSeconds;
+}
+
+float FGFAccelHopLitRules::WeightFor(EGFHopTileKind Kind, const FGFAccelHopLitTuning& Tuning)
+{
+	switch (Kind)
+	{
+	case EGFHopTileKind::Boost: return FMath::Max(0.f, Tuning.BoostWeight);
+	case EGFHopTileKind::Downbeat: return FMath::Max(0.f, Tuning.DownbeatWeight);
+	case EGFHopTileKind::Landing: return FMath::Max(0.f, Tuning.LandingWeight);
+	default: return FMath::Max(0.f, Tuning.StandardWeight);
+	}
+}
+
+float FGFAccelHopLitRules::Jitter(int32 Index, int32 Seed)
+{
+	// Small integer hash (no global random stream), so a pick is the same on every run of the same inputs.
+	uint32 H = static_cast<uint32>(Index) * 2654435761u ^ (static_cast<uint32>(Seed) + 0x9E3779B9u) * 40503u;
+	H ^= H >> 15;
+	H *= 0x2C1B3C6Du;
+	H ^= H >> 12;
+	H *= 0x297A2D39u;
+	H ^= H >> 15;
+	return static_cast<float>(H & 0xFFFFFFu) / static_cast<float>(0xFFFFFFu);
+}
+
+int32 FGFAccelHopLitRules::PickLitIndex(const TArray<FGFHopTileSlot>& Slots, float AnchorAlong, float Direction, int32 AvoidIndex, int32 Seed, const FGFAccelHopLitTuning& Tuning)
+{
+	const float Dir = Direction < 0.f ? -1.f : 1.f;
+	const float Hop = FMath::Max(50.f, Tuning.HopLengthCm);
+	const float MinAhead = FMath::Max(0.f, Tuning.MinAheadHops) * Hop;
+	const float MaxAhead = FMath::Max(MinAhead + 1.f, FMath::Max(0.5f, Tuning.MaxAheadHops) * Hop);
+	const float Prefer = FMath::Clamp(Tuning.PreferAheadHops * Hop, MinAhead, MaxAhead);
+	const float Span = MaxAhead - MinAhead;
+	int32 Best = INDEX_NONE;
+	float BestScore = -1.f;
+	for (int32 Index = 0; Index < Slots.Num(); ++Index)
+	{
+		if (Index == AvoidIndex)
+		{
+			continue;
+		}
+		const float Ahead = (Slots[Index].Along - AnchorAlong) * Dir;
+		if (Ahead < MinAhead || Ahead > MaxAhead)
+		{
+			continue;
+		}
+		const float Weight = WeightFor(Slots[Index].Kind, Tuning);
+		if (Weight <= 0.f)
+		{
+			continue;
+		}
+		// Weight dominates (0.5..1 of it); the distance pull is at most 0.25, a tie-break between near equals.
+		const float Score = Weight * (0.5f + 0.5f * Jitter(Index, Seed)) - 0.25f * FMath::Abs(Ahead - Prefer) / Span;
+		if (Score > BestScore)
+		{
+			BestScore = Score;
+			Best = Index;
+		}
+	}
+	return Best;
+}
+
+bool FGFAccelHopLitRules::KeepLit(const TArray<FGFHopTileSlot>& Slots, int32 LitIndex, float AnchorAlong, float Direction, const FGFAccelHopLitTuning& Tuning)
+{
+	if (!Slots.IsValidIndex(LitIndex))
+	{
+		return false;
+	}
+	const float Dir = Direction < 0.f ? -1.f : 1.f;
+	const float Ahead = (Slots[LitIndex].Along - AnchorAlong) * Dir;
+	const float Far = FMath::Max(0.5f, Tuning.MaxAheadHops) * FMath::Max(50.f, Tuning.HopLengthCm) * 1.5f;
+	return Ahead >= -FMath::Max(0.f, Tuning.KeepBehindCm) && Ahead <= Far;
+}
+
+float FGFAccelHopLitRules::LitPulse(double NowBeat, float PulseBeats)
+{
+	if (NowBeat < 0.0)
+	{
+		return 0.f;
+	}
+	const float Width = FMath::Clamp(PulseBeats, 0.05f, 1.f);
+	const float Phase = static_cast<float>(NowBeat - FMath::FloorToDouble(NowBeat));
+	if (Phase >= Width)
+	{
+		return 0.f;
+	}
+	const float Left = 1.f - Phase / Width;
+	return Left * Left;
 }

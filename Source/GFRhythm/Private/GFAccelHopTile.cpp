@@ -2,6 +2,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/CollisionProfile.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 
 AGFAccelHopTile::AGFAccelHopTile()
 {
@@ -49,4 +51,53 @@ void AGFAccelHopTile::ApplyKind()
 AGFAccelHopTile* AGFAccelHopTile::FromFloor(const UPrimitiveComponent* Floor)
 {
 	return Floor ? Cast<AGFAccelHopTile>(Floor->GetOwner()) : nullptr;
+}
+
+void AGFAccelHopTile::SetRoad(AGFAccelHopRoad* InRoad, int32 InIndex)
+{
+	Road = InRoad;
+	RoadIndex = InRoad ? InIndex : INDEX_NONE;
+}
+
+UMaterialInstanceDynamic* AGFAccelHopTile::LitMaterial()
+{
+	if (LitMID || !Mesh || !Mesh->GetStaticMesh() || !Mesh->GetMaterial(0))
+	{
+		return LitMID;
+	}
+	UMaterialInterface* Base = Mesh->GetMaterial(0);
+	float Value = 0.f;
+	if (Base->GetScalarParameterValue(FHashedMaterialParameterInfo(FName(TEXT("EmissiveStrength"))), Value))
+	{
+		BaseEmissiveStrength = Value;
+	}
+	if (Base->GetScalarParameterValue(FHashedMaterialParameterInfo(FName(TEXT("RimLightWidth"))), Value))
+	{
+		BaseRimLightWidth = Value;
+	}
+	LitMID = Mesh->CreateDynamicMaterialInstance(0, Base);
+	return LitMID;
+}
+
+void AGFAccelHopTile::SetLitVisual(bool bLit, float Pulse, const FGFAccelHopLitTuning& Tuning)
+{
+	const float Clamped = bLit ? FMath::Clamp(Pulse, 0.f, 1.f) : 0.f;
+	if (bLit == bLitVisual && FMath::IsNearlyEqual(Clamped, LitPulse, 0.002f))
+	{
+		return;
+	}
+	bLitVisual = bLit;
+	LitPulse = Clamped;
+	if (!bLit && !LitMID)
+	{
+		return; // never lit, nothing to put back
+	}
+	UMaterialInstanceDynamic* MID = LitMaterial();
+	if (!MID)
+	{
+		return;
+	}
+	MID->SetScalarParameterValue(TEXT("EmissiveStrength"), bLit ? FMath::Max(BaseEmissiveStrength, Tuning.LitEmissiveStrength) : BaseEmissiveStrength);
+	MID->SetScalarParameterValue(TEXT("RimLightWidth"), bLit ? FMath::Max(BaseRimLightWidth, Tuning.LitRimLightWidth) : BaseRimLightWidth);
+	MID->SetScalarParameterValue(TEXT("BeatPulse"), Clamped);
 }

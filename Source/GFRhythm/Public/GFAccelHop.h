@@ -1,5 +1,5 @@
 #pragma once
-// Acceleration Hop (issue 334): hop tiles on the Verdant to Cinderwright road. Landing on a tile on the music beat
+// Acceleration Hop (issue 334, v2 in issue 342): hop tiles on the Verdant to Cinderwright road. Landing on a tile on the music beat
 // gives a short speed boost. Judging reuses the Beat Hop clock and windows; this file is the pure part (no world),
 // so every rule is unit tested. AGFAccelHopTile and AGFAccelHopRoad are the placed actors; the movement component owns
 // the boost state.
@@ -74,6 +74,113 @@ struct GFRHYTHM_API FGFAccelHopTuning
 	/** Server side: the reported tile must be this close to the pawn. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop", meta = (ClampMin = "0"))
 	float ServerCheckRadiusCm = 400.f;
+
+	/** v2 (#342): an in-time landing on the road's lit target tile scales the whole gain by this (1.5 = half again). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop", meta = (ClampMin = "1"))
+	float LitBoostScale = 1.5f;
+};
+
+/**
+ * v2 (#342): how the road picks and shows its one lit target tile. Lives on AGFAccelHopRoad (the road owns the pick);
+ * the speed side (LitBoostScale) lives with the rest of the boost numbers on FGFAccelHopTuning.
+ */
+USTRUCT(BlueprintType)
+struct GFRHYTHM_API FGFAccelHopLitTuning
+{
+	GENERATED_BODY()
+
+	/** Rough length of one hop along the road at base run speed, cm. "A few hops ahead" is measured in these. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|Lit", meta = (ClampMin = "50"))
+	float HopLengthCm = 450.f;
+
+	/** The pick window starts this many hops ahead of the player (closer is too late to aim for). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|Lit", meta = (ClampMin = "0"))
+	float MinAheadHops = 2.f;
+
+	/** ...and ends this many hops ahead. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|Lit", meta = (ClampMin = "0.5"))
+	float MaxAheadHops = 4.f;
+
+	/** Among tiles of equal pull, the one nearest this many hops ahead wins. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|Lit", meta = (ClampMin = "0"))
+	float PreferAheadHops = 3.f;
+
+	/** Pick weights by kind. 0 never lights (Landing tiles open and close the run, they are not targets). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|Lit", meta = (ClampMin = "0"))
+	float StandardWeight = 1.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|Lit", meta = (ClampMin = "0"))
+	float DownbeatWeight = 2.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|Lit", meta = (ClampMin = "0"))
+	float BoostWeight = 3.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|Lit", meta = (ClampMin = "0"))
+	float LandingWeight = 0.f;
+
+	/** A lit tile stays lit until the player is this far past it (then the next beat picks a new one). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|Lit", meta = (ClampMin = "0"))
+	float KeepBehindCm = 150.f;
+
+	/** Server: a landing on the tile that was lit up to this long ago still counts (covers the RPC trip). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|Lit", meta = (ClampMin = "0"))
+	float ServerGraceSeconds = 0.6f;
+
+	/** Lit look on M_GF_HopCel: EmissiveStrength (unlit tiles use the material's 2.0). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|Lit", meta = (ClampMin = "0"))
+	float LitEmissiveStrength = 10.f;
+
+	/** Lit look: RimLightWidth (README: 0 is off, 0.2 to 0.4 is a lit edge; full strength is the top of that). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|Lit", meta = (ClampMin = "0", ClampMax = "1"))
+	float LitRimLightWidth = 0.4f;
+
+	/** The lit tile's own beat pulse (the material's per-tile BeatPulse) lasts this fraction of a beat. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GF|AccelHop|Lit", meta = (ClampMin = "0.05", ClampMax = "1"))
+	float LitPulseBeats = 0.3f;
+};
+
+/** One hop tile as the lit pick sees it: distance along the road (box local X, cm) and kind. */
+struct GFRHYTHM_API FGFHopTileSlot
+{
+	float Along = 0.f;
+	EGFHopTileKind Kind = EGFHopTileKind::Standard;
+};
+
+/** The road's lit target, replicated from the server (#342). Index into the road's sorted tile list; -1 is none. */
+USTRUCT(BlueprintType)
+struct GFRHYTHM_API FGFAccelHopLitState
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "GF|AccelHop")
+	int32 Index = -1;
+
+	/** Bumped on every change, so a re-pick of the same index still reaches clients. */
+	UPROPERTY(BlueprintReadOnly, Category = "GF|AccelHop")
+	int32 Serial = 0;
+};
+
+/** Pure lit-tile rules (#342). Same input, same result. */
+struct GFRHYTHM_API FGFAccelHopLitRules
+{
+	/** Pick weight of a kind. */
+	static float WeightFor(EGFHopTileKind Kind, const FGFAccelHopLitTuning& Tuning);
+
+	/** 0..1, stable for (Index, Seed): the variety in the pick, so a Downbeat sometimes beats a Boost. */
+	static float Jitter(int32 Index, int32 Seed);
+
+	/**
+	 * The tile to light: within MinAheadHops..MaxAheadHops hops ahead of AnchorAlong in Direction (sign only), weight
+	 * scaled by 0.5..1 Jitter, then a small pull toward PreferAheadHops. Skips AvoidIndex and weight 0 kinds. -1 when
+	 * nothing is in the window (the end of the road).
+	 */
+	static int32 PickLitIndex(const TArray<FGFHopTileSlot>& Slots, float AnchorAlong, float Direction, int32 AvoidIndex, int32 Seed, const FGFAccelHopLitTuning& Tuning);
+
+	/** Keep the current lit tile? Yes while it is not more than KeepBehindCm behind the anchor and not far past the window. */
+	static bool KeepLit(const TArray<FGFHopTileSlot>& Slots, int32 LitIndex, float AnchorAlong, float Direction, const FGFAccelHopLitTuning& Tuning);
+
+	/** The lit tile's sharp pulse: 1 on the beat, gone after PulseBeats of a beat. 0 with no clock. */
+	static float LitPulse(double NowBeat, float PulseBeats);
 };
 
 /** One landing judged against the music. */
@@ -146,15 +253,16 @@ struct GFRHYTHM_API FGFAccelHopRules
 	/** Judges a landing at NowBeat (the clock's current beat) against the nearest beat. No clock (NowBeat < 0, Bpm <= 0) is None. */
 	static FGFAccelHopHit JudgeLanding(double NowBeat, float Bpm, const FGFJudgeWindows& Windows, int32 BeatsPerBar);
 
-	/** Multiplier a hit adds on a tile kind (0 for Miss and None). */
-	static float GainFor(const FGFAccelHopHit& Hit, EGFHopTileKind Kind, const FGFAccelHopTuning& Tuning);
+	/** Multiplier a hit adds on a tile kind (0 for Miss and None). A lit target tile (#342) scales it by LitBoostScale. */
+	static float GainFor(const FGFAccelHopHit& Hit, EGFHopTileKind Kind, const FGFAccelHopTuning& Tuning, bool bLit = false);
 
 	/**
 	 * Applies a judged landing. Good/Perfect stack onto the current boost (capped) and restart its timer for BoostBeats
 	 * beats; Landing tiles hold the speed (max of current and a fresh boost) and close the chain. A second hop on the
-	 * same beat within one beat is ignored. Returns true when the boost changed.
+	 * same beat within one beat is ignored. bLit is a landing on the road's lit target tile (#342). Returns true when the
+	 * boost changed.
 	 */
-	static bool ApplyHit(FGFAccelHopBoost& State, const FGFAccelHopHit& Hit, EGFHopTileKind Kind, double Now, float BeatSeconds, const FGFAccelHopTuning& Tuning);
+	static bool ApplyHit(FGFAccelHopBoost& State, const FGFAccelHopHit& Hit, EGFHopTileKind Kind, double Now, float BeatSeconds, const FGFAccelHopTuning& Tuning, bool bLit = false);
 
 	/** Speed multiplier at Now: the peak until the fade, then easing to 1 at ExpiresAt. Never below 1. */
 	static float MultiplierAt(const FGFAccelHopBoost& State, double Now);
