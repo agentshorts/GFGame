@@ -1,7 +1,11 @@
 // Acceleration Hop v3 (issue 347): the live landing circle in a real PIE tick. The v2 tests proved the landing math
 // with a hand-built probe, and the circle still sat at takeoff in play. This one flies the listen host's own pawn in
-// the PIE world, turns the camera mid-air, lets the world tick, and checks that the flight turned and the landing
-// target the HUD draws moved with it, then that the pawn came down where the target said.
+// the PIE world, sweeps the camera mid-air the way a mouse does, lets the world tick, and checks that the landing
+// target the HUD draws followed the camera frame by frame, held still once the aim held, that the flight turned with
+// it, and that the pawn came down where the target said.
+// The first version snapped the camera 60 degrees in one frame and then asked for the circle to keep moving. A circle
+// that predicts the steering it will do jumps once on the snap and then holds still (it was right the first time), so
+// that check failed 0 of 37 frames with the steering working. A sweep moves the circle every frame it turns.
 // Run: UnrealEditor-Cmd GFGame.uproject -ExecCmds="Automation RunTests GFGame.Net.AccelHop.LiveLandingCircle;Quit" -unattended -nullrhi
 #include "GFNetTestUtils.h"
 #include "GFAccelHop.h"
@@ -27,8 +31,14 @@ namespace GFNetAccelHopSteerDetail
 	constexpr double SteerSkyLiftCm = 3000.0;
 	/** The camera turn mid-air, degrees left of the takeoff heading (+Y side). */
 	constexpr double SteerTurnYawDeg = 60.0;
-	/** World seconds flown with the new aim before the checks. */
+	/** The camera sweeps from 0 to SteerTurnYawDeg over this many world seconds (a mouse turn, not a snap). */
+	constexpr double SteerSweepSeconds = 0.2;
+	/** World seconds flown from the start of the sweep before the checks (the rest holds the aim at the end yaw). */
 	constexpr double SteerTurnSeconds = 0.3;
+	/** With the aim held, the circle may wobble this much frame to frame (sampling), cm. The math port moves under 1. */
+	constexpr double SteerHoldWobbleCm = 25.0;
+	/** The camera yaw read back from the pawn must match what the test set, degrees. */
+	constexpr double SteerYawTolDeg = 0.5;
 
 	struct FSteerRun
 	{
@@ -40,8 +50,19 @@ namespace GFNetAccelHopSteerDetail
 		FVector TakeoffVelocity = FVector::ZeroVector;
 		double TurnAt = -1.0;
 		int32 Frames = 0;
+		/** Frames inside the sweep (the camera turned since the last one), and how many of them moved the circle. */
+		int32 SweepFrames = 0;
 		int32 FramesMoved = 0;
+		/** Frames after the sweep (aim held), and the biggest frame to frame circle move among them. */
+		int32 HoldFrames = 0;
+		double HoldWobbleCm = 0.0;
 		int32 FramesSteerOn = 0;
+		/** Falling frames whose move flew with the steering off, and how many of those were outside the road scope. */
+		int32 FramesSteerOff = 0;
+		int32 FramesOffRoad = 0;
+		FVector OffRoadAt = FVector::ZeroVector;
+		/** Worst gap between the yaw the test set and the yaw the pawn reports. */
+		double MaxYawErrDeg = 0.0;
 		float MaxTurnDeg = 0.f;
 		FVector LastTarget = FVector::ZeroVector;
 		bool bHaveLast = false;
@@ -87,6 +108,24 @@ namespace GFNetAccelHopSteerDetail
 	double SteerFlatYawDeg(const FVector& V)
 	{
 		return FMath::RadiansToDegrees(FMath::Atan2(V.Y, V.X));
+	}
+
+	/** The camera yaw at Elapsed world seconds into the sweep. */
+	double SteerSweepYawDeg(double Elapsed)
+	{
+		return SteerTurnYawDeg * FMath::Clamp(Elapsed / SteerSweepSeconds, 0.0, 1.0);
+	}
+
+	/** Sets the camera on the host pawn's controller. False if there is no player controller to set. */
+	bool SteerSetYaw(ACharacter* Body, double YawDeg)
+	{
+		APlayerController* PC = Body ? Cast<APlayerController>(Body->GetController()) : nullptr;
+		if (!PC)
+		{
+			return false;
+		}
+		PC->SetControlRotation(FRotator(0.0, YawDeg, 0.0));
+		return true;
 	}
 
 	double SteerFlatSpeed(const FVector& V)
@@ -222,22 +261,25 @@ bool FGFNetAccelHopLiveLandingCircleTest::RunTest(const FString&)
 		}
 		const FGFLandingTarget Target = Move->GetLandingTarget();
 		Ctx->Test->TestTrue(*FString::Printf(TEXT("Aim held: the target holds still (%.1f cm)"), FVector::Dist2D(Target.Point, Run->TakeoffTarget)), Target.bValid && FVector::Dist2D(Target.Point, Run->TakeoffTarget) < 25.0);
-		// Turn the camera 60 degrees left mid-air. Nothing else changes: no stick input, no dash.
-		ACharacter* Body = Run->Body.Get();
-		if (APlayerController* PC = Body ? Cast<APlayerController>(Body->GetController()) : nullptr)
+		// From here the camera sweeps 60 degrees left over SteerSweepSeconds, then holds. Nothing else changes: no
+		// stick input, no dash.
+		if (!SteerSetYaw(Run->Body.Get(), 0.0))
 		{
-			PC->SetControlRotation(FRotator(0.0, SteerTurnYawDeg, 0.0));
+			SteerFail(Ctx, TEXT("The host pawn has no player controller, so the test cannot turn the camera"));
+			return;
 		}
 		Run->TurnAt = ServerWorld()->GetTimeSeconds();
 		Run->TakeoffTarget = Target.Point;
 	});
 
-	// Tick the world. Every frame, read the target the HUD would draw and what the move did.
-	WaitUntil(Ctx, TEXT("0.3 s of world time flown with the new aim"), 5.f, [Run]()
+	// Tick the world. Every frame: set this frame's camera yaw (set every frame, so nothing can undo it between frames),
+	// read it back, read the target the HUD would draw, and what the move did.
+	WaitUntil(Ctx, TEXT("0.3 s of world time flown while the camera sweeps then holds"), 5.f, [Run]()
 	{
 		UWorld* World = ServerWorld();
+		ACharacter* Body = Run->Body.Get();
 		UGFCharacterMovementComponent* Move = SteerMove(*Run);
-		if (!World || !Move)
+		if (!World || !Body || !Move)
 		{
 			return true;
 		}
@@ -246,13 +288,32 @@ bool FGFNetAccelHopLiveLandingCircleTest::RunTest(const FString&)
 			Run->bLandedEarly = true;
 			return true;
 		}
+		const double Elapsed = World->GetTimeSeconds() - Run->TurnAt;
+		const bool bSweeping = Elapsed < SteerSweepSeconds;
+		const double Yaw = SteerSweepYawDeg(Elapsed);
+		SteerSetYaw(Body, Yaw);
+		Run->MaxYawErrDeg = FMath::Max(Run->MaxYawErrDeg, FMath::Abs(FMath::FindDeltaAngleDegrees(Body->GetControlRotation().Yaw, Yaw)));
+
 		const FGFLandingTarget Target = Move->GetLandingTarget();
 		if (Target.bValid)
 		{
 			++Run->Frames;
-			if (Run->bHaveLast && FVector::Dist2D(Target.Point, Run->LastTarget) > 1.0)
+			if (Run->bHaveLast)
 			{
-				++Run->FramesMoved;
+				const double Step = FVector::Dist2D(Target.Point, Run->LastTarget);
+				if (bSweeping)
+				{
+					++Run->SweepFrames;
+					if (Step > 1.0)
+					{
+						++Run->FramesMoved;
+					}
+				}
+				else if (Run->HoldFrames++ > 0)
+				{
+					// The first held frame still carries the sweep's last turn; the wobble counts from the second.
+					Run->HoldWobbleCm = FMath::Max(Run->HoldWobbleCm, Step);
+				}
 			}
 			Run->LastTarget = Target.Point;
 			Run->bHaveLast = true;
@@ -262,8 +323,17 @@ bool FGFNetAccelHopLiveLandingCircleTest::RunTest(const FString&)
 		{
 			++Run->FramesSteerOn;
 		}
+		else
+		{
+			++Run->FramesSteerOff;
+			if (!Move->IsInAirSteerRoadScope(Body->GetActorLocation()))
+			{
+				++Run->FramesOffRoad;
+				Run->OffRoadAt = Body->GetActorLocation();
+			}
+		}
 		Run->MaxTurnDeg = FMath::Max(Run->MaxTurnDeg, Move->GetLastAirSteerTurnDeg());
-		return World->GetTimeSeconds() - Run->TurnAt >= SteerTurnSeconds;
+		return Elapsed >= SteerTurnSeconds;
 	});
 
 	Do(Ctx, [Ctx, Run]()
@@ -275,8 +345,21 @@ bool FGFNetAccelHopLiveLandingCircleTest::RunTest(const FString&)
 			return;
 		}
 		Ctx->Test->TestFalse(TEXT("Still in the air after the turn window (the hop is long enough to test)"), Run->bLandedEarly);
+		Ctx->Test->TestTrue(*FString::Printf(TEXT("The camera yaw the test set stuck on the pawn (worst %.2f deg off)"), Run->MaxYawErrDeg), Run->MaxYawErrDeg <= SteerYawTolDeg);
+		Ctx->Test->TestTrue(TEXT("The flight is known to have taken off on the road (it keeps steering if it drifts out of the box)"), Move->DidAirSteerTakeOffOnRoad());
+		if (Run->FramesOffRoad > 0)
+		{
+			SteerFail(Ctx, FString::Printf(TEXT("The pawn left the hop road scope mid-flight on %d frames (last at %s), so aim steering switched off"),
+				Run->FramesOffRoad, *Run->OffRoadAt.ToCompactString()));
+		}
 		Ctx->Test->TestTrue(*FString::Printf(TEXT("Ticked a few frames with a target (%d)"), Run->Frames), Run->Frames >= 3);
-		Ctx->Test->TestTrue(*FString::Printf(TEXT("The circle moved frame to frame (%d of %d frames)"), Run->FramesMoved, Run->Frames), Run->FramesMoved >= 2);
+		Ctx->Test->TestTrue(*FString::Printf(TEXT("Ticked a few frames of the sweep (%d)"), Run->SweepFrames), Run->SweepFrames >= 3);
+		// Every sweep frame turns the camera, so (nearly) every one should move the circle. Half leaves room for a
+		// frame where the world did not tick between two reads.
+		Ctx->Test->TestTrue(*FString::Printf(TEXT("The circle followed the camera frame to frame (%d of %d sweep frames)"), Run->FramesMoved, Run->SweepFrames),
+			Run->FramesMoved >= 2 && Run->FramesMoved * 2 >= Run->SweepFrames);
+		Ctx->Test->TestTrue(*FString::Printf(TEXT("Aim held after the sweep: the circle holds still (worst %.1f cm a frame over %d frames)"), Run->HoldWobbleCm, Run->HoldFrames),
+			Run->HoldWobbleCm < SteerHoldWobbleCm);
 		const double Shift = Run->HeldTarget.Y - Run->TakeoffTarget.Y;
 		Ctx->Test->TestTrue(*FString::Printf(TEXT("The circle moved toward the new aim (+Y %.0f cm)"), Shift), Shift > 60.0);
 		const double Yaw = SteerFlatYawDeg(Move->Velocity);
@@ -284,7 +367,7 @@ bool FGFNetAccelHopLiveLandingCircleTest::RunTest(const FString&)
 		const double Before = SteerFlatSpeed(Run->TakeoffVelocity);
 		const double Now = SteerFlatSpeed(Move->Velocity);
 		Ctx->Test->TestTrue(*FString::Printf(TEXT("Speed kept through the turn (%.0f -> %.0f cm/s)"), Before, Now), Before > 1.0 && FMath::Abs(Now - Before) / Before < 0.05);
-		Ctx->Test->TestTrue(TEXT("The move flew with aim steering on"), Run->FramesSteerOn > 0);
+		Ctx->Test->TestTrue(*FString::Printf(TEXT("The move flew with aim steering on (%d on, %d off)"), Run->FramesSteerOn, Run->FramesSteerOff), Run->FramesSteerOn > 0 && Run->FramesSteerOff == 0);
 		Ctx->Test->TestTrue(*FString::Printf(TEXT("The move turned the velocity (max %.2f deg in a step)"), Run->MaxTurnDeg), Run->MaxTurnDeg > 0.f);
 	});
 
