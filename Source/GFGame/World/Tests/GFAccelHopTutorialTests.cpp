@@ -1,11 +1,13 @@
 // Acceleration Hop tutorial (#348) tests: the side gate and its map name, the hub portal beside Beat Hop, the tutorial
-// map's marker and two HUB gates, the lesson order and prompt copy, lesson progress, and lit opt-out tiles.
+// map's marker and two HUB gates, the lesson order and prompt copy, lesson progress, lit opt-out tiles, and the hop FX hooks.
 // Run: UnrealEditor-Cmd GFGame.uproject -ExecCmds="Automation RunTests GFGame.AccelHop.Tutorial;Quit" -unattended -nullrhi
 #include "Misc/AutomationTest.h"
 #include "GFAccelHop.h"
 #include "GFAccelHopTutorial.h"
 #include "GFAccelHopTutorialGateSubsystem.h"
 #include "GFAccelHopTutorialRules.h"
+#include "GFAccelHopTile.h"
+#include "GFCharacterMovementComponent.h"
 #include "GFHubGateDirector.h"
 #include "GFMiniGameCatalog.h"
 #include "GFMiniGameGate.h"
@@ -15,6 +17,10 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/WorldSettings.h"
+#include "Misc/PackageName.h"
+#include "NiagaraComponent.h"
+#include "NiagaraSystem.h"
+#include "UObject/UObjectIterator.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -379,6 +385,68 @@ bool FGFAccelHopTutorialLitOptOutTest::RunTest(const FString&)
 		const int32 Late = FGFAccelHopLitRules::PickLitIndex(Slots, 450.f * 4.f, 1.f, INDEX_NONE, Seed, Tuning);
 		TestTrue(*FString::Printf(TEXT("Seed %d: picks a tile that can light"), Seed), Slots.IsValidIndex(Late) && Slots[Late].bCanLight);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFAccelHopTutorialFXTest, "GFGame.AccelHop.Tutorial.FX", GFAccelHopTutorialTests::Flags)
+bool FGFAccelHopTutorialFXTest::RunTest(const FString&)
+{
+	using namespace GFAccelHopTutorialTests;
+	// The three systems resolve when their packages are in Content; a missing one loads as null (logged once), no crash.
+	for (const TCHAR* Path : { AGFAccelHopTutorial::BoostFXPath(), AGFAccelHopTutorial::LitPopFXPath(), AGFAccelHopTutorial::LitIdleFXPath() })
+	{
+		const FString Package = FSoftObjectPath(Path).GetLongPackageName();
+		TestTrue(*FString::Printf(TEXT("%s is under /Game/FX/AccelHop"), Path), Package.StartsWith(TEXT("/Game/FX/AccelHop/")));
+		UNiagaraSystem* System = AGFAccelHopTutorial::LoadFXSystem(Path);
+		if (FPackageName::DoesPackageExist(Package))
+		{
+			TestNotNull(*FString::Printf(TEXT("%s resolves"), Path), System);
+		}
+		else
+		{
+			TestNull(*FString::Printf(TEXT("%s missing loads as null"), Path), System);
+		}
+	}
+	TestNull(TEXT("A missing path loads as null"), AGFAccelHopTutorial::LoadFXSystem(TEXT("/Game/FX/AccelHop/NS_Missing_v0.NS_Missing_v0")));
+	TestNull(TEXT("A second missing load still null"), AGFAccelHopTutorial::LoadFXSystem(TEXT("/Game/FX/AccelHop/NS_Missing_v0.NS_Missing_v0")));
+	TestNull(TEXT("A null path loads as null"), AGFAccelHopTutorial::LoadFXSystem(nullptr));
+
+	FWorldScope Map(TEXT("GFTutorialFX"));
+	if (!TestNotNull(TEXT("Tutorial world"), Map.World))
+	{
+		return false;
+	}
+	AGFAccelHopTutorial* Tutorial = Map.World->SpawnActor<AGFAccelHopTutorial>();
+	AGFAccelHopTile* Tile = Map.World->SpawnActor<AGFAccelHopTile>();
+	if (!TestNotNull(TEXT("Director"), Tutorial) || !TestNotNull(TEXT("Tile"), Tile))
+	{
+		return false;
+	}
+	Tile->SetKind(EGFHopTileKind::Boost);
+	FGFAccelHopLandingEvent Event;
+	Event.Tile = Tile;
+	Event.bLit = true;
+	Event.bApplied = false;
+	const int32 Before = Tutorial->GetFXSpawnCount();
+	auto CountNiagara = [&Map]()
+	{
+		int32 Count = 0;
+		for (TObjectIterator<UNiagaraComponent> It; It; ++It)
+		{
+			Count += It->GetWorld() == Map.World ? 1 : 0;
+		}
+		return Count;
+	};
+	const int32 ComponentsBefore = CountNiagara();
+	Tutorial->PlayLandingFX(nullptr, Event);
+	TestEqual(TEXT("A landing the boost did not take spawns nothing"), Tutorial->GetFXSpawnCount(), Before);
+	TestEqual(TEXT("No Niagara components in the world"), CountNiagara(), ComponentsBefore);
+	TestNull(TEXT("No idle shimmer without a road"), Tutorial->GetLitIdleFX());
+
+	Event.bApplied = true;
+	Event.Tile.Reset();
+	Tutorial->PlayLandingFX(nullptr, Event);
+	TestEqual(TEXT("An applied landing with no tile spawns nothing"), Tutorial->GetFXSpawnCount(), Before);
 	return true;
 }
 
