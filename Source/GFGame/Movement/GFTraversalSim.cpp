@@ -181,7 +181,40 @@ FGFLandingPrediction GFTraversalSim::PredictLandingOnPlane(const FVector& Origin
 	return Result;
 }
 
+FVector GFTraversalSim::SteerTowardAim(const FVector& Velocity, const FGFAirSteer& Steer, float Dt)
+{
+	if (!Steer.bOn || Dt <= 0.f || Steer.TurnRateDeg <= 0.f)
+	{
+		return Velocity;
+	}
+	const double Speed = FVector(Velocity.X, Velocity.Y, 0.0).Size();
+	if (Speed < static_cast<double>(FMath::Max(1.f, Steer.MinSpeed)))
+	{
+		return Velocity;
+	}
+	const FVector Aim = FVector(Steer.Aim.X, Steer.Aim.Y, 0.0).GetSafeNormal();
+	if (Aim.IsNearlyZero())
+	{
+		return Velocity;
+	}
+	const double Heading = FMath::Atan2(Velocity.Y, Velocity.X);
+	const double Want = FMath::Atan2(Aim.Y, Aim.X);
+	const double Delta = FMath::FindDeltaAngleRadians(Heading, Want);
+	if (FMath::Abs(Delta) > FMath::DegreesToRadians(static_cast<double>(FMath::Clamp(Steer.MaxAngleDeg, 0.f, 180.f))))
+	{
+		return Velocity;
+	}
+	const double MaxTurn = FMath::DegreesToRadians(static_cast<double>(Steer.TurnRateDeg)) * static_cast<double>(Dt);
+	const double Turned = Heading + FMath::Clamp(Delta, -MaxTurn, MaxTurn);
+	return FVector(FMath::Cos(Turned) * Speed, FMath::Sin(Turned) * Speed, Velocity.Z);
+}
+
 void GFTraversalSim::StepFlight(FVector& Position, FVector& Velocity, const FVector& LateralAccel, float GravityZ, float MaxLateralSpeed, float Dt)
+{
+	StepFlight(Position, Velocity, LateralAccel, FGFAirSteer(), GravityZ, MaxLateralSpeed, Dt);
+}
+
+void GFTraversalSim::StepFlight(FVector& Position, FVector& Velocity, const FVector& LateralAccel, const FGFAirSteer& Steer, float GravityZ, float MaxLateralSpeed, float Dt)
 {
 	const double T = static_cast<double>(FMath::Max(0.f, Dt));
 	const FVector FlatBefore(Velocity.X, Velocity.Y, 0.0);
@@ -191,6 +224,7 @@ void GFTraversalSim::StepFlight(FVector& Position, FVector& Velocity, const FVec
 	{
 		FlatAfter = FlatAfter.GetSafeNormal() * Cap;
 	}
+	FlatAfter = SteerTowardAim(FlatAfter, Steer, Dt);
 	const double Gravity = static_cast<double>(GravityZ);
 	Position.X += 0.5 * (FlatBefore.X + FlatAfter.X) * T;
 	Position.Y += 0.5 * (FlatBefore.Y + FlatAfter.Y) * T;
@@ -210,7 +244,7 @@ FGFLandingPrediction GFTraversalSim::PredictFlightLanding(const FGFFlightProbe& 
 	for (int32 Index = 1; Index <= Steps; ++Index)
 	{
 		const FVector Previous = Position;
-		StepFlight(Position, Velocity, Probe.LateralAccel, Probe.GravityZ, Probe.MaxLateralSpeed, StepTime);
+		StepFlight(Position, Velocity, Probe.LateralAccel, Probe.Steer, Probe.GravityZ, Probe.MaxLateralSpeed, StepTime);
 		FVector Hit = FVector::ZeroVector;
 		if (Trace(Previous, Position, Hit))
 		{

@@ -115,6 +115,22 @@ struct GFGAME_API FGFLandingPrediction
 	FVector Point = FVector::ZeroVector;
 };
 
+/**
+ * Aim-follow air steering (#347): while airborne the flat velocity turns toward Aim at up to TurnRateDeg per second.
+ * The flat speed is kept exactly; Z is never touched.
+ */
+struct GFGAME_API FGFAirSteer
+{
+	bool bOn = false;
+	/** Where the camera aims. Only its flat direction counts. */
+	FVector Aim = FVector::ForwardVector;
+	float TurnRateDeg = 90.f;
+	/** Below this flat speed nothing turns, cm/s. */
+	float MinSpeed = 150.f;
+	/** Aim further than this from the flight does not steer, degrees. */
+	float MaxAngleDeg = 150.f;
+};
+
 /** The flight state the landing target is predicted from (#342). Built fresh every frame. */
 struct GFGAME_API FGFFlightProbe
 {
@@ -126,6 +142,8 @@ struct GFGAME_API FGFFlightProbe
 	float GravityZ = -980.f;
 	/** Steering never pushes the flat speed past this (or past the speed already carried, if higher). */
 	float MaxLateralSpeed = 0.f;
+	/** #347: the aim steering the flight will keep doing (the aim is held where it is now). */
+	FGFAirSteer Steer;
 	float Lookahead = 2.5f;
 	float SampleSeconds = 0.08f;
 };
@@ -177,6 +195,18 @@ namespace GFTraversalSim
 	 * max(MaxLateralSpeed, speed carried in). With no steering it lands on BallisticPoint exactly.
 	 */
 	GFGAME_API void StepFlight(FVector& Position, FVector& Velocity, const FVector& LateralAccel, float GravityZ, float MaxLateralSpeed, float Dt);
+
+	/**
+	 * #347: the same step with aim steering after the push, in the order the movement runs it (CalcVelocity, then the
+	 * turn). Steer off is exactly StepFlight.
+	 */
+	GFGAME_API void StepFlight(FVector& Position, FVector& Velocity, const FVector& LateralAccel, const FGFAirSteer& Steer, float GravityZ, float MaxLateralSpeed, float Dt);
+
+	/**
+	 * #347: Velocity with its flat part turned toward Steer.Aim by at most TurnRateDeg x Dt. Same flat speed, same Z.
+	 * Unchanged when steering is off, too slow, the aim is flat zero, or the aim is more than MaxAngleDeg away.
+	 */
+	GFGAME_API FVector SteerTowardAim(const FVector& Velocity, const FGFAirSteer& Steer, float Dt);
 
 	/**
 	 * Walks the flight in SampleSeconds steps out to Lookahead and asks Trace(From, To, OutHitPoint) for the first

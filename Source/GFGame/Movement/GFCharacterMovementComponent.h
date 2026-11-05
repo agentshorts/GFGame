@@ -141,6 +141,22 @@ public:
 	 */
 	FGFLandingTarget GetLandingTarget() const;
 
+	/**
+	 * v3 (#347): the aim steering this pawn flies with when the camera looks along Aim. Off unless it is a player's
+	 * pawn this machine moves (owner or server), the tuning has it on, no swing, dash or override is driving the
+	 * velocity, and (bAirSteerOnlyOnRoad) the pawn is inside a hop road's box. The move and the landing probe share it.
+	 */
+	FGFAirSteer BuildAirSteer(const FVector& Aim) const;
+
+	/** v3 (#347): Location is inside some hop road's box. */
+	bool IsOnAccelHopRoad(const FVector& Location) const;
+
+	/** v3 (#347): the steering the last move flew with (tests and the HUD read it). */
+	const FGFAirSteer& GetMoveAirSteer() const { return MoveAirSteer; }
+
+	/** v3 (#347): degrees the aim steering turned the flight in the last falling velocity update. */
+	float GetLastAirSteerTurnDeg() const { return LastAirSteerTurnDeg; }
+
 	/** Looks for a Beat Hop run that opted into the traversal kit (#277). */
 	void RefreshBeatHop();
 
@@ -309,4 +325,7 @@ private:
 	FGFWalkRefusal LastWalkRefusal;
 	bool bAccelHopWasFalling = false;
 	bool bLastAccelHopLit = false;
+	/** #347: built once per move in PerformMovement (from the move's camera, so a replay steers the same way). */
+	FGFAirSteer MoveAirSteer;
+	float LastAirSteerTurnDeg = 0.f;
 };

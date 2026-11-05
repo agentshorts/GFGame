@@ -488,6 +488,7 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 	if (!CharacterOwner)
 	{
 		StepDeltaSeconds = 0.f;
+		MoveAirSteer = FGFAirSteer();
 		Super::PerformMovement(DeltaTime);
 		return;
 	}
@@ -496,6 +497,7 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 	if (!bAuthoritative && !bLocal)
 	{
 		StepDeltaSeconds = 0.f;
+		MoveAirSteer = FGFAirSteer();
 		Super::PerformMovement(DeltaTime);
 		return;
 	}
@@ -584,6 +586,10 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 	// Substeps share this frame's start so a rope, yank, or orbit lands on TravelLocation.
 	LocationAtStepStart = Command.PlayerLocation;
 	StepDeltaSeconds = DeltaTime;
+	// #347: aim steering for this move, from the camera this move recorded (a replay restores it), so the owner,
+	// the server and a correction replay all turn the flight the same way.
+	MoveAirSteer = BuildAirSteer(Command.CameraForward);
+	LastAirSteerTurnDeg = 0.f;
 
 	if (bAuthoritative)
 	{
@@ -802,6 +808,63 @@ void UGFCharacterMovementComponent::CalcVelocity(float DeltaTime, float Friction
 		return;
 	}
 	Super::CalcVelocity(DeltaTime, Friction, bFluid, BrakingDeceleration);
+	// #347: in the air, turn the flat momentum toward the aim after the stick push, same speed, capped turn rate.
+	// PhysFalling hands CalcVelocity the flat velocity (Z zeroed), and GetLandingTarget predicts the same turn.
+	if (MoveAirSteer.bOn && IsFalling())
+	{
+		const FVector Before(Velocity.X, Velocity.Y, 0.0);
+		Velocity = GFTraversalSim::SteerTowardAim(Velocity, MoveAirSteer, DeltaTime);
+		const FVector After(Velocity.X, Velocity.Y, 0.0);
+		if (!Before.IsNearlyZero() && !After.IsNearlyZero())
+		{
+			LastAirSteerTurnDeg = FMath::RadiansToDegrees(static_cast<float>(FMath::Acos(FMath::Clamp(FVector::DotProduct(Before.GetSafeNormal(), After.GetSafeNormal()), -1.0, 1.0))));
+		}
+	}
+}
+
+FGFAirSteer UGFCharacterMovementComponent::BuildAirSteer(const FVector& Aim) const
+{
+	FGFAirSteer Steer;
+	const FGFAccelHopTuning& Hop = GetTuning().AccelHop;
+	if (!Hop.bAirSteerFollowsAim || !CharacterOwner || !CharacterOwner->IsPlayerControlled())
+	{
+		return Steer;
+	}
+	if (!CharacterOwner->HasAuthority() && !CharacterOwner->IsLocallyControlled())
+	{
+		return Steer;
+	}
+	if (Sim.bSwinging || Sim.bYanking || Sim.bSwiveling || Sim.bDashing || Sim.bOverrideVelocity)
+	{
+		return Steer;
+	}
+	if (Hop.bAirSteerOnlyOnRoad && !IsOnAccelHopRoad(CharacterOwner->GetActorLocation()))
+	{
+		return Steer;
+	}
+	Steer.bOn = true;
+	Steer.Aim = Aim;
+	Steer.TurnRateDeg = Hop.AirSteerTurnRateDeg;
+	Steer.MinSpeed = Hop.AirSteerMinSpeedCm;
+	Steer.MaxAngleDeg = Hop.AirSteerMaxAngleDeg;
+	return Steer;
+}
+
+bool UGFCharacterMovementComponent::IsOnAccelHopRoad(const FVector& Location) const
+{
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+	for (TActorIterator<AGFAccelHopRoad> It(World); It; ++It)
+	{
+		if (It->ContainsPoint(Location))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void UGFCharacterMovementComponent::HandleImpact(const FHitResult& Hit, float TimeSlice, const FVector& MoveDelta)
@@ -1386,6 +1449,10 @@ FGFLandingTarget UGFCharacterMovementComponent::GetLandingTarget() const
 	// v2 (#342): built from this frame's flight, every frame, steering included. The v1 marker was a pure parabola off
 	// the velocity, so air steering never reached it until it had already bent the path, and the ring sat where the
 	// jump had aimed it.
+	// v3 (#347): v2 was still pinned in play. The only steering it knew was stick input x AirControl, and AirControl is
+	// the engine default 0.05 everywhere outside a Beat Hop course (about 100 cm/s^2 of push, half a metre over a whole
+	// hop), and the mouse never steered at all. The ring was right: the flight really did not turn. Aim steering
+	// (BuildAirSteer) is what turns it now, and the probe below predicts that same turn.
 	FGFFlightProbe Probe;
 	Probe.Origin = CharacterOwner->GetActorLocation();
 	if (const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent())
@@ -1402,6 +1469,9 @@ FGFLandingTarget UGFCharacterMovementComponent::GetLandingTarget() const
 		Probe.LateralAccel = FVector(Acceleration.X, Acceleration.Y, 0.0) * static_cast<double>(FMath::Max(0.f, AirControl));
 	}
 	Probe.MaxLateralSpeed = GetMaxSpeed();
+	// v3 (#347): the aim steering the flight is doing, with the aim held where the camera points now. The owner reads
+	// its live camera (what its next move will record); anyone else the camera of the last move.
+	Probe.Steer = BuildAirSteer(CharacterOwner->IsLocallyControlled() ? LiveCameraForward() : LastCameraForward);
 	Probe.Lookahead = Tuning.LandingLookahead;
 	Probe.SampleSeconds = Tuning.LandingSampleSeconds;
 
