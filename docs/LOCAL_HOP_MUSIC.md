@@ -53,3 +53,11 @@ python3 Tools/hop_music_prep.py add song.flac --analyse        # find the BPM an
 Settings are saved in this player's `GameUserSettings.ini` (`[/Script/GFRhythm.GFRhythmSettings]`,
 `AccelHopPlaylist`). They are never replicated. In co-op each player hears their own playlist, and their hops are
 judged on their own track's BPM. The server only checks the boost against the beat length each client sends.
+
+## The lit tile and your tempo
+
+The lit target tile (issue 342) is the same for everyone and does not follow anyone's music. The server picks it a
+few hops ahead of the lead player on its own steady grid at the road song's committed tempo (130 BPM for the fallback
+song), even on a listen host that is playing a local track. Your own track sets only your beat feel, the tile pulses
+and your HUD timing. Land on the lit tile on your own beat and you get the lit boost, however far your beat sits from
+the server's grid or anyone else's. `GFGame.HopMusic.LitPickIgnoresClientBpm` pins this down.

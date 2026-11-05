@@ -3,9 +3,12 @@
 // clock on that machine, pulses the tiles' glow on the beat through MPC_GF_HopBeat, and adds the PP_GF_HopOutline ink
 // outline. Each machine hears its own music and judges its own landings; the server only checks and applies the boost
 // (UGFCharacterMovementComponent).
-// v2 (issue 342): the road also owns one lit target tile. The server picks it on the beat, a few hops ahead of the lead
-// player on the road, and replicates it (LitState) so every player sees the same tile. Landing on it in time gives
+// v2 (issue 342): the road also owns one lit target tile. The server picks it a few hops ahead of the lead player on
+// the road, and replicates it (LitState) so every player sees the same tile. Landing on it in time gives
 // LitBoostScale times the normal gain.
+// Tempo (issue 343): the pick runs on the server's own steady grid at the road song's committed tempo and counts hops,
+// never beats of anyone's music, so no player's local track (a listen host's included) moves it. Each player's own
+// music sets only their beat feel, pulses and HUD timing, and their landing is judged on that beat.
 // Music (issue 343): the player's own tracks from the local LicensedMusic/AccelHop folder through their Beat Hop
 // playlist (GFHopMusic.h), each on its own BPM; with none, Beat Hop's committed fallback song as before.
 #include "CoreMinimal.h"
@@ -92,6 +95,15 @@ public:
 	/** Server: light Index (or -1 for none). Bumps the serial, keeps the old one for the grace window. */
 	void ServerSetLit(int32 Index, double Now);
 
+	/**
+	 * Server: the lit pick's beat counter at Now (server seconds); a new value means a new pick step. A steady grid at
+	 * GetLitPickBeatSeconds on the server's own clock, whatever music any machine (this one included) is playing.
+	 */
+	int64 GetLitPickBeatIndex(double Now);
+
+	/** Seconds per lit pick step: the road song's committed beat (the fallback song's 130 BPM by default). */
+	float GetLitPickBeatSeconds();
+
 	/** Server tick picks on the beat when true. Tests turn it off and drive ServerPickFrom themselves. */
 	void SetAutoPick(bool bOn) { bAutoPick = bOn; }
 
@@ -167,7 +179,6 @@ private:
 
 	void ServerTickPick(double Now);
 	/** Server: the current beat index from this machine's clock, or a song-tempo grid when it has none (dedicated). */
-	int64 ServerBeatIndex(double Now);
 	/** Server: the first player pawn inside the box (join order), with its along and direction. */
 	bool FindAnchor(float& OutAlong, float& OutDirection);
 	void ShowLit(float Pulse);

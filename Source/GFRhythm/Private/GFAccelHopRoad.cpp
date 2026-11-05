@@ -282,23 +282,25 @@ void AGFAccelHopRoad::ShowLit(float Pulse)
 	ShownLit = Want;
 }
 
-int64 AGFAccelHopRoad::ServerBeatIndex(double Now)
+float AGFAccelHopRoad::GetLitPickBeatSeconds()
 {
-	const UGFBeatClockSubsystem* Beat = Clock();
-	if (Beat && Beat->IsRunning())
-	{
-		// A listen host or solo player on the road: pick on the beat they hear.
-		return static_cast<int64>(FMath::FloorToDouble(Beat->GetCurrentBeat()));
-	}
 	if (GridBeatSeconds <= 0.f)
 	{
-		// No music on this machine (dedicated server): the road song's tempo, on the server's own clock.
+		// The road song's committed tempo (Beat Hop's fallback song by default), never a local track's (issue 343).
 		const FName Song = FGFBeatHopMusic::PickSong(EGFBeatHopMode::Songs, SongId, false, false);
 		const FGFBeatmap* Map = FGFBuiltInSongs::Find(Song, SongDifficulty);
 		const double Seconds = Map ? Map->SecondsPerBeat() : 0.5;
 		GridBeatSeconds = FGFAccelHopRules::ClampBeatSeconds(static_cast<float>(Seconds > 0.0 ? Seconds : 0.5));
 	}
-	return static_cast<int64>(FMath::FloorToDouble(Now / static_cast<double>(GridBeatSeconds)));
+	return GridBeatSeconds;
+}
+
+int64 AGFAccelHopRoad::GetLitPickBeatIndex(double Now)
+{
+	// Always the server's own steady grid, also on a listen host or a solo player. Each player may hear a different
+	// track at a different BPM (issue 343), so the shared pick must not ride the clock this machine hears: that
+	// clock only sets this player's beat feel, pulses and HUD timing.
+	return static_cast<int64>(FMath::FloorToDouble(Now / static_cast<double>(GetLitPickBeatSeconds())));
 }
 
 bool AGFAccelHopRoad::FindAnchor(float& OutAlong, float& OutDirection)
@@ -334,7 +336,7 @@ bool AGFAccelHopRoad::FindAnchor(float& OutAlong, float& OutDirection)
 
 void AGFAccelHopRoad::ServerTickPick(double Now)
 {
-	const int64 BeatIndex = ServerBeatIndex(Now);
+	const int64 BeatIndex = GetLitPickBeatIndex(Now);
 	if (BeatIndex == LastPickBeat)
 	{
 		return;
