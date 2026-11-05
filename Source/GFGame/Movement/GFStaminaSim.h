@@ -104,6 +104,8 @@ struct GFGAME_API FGFStaminaState
 	bool bMantling = false;
 	float MantleTimeLeft = 0.f;
 	FVector MantleTarget = FVector::ZeroVector;
+	/** #356: lip height above the feet when this mantle started, cm (picks the Low or High mantle clip). */
+	float MantleLipHeight = 0.f;
 
 	bool bSwiveling = false;
 	float SwivelAngle = 0.f;

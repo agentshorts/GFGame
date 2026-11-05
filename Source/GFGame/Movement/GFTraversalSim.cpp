@@ -652,6 +652,7 @@ bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Comma
 				Next.bMantling = true;
 				Next.MantleTimeLeft = Tuning.WallClimbMantleMaxSeconds;
 				Next.MantleTarget = Contact.LedgeTarget;
+				Next.MantleLipHeight = Contact.LedgeHeight;
 				StepMantle();
 			}
 			else

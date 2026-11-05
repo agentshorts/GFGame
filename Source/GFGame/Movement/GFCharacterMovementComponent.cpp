@@ -286,6 +286,15 @@ EGFWallClimbPhase UGFCharacterMovementComponent::GetWallClimbPhase() const
 	return Sim.bWallClimbing ? EGFWallClimbPhase::Climbing : EGFWallClimbPhase::None;
 }
 
+float UGFCharacterMovementComponent::GetMantleLipHeightCm() const
+{
+	if (CharacterOwner && CharacterOwner->GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		return -1.f;
+	}
+	return Sim.bMantling ? Sim.MantleLipHeight : -1.f;
+}
+
 void UGFCharacterMovementComponent::ApplyBaseRunSpeed()
 {
 	MaxWalkSpeed = GetTuning().BaseRunSpeed;

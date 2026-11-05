@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Aim/GFAimSim.h"
 #include "GFMiningAnim.h"
+#include "GFTraversalAnim.h"
 #include "GameFramework/Character.h"
 #include "InputCoreTypes.h"
 #include "GFCharacter.generated.h"
@@ -233,6 +234,13 @@ protected:
 	void UpdateMiningField(float DeltaSeconds);
 	/** Release: Mine_Field_End when the field pose is up. */
 	void EndMiningField();
+	/**
+	 * #356: climb, mantle and wall run clips from the movement state (GFTraversalAnim.h), on every copy that draws the
+	 * body. A clip that is not imported is never claimed, so locomotion keeps the body until the FBX land.
+	 */
+	void UpdateTraversalAnim(float DeltaSeconds);
+	/** Length and natural speed of a traversal clip, cached per key (a missing clip is looked up once). */
+	FGFTraversalClipInfo TraversalClipInfo(FName Key);
 	void PlayFistScopeCue();
 	bool IsAimingDownASnout() const;
 
@@ -246,6 +254,9 @@ protected:
 	bool bMagicHeld = false;
 	/** LMB hold field pose (GFMiningAnim.h). The pose and the Mining claim move together through its cues. */
 	FGFMiningField MiningField;
+	/** #356 traversal clips: edges and held claims for Climbing, Mantling and WallRun. */
+	FGFTraversalAnimDriver TraversalAnim;
+	TMap<FName, FGFTraversalClipInfo> TraversalClipCache;
 	float MagicPressSeconds = 0.f;
 	float MagicAimElapsed = 0.f;
 	bool bFistScopeSoundSearched = false;

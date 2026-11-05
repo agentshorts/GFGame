@@ -12,6 +12,7 @@
 #include "GFBeatHopNinja.h"
 #include "GFAccelHop.h"
 #include "GFStaminaSim.h"
+#include "GFTraversalAnim.h"
 #include "GFCharacterMovementComponent.generated.h"
 
 class UGFMovementTuning;
@@ -156,6 +157,28 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GF|Movement")
 	bool IsWallRunning() const { return Sim.bWallRunning; }
 
+	/**
+	 * #356: which side of her the wall is on while IsWallRunning(): Left plays Player.WallRun_Loop_L, Right plays
+	 * Player.WallRun_Loop_R. None when not wall running. Reads the sim, so like IsWallRunning it is None on a
+	 * simulated proxy (wall running is not replicated).
+	 */
+	EGFWallRunSide GetWallRunSide() const
+	{
+		return Sim.bWallRunning ? GFTraversalAnim::WallRunSideOf(Sim.WallRunDir, Sim.WallNormal) : EGFWallRunSide::None;
+	}
+
+	/** #356: wall running with the wall on her left (Blueprint view of GetWallRunSide). */
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	bool IsWallRunWallOnLeft() const { return GetWallRunSide() == EGFWallRunSide::Left; }
+
+	/** #356: wall running with the wall on her right (Blueprint view of GetWallRunSide). */
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	bool IsWallRunWallOnRight() const { return GetWallRunSide() == EGFWallRunSide::Right; }
+
+	/** #356: wall run speed along the wall, cm/s. Zero when not wall running. */
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	float GetWallRunSpeed() const { return Sim.bWallRunning ? Sim.WallRunSpeed : 0.f; }
+
 	/** #355: climbing straight up a wall. Remote players read the replicated phase. */
 	UFUNCTION(BlueprintPure, Category = "GF|Movement")
 	bool IsWallClimbing() const { return GetWallClimbPhase() == EGFWallClimbPhase::Climbing; }
@@ -167,6 +190,13 @@ public:
 	/** #355: None, Climbing or Mantling. The owner and the server read the sim; simulated proxies read the replicated copy. */
 	UFUNCTION(BlueprintPure, Category = "GF|Movement")
 	EGFWallClimbPhase GetWallClimbPhase() const;
+
+	/**
+	 * #356: lip height above the feet for the current mantle, cm (Decision #370: up to 120 takes the Low clip, else
+	 * High). -1 when not mantling, or on a simulated proxy, which only has the replicated phase.
+	 */
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	float GetMantleLipHeightCm() const;
 
 	UFUNCTION(BlueprintPure, Category = "GF|Movement")
 	bool IsSwiveling() const { return Sim.bSwiveling; }

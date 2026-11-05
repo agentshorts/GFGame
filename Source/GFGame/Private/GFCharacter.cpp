@@ -25,6 +25,7 @@
 #include "GFMagicTables.h"
 #include "GFMagicTypes.h"
 #include "GFMiningAnim.h"
+#include "GFTraversalAnim.h"
 #include "GFArenaDirector.h"
 #include "Aim/GFAimSim.h"
 #include "Animation/AnimSequenceBase.h"
@@ -157,6 +158,8 @@ FKey AGFCharacter::DefaultShoulderSwapKey()
 void AGFCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	// Before the local-only work: remote copies show the climb and the mantle from the replicated phase.
+	UpdateTraversalAnim(DeltaSeconds);
 	if (!IsLocallyControlled())
 	{
 		return;
@@ -1257,6 +1260,62 @@ void AGFCharacter::UpdateMiningField(float DeltaSeconds)
 void AGFCharacter::EndMiningField()
 {
 	ApplyMiningCue(MiningField.End());
+}
+
+FGFTraversalClipInfo AGFCharacter::TraversalClipInfo(FName Key)
+{
+	if (const FGFTraversalClipInfo* Cached = TraversalClipCache.Find(Key))
+	{
+		return *Cached;
+	}
+	FGFTraversalClipInfo Info;
+	if (UAnimSequenceBase* Clip = FGFAnimMap::Load(Key))
+	{
+		Info.Seconds = Clip->GetPlayLength();
+		Info.NaturalSpeedCms = FGFAnimMap::NaturalSpeedFor(Key, GFTraversalAnim::DefaultNaturalSpeedCms(Key));
+	}
+	TraversalClipCache.Add(Key, Info);
+	return Info;
+}
+
+void AGFCharacter::UpdateTraversalAnim(float DeltaSeconds)
+{
+	if (!SimpleAnim || GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	const UGFCharacterMovementComponent* Move = GetGFMovement();
+	if (!Move)
+	{
+		return;
+	}
+	FGFTraversalAnimInput In;
+	const EGFWallClimbPhase Phase = Move->GetWallClimbPhase();
+	In.bClimbing = Phase == EGFWallClimbPhase::Climbing;
+	In.bMantling = Phase == EGFWallClimbPhase::Mantling;
+	In.WallRunSide = Move->GetWallRunSide();
+	In.MantleLipCm = Move->GetMantleLipHeightCm();
+	In.ClimbSpeedCms = FMath::Max(0.f, static_cast<float>(Move->Velocity.Z));
+	In.WallRunSpeedCms = static_cast<float>(Move->Velocity.Size2D());
+	In.DeltaSeconds = DeltaSeconds;
+	const FGFTraversalAnimDriver::FCues Cues = TraversalAnim.Tick(In, [this](FName Key) { return TraversalClipInfo(Key); });
+	for (const FGFTraversalAnimCue& Cue : Cues)
+	{
+		switch (Cue.Kind)
+		{
+		case FGFTraversalAnimCue::EKind::Claim:
+			SimpleAnim->ClaimClip(Cue.Owner, Cue.Key, Cue.bLoop, Cue.Seconds, Cue.PlayRate);
+			break;
+		case FGFTraversalAnimCue::EKind::Release:
+			SimpleAnim->ReleaseClaim(Cue.Owner);
+			break;
+		case FGFTraversalAnimCue::EKind::SetPlayRate:
+			SimpleAnim->SetClaimPlayRate(Cue.Owner, Cue.PlayRate);
+			break;
+		default:
+			break;
+		}
+	}
 }
 
 void AGFCharacter::PlayFistScopeCue()

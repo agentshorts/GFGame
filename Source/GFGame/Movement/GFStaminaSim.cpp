@@ -42,6 +42,7 @@ void FGFStaminaState::ResetFull(const UGFMovementTuning& Tuning)
 	bMantling = false;
 	MantleTimeLeft = 0.f;
 	MantleTarget = FVector::ZeroVector;
+	MantleLipHeight = 0.f;
 	bSwiveling = false;
 	SwivelAngle = 0.f;
 	SwivelRadius = 0.f;
