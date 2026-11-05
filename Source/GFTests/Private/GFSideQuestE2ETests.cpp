@@ -409,7 +409,7 @@ bool FGFSideQuestE2ECinderTest::RunTest(const FString&)
 	}
 	const FString Key(TEXT("CinderClimber"));
 	AGFMagicPlayerState* PS = W.Add(Key);
-	if (!TestNotNull(TEXT("Player"), PS))
+	if (!TestNotNull(TEXT("Inventory"), PS ? PS->Inventory.Get() : nullptr))
 	{
 		return false;
 	}
@@ -436,6 +436,8 @@ bool FGFSideQuestE2ECinderTest::RunTest(const FString&)
 	TestEqual(TEXT("Mantle at the Cinderwright lip"), W.Adapters->CreditMantle(Key, Lip + FVector(50.f, 0.f, 0.f)), 1);
 	TestEqual(TEXT("Climb reaches the hand in"), W.StepOf(Key, CinderLine), FName(TEXT("HotbarDeliver")));
 	TestTrue(TEXT("Empty hand is refused"), W.HandIn(PS, Cinderwright).Result != EGFQuestResult::Ok);
+	// SideHandInEvent only counts HeldItem when inventory still owns one (same rule as ServerSetHeldItem).
+	PS->Inventory->AddItem(CrystalId, 1);
 	PS->HeldItem = CrystalId;
 	TestTrue(TEXT("Held crystal hands in"), W.HandIn(PS, Cinderwright).Result == EGFQuestResult::Ok);
 	TestTrue(TEXT("Cinderwright line done"), W.IsDone(Key, CinderLine));
