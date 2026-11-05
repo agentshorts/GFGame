@@ -6,12 +6,13 @@ Run Tools/import_acceleration_hop.py first (the tiles need their meshes). Tools/
 from scratch and calls place_in_current_level itself (GFTOWN_ACCEL_HOP=0 skips that), so this standalone pass is only
 needed on a map built before issue 334.
 
-Env: GFTOWN_KIT (default <project>/handoff/inbox/towns_v2), GFHOP_MAP (default L_World_Factions_A).
+Env: GFTOWN_KIT (default <project>/handoff/inbox/towns_v2), GFHOP_MAP (default L_World_Factions_A), GFTOWN_REST_AREA
+(the issue 335 rest area layout; default <kit>/../rest_area_v1/Rest_Area_Layout_v1_world_placements.json).
 
-- The plan comes from Tools/accel_hop_layout.py (pure Python, unit tested): two tiles per straight, straights only,
-  Landing tiles at both ends, Downbeat on each bar line and a Boost pair before the next bar.
+- The plan comes from Tools/accel_hop_layout.py (pure Python, unit tested): two tiles per straight, straights only
+  (never the rest area Road_T), Landing tiles at both ends of each run, Downbeat on each bar line and a Boost pair before the next bar.
 - Every tile is an AGFAccelHopTile (CustomDepth stencil 3, kind sets the mesh) in the folder AccelerationHop/Tiles,
-  tagged GFAccelHop. One AGFAccelHopRoad covers the run: it plays the song, pulses the glow and adds the outline pass.
+  tagged GFAccelHop. One AGFAccelHopRoad covers all runs: it plays the song, pulses the glow and adds the outline pass.
 - Reruns are safe: actors tagged GFAccelHop are removed before placing.
 Writes Saved/ArtImport/acceleration_hop_placement_report.json and logs "[gfhop]" lines.
 """
@@ -54,13 +55,14 @@ def clear_hops():
     return len(old)
 
 
-def place_in_current_level(kit=None):
-    """Removes earlier hop actors and places the plan into the open level. Returns a report dict (no save)."""
+def place_in_current_level(kit=None, rest_path=None):
+    """Removes earlier hop actors and places the plan into the open level. Returns a report dict (no save).
+    rest_path: the issue 335 rest area layout (default next to the kit); its Road_T splits the road into two runs."""
     kit = kit or KIT
     missing = [k for k in layout.KINDS if not unreal.EditorAssetLibrary.does_asset_exist(layout.mesh_path(k).rsplit(".", 1)[0])]
     if missing:
         raise RuntimeError("hop tile meshes missing ({}); run Tools/import_acceleration_hop.py first".format(", ".join(missing)))
-    plan = layout.plan_from_kit(kit)
+    plan = layout.plan_from_kit(kit, rest_path)
     if not plan["tiles"]:
         raise RuntimeError("no road straights found between Verdant and Cinderwright")
     eas = _eas()

@@ -13,9 +13,13 @@ Which road: the world layout's own link road straights that lie on the line from
 origin) to the Cinderwright layout_ref, parallel to it, between the two. The Rime road (x 0, running along Y) is
 left out by the parallel test.
 
-Tile kinds along the run (a design default, tunable here): the run opens and closes on Landing tiles, and between
+Tile kinds along each run (a design default, tunable here): a run opens and closes on Landing tiles, and between
 them repeats PATTERN, one bar of eight tiles (four straights, 16 m): a Downbeat on the bar line, Standard hops, and a
 pair of Boost chevrons before the next bar.
+
+Junctions (issue 335): the rest area turns the midpoint straight into a Road_T with a spur, which splits the road into
+two runs. Every run gets tiles (each with its own Landing ends), no tile overlaps a junction piece on the line, and one
+music box spans all of them. plan_from_kit applies the rest area layout (Tools/rest_area.py) when its file is there.
 """
 import io
 import json
@@ -38,6 +42,8 @@ PATTERN = ("Downbeat", "Standard", "Standard", "Standard", "Standard", "Standard
 END_LANDING_TILES = 2               # Landing tiles at each end of the run (one straight's worth)
 MESH_DIR = "/Game/Art/AccelerationHop/Tiles"
 BOUNDS_PAD_CM = (600.0, 400.0, 400.0)   # music box padding around the run: along, across, up
+ROAD_PREFIX = "SM_Town_Road_"
+JUNCTION_CLEAR_CM = ROAD_TILE_CM / 2.0 + TILE_SIZE_CM[0] / 2.0   # a tile centre closer than this to a junction overlaps it
 
 
 def mesh_path(kind):
@@ -108,6 +114,24 @@ def road_straights(layout, start, end):
     return out, travel_yaw
 
 
+def junctions(layout, start, end):
+    """Along-line positions of non-straight road pieces (T, corner, cross) whose centre sits on the road line."""
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length = math.hypot(dx, dy)
+    ux, uy = dx / length, dy / length
+    out = []
+    for p in layout["placements"]:
+        a = p["asset"]
+        if not a.startswith(ROAD_PREFIX) or a == ROAD_STRAIGHT:
+            continue
+        l = p["location_ue_cm"]
+        rx, ry = l[0] - start[0], l[1] - start[1]
+        along, across = rx * ux + ry * uy, -rx * uy + ry * ux
+        if abs(across) <= LINE_TOL_CM and 0.0 <= along <= length:
+            out.append(along)
+    return sorted(out)
+
+
 def runs(straights):
     """Splits sorted straights into contiguous runs (neighbours one road tile apart)."""
     groups = []
@@ -129,7 +153,8 @@ def kind_for(slot, count):
 
 
 def tiles_for(straights, travel_yaw):
-    """Two hop tiles per straight, in travel order, each dict(kind, mesh, location, yaw, road_index, slot)."""
+    """Two hop tiles per straight of one run, in travel order, each dict(kind, mesh, location, yaw, road_index, slot);
+    slot and kind count within the run."""
     out = []
     for s in straights:
         flip = _angle_diff(s["yaw"], travel_yaw) > 90.0
@@ -160,21 +185,43 @@ def bounds(tiles, travel_yaw):
                             round(BOUNDS_PAD_CM[2], 3)]}
 
 
+def _along(loc, start, travel_yaw):
+    return (loc[0] - start[0]) * math.cos(math.radians(travel_yaw)) + (loc[1] - start[1]) * math.sin(math.radians(travel_yaw))
+
+
 def plan(layout):
-    """The full placement plan for one world layout dict."""
+    """The full placement plan for one world layout dict: every run on the line, junction pieces skipped."""
     start, end = endpoints(layout)
     straights, travel_yaw = road_straights(layout, start, end)
+    joins = junctions(layout, start, end)
     groups = runs(straights)
-    run = max(groups, key=len) if groups else []
-    tiles = tiles_for(run, travel_yaw)
+    tiles = []
+    for run_index, g in enumerate(groups):
+        for t in tiles_for(g, travel_yaw):
+            if any(abs(_along(t["location"], start, travel_yaw) - j) < JUNCTION_CLEAR_CM for j in joins):
+                raise ValueError("hop tile at {} overlaps a junction".format(t["location"]))
+            t["run"] = run_index
+            t["run_slot"] = t["slot"]
+            tiles.append(t)
+    for slot, t in enumerate(tiles):
+        t["slot"] = slot
     counts = {k: sum(1 for t in tiles if t["kind"] == k) for k in KINDS}
     return {"layout": layout.get("layout"), "from": list(start), "to": list(end), "travel_yaw": round(travel_yaw, 3),
-            "straights": len(run), "straights_on_line": len(straights), "runs": [len(g) for g in groups],
+            "straights": sum(len(g) for g in groups), "straights_on_line": len(straights), "runs": [len(g) for g in groups],
+            "junctions_on_line": [round(j, 3) for j in joins],
             "tiles": tiles, "counts": counts, "bounds": bounds(tiles, travel_yaw)}
 
 
-def plan_from_kit(kit):
-    return plan(load(default_layouts(kit)[WORLD_LAYOUT]))
+def world_layout(kit, rest_path=None):
+    """The world layout dict, with the rest area applied when its file exists (rest_path or next to the kit)."""
+    import rest_area
+    lay = load(default_layouts(kit)[WORLD_LAYOUT])
+    rest = rest_area.load(rest_path or rest_area.path_next_to_kit(kit))
+    return rest_area.apply(lay, rest) if rest else lay
+
+
+def plan_from_kit(kit, rest_path=None):
+    return plan(world_layout(kit, rest_path))
 
 
 if __name__ == "__main__":
