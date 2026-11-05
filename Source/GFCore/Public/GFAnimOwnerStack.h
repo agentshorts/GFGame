@@ -25,7 +25,7 @@ enum class EGFAnimOwner : uint8
 	Climbing = 5,
 	/** #356 wall run: Player.WallRun_Loop_L / Player.WallRun_Loop_R by the side the wall is on. */
 	WallRun = 6,
-	/** #356 climb-exit mantle: Player.Mantle_Up (High), Player.Mantle_Up_Low (Low, reserved). */
+	/** #356 climb-exit mantle: Player.Mantle_Up (High), Player.Mantle_Up_Low (Low; row present, clip import pending). */
 	Mantling = 7,
 	FerrySeat = 8,
 };

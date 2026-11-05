@@ -50,6 +50,7 @@ Player.WallClimb_Enter,/Game/Art/Characters/Player/Anims/A_Player_Base_WallClimb
 Player.WallClimb_Loop,/Game/Art/Characters/Player/Anims/A_Player_Base_WallClimb_Loop.A_Player_Base_WallClimb_Loop,True,False,0.0,350.0
 Player.WallClimb_Exit_Fall,/Game/Art/Characters/Player/Anims/A_Player_Base_WallClimb_Exit_Fall.A_Player_Base_WallClimb_Exit_Fall,False,False,0.0,0.0
 Player.Mantle_Up,/Game/Art/Characters/Player/Anims/A_Player_Base_Mantle_Up.A_Player_Base_Mantle_Up,False,False,0.0,0.0
+Player.Mantle_Up_Low,/Game/Art/Characters/Player/Anims/A_Player_Base_Mantle_Up_Low.A_Player_Base_Mantle_Up_Low,False,False,0.0,0.0
 Player.WallRun_Loop_L,/Game/Art/Characters/Player/Anims/A_Player_Base_WallRun_Loop_L.A_Player_Base_WallRun_Loop_L,True,False,0.0,450.0
 Player.WallRun_Loop_R,/Game/Art/Characters/Player/Anims/A_Player_Base_WallRun_Loop_R.A_Player_Base_WallRun_Loop_R,True,False,0.0,450.0
 Tusksaw.Idle,/Game/Art/Dinos/Tusksaw/Anims/A_Dino_Tusksaw_Idle.A_Dino_Tusksaw_Idle,True,False,0.0,0.0

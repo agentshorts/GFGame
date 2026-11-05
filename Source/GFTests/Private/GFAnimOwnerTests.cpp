@@ -289,6 +289,7 @@ bool FGFAnimOwnerTraversalRowsTest::RunTest(const FString&)
 		{ TEXT("Player.WallClimb_Loop"), true, 350.f },
 		{ TEXT("Player.WallClimb_Exit_Fall"), false, 0.f },
 		{ TEXT("Player.Mantle_Up"), false, 0.f },
+		{ TEXT("Player.Mantle_Up_Low"), false, 0.f },
 		{ TEXT("Player.WallRun_Loop_L"), true, 450.f },
 		{ TEXT("Player.WallRun_Loop_R"), true, 450.f },
 	};
@@ -304,13 +305,13 @@ bool FGFAnimOwnerTraversalRowsTest::RunTest(const FString&)
 		TestEqual(FString::Printf(TEXT("%s natural speed"), E.Key), Row->NaturalSpeedCms, E.NaturalSpeedCms);
 		TestFalse(FString::Printf(TEXT("%s names a clip path"), E.Key), Row->Anim.IsNull());
 	}
-	TestNull(TEXT("Low mantle key is reserved, no row yet"), FGFAnimMap::Find(TEXT("Player.Mantle_Up_Low")));
 	TestEqual(TEXT("climb at 350 plays at 1.0"), FGFAnimMap::PlayRateFor(TEXT("Player.WallClimb_Loop"), 350.f), 1.f);
 	TestEqual(TEXT("wall run at 900 plays at 2.0"), FGFAnimMap::PlayRateFor(TEXT("Player.WallRun_Loop_R"), 900.f), 2.f);
 	TestEqual(TEXT("wall run clamps"), FGFAnimMap::PlayRateFor(TEXT("Player.WallRun_Loop_L"), 50.f), 0.25f);
 	TestEqual(TEXT("Enter has no natural speed"), FGFAnimMap::PlayRateFor(TEXT("Player.WallClimb_Enter"), 350.f), 1.f);
 	TestEqual(TEXT("row natural speed wins over the fallback"), FGFAnimMap::NaturalSpeedFor(TEXT("Player.WallClimb_Loop"), 1.f), 350.f);
-	TestEqual(TEXT("no row uses the fallback"), FGFAnimMap::NaturalSpeedFor(TEXT("Player.Mantle_Up_Low"), 42.f), 42.f);
+	TestEqual(TEXT("Low mantle row natural speed is 0"), FGFAnimMap::NaturalSpeedFor(TEXT("Player.Mantle_Up_Low"), 42.f), 0.f);
+	TestEqual(TEXT("no row uses the fallback"), FGFAnimMap::NaturalSpeedFor(TEXT("Player.Missing_Key_For_Fallback"), 42.f), 42.f);
 	return true;
 }
 

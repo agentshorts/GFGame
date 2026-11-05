@@ -29,9 +29,9 @@ namespace GFTraversalAnim
 	inline FName ClimbEnter() { return FName(TEXT("Player.WallClimb_Enter")); }
 	inline FName ClimbLoop() { return FName(TEXT("Player.WallClimb_Loop")); }
 	inline FName ClimbExitFall() { return FName(TEXT("Player.WallClimb_Exit_Fall")); }
-	/** Authored for the 220 cm lip (WallClimbMantleReach). Plays for every lip until a Low clip is in. */
+	/** Authored for the 220 cm lip (WallClimbMantleReach). Plays when Low is unavailable or the lip is above MantleLowMaxLipCm. */
 	inline FName MantleHigh() { return FName(TEXT("Player.Mantle_Up")); }
-	/** Reserved for the next anim pass (lips up to MantleLowMaxLipCm). No row yet; MantleKey falls back to High. */
+	/** Lips up to MantleLowMaxLipCm. DT_AnimMap row present; clip import still pending (MantleKey falls back to High until then). */
 	inline FName MantleLow() { return FName(TEXT("Player.Mantle_Up_Low")); }
 	inline FName WallRunLoopL() { return FName(TEXT("Player.WallRun_Loop_L")); }
 	inline FName WallRunLoopR() { return FName(TEXT("Player.WallRun_Loop_R")); }

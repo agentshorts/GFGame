@@ -140,7 +140,7 @@ bool FGFTraversalAnimMantleKeyTest::RunTest(const FString&)
 	TestEqual(TEXT("Decision #370 Low limit"), GFTraversalAnim::MantleLowMaxLipCm, 120.f);
 	TestEqual(TEXT("Decision #370 High lip"), GFTraversalAnim::MantleHighLipCm, 220.f);
 	TestEqual(TEXT("High key is the authored Mantle_Up"), GFTraversalAnim::MantleHigh(), FName(TEXT("Player.Mantle_Up")));
-	TestEqual(TEXT("Low key name is reserved"), GFTraversalAnim::MantleLow(), FName(TEXT("Player.Mantle_Up_Low")));
+	TestEqual(TEXT("Low key is Mantle_Up_Low"), GFTraversalAnim::MantleLow(), FName(TEXT("Player.Mantle_Up_Low")));
 
 	// Both clips in.
 	TestEqual(TEXT("30 cm lip is Low"), GFTraversalAnim::MantleKey(30.f, true), GFTraversalAnim::MantleLow());
@@ -148,7 +148,7 @@ bool FGFTraversalAnimMantleKeyTest::RunTest(const FString&)
 	TestEqual(TEXT("121 cm lip is High"), GFTraversalAnim::MantleKey(121.f, true), GFTraversalAnim::MantleHigh());
 	TestEqual(TEXT("220 cm lip is High"), GFTraversalAnim::MantleKey(220.f, true), GFTraversalAnim::MantleHigh());
 	TestEqual(TEXT("unknown lip (remote copy) is High"), GFTraversalAnim::MantleKey(-1.f, true), GFTraversalAnim::MantleHigh());
-	// Only Mantle_Up in the map today: every lip plays High.
+	// When the Low clip is not loaded yet, every lip plays High.
 	TestEqual(TEXT("no Low clip: 60 cm lip plays High"), GFTraversalAnim::MantleKey(60.f, false), GFTraversalAnim::MantleHigh());
 
 	// The sim keeps the lip the mantle started from.
@@ -296,7 +296,7 @@ bool FGFTraversalAnimDriverMantleRunTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("setup: climbing loop"), TopKey(S), GFTraversalAnim::ClimbLoop());
 
-	// Low lip with only Mantle_Up in the map: High plays.
+	// Low lip with the Low clip not loaded: High plays.
 	FGFTraversalAnimInput Mantle;
 	Mantle.bMantling = true;
 	Mantle.MantleLipCm = 90.f;
