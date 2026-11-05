@@ -1,12 +1,17 @@
 #include "GFStairCollision.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/World.h"
 #include "CollisionQueryParams.h"
 #include "CollisionShape.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "PhysicsEngine/AggregateGeom.h"
 #include "StaticMeshResources.h"
 #include "UObject/UObjectIterator.h"
+#if WITH_EDITORONLY_DATA
+#include "MeshDescription.h"
+#include "StaticMeshAttributes.h"
+#endif
 
 namespace GFStairCollisionDetail
 {
@@ -32,8 +37,8 @@ namespace GFStairCollisionDetail
 		FVector Normal;
 	};
 
-	/** World-space up-facing render triangles of LOD0. False when the CPU copy is gone. */
-	bool GatherUpTriangles(const UStaticMeshComponent* Component, TArray<FTri>& Out)
+	/** World-space up-facing triangles of LOD0 from the render buffers. False when the CPU copy is gone (bAllowCPUAccess off). */
+	bool GatherUpTrianglesFromRender(const UStaticMeshComponent* Component, TArray<FTri>& Out)
 	{
 		const UStaticMesh* Mesh = Component ? Component->GetStaticMesh() : nullptr;
 		const FStaticMeshRenderData* Render = Mesh ? Mesh->GetRenderData() : nullptr;
@@ -77,6 +82,95 @@ namespace GFStairCollisionDetail
 		return true;
 	}
 
+	/**
+	 * Editor fallback: the same triangles from the LOD0 mesh description (the imported source), scaled by the LOD0 build
+	 * scale. Town meshes do not set bAllowCPUAccess, so an editor script often has no CPU render copy, but the source is
+	 * always there in the editor. Uses the imported vertex normals; a triangle without them uses its winding normal.
+	 */
+	bool GatherUpTrianglesFromSource(const UStaticMeshComponent* Component, TArray<FTri>& Out)
+	{
+#if WITH_EDITORONLY_DATA
+		UStaticMesh* Mesh = Component ? Component->GetStaticMesh() : nullptr;
+		const FMeshDescription* Source = Mesh ? Mesh->GetMeshDescription(0) : nullptr;
+		if (!Source || Source->Triangles().Num() == 0)
+		{
+			return false;
+		}
+		const FVector BuildScale = Mesh->GetNumSourceModels() > 0 ? FVector(Mesh->GetSourceModel(0).BuildSettings.BuildScale3D) : FVector::OneVector;
+		FStaticMeshConstAttributes Attributes(*Source);
+		const TVertexAttributesConstRef<FVector3f> Positions = Attributes.GetVertexPositions();
+		const TVertexInstanceAttributesConstRef<FVector3f> Normals = Attributes.GetVertexInstanceNormals();
+		const FTransform ToWorld = Component->GetComponentTransform();
+		for (const FTriangleID Triangle : Source->Triangles().GetElementIDs())
+		{
+			const TArrayView<const FVertexID> Vertices = Source->GetTriangleVertices(Triangle);
+			const TArrayView<const FVertexInstanceID> Instances = Source->GetTriangleVertexInstances(Triangle);
+			if (Vertices.Num() != 3 || Instances.Num() != 3)
+			{
+				continue;
+			}
+			const FVector A = FVector(Positions[Vertices[0]]) * BuildScale;
+			const FVector B = FVector(Positions[Vertices[1]]) * BuildScale;
+			const FVector C = FVector(Positions[Vertices[2]]) * BuildScale;
+			FVector LocalNormal = FVector::ZeroVector;
+			if (Normals.IsValid())
+			{
+				LocalNormal = FVector(Normals[Instances[0]]) + FVector(Normals[Instances[1]]) + FVector(Normals[Instances[2]]);
+			}
+			if (LocalNormal.IsNearlyZero())
+			{
+				// Unreal's front face winding: (C - A) x (B - A) points out.
+				LocalNormal = FVector::CrossProduct(C - A, B - A);
+			}
+			const FVector Normal = ToWorld.TransformVectorNoScale(LocalNormal).GetSafeNormal();
+			if (Normal.Z < MinTreadNormalZ)
+			{
+				continue;
+			}
+			Out.Add({ ToWorld.TransformPosition(A), ToWorld.TransformPosition(B), ToWorld.TransformPosition(C), Normal });
+		}
+		return true;
+#else
+		return false;
+#endif
+	}
+
+	/** Render buffers first, then the editor source. False when neither has triangles. */
+	bool GatherUpTriangles(const UStaticMeshComponent* Component, TArray<FTri>& Out)
+	{
+		Out.Reset();
+		if (GatherUpTrianglesFromRender(Component, Out))
+		{
+			return true;
+		}
+		Out.Reset();
+		return GatherUpTrianglesFromSource(Component, Out);
+	}
+
+	/** Empty when FindBuriedTreads can measure the component, else why it returns -1. */
+	FString AuditBlocker(const UStaticMeshComponent* Component)
+	{
+		if (!Component)
+		{
+			return TEXT("no component");
+		}
+		if (!Component->GetStaticMesh())
+		{
+			return TEXT("component has no static mesh");
+		}
+		if (!Component->IsRegistered())
+		{
+			return TEXT("component is not registered");
+		}
+		if (!Component->IsPhysicsStateCreated() || !Component->GetBodyInstance() || !Component->GetBodyInstance()->IsValidBodyInstance())
+		{
+			return FString::Printf(TEXT("no physics state (collision %s, world %s)"),
+				Component->IsCollisionEnabled() ? TEXT("on") : TEXT("off"),
+				Component->GetWorld() && Component->GetWorld()->GetPhysicsScene() ? TEXT("has a physics scene") : TEXT("has no physics scene"));
+		}
+		return FString();
+	}
+
 	/** Sub-triangle centroids on a grid sized to the triangle, so a big plinth top is sampled at its rim, not only its middle. */
 	void SampleTriangle(const FTri& Tri, TArray<FVector>& Out)
 	{
@@ -99,7 +193,17 @@ int32 UGFStairCollisionLibrary::FindBuriedTreads(UStaticMeshComponent* Component
 	using namespace GFStairCollisionDetail;
 	OutWorldPoints.Reset();
 	OutTreadHeightsCm.Reset();
-	if (!Component || !Component->GetStaticMesh() || !Component->IsPhysicsStateCreated() || !Component->GetBodyInstance() || !Component->GetBodyInstance()->IsValidBodyInstance())
+	if (!Component || !Component->GetStaticMesh())
+	{
+		return -1;
+	}
+	// Complex as simple means the blocking collision is the render triangles, so no hull can cover a tread the eye
+	// sees. The overlap test below would read the mesh's own walls and risers over open treads as buried, so skip it.
+	if (UsesComplexAsSimple(Component->GetStaticMesh()))
+	{
+		return 0;
+	}
+	if (!AuditBlocker(Component).IsEmpty())
 	{
 		return -1;
 	}
@@ -130,7 +234,7 @@ int32 UGFStairCollisionLibrary::FindBuriedTreads(UStaticMeshComponent* Component
 			{
 				continue;
 			}
-			// Blocking collision (simple, or the trimesh when complex is used as simple) fills the band over the tread.
+			// Blocking collision (the simple hull) fills the band over the tread.
 			if (!Component->OverlapComponent(Point + BandCentreUp, FQuat::Identity, Band))
 			{
 				continue;
@@ -162,6 +266,45 @@ int32 UGFStairCollisionLibrary::FindBuriedTreads(UStaticMeshComponent* Component
 		}
 	}
 	return OutWorldPoints.Num();
+}
+
+FString UGFStairCollisionLibrary::DescribeTreadAuditBlocker(UStaticMeshComponent* Component)
+{
+	FString Why = GFStairCollisionDetail::AuditBlocker(Component);
+	if (!Why.IsEmpty())
+	{
+		return Why;
+	}
+	if (UsesComplexAsSimple(Component->GetStaticMesh()))
+	{
+		return FString();
+	}
+	TArray<GFStairCollisionDetail::FTri> Treads;
+	if (GFStairCollisionDetail::GatherUpTrianglesFromRender(Component, Treads))
+	{
+		return FString();
+	}
+	Treads.Reset();
+	if (GFStairCollisionDetail::GatherUpTrianglesFromSource(Component, Treads))
+	{
+		return FString();
+	}
+	return TEXT("no CPU render triangles (bAllowCPUAccess off) and no editor mesh description for LOD0");
+}
+
+FString UGFStairCollisionLibrary::DescribeTreadSource(UStaticMeshComponent* Component)
+{
+	TArray<GFStairCollisionDetail::FTri> Treads;
+	if (GFStairCollisionDetail::GatherUpTrianglesFromRender(Component, Treads))
+	{
+		return TEXT("render buffers");
+	}
+	Treads.Reset();
+	if (GFStairCollisionDetail::GatherUpTrianglesFromSource(Component, Treads))
+	{
+		return TEXT("mesh description");
+	}
+	return TEXT("none");
 }
 
 FString UGFStairCollisionLibrary::DescribeSimpleCollision(UStaticMesh* Mesh)

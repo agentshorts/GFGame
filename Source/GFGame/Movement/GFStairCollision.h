@@ -23,10 +23,21 @@ public:
 	 * 1.5 cm and StepHeightCm above the bottom of the component's bounds (a step a walking pawn can take from the
 	 * ground). It is buried when the component's blocking collision fills the capsule band above it while the render
 	 * mesh shows open air there, and a horizontal ray from knee height leaves the mesh somewhere (a player can reach it).
-	 * Returns how many samples are buried, or -1 when the mesh has no CPU-readable triangles or no physics state.
+	 * Triangles come from the LOD0 render buffers, or in the editor from the LOD0 mesh description when the render
+	 * copy is not CPU readable. A mesh that uses complex as simple returns 0: its collision is its render triangles,
+	 * so no hull can cover a tread (and its own walls would read as false buried samples).
+	 * Returns how many samples are buried, or -1 when it cannot measure (DescribeTreadAuditBlocker says why).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GF|Collision")
 	static int32 FindBuriedTreads(UStaticMeshComponent* Component, float StepHeightCm, TArray<FVector>& OutWorldPoints, TArray<float>& OutTreadHeightsCm);
+
+	/** Empty when FindBuriedTreads can measure this component, else why it returns -1 (no physics state, no triangles). */
+	UFUNCTION(BlueprintCallable, Category = "GF|Collision")
+	static FString DescribeTreadAuditBlocker(UStaticMeshComponent* Component);
+
+	/** Where FindBuriedTreads reads triangles for this component: "render buffers", "mesh description" or "none". */
+	UFUNCTION(BlueprintCallable, Category = "GF|Collision")
+	static FString DescribeTreadSource(UStaticMeshComponent* Component);
 
 	/** One line about the mesh's simple collision: trace flag, element counts, each element's local box, and how much of the render bounds the biggest one fills. */
 	UFUNCTION(BlueprintCallable, Category = "GF|Collision")
