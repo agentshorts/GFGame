@@ -85,6 +85,10 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
 	EGFSideQuestStatus ActiveSideStatus = EGFSideQuestStatus::Locked;
 
+	/** Side lines this player has finished (Done), so the elder menu does not offer them again. Replication only, not saved here. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
+	TArray<FName> DoneSideLineIds;
+
 	/** Who last turned this player's visitor protection off, and when (server sets it; session only). {Dragger} in lines. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Faction")
 	FGFDragRecord LastDrag;
@@ -236,6 +240,8 @@ public:
 	void SetQuestReplicated(EGFQuestStep Step, int32 Count, EGFFactionRank Rank);
 	/** Server. Copies the Active side line, its step, count, and status onto the replicated fields. */
 	void SetSideQuestReplicated(FName LineId, FName StepId, int32 Count, EGFSideQuestStatus Status);
+	/** Server. Copies the Done side lines onto the replicated list. */
+	void SetSideDoneReplicated(const TArray<FName>& LineIds);
 	/** Server. Raw flag. Villain rules go through UGFSocialComponent; this only stores the result. */
 	void SetVillainMode(bool bOn);
 	/**

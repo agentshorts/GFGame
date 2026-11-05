@@ -48,6 +48,11 @@ public:
 	FGFSideQuestApplyResult ApplySideEvent(const FGFSideQuestEvent& Event);
 	const FGFSideQuestBoard* FindSideBoard(const FString& PlayerKey) const;
 	const FGFSideQuestCatalog& GetSideCatalog() const { return SideCatalog; }
+	/**
+	 * Tests and dev tools only. Swaps the side lines (shipped data stays as loaded from the CSVs) and refreshes every
+	 * board against them. Lets a test run a full line while the shipped stubs stay locked.
+	 */
+	void SetSideCatalogForTests(const FGFSideQuestCatalog& InCatalog);
 
 	/**
 	 * Rank Leader was recorded for this player.

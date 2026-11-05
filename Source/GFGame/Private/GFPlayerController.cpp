@@ -714,6 +714,30 @@ void AGFPlayerController::RequestElderHandIn()
 	}
 }
 
+void AGFPlayerController::RequestElderSideAccept()
+{
+	if (HasAuthority())
+	{
+		ServerElderSideAccept_Implementation();
+	}
+	else
+	{
+		ServerElderSideAccept();
+	}
+}
+
+void AGFPlayerController::RequestElderSideHandIn()
+{
+	if (HasAuthority())
+	{
+		ServerElderSideHandIn_Implementation();
+	}
+	else
+	{
+		ServerElderSideHandIn();
+	}
+}
+
 void AGFPlayerController::RequestElderTrade(FName RowId)
 {
 	const int32 RequestId = ++ElderRequestSerial;
@@ -778,6 +802,75 @@ void AGFPlayerController::ServerElderHandIn_Implementation()
 	else if (Result.Result == EGFQuestResult::Ignored && FGFElderTalk::ActionFor(View.Step) == FGFElderTalk::EAction::HandIn && Offer.Num() == 0)
 	{
 		ShowElderToast(FGFElderTalk::RefusalText(FGFQuestCodes::Short, View.Step));
+	}
+}
+
+void AGFPlayerController::ServerElderSideAccept_Implementation()
+{
+	FString Why;
+	if (!ElderMenuAllows(Why))
+	{
+		ShowElderToast(Why);
+		return;
+	}
+	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	UGFQuestSubsystem* Quest = UGFQuestSubsystem::Get(GetWorld());
+	if (!PS || PS->PlayerKey.IsEmpty() || !Quest)
+	{
+		ShowElderToast(TEXT("The elder cannot take that yet."));
+		return;
+	}
+	Quest->EnsureRegistered();
+	const FName TownId = ElderSession->TownId;
+	const FGFQuestProgress* Errand = Quest->FindProgress(PS->PlayerKey);
+	const FGFSideQuestBoard* Board = Quest->FindSideBoard(PS->PlayerKey);
+	const FGFSideQuestBoard Empty;
+	const FGFElderTalk::FSideOffer Offer = FGFElderTalk::SideOfferFor(Quest->GetSideCatalog(), Board ? *Board : Empty,
+		Errand ? Errand->FactionId : NAME_None, Errand ? Errand->Rank : EGFFactionRank::Outsider, TownId);
+	if (Offer.Action != FGFElderTalk::ESideAction::Accept)
+	{
+		ShowElderToast(TEXT("This elder has no town task for you right now."));
+		return;
+	}
+	const FGFSideQuestApplyResult Result = Quest->ApplySideEvent(FGFSideQuestEvents::TalkAccepted(PS->PlayerKey, Offer.LineId, TownId));
+	if (Result.Result != EGFQuestResult::Ok)
+	{
+		ShowElderToast(FGFElderTalk::SideRefusalText(Result.Reason));
+	}
+}
+
+void AGFPlayerController::ServerElderSideHandIn_Implementation()
+{
+	FString Why;
+	if (!ElderMenuAllows(Why))
+	{
+		ShowElderToast(Why);
+		return;
+	}
+	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	UGFQuestSubsystem* Quest = UGFQuestSubsystem::Get(GetWorld());
+	if (!PS || !PS->Inventory || PS->PlayerKey.IsEmpty() || !Quest)
+	{
+		ShowElderToast(TEXT("The elder cannot take that yet."));
+		return;
+	}
+	Quest->EnsureRegistered();
+	const FName TownId = ElderSession->TownId;
+	const FGFQuestProgress* Errand = Quest->FindProgress(PS->PlayerKey);
+	const FGFSideQuestBoard* Board = Quest->FindSideBoard(PS->PlayerKey);
+	const FGFSideQuestBoard Empty;
+	const FGFElderTalk::FSideOffer Offer = FGFElderTalk::SideOfferFor(Quest->GetSideCatalog(), Board ? *Board : Empty,
+		Errand ? Errand->FactionId : NAME_None, Errand ? Errand->Rank : EGFFactionRank::Outsider, TownId);
+	FGFSideQuestEvent Event;
+	if (!FGFElderTalk::SideHandInEvent(Offer, PS->PlayerKey, TownId, PS->HeldItem, PS->Inventory->GetInventory(), Event))
+	{
+		ShowElderToast(TEXT("There is nothing to hand in for this town task yet."));
+		return;
+	}
+	const FGFSideQuestApplyResult Result = Quest->ApplySideEvent(Event);
+	if (Result.Result != EGFQuestResult::Ok)
+	{
+		ShowElderToast(FGFElderTalk::SideRefusalText(Result.Reason));
 	}
 }
 

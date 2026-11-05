@@ -222,6 +222,18 @@ void UGFQuestSubsystem::PushPlayer(AGFPlayerState* PS) const
 	{
 		PS->SetSideQuestReplicated(NAME_None, NAME_None, 0, EGFSideQuestStatus::Locked);
 	}
+	TArray<FName> Done;
+	if (Board)
+	{
+		for (const FGFSideQuestProgress& Line : Board->Lines)
+		{
+			if (Line.Status == EGFSideQuestStatus::Done)
+			{
+				Done.Add(Line.LineId);
+			}
+		}
+	}
+	PS->SetSideDoneReplicated(Done);
 }
 
 void UGFQuestSubsystem::PushAllPlayers() const
@@ -375,6 +387,19 @@ FGFSideQuestLine& UGFQuestSubsystem::SideLineFor(const FString& PlayerKey)
 	Line.FactionId = Errand ? Errand->FactionId : NAME_None;
 	Line.Rank = Errand ? Errand->Rank : EGFFactionRank::Outsider;
 	return Line;
+}
+
+void UGFQuestSubsystem::SetSideCatalogForTests(const FGFSideQuestCatalog& InCatalog)
+{
+	SideCatalog = InCatalog;
+	SideCatalog.Normalize();
+	TArray<FString> Keys;
+	SideLines.GetKeys(Keys);
+	for (const FString& Key : Keys)
+	{
+		RefreshSide(Key);
+	}
+	PushAllPlayers();
 }
 
 void UGFQuestSubsystem::RefreshSide(const FString& PlayerKey)

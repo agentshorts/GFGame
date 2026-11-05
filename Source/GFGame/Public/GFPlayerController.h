@@ -56,6 +56,9 @@ public:
 	void RequestCloseElderMenu();
 	void RequestElderAccept();
 	void RequestElderHandIn();
+	/** Side line buttons (QL-b). Separate from the errand Accept and Hand in. */
+	void RequestElderSideAccept();
+	void RequestElderSideHandIn();
 	void RequestElderTrade(FName RowId);
 	bool IsElderMenuSessionOpen() const { return ElderPhase == EGFElderSession::Open; }
 	void ShowElderToast(const FString& Text);
@@ -94,6 +97,12 @@ public:
 
 	UFUNCTION(Server, Reliable)
 	void ServerElderHandIn();
+
+	UFUNCTION(Server, Reliable)
+	void ServerElderSideAccept();
+
+	UFUNCTION(Server, Reliable)
+	void ServerElderSideHandIn();
 
 	UFUNCTION(Server, Reliable)
 	void ServerElderTrade(FName RowId, int32 RequestId);

@@ -39,6 +39,7 @@ void AGFPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(AGFPlayerState, ActiveSideStepId);
 	DOREPLIFETIME(AGFPlayerState, ActiveSideCount);
 	DOREPLIFETIME(AGFPlayerState, ActiveSideStatus);
+	DOREPLIFETIME(AGFPlayerState, DoneSideLineIds);
 	DOREPLIFETIME(AGFPlayerState, LastDrag);
 	DOREPLIFETIME(AGFPlayerState, HeldItem);
 	DOREPLIFETIME(AGFPlayerState, bCharacterReady);
@@ -387,6 +388,16 @@ void AGFPlayerState::SetSideQuestReplicated(FName LineId, FName StepId, int32 Co
 	ActiveSideStepId = StepId;
 	ActiveSideCount = Count;
 	ActiveSideStatus = Status;
+	ForceNetUpdate();
+}
+
+void AGFPlayerState::SetSideDoneReplicated(const TArray<FName>& LineIds)
+{
+	if (!HasAuthority() || DoneSideLineIds == LineIds)
+	{
+		return;
+	}
+	DoneSideLineIds = LineIds;
 	ForceNetUpdate();
 }
 

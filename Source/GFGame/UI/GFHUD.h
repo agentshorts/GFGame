@@ -229,6 +229,8 @@ private:
 	void DrawPauseMenu();
 	void DrawFieldHud();
 	void DrawElderMenu();
+	/** Side line part of the Talk tab (QL-b): the town task title, its step, and Accept town task or Hand in town task. */
+	void DrawElderSideSection(const class AGFPlayerState* PS, float Y);
 	void ActivateElderBox(FName BoxName);
 	void DrawInventoryScreen();
 	/** Icon, or a swatch with a short label, inside a tile. Shared by the hotbar and the bag. */

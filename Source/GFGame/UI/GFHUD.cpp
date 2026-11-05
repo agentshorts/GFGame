@@ -1840,6 +1840,17 @@ namespace
 		static const FGFQuestCatalog Catalog = FGFQuestCatalog::Load();
 		return Catalog;
 	}
+
+	/** The world's side lines (the quest subsystem loads them on every machine), else the CSVs once. */
+	const FGFSideQuestCatalog& ElderSideRows(const UWorld* World)
+	{
+		if (const UGFQuestSubsystem* Quest = UGFQuestSubsystem::Get(World))
+		{
+			return Quest->GetSideCatalog();
+		}
+		static const FGFSideQuestCatalog Catalog = FGFSideQuestCatalog::Load();
+		return Catalog;
+	}
 }
 
 void AGFHUD::ActivateElderBox(FName BoxName)
@@ -1878,6 +1889,16 @@ void AGFHUD::ActivateElderBox(FName BoxName)
 	if (Name == TEXT("GFElder_HandIn"))
 	{
 		PC->RequestElderHandIn();
+		return;
+	}
+	if (Name == TEXT("GFElder_SideAccept"))
+	{
+		PC->RequestElderSideAccept();
+		return;
+	}
+	if (Name == TEXT("GFElder_SideHandIn"))
+	{
+		PC->RequestElderSideHandIn();
 		return;
 	}
 	FString Trade = Name;
@@ -1946,6 +1967,7 @@ void AGFHUD::DrawElderMenu()
 			DrawText(TEXT("Hand in"), FLinearColor(0.98f, 0.86f, 0.45f), 40.f, Y, Font, 1.f, false);
 			AddHitBox(FVector2D(32.f, Y - 4.f), FVector2D(200.f, 26.f), TEXT("GFElder_HandIn"), true);
 		}
+		DrawElderSideSection(PS, Y + 40.f);
 	}
 	else if (ElderTab == EGFElderTab::Trade)
 	{
@@ -1993,6 +2015,46 @@ void AGFHUD::DrawElderMenu()
 
 	DrawText(TEXT("Close"), FLinearColor(0.98f, 0.86f, 0.45f), 40.f, 384.f, Font, 1.f, false);
 	AddHitBox(FVector2D(32.f, 378.f), FVector2D(160.f, 28.f), TEXT("GFElder_Close"), true);
+}
+
+void AGFHUD::DrawElderSideSection(const AGFPlayerState* PS, float Y)
+{
+	if (!PS || ElderTownId.IsNone())
+	{
+		return;
+	}
+	UFont* Font = HudFont();
+	const bool bActive = PS->ActiveSideStatus == EGFSideQuestStatus::Active;
+	const FGFElderTalk::FSideOffer Offer = FGFElderTalk::SideOfferFor(ElderSideRows(GetWorld()),
+		bActive ? PS->ActiveSideLineId : NAME_None, bActive ? PS->ActiveSideStepId : NAME_None, bActive ? PS->ActiveSideCount : 0,
+		PS->DoneSideLineIds, PS->FactionId, PS->FactionRank, ElderTownId);
+	if (!Offer.Line)
+	{
+		return;
+	}
+	DrawText(Offer.Line->Title.IsEmpty() ? FString(TEXT("Town task")) : Offer.Line->Title, FLinearColor::White, 40.f, Y, Font, 0.95f, false);
+	Y += 26.f;
+	if (Offer.Step)
+	{
+		const int32 Goal = FMath::Max(1, Offer.Step->Goal);
+		FString StepLine = Offer.Step->Hint.IsEmpty() ? Offer.Step->Title : Offer.Step->Hint;
+		if (Goal > 1)
+		{
+			StepLine += FString::Printf(TEXT(" (%d/%d)"), FMath::Clamp(Offer.Count, 0, Goal), Goal);
+		}
+		DrawText(StepLine, FLinearColor(0.88f, 0.90f, 0.84f), 40.f, Y, Font, 0.85f, false);
+		Y += 30.f;
+	}
+	if (Offer.Action == FGFElderTalk::ESideAction::Accept)
+	{
+		DrawText(TEXT("Accept town task"), FLinearColor(0.98f, 0.86f, 0.45f), 40.f, Y, Font, 1.f, false);
+		AddHitBox(FVector2D(32.f, Y - 4.f), FVector2D(240.f, 26.f), TEXT("GFElder_SideAccept"), true);
+	}
+	else if (Offer.Action == FGFElderTalk::ESideAction::HandIn)
+	{
+		DrawText(TEXT("Hand in town task"), FLinearColor(0.98f, 0.86f, 0.45f), 40.f, Y, Font, 1.f, false);
+		AddHitBox(FVector2D(32.f, Y - 4.f), FVector2D(240.f, 26.f), TEXT("GFElder_SideHandIn"), true);
+	}
 }
 
 void AGFHUD::DrawBeatHopPops()
