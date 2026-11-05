@@ -69,6 +69,22 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
 	EGFFactionRank FactionRank = EGFFactionRank::Outsider;
 
+	/** Active side line on the board (None when no side line is Active). The server writes it. Same replication as the errand fields. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
+	FName ActiveSideLineId;
+
+	/** Step of the Active side line. None when no side line is Active. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
+	FName ActiveSideStepId;
+
+	/** Count inside the Active side step. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
+	int32 ActiveSideCount = 0;
+
+	/** Active while a side line runs, else Locked. The full board stays on the server. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
+	EGFSideQuestStatus ActiveSideStatus = EGFSideQuestStatus::Locked;
+
 	/** Who last turned this player's visitor protection off, and when (server sets it; session only). {Dragger} in lines. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Faction")
 	FGFDragRecord LastDrag;
@@ -218,6 +234,8 @@ public:
 	void SetCurrentZoneId(FName NewId);
 	/** Server. Copies the quest step, the step count, and the rank onto the replicated fields. */
 	void SetQuestReplicated(EGFQuestStep Step, int32 Count, EGFFactionRank Rank);
+	/** Server. Copies the Active side line, its step, count, and status onto the replicated fields. */
+	void SetSideQuestReplicated(FName LineId, FName StepId, int32 Count, EGFSideQuestStatus Status);
 	/** Server. Raw flag. Villain rules go through UGFSocialComponent; this only stores the result. */
 	void SetVillainMode(bool bOn);
 	/**

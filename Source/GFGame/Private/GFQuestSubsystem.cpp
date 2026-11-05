@@ -21,6 +21,8 @@ void UGFQuestSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 	Catalog = FGFQuestCatalog::Load();
 	EventHandle = FGFQuestEvents::OnRaised().AddUObject(this, &UGFQuestSubsystem::OnQuestEvent);
+	SideCatalog = FGFSideQuestCatalog::Load();
+	SideEventHandle = FGFSideQuestEvents::OnRaised().AddUObject(this, &UGFQuestSubsystem::OnSideQuestEvent);
 }
 
 void UGFQuestSubsystem::Deinitialize()
@@ -41,6 +43,11 @@ void UGFQuestSubsystem::Deinitialize()
 	{
 		FGFQuestEvents::OnRaised().Remove(EventHandle);
 		EventHandle.Reset();
+	}
+	if (SideEventHandle.IsValid())
+	{
+		FGFSideQuestEvents::OnRaised().Remove(SideEventHandle);
+		SideEventHandle.Reset();
 	}
 	Super::Deinitialize();
 }
@@ -105,6 +112,7 @@ void UGFQuestSubsystem::OnModePlayerReady(AGFPlayerState* PS)
 			}
 		}
 	}
+	RefreshSide(PS->PlayerKey);
 	PushPlayer(PS);
 }
 
@@ -122,7 +130,18 @@ void UGFQuestSubsystem::CaptureModeState(TArray<uint8>& Out) const
 		Record.Progress = Pair.Value.Progress;
 		Save.Records.Add(Record);
 	}
-	if (Save.Records.Num() > 0)
+	for (const TPair<FString, FGFSideQuestLine>& Pair : SideLines)
+	{
+		if (Pair.Key.IsEmpty() || Pair.Value.Board.IsDefault())
+		{
+			continue;
+		}
+		FGFSideQuestBoardRecord Record;
+		Record.PlayerKey = Pair.Key;
+		Record.Board = Pair.Value.Board;
+		Save.SideBoards.Add(Record);
+	}
+	if (Save.Records.Num() > 0 || Save.SideBoards.Num() > 0)
 	{
 		FGFModeBytes::Write(Save, Out);
 	}
@@ -131,6 +150,7 @@ void UGFQuestSubsystem::CaptureModeState(TArray<uint8>& Out) const
 void UGFQuestSubsystem::RestoreModeState(const TArray<uint8>& In)
 {
 	Lines.Reset();
+	SideLines.Reset();
 	FGFQuestSave Save;
 	if (In.Num() > 0 && FGFModeBytes::Read(Save, In))
 	{
@@ -143,6 +163,26 @@ void UGFQuestSubsystem::RestoreModeState(const TArray<uint8>& In)
 			FGFQuestLine& Line = Lines.FindOrAdd(Record.PlayerKey);
 			Line.Catalog = &Catalog;
 			Line.Progress = Record.Progress;
+		}
+		// Blobs saved before the side board existed have no SideBoards and load with empty boards.
+		for (const FGFSideQuestBoardRecord& Record : Save.SideBoards)
+		{
+			if (Record.PlayerKey.IsEmpty())
+			{
+				continue;
+			}
+			SideLineFor(Record.PlayerKey).Board = Record.Board;
+		}
+		// Every known player gets Locked / Available re-derived from the restored errand standing.
+		for (const TPair<FString, FGFQuestLine>& Pair : Lines)
+		{
+			RefreshSide(Pair.Key);
+		}
+		TArray<FString> SideKeys;
+		SideLines.GetKeys(SideKeys);
+		for (const FString& Key : SideKeys)
+		{
+			RefreshSide(Key);
 		}
 	}
 	PushAllPlayers();
@@ -171,6 +211,17 @@ void UGFQuestSubsystem::PushPlayer(AGFPlayerState* PS) const
 	const FGFQuestProgress Defaults;
 	const FGFQuestProgress& View = Progress ? *Progress : Defaults;
 	PS->SetQuestReplicated(View.Step, View.Count, View.Rank);
+
+	const FGFSideQuestBoard* Board = FindSideBoard(PS->PlayerKey);
+	const FGFSideQuestProgress* Active = Board ? Board->Active() : nullptr;
+	if (Active && Active->Status == EGFSideQuestStatus::Active)
+	{
+		PS->SetSideQuestReplicated(Active->LineId, Active->StepId, Active->Count, Active->Status);
+	}
+	else
+	{
+		PS->SetSideQuestReplicated(NAME_None, NAME_None, 0, EGFSideQuestStatus::Locked);
+	}
 }
 
 void UGFQuestSubsystem::PushAllPlayers() const
@@ -276,6 +327,7 @@ FGFQuestApplyResult UGFQuestSubsystem::ApplyEvent(const FGFQuestEvent& Event)
 			UE_LOG(LogGF, Log, TEXT("Quest: %s won the show but did not take %s (%s)."), *Event.PlayerKey, *Line.Progress.FactionId.ToString(), *Code.ToString());
 		}
 	}
+	RefreshSide(Event.PlayerKey);
 	if (PS)
 	{
 		PushPlayer(PS);
@@ -306,5 +358,111 @@ void UGFQuestSubsystem::OnFactionLeaderSet(FName FactionId, const FString& Playe
 	if (!bPosted)
 	{
 		UE_LOG(LogGF, Log, TEXT("Quest: show win for %s did not reach the Elder Book."), *PlayerKey);
+	}
+}
+
+const FGFSideQuestBoard* UGFQuestSubsystem::FindSideBoard(const FString& PlayerKey) const
+{
+	const FGFSideQuestLine* Line = SideLines.Find(PlayerKey);
+	return Line ? &Line->Board : nullptr;
+}
+
+FGFSideQuestLine& UGFQuestSubsystem::SideLineFor(const FString& PlayerKey)
+{
+	FGFSideQuestLine& Line = SideLines.FindOrAdd(PlayerKey);
+	Line.Catalog = &SideCatalog;
+	const FGFQuestProgress* Errand = FindProgress(PlayerKey);
+	Line.FactionId = Errand ? Errand->FactionId : NAME_None;
+	Line.Rank = Errand ? Errand->Rank : EGFFactionRank::Outsider;
+	return Line;
+}
+
+void UGFQuestSubsystem::RefreshSide(const FString& PlayerKey)
+{
+	if (PlayerKey.IsEmpty())
+	{
+		return;
+	}
+	SideLineFor(PlayerKey).Refresh();
+}
+
+void UGFQuestSubsystem::OnSideQuestEvent(UWorld* World, const FGFSideQuestEvent& Event)
+{
+	if (!GetWorld() || World != GetWorld() || GetWorld()->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	ApplySideEvent(Event);
+}
+
+FGFSideQuestApplyResult UGFQuestSubsystem::ApplySideEvent(const FGFSideQuestEvent& Event)
+{
+	FGFSideQuestApplyResult Result;
+	Result.Reason = FGFQuestCodes::Unknown;
+	if (Event.PlayerKey.IsEmpty())
+	{
+		return Result;
+	}
+	UWorld* World = GetWorld();
+	if (World && World->GetNetMode() == NM_Client)
+	{
+		return Result;
+	}
+	EnsureRegistered();
+	FGFSideQuestLine& Line = SideLineFor(Event.PlayerKey);
+	const FGFSideQuestBoard Before = Line.Board;
+	Result = Line.Apply(Event);
+
+	AGFGameState* GS = World ? World->GetGameState<AGFGameState>() : nullptr;
+	AGFPlayerState* PS = GS ? GS->FindPlayerByKey(Event.PlayerKey) : nullptr;
+	if (Result.Result == EGFQuestResult::Ok && Result.Charge.Num() > 0)
+	{
+		if (!PS || !PS->Inventory || !PS->Inventory->RemoveAll(Result.Charge))
+		{
+			Line.Board = Before;
+			Result.Result = EGFQuestResult::Refused;
+			Result.Reason = FGFQuestCodes::Short;
+			Result.Charge.Reset();
+			Result.bAccepted = false;
+			Result.bCompleted = false;
+		}
+	}
+	if (Result.Result != EGFQuestResult::Ok)
+	{
+		if (Result.Result == EGFQuestResult::Refused)
+		{
+			UE_LOG(LogGF, Verbose, TEXT("SideQuest: %s refused (%s)."), *Event.PlayerKey, *Result.Reason.ToString());
+		}
+		return Result;
+	}
+	if (Result.bAccepted)
+	{
+		PostSide(EGFElderKind::SideAccept, Event.PlayerKey, Result.LineId);
+	}
+	if (Result.bCompleted)
+	{
+		PostSide(EGFElderKind::SideComplete, Event.PlayerKey, Result.LineId);
+	}
+	if (PS)
+	{
+		PushPlayer(PS);
+	}
+	return Result;
+}
+
+void UGFQuestSubsystem::PostSide(EGFElderKind Kind, const FString& PlayerKey, FName LineId) const
+{
+	UWorld* World = GetWorld();
+	const FGFSideQuestLineRule* Rule = SideCatalog.FindLine(LineId);
+	if (!World || !Rule)
+	{
+		return;
+	}
+	const AGFGameState* GS = World->GetGameState<AGFGameState>();
+	const AGFPlayerState* PS = GS ? GS->FindPlayerByKey(PlayerKey) : nullptr;
+	const FString Name = PS ? PS->GetPlayerName() : FString();
+	if (!FGFElderBook::Post(World, FGFElderBook::TownChannel(Rule->TownId), Kind, Name, PlayerKey, Rule->TownId, World->GetTimeSeconds()))
+	{
+		UE_LOG(LogGF, Verbose, TEXT("SideQuest: %s post for %s did not reach the Elder Book."), *LineId.ToString(), *PlayerKey);
 	}
 }

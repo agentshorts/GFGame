@@ -35,6 +35,10 @@ void AGFPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(AGFPlayerState, QuestStep);
 	DOREPLIFETIME(AGFPlayerState, QuestCount);
 	DOREPLIFETIME(AGFPlayerState, FactionRank);
+	DOREPLIFETIME(AGFPlayerState, ActiveSideLineId);
+	DOREPLIFETIME(AGFPlayerState, ActiveSideStepId);
+	DOREPLIFETIME(AGFPlayerState, ActiveSideCount);
+	DOREPLIFETIME(AGFPlayerState, ActiveSideStatus);
 	DOREPLIFETIME(AGFPlayerState, LastDrag);
 	DOREPLIFETIME(AGFPlayerState, HeldItem);
 	DOREPLIFETIME(AGFPlayerState, bCharacterReady);
@@ -370,6 +374,19 @@ void AGFPlayerState::SetQuestReplicated(EGFQuestStep Step, int32 Count, EGFFacti
 	QuestStep = Step;
 	QuestCount = Count;
 	FactionRank = Rank;
+	ForceNetUpdate();
+}
+
+void AGFPlayerState::SetSideQuestReplicated(FName LineId, FName StepId, int32 Count, EGFSideQuestStatus Status)
+{
+	if (!HasAuthority() || (ActiveSideLineId == LineId && ActiveSideStepId == StepId && ActiveSideCount == Count && ActiveSideStatus == Status))
+	{
+		return;
+	}
+	ActiveSideLineId = LineId;
+	ActiveSideStepId = StepId;
+	ActiveSideCount = Count;
+	ActiveSideStatus = Status;
 	ForceNetUpdate();
 }
 

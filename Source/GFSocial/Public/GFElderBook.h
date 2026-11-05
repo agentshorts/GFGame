@@ -36,7 +36,11 @@ enum class EGFElderKind : uint8
 	Villain,
 	Brag,
 	RentalQuit,
-	ElderNice
+	ElderNice,
+	/** Side quest board (QL-a stub): a player took on a town task. Fixed generic line, town channel. */
+	SideAccept,
+	/** Side quest board (QL-a stub): a player finished a town task. Fixed generic line, town channel. */
+	SideComplete
 };
 
 /** Who owns the replicated book. Change it only through FGFElderBook::Transition. */
@@ -125,10 +129,10 @@ struct GFSOCIAL_API FGFElderBook
 	/** Elder view: every channel. A town id is not this. */
 	static FName ElderViewId();
 
-	/** Rime, Verdant, Cinder or Cinderwrights. Anything else has no town book. */
+	/** Rime, Verdant, Cinder, Cinderwright or Cinderwrights. Anything else has no town book. */
 	static EGFElderChannel TownChannel(FName FactionId);
 
-	/** Fixed line for Theft, Hire, Joined, RankUp and ShowWin. Empty for every other kind. */
+	/** Fixed line for Theft, Hire, Joined, RankUp, ShowWin, SideAccept and SideComplete. Empty for every other kind. */
 	static FString LineFor(EGFElderKind Kind, const FString& DisplayName);
 
 	static bool IsQuestKind(EGFElderKind Kind);

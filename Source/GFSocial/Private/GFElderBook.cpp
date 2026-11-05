@@ -136,7 +136,7 @@ EGFElderChannel FGFElderBook::TownChannel(FName FactionId)
 	{
 		return EGFElderChannel::VerdantBook;
 	}
-	if (SameName(FactionId, TEXT("Cinder")) || SameName(FactionId, TEXT("Cinderwrights")))
+	if (SameName(FactionId, TEXT("Cinder")) || SameName(FactionId, TEXT("Cinderwright")) || SameName(FactionId, TEXT("Cinderwrights")))
 	{
 		return EGFElderChannel::CinderBook;
 	}
@@ -152,6 +152,8 @@ bool FGFElderBook::IsQuestKind(EGFElderKind Kind)
 	case EGFElderKind::Joined:
 	case EGFElderKind::RankUp:
 	case EGFElderKind::ShowWin:
+	case EGFElderKind::SideAccept:
+	case EGFElderKind::SideComplete:
 		return true;
 	default:
 		return false;
@@ -173,6 +175,10 @@ FString FGFElderBook::LineFor(EGFElderKind Kind, const FString& DisplayName)
 		return FString::Printf(TEXT("%s rose in rank."), *Name);
 	case EGFElderKind::ShowWin:
 		return FString::Printf(TEXT("%s won the show and leads the faction."), *Name);
+	case EGFElderKind::SideAccept:
+		return FString::Printf(TEXT("%s took on a town task."), *Name);
+	case EGFElderKind::SideComplete:
+		return FString::Printf(TEXT("%s finished a town task."), *Name);
 	default:
 		return FString();
 	}
