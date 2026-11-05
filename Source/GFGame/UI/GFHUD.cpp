@@ -10,6 +10,7 @@
 #include "GFBeatHopCourse.h"
 #include "GFAccelHopRoad.h"
 #include "GFAccelHopTile.h"
+#include "GFAccelHopTutorial.h"
 #include "GFMineSite.h"
 #include "GFRunwaySite.h"
 #include "GFRunwayStage.h"
@@ -291,6 +292,7 @@ void AGFHUD::DrawHUD()
 	// The lit diamond lies on the ground, so it goes down first and the landing circle is drawn over it (#347).
 	DrawAccelHopLitMarker();
 	DrawLandingMarker();
+	DrawAccelHopTutorial();
 	DrawZoneLabel();
 	DrawChat();
 	DrawToasts();
@@ -994,6 +996,50 @@ void AGFHUD::DrawLandingMarker()
 			PreviousY = Y;
 		}
 		Radius *= 1.45f;
+	}
+}
+
+void AGFHUD::DrawAccelHopTutorial()
+{
+	// #348: a plain panel, top centre: step and title, one line of body copy, the live goal counter.
+	// VISUAL PASS: the colours and the box are placeholders (the lit magenta for the title, Beat Hop's dark violet for
+	// the box); swap them for the tutorial's own panel art here.
+	UWorld* World = GetWorld();
+	const AGFAccelHopTutorial* Tutorial = AGFAccelHopTutorial::Find(World);
+	if (!World || !Canvas || !Tutorial || !Tutorial->bShowPrompts)
+	{
+		return;
+	}
+	const FGFAccelHopTutorialPrompt Prompt = Tutorial->GetPrompt();
+	const bool bFlash = World->GetTimeSeconds() - Tutorial->GetLastAdvanceTime() < FGFAccelHopTutorialRules::FlashSeconds;
+	const TArray<FString> Lines = FGFAccelHopTutorialRules::PromptLines(Prompt, bFlash);
+	UFont* Font = HudFont();
+	const float Scale = FMath::Clamp(Canvas->ClipY / 720.f, 1.f, 3.f);
+	const float TitleScale = Scale * 1.35f;
+	float W = 0.f;
+	float H = 0.f;
+	TArray<float> Heights;
+	for (int32 Index = 0; Index < Lines.Num(); ++Index)
+	{
+		float TW = 0.f, TH = 0.f;
+		GetTextSize(Lines[Index], TW, TH, Font, Index == 0 ? TitleScale : Scale);
+		W = FMath::Max(W, TW);
+		Heights.Add(TH + 4.f * Scale);
+		H += Heights.Last();
+	}
+	const float Pad = 12.f * Scale;
+	const float X = Canvas->ClipX * 0.5f - W * 0.5f - Pad;
+	const float Top = 12.f * Scale;
+	DrawRect(FLinearColor(0.08f, 0.05f, 0.14f, 0.80f), X, Top, W + Pad * 2.f, H + Pad * 2.f);
+	const FLinearColor TitleTint = bFlash ? FLinearColor(0.55f, 1.f, 0.55f) : FLinearColor(1.f, 0.35f, 0.90f);
+	const FLinearColor BodyTint(0.92f, 0.90f, 0.98f);
+	const FLinearColor GoalTint(1.f, 0.86f, 0.45f);
+	float Y = Top + Pad;
+	for (int32 Index = 0; Index < Lines.Num(); ++Index)
+	{
+		const FLinearColor Tint = Index == 0 ? TitleTint : (Index == Lines.Num() - 1 ? GoalTint : BodyTint);
+		DrawText(Lines[Index], Tint, X + Pad, Y, Font, Index == 0 ? TitleScale : Scale, false);
+		Y += Heights[Index];
 	}
 }
 
