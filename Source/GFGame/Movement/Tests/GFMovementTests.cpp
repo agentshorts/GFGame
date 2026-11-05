@@ -1,4 +1,4 @@
-// Stamina, sprint and dash. Pure steps, plus the player CDO's base run speed.
+// Stamina, sprint, dash and traversal (wall climb #355 included). Pure steps, plus the player CDO's base run speed.
 // Run: UnrealEditor-Cmd GFGame.uproject -ExecCmds="Automation RunTests GFGame.Movement;Quit" -unattended -nullrhi
 #include "Misc/AutomationTest.h"
 #include "GFCharacter.h"
@@ -942,6 +942,379 @@ bool FGFMovementTripleJumpTest::RunTest(const FString&)
 	TestEqual(TEXT("Mini-games clear the jump count"), Off.JumpsUsed, 0);
 	TestFalse(TEXT("Mini-games do not accept the hop"), Off.bJumpAccepted);
 	TestTrue(TEXT("Mini-games end the flip"), Off.FlipTimeLeft <= 0.f);
+	return true;
+}
+
+// #355 wall climb. Wall is at +X with its face normal pointing -X, so "into" is +X and "along" is +/-Y.
+namespace GFWallClimbTestsPrivate
+{
+	const FVector GFClimbNormal(-1.0, 0.0, 0.0);
+	const FVector GFClimbInto(1.0, 0.0, 0.0);
+	const FVector GFClimbAlong(0.0, 1.0, 0.0);
+
+	FGFStaminaCommand GFClimbCommand(float DeltaSeconds, const FVector& Move, bool bGrounded)
+	{
+		FGFStaminaCommand Command = GFMovementTestsPrivate::GFMovementCommand(DeltaSeconds);
+		Command.bGrounded = bGrounded;
+		Command.MoveDirection = Move;
+		Command.PlayerLocation = FVector(0.0, 0.0, 88.0);
+		Command.Contact.bWallAhead = true;
+		Command.Contact.WallAheadNormal = GFClimbNormal;
+		return Command;
+	}
+
+	/** Grounded into the wall for one short step, so the state is climbing. */
+	FGFStaminaState GFClimbingState(const UGFMovementTuning& Tuning)
+	{
+		return GFStaminaSim::Step(GFMovementTestsPrivate::GFMovementFullState(), GFClimbCommand(0.05f, GFClimbInto, true), Tuning);
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMovementWallClimbEnterTest, "GFGame.Movement.WallClimb.Enter", GFMovementTestsPrivate::GFMovementFlags)
+bool FGFMovementWallClimbEnterTest::RunTest(const FString&)
+{
+	using namespace GFMovementTestsPrivate;
+	using namespace GFWallClimbTestsPrivate;
+	const UGFMovementTuning& Tuning = GFMovementTuningCDO();
+	TestEqual(TEXT("Climb speed"), Tuning.WallClimbSpeed, 350.f);
+	TestEqual(TEXT("Climb drain"), Tuning.WallClimbDrainPerSecond, 12.f);
+	TestEqual(TEXT("Climb window"), Tuning.WallClimbMaxSeconds, 1.5f);
+	TestTrue(TEXT("Hand-off speed clears the wall run gate"), Tuning.WallClimbToRunSpeed > Tuning.WallRunMinSpeed);
+
+	FGFStaminaState State = GFStaminaSim::Step(GFMovementFullState(), GFClimbCommand(0.1f, GFClimbInto, true), Tuning);
+	TestTrue(TEXT("Grounded into the wall climbs"), State.bWallClimbing);
+	TestFalse(TEXT("A climb is not a wall run"), State.bWallRunning);
+	TestTrue(TEXT("Climb goes straight up at 350"), State.bOverrideVelocity && GFMovementNear(static_cast<float>(State.OverrideVelocity.Z), 350.f));
+	TestTrue(TEXT("Climb sticks into the wall"), State.OverrideVelocity.X > 0.0 && FMath::IsNearlyZero(State.OverrideVelocity.Y));
+	TestTrue(TEXT("Climb drains 12/s"), GFMovementNear(State.Stamina, 198.8f));
+	TestTrue(TEXT("No gravity while climbing"), FMath::IsNearlyZero(GFStaminaSim::GravityScale(State, Tuning)));
+	TestFalse(TEXT("No landing marker while climbing"), GFTraversalSim::ShouldShowLandingMarker(State, false, true));
+	TestTrue(TEXT("Climb normal is the wall"), State.WallClimbNormal.Equals(GFClimbNormal, 0.01));
+
+	FVector Location(0.0, 0.0, 88.0);
+	for (int32 Index = 0; Index < 10; ++Index)
+	{
+		FGFStaminaCommand Up = GFClimbCommand(0.05f, GFClimbInto, false);
+		Up.PlayerLocation = Location;
+		State = GFStaminaSim::Step(State, Up, Tuning);
+		Location += State.OverrideVelocity * 0.05;
+	}
+	TestTrue(TEXT("Still climbing after half a second"), State.bWallClimbing);
+	TestTrue(TEXT("Half a second climbs 175 cm"), FMath::IsNearlyEqual(Location.Z - 88.0, 175.0, 1.0));
+
+	FGFStaminaState Air = GFStaminaSim::Step(GFMovementFullState(), GFClimbCommand(0.05f, GFClimbInto, false), Tuning);
+	TestFalse(TEXT("A climb does not start in mid-air"), Air.bWallClimbing);
+
+	FGFStaminaState Coyote = GFStaminaSim::Step(GFMovementFullState(), GFMovementCommand(0.05f), Tuning);
+	TestTrue(TEXT("Standing arms the coyote window"), GFMovementNear(Coyote.WallClimbCoyoteLeft, Tuning.WallClimbCoyoteSeconds));
+	FGFStaminaState JustLeft = GFStaminaSim::Step(Coyote, GFClimbCommand(0.05f, GFClimbInto, false), Tuning);
+	TestTrue(TEXT("Just after leaving the floor still climbs"), JustLeft.bWallClimbing);
+	FGFStaminaCommand Fall = GFMovementCommand(0.2f);
+	Fall.bGrounded = false;
+	FGFStaminaState Late = GFStaminaSim::Step(Coyote, Fall, Tuning);
+	Late = GFStaminaSim::Step(Late, GFClimbCommand(0.05f, GFClimbInto, false), Tuning);
+	TestFalse(TEXT("Past the coyote window does not climb"), Late.bWallClimbing);
+
+	FGFStaminaCommand Hop = GFClimbCommand(0.05f, GFClimbInto, true);
+	Hop.bJumpPressed = true;
+	FGFStaminaState Hopped = GFStaminaSim::Step(GFMovementFullState(), Hop, Tuning);
+	TestFalse(TEXT("A grounded jump into the wall is a hop, not a climb"), Hopped.bWallClimbing);
+	TestTrue(TEXT("The hop is accepted"), Hopped.bJumpAccepted);
+
+	FGFStaminaState Along = GFStaminaSim::Step(GFMovementFullState(), GFClimbCommand(0.05f, GFClimbAlong, true), Tuning);
+	TestFalse(TEXT("Along the wall does not climb"), Along.bWallClimbing);
+	FGFStaminaState Idle = GFStaminaSim::Step(GFMovementFullState(), GFClimbCommand(0.05f, FVector::ZeroVector, true), Tuning);
+	TestFalse(TEXT("No input does not climb"), Idle.bWallClimbing);
+	FGFStaminaState Diagonal = GFStaminaSim::Step(GFMovementFullState(), GFClimbCommand(0.05f, FVector(1.0, 0.8, 0.0), true), Tuning);
+	TestTrue(TEXT("Mostly into the wall still climbs"), Diagonal.bWallClimbing);
+
+	FGFStaminaCommand Slope = GFClimbCommand(0.05f, GFClimbInto, true);
+	Slope.Contact.WallAheadNormal = FVector(-0.7, 0.0, 0.7);
+	FGFStaminaState Ramp = GFStaminaSim::Step(GFMovementFullState(), Slope, Tuning);
+	TestFalse(TEXT("A slope is not a wall"), Ramp.bWallClimbing);
+
+	FGFStaminaCommand Side = GFClimbCommand(0.05f, GFClimbInto, true);
+	Side.Contact.bWallAhead = false;
+	Side.Contact.bWallContact = true;
+	Side.Contact.WallNormal = GFClimbNormal;
+	TestTrue(TEXT("A side wall the input pushes into also climbs"), GFStaminaSim::Step(GFMovementFullState(), Side, Tuning).bWallClimbing);
+
+	FGFStaminaCommand Kindle = GFClimbCommand(0.5f, GFClimbInto, true);
+	Kindle.bInsideKindleRing = true;
+	FGFStaminaState Free = GFStaminaSim::Step(GFMovementFullState(), Kindle, Tuning);
+	TestTrue(TEXT("Hearth climbs"), Free.bWallClimbing);
+	TestTrue(TEXT("Hearth climb is free"), GFMovementNear(Free.Stamina, Tuning.MaxStamina));
+
+	FGFStaminaCommand BeatHop = GFClimbCommand(0.05f, GFClimbInto, true);
+	BeatHop.bWallClimbAllowed = false;
+	TestFalse(TEXT("Beat Hop runs never climb"), GFStaminaSim::Step(GFMovementFullState(), BeatHop, Tuning).bWallClimbing);
+
+	FGFStaminaState Climbing = GFClimbingState(Tuning);
+	FGFStaminaCommand Kick = GFClimbCommand(0.05f, GFClimbInto, false);
+	Kick.bJumpPressed = true;
+	FGFStaminaState Kicked = GFStaminaSim::Step(Climbing, Kick, Tuning);
+	TestFalse(TEXT("Jump leaves the climb"), Kicked.bWallClimbing);
+	TestTrue(TEXT("Jump off a climb is a wall-kick"), Kicked.bTraversalJump && !Kicked.bJumpAccepted);
+	TestTrue(TEXT("Kick pushes off the wall with lift"), Kicked.bOverrideVelocity && Kicked.OverrideVelocity.X < 0.0 && Kicked.OverrideVelocity.Z > 0.0);
+	TestEqual(TEXT("Kick resets the hop count"), Kicked.JumpsUsed, 0);
+	FGFStaminaState AfterKick = GFStaminaSim::Step(Kicked, GFClimbCommand(0.05f, GFClimbInto, false), Tuning);
+	TestFalse(TEXT("A kick does not grab the same wall again"), AfterKick.bWallClimbing);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMovementWallClimbDropTest, "GFGame.Movement.WallClimb.Drop", GFMovementTestsPrivate::GFMovementFlags)
+bool FGFMovementWallClimbDropTest::RunTest(const FString&)
+{
+	using namespace GFMovementTestsPrivate;
+	using namespace GFWallClimbTestsPrivate;
+	const UGFMovementTuning& Tuning = GFMovementTuningCDO();
+	const FGFStaminaState Climbing = GFClimbingState(Tuning);
+	TestTrue(TEXT("Setup is a climb"), Climbing.bWallClimbing);
+
+	FGFStaminaState Peel = GFStaminaSim::Step(Climbing, GFClimbCommand(0.05f, FVector::ZeroVector, false), Tuning);
+	TestFalse(TEXT("Letting go of the stick drops the climb"), Peel.bWallClimbing);
+	TestFalse(TEXT("A drop does not drive the velocity"), Peel.bOverrideVelocity);
+	TestTrue(TEXT("Gravity is back after the drop"), GFMovementNear(GFStaminaSim::GravityScale(Peel, Tuning), 1.f));
+
+	FGFStaminaState Away = GFStaminaSim::Step(Climbing, GFClimbCommand(0.05f, GFClimbNormal, false), Tuning);
+	TestFalse(TEXT("Pulling away drops the climb"), Away.bWallClimbing);
+
+	FGFStaminaCommand Gone = GFClimbCommand(0.05f, GFClimbInto, false);
+	Gone.Contact.bWallAhead = false;
+	FGFStaminaState Topped = GFStaminaSim::Step(Climbing, Gone, Tuning);
+	TestFalse(TEXT("Losing the wall drops the climb"), Topped.bWallClimbing);
+	TestFalse(TEXT("No stuck climb state"), Topped.bOverrideVelocity || Topped.bMantling);
+
+	FGFStaminaState Empty = Climbing;
+	Empty.Stamina = 1.f;
+	Empty = GFStaminaSim::Step(Empty, GFClimbCommand(0.2f, GFClimbInto, false), Tuning);
+	TestFalse(TEXT("An empty pool drops the climb"), Empty.bWallClimbing);
+	TestTrue(TEXT("The climb spent the last point"), GFMovementNear(Empty.Stamina, 0.f));
+	TestTrue(TEXT("Empty blocks a re-grab"), Empty.bWallClimbBlocked);
+
+	FGFStaminaState Long = GFStaminaSim::Step(GFMovementFullState(), GFClimbCommand(Tuning.WallClimbMaxSeconds, GFClimbInto, true), Tuning);
+	TestFalse(TEXT("The 1.5s window ends the climb"), Long.bWallClimbing);
+	TestTrue(TEXT("Full window costs 18"), GFMovementNear(Long.Stamina, 182.f));
+	TestTrue(TEXT("Still pushing into the wall stays blocked"), Long.bWallClimbBlocked);
+	Long = GFStaminaSim::Step(Long, GFClimbCommand(0.05f, GFClimbInto, true), Tuning);
+	TestFalse(TEXT("Landing while still pushing in does not re-climb"), Long.bWallClimbing);
+	Long = GFStaminaSim::Step(Long, GFClimbCommand(0.05f, FVector::ZeroVector, true), Tuning);
+	TestFalse(TEXT("Easing off the stick clears the block"), Long.bWallClimbBlocked);
+	Long = GFStaminaSim::Step(Long, GFClimbCommand(0.05f, GFClimbInto, true), Tuning);
+	TestTrue(TEXT("Pushing in again climbs again"), Long.bWallClimbing);
+
+	FGFStaminaCommand Disabled = GFClimbCommand(0.05f, GFClimbInto, false);
+	Disabled.bStaminaEnabled = false;
+	FGFStaminaState Off = GFStaminaSim::Step(Climbing, Disabled, Tuning);
+	TestFalse(TEXT("Mini-games drop the climb"), Off.bWallClimbing || Off.bMantling);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMovementWallClimbToWallRunTest, "GFGame.Movement.WallClimb.ToWallRun", GFMovementTestsPrivate::GFMovementFlags)
+bool FGFMovementWallClimbToWallRunTest::RunTest(const FString&)
+{
+	using namespace GFMovementTestsPrivate;
+	using namespace GFWallClimbTestsPrivate;
+	const UGFMovementTuning& Tuning = GFMovementTuningCDO();
+	const FGFStaminaState Climbing = GFClimbingState(Tuning);
+	const float StaminaBefore = Climbing.Stamina;
+
+	FGFStaminaCommand Turn = GFClimbCommand(0.1f, GFClimbAlong, false);
+	Turn.HorizontalSpeed = 60.f;
+	FGFStaminaState Run = GFStaminaSim::Step(Climbing, Turn, Tuning);
+	TestFalse(TEXT("Turning along the wall leaves the climb"), Run.bWallClimbing);
+	TestTrue(TEXT("Turning along the wall wall-runs"), Run.bWallRunning);
+	TestTrue(TEXT("A slow climb carries the hand-off speed"), GFMovementNear(Run.WallRunSpeed, Tuning.WallClimbToRunSpeed));
+	TestTrue(TEXT("The run uses the climbed wall"), Run.WallNormal.Equals(GFClimbNormal, 0.01));
+	TestTrue(TEXT("The run goes along the wall and sticks in"), Run.bOverrideVelocity && Run.OverrideVelocity.Y > 0.0 && Run.OverrideVelocity.X > 0.0);
+	TestTrue(TEXT("The run spends the one wall run budget"), GFMovementNear(Run.WallRunTimeLeft, Tuning.WallRunMaxSeconds - 0.1f));
+	TestTrue(TEXT("The run drains 15/s"), GFMovementNear(Run.Stamina, StaminaBefore - 1.5f));
+
+	FGFStaminaCommand Fast = Turn;
+	Fast.HorizontalSpeed = 600.f;
+	TestTrue(TEXT("A fast hand-off keeps its speed"), GFMovementNear(GFStaminaSim::Step(Climbing, Fast, Tuning).WallRunSpeed, 600.f));
+
+	FGFStaminaCommand Back = GFClimbCommand(0.1f, FVector(0.0, -1.0, 0.0), false);
+	TestTrue(TEXT("Either way along the wall hands off"), GFStaminaSim::Step(Climbing, Back, Tuning).WallRunDir.Y < 0.0);
+
+	FGFStaminaCommand Stay;
+	Stay = GFMovementCommand(Tuning.WallRunMaxSeconds);
+	Stay.bGrounded = false;
+	Stay.HorizontalSpeed = Run.WallRunSpeed;
+	Stay.MoveDirection = GFClimbAlong;
+	Stay.Contact.bWallContact = true;
+	Stay.Contact.WallNormal = GFClimbNormal;
+	Run = GFStaminaSim::Step(Run, Stay, Tuning);
+	TestFalse(TEXT("The same budget runs out"), Run.bWallRunning);
+	TestTrue(TEXT("No second timer: the budget is empty"), Run.WallRunTimeLeft <= KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("Out of budget blocks the wall run"), Run.bWallRunBlocked);
+	Stay.DeltaSeconds = 0.05f;
+	Run = GFStaminaSim::Step(Run, Stay, Tuning);
+	TestFalse(TEXT("No restart until the wall is left"), Run.bWallRunning);
+
+	FGFStaminaState Blocked = Climbing;
+	Blocked.bWallRunBlocked = true;
+	Blocked = GFStaminaSim::Step(Blocked, Turn, Tuning);
+	TestFalse(TEXT("A blocked visit cannot hand off"), Blocked.bWallRunning);
+	TestFalse(TEXT("A failed hand-off still leaves the climb"), Blocked.bWallClimbing);
+
+	FGFStaminaCommand Leave = GFMovementCommand(0.05f);
+	Leave.bGrounded = false;
+	Run = GFStaminaSim::Step(Run, Leave, Tuning);
+	TestTrue(TEXT("Leaving the wall gives a new budget"), GFMovementNear(Run.WallRunTimeLeft, Tuning.WallRunMaxSeconds) && !Run.bWallRunBlocked);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMovementWallClimbMantleTest, "GFGame.Movement.WallClimb.Mantle", GFMovementTestsPrivate::GFMovementFlags)
+bool FGFMovementWallClimbMantleTest::RunTest(const FString&)
+{
+	using namespace GFMovementTestsPrivate;
+	using namespace GFWallClimbTestsPrivate;
+	const UGFMovementTuning& Tuning = GFMovementTuningCDO();
+	TestEqual(TEXT("Mantle cost"), Tuning.WallClimbMantleCost, 10.f);
+	TestEqual(TEXT("Mantle reach"), Tuning.WallClimbMantleReach, 220.f);
+
+	// Wall face at X = 50, lip 150 cm above the feet. The movement component's probe fills these from the world.
+	const FVector Target(100.0, 0.0, 150.0 + 88.0 + 2.0);
+	auto Ledge = [&Target](float Dt, const FVector& Location, bool bGrounded, float LipHeight)
+	{
+		FGFStaminaCommand Command = GFClimbCommand(Dt, GFClimbInto, bGrounded);
+		Command.PlayerLocation = Location;
+		Command.Contact.bLedge = true;
+		Command.Contact.LedgeTarget = Target;
+		Command.Contact.LedgeHeight = LipHeight;
+		return Command;
+	};
+
+	FVector Location(0.0, 0.0, 88.0);
+	FGFStaminaState State = GFStaminaSim::Step(GFMovementFullState(), Ledge(0.05f, Location, true, 150.f), Tuning);
+	TestTrue(TEXT("A lip in reach mantles straight from the climb"), State.bMantling);
+	TestFalse(TEXT("A mantle is not a climb"), State.bWallClimbing);
+	TestTrue(TEXT("Mantle costs 10"), GFMovementNear(State.Stamina, 190.f));
+	TestTrue(TEXT("Mantle rises first"), State.bOverrideVelocity && State.OverrideVelocity.Z > 0.0 && FMath::IsNearlyZero(State.OverrideVelocity.X));
+	TestTrue(TEXT("No gravity while mantling"), FMath::IsNearlyZero(GFStaminaSim::GravityScale(State, Tuning)));
+
+	int32 Steps = 0;
+	bool bSawForward = false;
+	bool bJumpRefused = true;
+	while (State.bMantling && Steps < 40)
+	{
+		Location += State.OverrideVelocity * 0.05;
+		FGFStaminaCommand Next = Ledge(0.05f, Location, false, 150.f);
+		Next.Contact.bWallAhead = false;
+		Next.Contact.bLedge = false;
+		Next.bJumpPressed = Steps == 2;
+		Next.bDashPressed = Steps == 3;
+		State = GFStaminaSim::Step(State, Next, Tuning);
+		if (Steps == 2 && (State.bJumpAccepted || !State.bMantling))
+		{
+			bJumpRefused = false;
+		}
+		TestFalse(TEXT("No dash during a mantle"), State.bDashing);
+		bSawForward = bSawForward || (State.bMantling && State.OverrideVelocity.X > 0.0 && FMath::IsNearlyZero(State.OverrideVelocity.Z));
+		++Steps;
+	}
+	TestFalse(TEXT("The mantle ends"), State.bMantling);
+	TestTrue(TEXT("The mantle steps onto the lip after rising"), bSawForward);
+	TestTrue(TEXT("A jump does not break the mantle"), bJumpRefused);
+	TestTrue(TEXT("The mantle ends inside its time"), static_cast<float>(Steps) * 0.05f <= Tuning.WallClimbMantleMaxSeconds + 0.05f);
+	TestTrue(TEXT("The mantle stands on the lip"), FVector::Dist(Location, Target) <= Tuning.WallClimbMantleArrive + 1.0);
+	TestTrue(TEXT("The mantle stops dead at the end"), State.bOverrideVelocity && State.OverrideVelocity.IsNearlyZero());
+
+	FGFStaminaCommand Walk = GFMovementCommand(0.05f);
+	Walk.PlayerLocation = Location;
+	Walk.MoveDirection = GFClimbInto;
+	State = GFStaminaSim::Step(State, Walk, Tuning);
+	TestFalse(TEXT("Grounded after the mantle"), State.bMantling || State.bWallClimbing || State.bOverrideVelocity);
+	TestTrue(TEXT("Gravity is back on the lip"), GFMovementNear(GFStaminaSim::GravityScale(State, Tuning), 1.f));
+
+	FGFStaminaState High = GFStaminaSim::Step(GFMovementFullState(), Ledge(0.05f, FVector(0.0, 0.0, 88.0), true, Tuning.WallClimbMantleReach + 50.f), Tuning);
+	TestTrue(TEXT("A lip out of reach keeps climbing"), High.bWallClimbing && !High.bMantling);
+	FGFStaminaState Low = GFStaminaSim::Step(GFMovementFullState(), Ledge(0.05f, FVector(0.0, 0.0, 88.0), true, Tuning.WallClimbMantleMinLip - 10.f), Tuning);
+	TestFalse(TEXT("A lip below the minimum is not a mantle"), Low.bMantling);
+
+	FGFStaminaState Poor = GFMovementFullState();
+	Poor.Stamina = 5.f;
+	Poor = GFStaminaSim::Step(Poor, Ledge(0.05f, FVector(0.0, 0.0, 88.0), true, 150.f), Tuning);
+	TestTrue(TEXT("Too little stamina for the mantle keeps climbing"), Poor.bWallClimbing && !Poor.bMantling);
+
+	FGFStaminaCommand KindleLedge = Ledge(0.05f, FVector(0.0, 0.0, 88.0), true, 150.f);
+	KindleLedge.bInsideKindleRing = true;
+	FGFStaminaState Free = GFMovementFullState();
+	Free.Stamina = 5.f;
+	Free = GFStaminaSim::Step(Free, KindleLedge, Tuning);
+	TestTrue(TEXT("Hearth mantle is free"), Free.bMantling && GFMovementNear(Free.Stamina, Tuning.MaxStamina));
+
+	FGFStaminaState Stuck = GFStaminaSim::Step(GFMovementFullState(), Ledge(0.05f, FVector(0.0, 0.0, 88.0), true, 150.f), Tuning);
+	FGFStaminaCommand Pinned = Ledge(0.1f, FVector(0.0, 0.0, 88.0), false, 150.f);
+	for (int32 Index = 0; Index < 10 && Stuck.bMantling; ++Index)
+	{
+		Stuck = GFStaminaSim::Step(Stuck, Pinned, Tuning);
+	}
+	TestFalse(TEXT("A mantle that never arrives times out"), Stuck.bMantling);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMovementWallClimbBusyTest, "GFGame.Movement.WallClimb.BusyBlocks", GFMovementTestsPrivate::GFMovementFlags)
+bool FGFMovementWallClimbBusyTest::RunTest(const FString&)
+{
+	using namespace GFMovementTestsPrivate;
+	using namespace GFWallClimbTestsPrivate;
+	const UGFMovementTuning& Tuning = GFMovementTuningCDO();
+
+	FGFStaminaState Grip = GFMovementFullState();
+	Grip.bGripping = true;
+	Grip.GripTimeLeft = 2.f;
+	Grip.GripNormal = GFClimbNormal;
+	Grip = GFStaminaSim::Step(Grip, GFClimbCommand(0.05f, GFClimbInto, true), Tuning);
+	TestTrue(TEXT("The cling holds"), Grip.bGripping);
+	TestFalse(TEXT("A cling blocks the climb"), Grip.bWallClimbing);
+
+	FGFStaminaState Dash = GFMovementFullState();
+	Dash.bDashing = true;
+	Dash.DashTimeLeft = 0.2f;
+	Dash = GFStaminaSim::Step(Dash, GFClimbCommand(0.05f, GFClimbInto, true), Tuning);
+	TestTrue(TEXT("The dash keeps going"), Dash.bDashing);
+	TestFalse(TEXT("A dash blocks the climb"), Dash.bWallClimbing);
+
+	FGFStaminaState Swing = GFMovementFullState();
+	Swing.bSwinging = true;
+	Swing.bWasGrounded = false;
+	Swing.GrappleAnchor = FVector(0.0, 0.0, 600.0);
+	Swing.TravelLocation = FVector(0.0, 0.0, 88.0);
+	Swing.RopeLength = 512.f;
+	FGFStaminaCommand SwingHeld = GFClimbCommand(0.05f, GFClimbInto, false);
+	SwingHeld.bGrappleSwingHeld = true;
+	Swing.WallClimbCoyoteLeft = 0.1f;
+	Swing = GFStaminaSim::Step(Swing, SwingHeld, Tuning);
+	TestFalse(TEXT("A swing blocks the climb"), Swing.bWallClimbing);
+
+	FGFStaminaState Climbing = GFClimbingState(Tuning);
+	FGFStaminaCommand Pole = GFClimbCommand(0.05f, GFClimbInto, false);
+	Pole.Contact.bSwivelContact = true;
+	Pole.Contact.SwivelOrigin = FVector(60.0, 0.0, 88.0);
+	Pole.HorizontalSpeed = 300.f;
+	FGFStaminaState Orbit = GFStaminaSim::Step(Climbing, Pole, Tuning);
+	TestTrue(TEXT("A pole still wins over the climb"), Orbit.bSwiveling && !Orbit.bWallClimbing);
+
+	FGFStaminaCommand DashPress = GFClimbCommand(0.05f, GFClimbInto, false);
+	DashPress.bDashPressed = true;
+	FGFStaminaState NoDash = GFStaminaSim::Step(Climbing, DashPress, Tuning);
+	TestTrue(TEXT("Climbing keeps going"), NoDash.bWallClimbing);
+	TestFalse(TEXT("No dash while climbing"), NoDash.bDashing);
+
+	FGFStaminaCommand Sprint = GFClimbCommand(0.05f, GFClimbInto, false);
+	Sprint.bSprintHeld = true;
+	TestFalse(TEXT("No sprint while climbing"), GFStaminaSim::Step(Climbing, Sprint, Tuning).bSprinting);
+
+	FGFStaminaCommand Run = GFMovementCommand(0.05f);
+	Run.bGrounded = false;
+	Run.HorizontalSpeed = 500.f;
+	Run.MoveDirection = GFClimbAlong;
+	Run.Contact.bWallContact = true;
+	Run.Contact.WallNormal = GFClimbNormal;
+	FGFStaminaState WallRun = GFStaminaSim::Step(GFMovementFullState(), Run, Tuning);
+	TestTrue(TEXT("Plain wall run is unchanged"), WallRun.bWallRunning && !WallRun.bWallClimbing);
 	return true;
 }
 
