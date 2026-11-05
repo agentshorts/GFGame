@@ -6,6 +6,8 @@
 #include "GFTerritoryTypes.h"
 #include "GFPathRules.h"
 #include "GFQuestLine.h"
+#include "GFSideQuestLine.h"
+#include "GFSideQuestTypes.h"
 #include "GFTheftRules.h"
 #include "GFMagicTypes.h"
 
@@ -223,6 +225,23 @@ struct GFGAME_API FGFQuestTrackerView
 };
 
 GFGAME_API FGFQuestTrackerView GFFormatQuestTracker(const FGFQuestCatalog& Catalog, EGFQuestStep Step, int32 Count, EGFFactionRank Rank, bool bAllow);
+
+/** The player's one side line slot, as replicated on the player state. */
+struct GFGAME_API FGFSideTrackerInput
+{
+	EGFSideQuestStatus Status = EGFSideQuestStatus::Locked;
+	FName LineId;
+	FName StepId;
+	int32 Count = 0;
+};
+
+/**
+ * Field tracker chooser. While the errand is not Done the errand tracker wins, side line or not.
+ * Errand Done plus an Active side line: line title, step title, n/m when Goal is above 1, hint. The rank badge stays the errand rank.
+ * Errand Done with no Active side line (or an unknown line): the Done collapse, rank badge only. bAllow false hides both.
+ */
+GFGAME_API FGFQuestTrackerView GFFormatSideQuestTracker(const FGFQuestCatalog& Catalog, EGFQuestStep Step, int32 Count, EGFFactionRank Rank,
+	const FGFSideQuestCatalog& SideCatalog, const FGFSideTrackerInput& Side, bool bAllow);
 
 /**
  * Spotted, then the hire banner with the heat countdown. Clear, or bAllow false, hides it.

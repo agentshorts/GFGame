@@ -709,6 +709,11 @@ void AGFHUD::ShowItemHowTo()
 	bItemHowToPinned = true;
 }
 
+namespace
+{
+	const FGFSideQuestCatalog& ElderSideRows(const UWorld* World);
+}
+
 void AGFHUD::DrawFieldHud()
 {
 	if (!Canvas || !FGFHudModalRules::ShowsFieldHud(Modal, Restore))
@@ -721,12 +726,17 @@ void AGFHUD::DrawFieldHud()
 	EGFFactionRank Rank = EGFFactionRank::Outsider;
 	EGFTheftHeat Heat = EGFTheftHeat::Clear;
 	float SecondsLeft = 0.f;
+	FGFSideTrackerInput Side;
 	const APlayerController* Owning = GetOwningPlayerController();
 	if (const AGFPlayerState* PS = Owning ? Owning->GetPlayerState<AGFPlayerState>() : nullptr)
 	{
 		Step = PS->QuestStep;
 		Count = PS->QuestCount;
 		Rank = PS->FactionRank;
+		Side.Status = PS->ActiveSideStatus;
+		Side.LineId = PS->ActiveSideLineId;
+		Side.StepId = PS->ActiveSideStepId;
+		Side.Count = PS->ActiveSideCount;
 	}
 	if (const AGFPlayerController* GPC = Cast<AGFPlayerController>(Owning))
 	{
@@ -749,7 +759,7 @@ void AGFHUD::DrawFieldHud()
 	}
 
 	const FString Key = FGFDefaultInputKeys::InteractKey().GetFName().ToString();
-	const FGFQuestTrackerView Tracker = GFFormatQuestTracker(Catalog, Step, Count, Rank, true);
+	const FGFQuestTrackerView Tracker = GFFormatSideQuestTracker(Catalog, Step, Count, Rank, ElderSideRows(GetWorld()), Side, true);
 	const FGFSpottedAlert Spotted = GFFormatSpottedAlert(Heat, SecondsLeft, true);
 	const FGFInteractPrompt Prompt = GFFormatInteractPrompt(bReach, Key, Verb, true);
 	const FGFFieldHudLayout Layout = GFLayoutFieldHud(Canvas->ClipX, Canvas->ClipY, Tracker.Lines.Num(), Spotted.bVisible, Prompt.bVisible);

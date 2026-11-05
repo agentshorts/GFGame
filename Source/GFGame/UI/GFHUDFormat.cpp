@@ -455,6 +455,45 @@ FGFQuestTrackerView GFFormatQuestTracker(const FGFQuestCatalog& Catalog, EGFQues
 	return Out;
 }
 
+FGFQuestTrackerView GFFormatSideQuestTracker(const FGFQuestCatalog& Catalog, EGFQuestStep Step, int32 Count, EGFFactionRank Rank,
+	const FGFSideQuestCatalog& SideCatalog, const FGFSideTrackerInput& Side, bool bAllow)
+{
+	FGFQuestTrackerView Out = GFFormatQuestTracker(Catalog, Step, Count, Rank, bAllow);
+	if (!bAllow || Step != EGFQuestStep::Done || Side.Status != EGFSideQuestStatus::Active)
+	{
+		return Out;
+	}
+	const FGFSideQuestLineRule* Line = SideCatalog.FindLine(Side.LineId);
+	if (!Line)
+	{
+		return Out;
+	}
+	const FGFSideQuestStepRule* StepRule = Line->FindStep(Side.StepId);
+	Out.bVisible = true;
+	Out.LineTitle = Line->Title.IsEmpty() ? FString(TEXT("Town task")) : Line->Title;
+	Out.StepTitle = StepRule ? StepRule->Title : FString();
+	Out.Progress.Reset();
+	Out.Hint.Reset();
+	if (StepRule)
+	{
+		if (StepRule->Goal > 1)
+		{
+			Out.Progress = FString::Printf(TEXT("%d/%d"), FMath::Clamp(Side.Count, 0, StepRule->Goal), StepRule->Goal);
+		}
+		Out.Hint = StepRule->Hint;
+	}
+	Out.Lines.Reset();
+	Out.Lines.Add(Out.Rank);
+	for (const FString* Part : { &Out.LineTitle, &Out.StepTitle, &Out.Progress, &Out.Hint })
+	{
+		if (!Part->IsEmpty())
+		{
+			Out.Lines.Add(*Part);
+		}
+	}
+	return Out;
+}
+
 FGFSpottedAlert GFFormatSpottedAlert(EGFTheftHeat State, float SecondsLeft, bool bAllow)
 {
 	FGFSpottedAlert Out;
