@@ -16,6 +16,6 @@ class GFRHYTHM_API UGFAccelHopTutorialGateSubsystem : public UGFMiniGameGateSubs
 
 public:
 	virtual FName GetGateId() const override { return TEXT("AccelHopTutorial"); }
-	virtual FName GetMapName() const override { return TEXT("/Game/Maps/L_AccelHop_Tutorial_v1"); }
+	virtual FName GetMapName() const override { return TEXT("/Game/Maps/L_AccelHop_Tutorial_v2"); }
 	virtual FText GetDisplayName() const override { return FText::FromString(TEXT("Accel Hop 101")); }
 };

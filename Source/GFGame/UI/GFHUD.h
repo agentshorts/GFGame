@@ -201,7 +201,7 @@ private:
 	void DrawLandingMarker();
 	/** v2 (#342): a pulsing diamond over the road's lit target tile, so it reads even at a grazing angle. */
 	void DrawAccelHopLitMarker();
-	/** #348: the Acceleration Hop tutorial's lesson panel (top centre) on L_AccelHop_Tutorial_v1. */
+	/** #348: the Acceleration Hop tutorial's lesson panel (top centre) on L_AccelHop_Tutorial_v2. */
 	void DrawAccelHopTutorial();
 	void DrawZoneLabel();
 	void DrawChat();

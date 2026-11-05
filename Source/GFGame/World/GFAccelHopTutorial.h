@@ -1,5 +1,5 @@
 #pragma once
-// Acceleration Hop tutorial director (#348). Lives on L_AccelHop_Tutorial_v1: the map script places one, and the hub
+// Acceleration Hop tutorial director (#348). Lives on L_AccelHop_Tutorial_v2: the map script places one, and the hub
 // director spawns one if it is missing (PlacedClass of the AccelHopTutorial side gate).
 // - Listens to judged hop tile landings on this machine (UGFCharacterMovementComponent::OnAccelHopLanded) and runs the
 //   pure lesson rules (FGFAccelHopTutorialRules) for the local player, so every player has their own prompts.

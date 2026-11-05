@@ -108,7 +108,7 @@ const TArray<FGFMiniGameEntry>& FGFMiniGameCatalog::Extras()
 	// No pictogram sign yet (the visual pass can add one through SignObject).
 	static const TArray<FGFMiniGameEntry> Entries = []
 	{
-		FGFMiniGameEntry Tutorial = MapMode(TEXT("AccelHopTutorial"), TEXT("Accel Hop 101"), TEXT("/Game/Maps/L_AccelHop_Tutorial_v1"),
+		FGFMiniGameEntry Tutorial = MapMode(TEXT("AccelHopTutorial"), TEXT("Accel Hop 101"), TEXT("/Game/Maps/L_AccelHop_Tutorial_v2"),
 			FGFMiniGameCatalog::SimGateObject,
 			FLinearColor(1.00f, 0.25f, 0.85f), true, INDEX_NONE,
 			TEXT("/Script/GFGame.GFAccelHopTutorial"));

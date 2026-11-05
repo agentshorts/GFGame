@@ -1,8 +1,13 @@
 # Acceleration Hop tutorial (issue 348)
 
-Map `/Game/Maps/L_AccelHop_Tutorial_v1`, gate id `AccelHopTutorial`, hub label "Accel Hop 101".
-L_Beat is the source of the copy and is never edited. A new version of the tutorial is a new map
-(`L_AccelHop_Tutorial_v2`, `GFTUT_MAP=/Game/Maps/L_AccelHop_Tutorial_v2`), never a save over v1.
+Live map `/Game/Maps/L_AccelHop_Tutorial_v2` (the visual pass, #348; the hub gate and the cook list point at it), gate id `AccelHopTutorial`, hub label "Accel Hop 101".
+L_Beat is the source of the copy and is never edited. `L_AccelHop_Tutorial_v1` is the first build and stays on disk;
+a new version of the tutorial is a new map (`GFTUT_MAP=/Game/Maps/L_AccelHop_Tutorial_vN`), never a save over an old one.
+
+FX (`/Game/FX/AccelHop`, spec in the visual pass `fx_hooks_v1.md`): the tutorial director spawns NS_HopBoost_v1 at the
+player's feet on an applied lit or Boost landing, NS_HopLitPop_v1 on the tile top for a lit landing, and keeps one
+NS_HopLitIdle_v1 attached to the road's lit tile. Local cosmetics only, skipped on a dedicated server, and a missing
+system logs once and plays nothing.
 
 ## How it fits together
 

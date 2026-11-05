@@ -91,7 +91,7 @@ bool FGFAccelHopTutorialGateTest::RunTest(const FString&)
 {
 	const FName Id = FGFMiniGameCatalog::AccelHopTutorialId();
 	TestEqual(TEXT("Gate id"), Id, FName(TEXT("AccelHopTutorial")));
-	TestEqual(TEXT("Versioned map"), FGFMiniGameCatalog::AccelHopTutorialMap(), FName(TEXT("/Game/Maps/L_AccelHop_Tutorial_v1")));
+	TestEqual(TEXT("Versioned map"), FGFMiniGameCatalog::AccelHopTutorialMap(), FName(TEXT("/Game/Maps/L_AccelHop_Tutorial_v2")));
 	TestTrue(TEXT("Never L_Beat"), FGFMiniGameCatalog::AccelHopTutorialMap() != FName(TEXT("/Game/Maps/L_Beat")));
 
 	const UGFAccelHopTutorialGateSubsystem* Gate = GetDefault<UGFAccelHopTutorialGateSubsystem>();
@@ -110,7 +110,7 @@ bool FGFAccelHopTutorialGateTest::RunTest(const FString&)
 	TestEqual(TEXT("Beside Beat Hop"), Entry->BesideId, FName(TEXT("BeatHop")));
 	TestEqual(TEXT("Placed class"), Entry->PlacedClass, FString(TEXT("/Script/GFGame.GFAccelHopTutorial")));
 	TestFalse(TEXT("Not on the ring"), FGFMiniGameCatalog::All().ContainsByPredicate([Id](const FGFMiniGameEntry& Row) { return Row.Id == Id; }));
-	TestTrue(TEXT("Tutorial map is a mini-game map (stamina off unless opted in)"), GFMovementPolicy::IsMiniGameMapName(TEXT("/Game/Maps/L_AccelHop_Tutorial_v1")));
+	TestTrue(TEXT("Tutorial map is a mini-game map (stamina off unless opted in)"), GFMovementPolicy::IsMiniGameMapName(TEXT("/Game/Maps/L_AccelHop_Tutorial_v2")));
 
 	const FGFMiniGameEntry* Beat = FGFMiniGameCatalog::Find(TEXT("BeatHop"));
 	if (!TestNotNull(TEXT("Beat Hop row"), Beat))
@@ -169,8 +169,8 @@ bool FGFAccelHopTutorialHubTest::RunTest(const FString&)
 		Placed->bHasFinishGate = true;
 		Placed->FinishGateLocation = FVector(9000.f, 0.f, 0.f);
 		AGFHubGateDirector* Director = Map.World->SpawnActor<AGFHubGateDirector>();
-		Director->Place(TEXT("/Game/Maps/L_AccelHop_Tutorial_v1"), Rime);
-		Director->Place(TEXT("/Game/Maps/UEDPIE_0_L_AccelHop_Tutorial_v1"), Rime);
+		Director->Place(TEXT("/Game/Maps/L_AccelHop_Tutorial_v2"), Rime);
+		Director->Place(TEXT("/Game/Maps/UEDPIE_0_L_AccelHop_Tutorial_v2"), Rime);
 		TestNotNull(TEXT("Tutorial marker"), FindGate(Map.World, Id, EGFMiniGameGateRole::Marker));
 		TestTrue(TEXT("Director reused, not doubled"), AGFAccelHopTutorial::Find(Map.World) == Placed);
 		int32 Directors = 0;

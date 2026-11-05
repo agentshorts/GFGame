@@ -89,7 +89,7 @@ struct GFCORE_API FGFMiniGameCatalog
 
 	/** Acceleration Hop tutorial (#348): gate id and its versioned map. */
 	static FName AccelHopTutorialId() { return TEXT("AccelHopTutorial"); }
-	static FName AccelHopTutorialMap() { return TEXT("/Game/Maps/L_AccelHop_Tutorial_v1"); }
+	static FName AccelHopTutorialMap() { return TEXT("/Game/Maps/L_AccelHop_Tutorial_v2"); }
 
 	/** Gate-local offset of the tutorial portal from the Beat Hop portal: past the jukebox on the portal's left (cm). */
 	static constexpr float AccelHopTutorialBesideCm = 750.f;

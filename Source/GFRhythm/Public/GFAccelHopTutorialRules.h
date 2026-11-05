@@ -1,6 +1,7 @@
 #pragma once
 // Acceleration Hop tutorial (#348): the four lessons, their on-screen prompts, and the pure progress rules.
-// The map (L_AccelHop_Tutorial_v1, built by Tools/create_accel_hop_tutorial_map.py) tags every hop tile with its lesson
+// The live map (L_AccelHop_Tutorial_v2, the visual pass copy of v1 from Tools/create_accel_hop_tutorial_map.py) tags every
+// hop tile with its lesson
 // (LessonTag). AGFAccelHopTutorial feeds each judged landing in here and the HUD draws PromptFor.
 // Lessons run in order: hop on the beat, steer in the air, hit the lit tile, then one short run that chains all three.
 // Reaching a later lesson's tiles skips ahead (nobody gets stuck); walking back never rewinds.

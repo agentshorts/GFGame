@@ -143,13 +143,15 @@ class CppAgreementTests(unittest.TestCase):
 
 class MapNameTests(unittest.TestCase):
     MAP = "/Game/Maps/L_AccelHop_Tutorial_v1"
+    # The live gate and the cook list point at the visual pass copy (#348); the script still builds v1 by default.
+    LIVE_MAP = "/Game/Maps/L_AccelHop_Tutorial_v2"
 
     def test_catalog_gate_and_script_agree(self):
-        self.assertIn('"{}"'.format(self.MAP), CATALOG_H.read_text(encoding="utf-8"))
-        self.assertIn('"{}"'.format(self.MAP), GATE_H.read_text(encoding="utf-8"))
+        self.assertIn('"{}"'.format(self.LIVE_MAP), CATALOG_H.read_text(encoding="utf-8"))
+        self.assertIn('"{}"'.format(self.LIVE_MAP), GATE_H.read_text(encoding="utf-8"))
         self.assertIn('"{}"'.format(self.MAP), (TOOLS / "create_accel_hop_tutorial_map.py").read_text(encoding="utf-8"))
         ini = (ROOT / "Config" / "DefaultGame.ini").read_text(encoding="utf-8")
-        self.assertIn('+MapsToCook=(FilePath="{}")'.format(self.MAP), ini)
+        self.assertIn('+MapsToCook=(FilePath="{}")'.format(self.LIVE_MAP), ini)
         self.assertIn('+MapsToCook=(FilePath="/Game/Maps/L_Beat")', ini, "L_Beat still cooks")
 
     def test_no_em_dashes_in_copy(self):

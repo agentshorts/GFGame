@@ -18,7 +18,7 @@ Towers, fences, trees, walls, pipes, wagons and props stay on simple collision o
 Acceleration Hop tutorial: Accel Hop 101 (issue 348)
 
 Where: the hub (L_Hub). A new pink gate, "Accel Hop 101", stands beside the Beat Hop portal, past the jukebox. Walk in.
-It opens a new map, L_AccelHop_Tutorial_v1, a copy of the Beat Hop test map. L_Beat itself is unchanged and the Beat Hop portal still opens it.
+It opens L_AccelHop_Tutorial_v2 (the visual pass of L_AccelHop_Tutorial_v1, a copy of the Beat Hop test map). Gold sparks on a lit or Boost landing, a magenta pop on the lit tile, and a soft magenta shimmer over the tile that is lit now. L_Beat itself is unchanged and the Beat Hop portal still opens it.
 Before the map script has run on the build machine the gate says "Under construction", like any missing map.
 A panel at the top of the screen walks you through four lessons along one straight course, one song and one beat for the whole run:
 1/4 Hop on the beat: land on the thump 4 times (misses do not count, they do not have to be in a row). No lit tile yet.
