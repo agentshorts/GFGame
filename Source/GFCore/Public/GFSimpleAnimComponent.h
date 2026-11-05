@@ -13,8 +13,9 @@ class USkeletalMeshComponent;
  * Single-node playback (SetAnimationMode AnimationSingleNode, PlayAnimation). MoveAnim plays at ground speed / the
  * row's NaturalSpeedCms (DT_AnimMap) when it has one, so Walk and Run don't skate; everything else plays at 1.0.
  *
- * Other clips (ferry seat, fist scope, emotes, Beat Hop) go through ClaimClip / ReleaseClaim instead of playing on the
- * mesh themselves. Claims sit in a priority stack keyed by owner (ferry seat > fist scope > emote > mining > Beat Hop > locomotion):
+ * Other clips (ferry seat, traversal, fist scope, emotes, mining, Beat Hop) go through ClaimClip / ReleaseClaim instead of
+ * playing on the mesh themselves. Claims sit in a priority stack keyed by owner (ferry seat > mantling > wall run >
+ * climbing > fist scope > emote > mining > Beat Hop > locomotion; GFAnimOwnerStack.h):
  * only the top claim plays, a lower claim waits underneath, and releasing the top restores the next one (or locomotion).
  * A non-looping clip left on the mesh with no claim still plays out before idle or move starts again.
  */

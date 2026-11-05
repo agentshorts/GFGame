@@ -1,5 +1,22 @@
 #include "GFAnimOwnerStack.h"
 
+const TCHAR* GFAnimOwnerName(EGFAnimOwner Owner)
+{
+	switch (Owner)
+	{
+	case EGFAnimOwner::Locomotion: return TEXT("Locomotion");
+	case EGFAnimOwner::BeatHop: return TEXT("BeatHop");
+	case EGFAnimOwner::Mining: return TEXT("Mining");
+	case EGFAnimOwner::Emote: return TEXT("Emote");
+	case EGFAnimOwner::FistScope: return TEXT("FistScope");
+	case EGFAnimOwner::Climbing: return TEXT("Climbing");
+	case EGFAnimOwner::WallRun: return TEXT("WallRun");
+	case EGFAnimOwner::Mantling: return TEXT("Mantling");
+	case EGFAnimOwner::FerrySeat: return TEXT("FerrySeat");
+	default: return TEXT("Unknown");
+	}
+}
+
 bool FGFAnimOwnerStack::Claim(EGFAnimOwner Owner, FName Key, bool bLoop, float Seconds, float PlayRate)
 {
 	if (Owner == EGFAnimOwner::Locomotion || Key.IsNone())

@@ -5,9 +5,14 @@
 /**
  * Who is driving a single-node art mesh. Higher value wins. Locomotion is the implicit fallback (idle / move picked
  * by UGFSimpleAnimComponent) and is never claimed.
- * Order: ferry seat > fist scope > emote > mining > Beat Hop clip > locomotion.
+ * Order: ferry seat > mantling > wall run > climbing > fist scope > emote > mining > Beat Hop clip > locomotion.
  * Mining has its own owner so an emote over a held mining loop restores the loop when it ends, and ending the
  * mining field never cuts an emote.
+ * Traversal (#356) sits above fist scope, emote and mining: a body on a wall must show the wall clip, and a held fist
+ * scope or mining loop underneath comes back when the climb, mantle or wall run lets go (a timed emote just expires
+ * underneath). Mantling beats wall run beats climbing, so a mantle that ends a climb, or a wall run a climb hands
+ * off to, is never hidden by the climb's own Enter / Exit_Fall one-shot. The ferry seat stays on top: nobody climbs
+ * while seated. Plain enum, never saved or replicated, so these values can move.
  */
 enum class EGFAnimOwner : uint8
 {
@@ -16,8 +21,17 @@ enum class EGFAnimOwner : uint8
 	Mining = 2,
 	Emote = 3,
 	FistScope = 4,
-	FerrySeat = 5,
+	/** #356 wall climb: Player.WallClimb_Enter, Player.WallClimb_Loop, Player.WallClimb_Exit_Fall. */
+	Climbing = 5,
+	/** #356 wall run: Player.WallRun_Loop_L / Player.WallRun_Loop_R by the side the wall is on. */
+	WallRun = 6,
+	/** #356 climb-exit mantle: Player.Mantle_Up (High), Player.Mantle_Up_Low (Low, reserved). */
+	Mantling = 7,
+	FerrySeat = 8,
 };
+
+/** Debug name for an owner (logs and test messages). */
+GFCORE_API const TCHAR* GFAnimOwnerName(EGFAnimOwner Owner);
 
 /** One owner's clip request. */
 struct FGFAnimClaim

@@ -30,6 +30,8 @@ struct GFCORE_API FGFAnimMapRow : public FTableRowBase
 	/**
 	 * cm/s the planted foot travels in a locomotion loop (Walk 87, Run 450, Run_Fast 600). Above zero, whoever plays the
 	 * clip for movement sets play rate = ground speed / this, so the feet don't skate. 0 = play at 1.0 (everything else).
+	 * Traversal loops (#356) use it the same way against their own speed: Player.WallClimb_Loop 350 (climb rise speed),
+	 * Player.WallRun_Loop_L / Player.WallRun_Loop_R 450 (wall run speed).
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Anim") float NaturalSpeedCms = 0.f;
 };
@@ -41,4 +43,16 @@ struct GFCORE_API FGFAnimMap
 	static UAnimSequenceBase* Load(FName Key);
 	/** Ground speed / the row's NaturalSpeedCms, clamped to [0.25, 3]; 1 when the key has no natural speed. */
 	static float PlayRateFor(FName Key, float GroundSpeedCms);
+
+	/** The row's NaturalSpeedCms when the row has one above zero, else Fallback (a code default for a row not in yet). */
+	static float NaturalSpeedFor(FName Key, float FallbackCms = 0.f);
+
+	/**
+	 * Pure rule behind PlayRateFor: SpeedCms / NaturalSpeedCms, clamped to [MinPlayRate, MaxPlayRate]; 1 when
+	 * NaturalSpeedCms is zero or less. Traversal claims (#356) use it for the climb and wall run loops.
+	 */
+	static float RateFromNaturalSpeed(float SpeedCms, float NaturalSpeedCms);
+
+	static constexpr float MinPlayRate = 0.25f;
+	static constexpr float MaxPlayRate = 3.f;
 };

@@ -17,9 +17,20 @@ UAnimSequenceBase* FGFAnimMap::Load(FName Key)
 float FGFAnimMap::PlayRateFor(FName Key, float GroundSpeedCms)
 {
 	const FGFAnimMapRow* Row = Find(Key);
-	if (!Row || Row->NaturalSpeedCms <= 0.f)
+	return RateFromNaturalSpeed(GroundSpeedCms, Row ? Row->NaturalSpeedCms : 0.f);
+}
+
+float FGFAnimMap::NaturalSpeedFor(FName Key, float FallbackCms)
+{
+	const FGFAnimMapRow* Row = Find(Key);
+	return (Row && Row->NaturalSpeedCms > 0.f) ? Row->NaturalSpeedCms : FallbackCms;
+}
+
+float FGFAnimMap::RateFromNaturalSpeed(float SpeedCms, float NaturalSpeedCms)
+{
+	if (NaturalSpeedCms <= 0.f)
 	{
 		return 1.f;
 	}
-	return FMath::Clamp(GroundSpeedCms / Row->NaturalSpeedCms, 0.25f, 3.f);
+	return FMath::Clamp(SpeedCms / NaturalSpeedCms, MinPlayRate, MaxPlayRate);
 }
