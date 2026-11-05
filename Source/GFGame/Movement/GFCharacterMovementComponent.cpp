@@ -192,6 +192,15 @@ public:
 		{
 			return false;
 		}
+		// #355: a climb starting, a lip coming into reach, or a mantle starting or ending is its own move.
+		if (SavedContact.bWallAhead != Next->SavedContact.bWallAhead || SavedContact.bLedge != Next->SavedContact.bLedge)
+		{
+			return false;
+		}
+		if (StartSim.bWallClimbing != Next->StartSim.bWallClimbing || StartSim.bMantling != Next->StartSim.bMantling)
+		{
+			return false;
+		}
 		return Super::CanCombineWith(NewMove, InCharacter, MaxDelta);
 	}
 };
@@ -259,6 +268,22 @@ void UGFCharacterMovementComponent::GetLifetimeReplicatedProps(TArray<FLifetimeP
 	DOREPLIFETIME_CONDITION(UGFCharacterMovementComponent, ReplicatedStaminaGate, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UGFCharacterMovementComponent, bInsideKindleRing, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UGFCharacterMovementComponent, ReplicatedFlipTimeLeft, COND_SkipOwner);
+	DOREPLIFETIME_CONDITION(UGFCharacterMovementComponent, ReplicatedWallClimbPhase, COND_SkipOwner);
+}
+
+EGFWallClimbPhase UGFCharacterMovementComponent::GetWallClimbPhase() const
+{
+	if (CharacterOwner && CharacterOwner->GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		return ReplicatedWallClimbPhase <= static_cast<uint8>(EGFWallClimbPhase::Mantling)
+			? static_cast<EGFWallClimbPhase>(ReplicatedWallClimbPhase)
+			: EGFWallClimbPhase::None;
+	}
+	if (Sim.bMantling)
+	{
+		return EGFWallClimbPhase::Mantling;
+	}
+	return Sim.bWallClimbing ? EGFWallClimbPhase::Climbing : EGFWallClimbPhase::None;
 }
 
 void UGFCharacterMovementComponent::ApplyBaseRunSpeed()
@@ -402,6 +427,10 @@ void UGFCharacterMovementComponent::ApplyBeatHopMoveMask(FGFStaminaCommand& Comm
 	{
 		return;
 	}
+	// #355: Beat Hop courses are built around the kit they list. Wall climb is not on it, so a run never climbs.
+	Command.bWallClimbAllowed = false;
+	Command.Contact.bWallAhead = false;
+	Command.Contact.bLedge = false;
 	if (!GFBeatHopNinja::Allows(BeatHopDifficulty, EGFBeatHopKitMove::WallRun, BeatHopProfile))
 	{
 		Command.Contact.bWallContact = false;
@@ -621,6 +650,12 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 		{
 			ReplicatedFlipTimeLeft = Sim.FlipTimeLeft;
 		}
+		const uint8 Phase = static_cast<uint8>(Sim.bMantling ? EGFWallClimbPhase::Mantling
+			: (Sim.bWallClimbing ? EGFWallClimbPhase::Climbing : EGFWallClimbPhase::None));
+		if (ReplicatedWallClimbPhase != Phase)
+		{
+			ReplicatedWallClimbPhase = Phase;
+		}
 	}
 
 	// The step decides whether this press is a real hop. The engine jump runs inside Super.
@@ -653,6 +688,7 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 	{
 		CharacterOwner->bPressedJump = false;
 	}
+	ApplyWallClimbMove();
 
 	Super::PerformMovement(DeltaTime);
 	JumpZVelocity = GetTuning().JumpZVelocity;
@@ -811,6 +847,32 @@ bool UGFCharacterMovementComponent::DoJump(bool bReplayingMoves, float DeltaTime
 	Velocity.Z = static_cast<double>(Sim.JumpZSpeed);
 	Velocity += Sim.JumpForward;
 	return true;
+}
+
+void UGFCharacterMovementComponent::ApplyWallClimbMove()
+{
+	const bool bClimbNow = Sim.bWallClimbing || Sim.bMantling;
+	const bool bClimbBefore = SimAtMoveStart.bWallClimbing || SimAtMoveStart.bMantling;
+	if (!bClimbNow && !bClimbBefore)
+	{
+		return;
+	}
+	if (bClimbNow && IsMovingOnGround())
+	{
+		// Walking keeps the capsule on the floor. A climb from the ground has to leave it.
+		SetMovementMode(MOVE_Falling);
+	}
+	// PhysFalling hands CalcVelocity a flat velocity and puts the old Z back, so the climb's Z goes in here.
+	// That covers the climb, the mantle, the stop at the lip, the kick off the wall and the hand-off to a wall run.
+	if (Sim.bOverrideVelocity)
+	{
+		Velocity = Sim.OverrideVelocity;
+	}
+	else
+	{
+		// A climb that just dropped (peel, out of time or stamina) falls from here instead of keeping its climb speed.
+		Velocity.Z = FMath::Min(Velocity.Z, 0.0);
+	}
 }
 
 void UGFCharacterMovementComponent::CalcVelocity(float DeltaTime, float Friction, bool bFluid, float BrakingDeceleration)
@@ -1401,6 +1463,8 @@ void UGFCharacterMovementComponent::GatherLiveContact(FGFTraversalContact& Conta
 		}
 	}
 
+	GatherClimbContact(Contact);
+
 	const float HalfHeight = CharacterOwner->GetCapsuleComponent() ? CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 88.f;
 	TArray<FOverlapResult> Overlaps;
 	FCollisionObjectQueryParams Objects;
@@ -1445,6 +1509,77 @@ void UGFCharacterMovementComponent::GatherLiveContact(FGFTraversalContact& Conta
 			Contact.GrapplePoint = Hit.ImpactPoint;
 		}
 	}
+}
+
+void UGFCharacterMovementComponent::GatherClimbContact(FGFTraversalContact& Contact) const
+{
+	UWorld* World = GetWorld();
+	const UCapsuleComponent* Capsule = CharacterOwner ? CharacterOwner->GetCapsuleComponent() : nullptr;
+	if (!World || !Capsule || !UpdatedComponent || bBeatHopRun)
+	{
+		return;
+	}
+	const UGFMovementTuning& Tuning = GetTuning();
+	FVector Into = Sim.bWallClimbing
+		? FVector(-Sim.WallClimbNormal.X, -Sim.WallClimbNormal.Y, 0.0).GetSafeNormal()
+		: FVector(Acceleration.X, Acceleration.Y, 0.0).GetSafeNormal();
+	if (Into.IsNearlyZero())
+	{
+		return;
+	}
+
+	float Radius = 0.f;
+	float HalfHeight = 0.f;
+	Capsule->GetScaledCapsuleSize(Radius, HalfHeight);
+	const FVector Center = UpdatedComponent->GetComponentLocation();
+	const double Feet = Center.Z - static_cast<double>(HalfHeight);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GFWallClimb), false, CharacterOwner);
+	FCollisionResponseParams Response;
+	InitCollisionParams(Params, Response);
+	const ECollisionChannel Channel = UpdatedComponent->GetCollisionObjectType();
+
+	// Look ahead above step height, so a stair riser or a one-block step is a step, never a climb.
+	constexpr float ProbeSphere = 12.f;
+	const double ProbeUp = FMath::Clamp(static_cast<double>(MaxStepHeight + Tuning.WallClimbProbeAboveStep) - static_cast<double>(HalfHeight),
+		0.0, static_cast<double>(FMath::Max(0.f, HalfHeight - ProbeSphere)));
+	const FVector ProbeFrom = Center + FVector(0.0, 0.0, ProbeUp);
+	const FVector ProbeTo = ProbeFrom + Into * static_cast<double>(Radius + Tuning.WallClimbProbeDistance);
+	FHitResult Wall;
+	if (!World->SweepSingleByChannel(Wall, ProbeFrom, ProbeTo, FQuat::Identity, Channel, FCollisionShape::MakeSphere(ProbeSphere), Params, Response)
+		|| Wall.bStartPenetrating
+		|| FMath::Abs(Wall.ImpactNormal.Z) > static_cast<double>(Tuning.WallNormalMaxZ)
+		|| FVector::DotProduct(FVector(Wall.ImpactNormal.X, Wall.ImpactNormal.Y, 0.0).GetSafeNormal(), Into) > -0.3)
+	{
+		return;
+	}
+	Contact.bWallAhead = true;
+	Contact.WallAheadNormal = Wall.ImpactNormal;
+
+	// A walkable lip within reach, past the wall face by a capsule, with room to stand and a clear path straight up.
+	const FVector FlatNormal = FVector(Wall.ImpactNormal.X, Wall.ImpactNormal.Y, 0.0).GetSafeNormal();
+	const FVector LipIn = FlatNormal.IsNearlyZero() ? Into : FlatNormal * -1.0;
+	const FVector Over = FVector(Wall.ImpactPoint.X, Wall.ImpactPoint.Y, Center.Z) + LipIn * static_cast<double>(Radius + Tuning.WallClimbMantleInset);
+	const FVector LipTop(Over.X, Over.Y, Feet + static_cast<double>(Tuning.WallClimbMantleReach) + 1.0);
+	const FVector LipBottom(Over.X, Over.Y, Feet + static_cast<double>(Tuning.WallClimbMantleMinLip));
+	FHitResult Lip;
+	if (!World->LineTraceSingleByChannel(Lip, LipTop, LipBottom, Channel, Params, Response) || Lip.bStartPenetrating || !IsWalkable(Lip))
+	{
+		return;
+	}
+	const FVector Target(Over.X, Over.Y, Lip.ImpactPoint.Z + static_cast<double>(HalfHeight) + 2.0);
+	const FCollisionShape Body = FCollisionShape::MakeCapsule(FMath::Max(1.f, Radius - 2.f), FMath::Max(1.f, HalfHeight - 2.f));
+	if (World->OverlapBlockingTestByChannel(Target, FQuat::Identity, Channel, Body, Params, Response))
+	{
+		return;
+	}
+	const FVector Rise(Center.X, Center.Y, Target.Z);
+	if (World->SweepTestByChannel(Center, Rise, FQuat::Identity, Channel, Body, Params, Response))
+	{
+		return;
+	}
+	Contact.bLedge = true;
+	Contact.LedgeTarget = Target;
+	Contact.LedgeHeight = static_cast<float>(Lip.ImpactPoint.Z - Feet);
 }
 
 namespace GFCharacterMovementLanding

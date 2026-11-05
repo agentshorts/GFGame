@@ -55,6 +55,17 @@ struct GFGAME_API FGFAccelHopLandingEvent
 	bool bApplied = false;
 };
 
+/** #355: what the wall climb is doing, for anim graphs and remote players (#356). */
+UENUM(BlueprintType)
+enum class EGFWallClimbPhase : uint8
+{
+	None = 0,
+	/** Straight up the wall the input pushes into. */
+	Climbing = 1,
+	/** Climb exit: rising to the lip, then stepping onto it. */
+	Mantling = 2,
+};
+
 class UGFCharacterMovementComponent;
 DECLARE_MULTICAST_DELEGATE_TwoParams(FGFOnAccelHopLanded, const UGFCharacterMovementComponent* /*Movement*/, const FGFAccelHopLandingEvent& /*Event*/);
 
@@ -136,6 +147,18 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "GF|Movement")
 	bool IsWallRunning() const { return Sim.bWallRunning; }
+
+	/** #355: climbing straight up a wall. Remote players read the replicated phase. */
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	bool IsWallClimbing() const { return GetWallClimbPhase() == EGFWallClimbPhase::Climbing; }
+
+	/** #355: the climb-exit mantle onto a ledge. Remote players read the replicated phase. */
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	bool IsMantling() const { return GetWallClimbPhase() == EGFWallClimbPhase::Mantling; }
+
+	/** #355: None, Climbing or Mantling. The owner and the server read the sim; simulated proxies read the replicated copy. */
+	UFUNCTION(BlueprintPure, Category = "GF|Movement")
+	EGFWallClimbPhase GetWallClimbPhase() const;
 
 	UFUNCTION(BlueprintPure, Category = "GF|Movement")
 	bool IsSwiveling() const { return Sim.bSwiveling; }
@@ -279,6 +302,10 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_FlipTime)
 	float ReplicatedFlipTimeLeft = 0.f;
 
+	/** #355: EGFWallClimbPhase for simulated proxies. The owner predicts Sim instead. */
+	UPROPERTY(Replicated)
+	uint8 ReplicatedWallClimbPhase = 0;
+
 private:
 	void RefreshStaminaGate();
 	void ApplyStaminaGate();
@@ -286,6 +313,10 @@ private:
 	void PrepareControllerlessWalk();
 	FVector LiveCameraForward() const;
 	void GatherLiveContact(FGFTraversalContact& Contact);
+	/** #355: wall straight ahead of the input (or the climbed wall), and a walkable lip above it with room to stand. */
+	void GatherClimbContact(FGFTraversalContact& Contact) const;
+	/** #355: a climb or mantle owns this move. Leaves the floor and hands the sim's velocity (Z included) to PhysFalling. */
+	void ApplyWallClimbMove();
 	void ApplyFlipPose(float TimeLeft);
 	void PollAccelHopLanding();
 	/** The #341 fallback behind StepUp. Same up, forward, down shape as the engine step, sized to the tread it found. */
