@@ -250,7 +250,7 @@ namespace GFStairKitTestsDetail
 
 	FString Describe(const FClimb& C)
 	{
-		return FString::Printf(TEXT("%s, along %.0f, feet %.1f (max %.1f), mode %d, assists %d, stair refusals %d"),
+		return FString::Printf(TEXT("%s, along %.0f, feet %.1f (max %.1f), mode %d, assists %d, refused walking hits %d"),
 			C.Why, C.Along, C.FeetZ, C.MaxFeetZ, C.Mode, C.Assists, C.Refusals);
 	}
 
@@ -474,15 +474,17 @@ bool FGFStairKitWallTest::RunTest(const FString&)
 		TestFalse(*FString::Printf(TEXT("%s is not walked up (%s)"), Kit.Id, *Describe(Result)), Result.bReached);
 		TestTrue(*FString::Printf(TEXT("%s feet stay on the ground"), Kit.Id), Result.MaxFeetZ < 10.f);
 		TestEqual(*FString::Printf(TEXT("%s gets no assist"), Kit.Id), Result.Assists, 0);
-		// The #341 map diagnostic: a riser just past the step height is logged as a refused stair, a 2 m wall is not.
-		if (Index == 0)
-		{
-			TestTrue(*FString::Printf(TEXT("%s logs a StairRefused line (%s)"), Kit.Id, *Describe(Result)), Result.Refusals > 0);
-		}
-		else
-		{
-			TestEqual(*FString::Printf(TEXT("%s is a wall, not a refused stair"), Kit.Id), Result.Refusals, 0);
-		}
+		// The #341 map diagnostic: every refused blocking hit while walking is logged, the 2 m wall too, so a playtest
+		// names whatever stopped the player. The line measures the face it hit.
+		TestTrue(*FString::Printf(TEXT("%s logs a StairRefused line (%s)"), Kit.Id, *Describe(Result)), Result.Refusals > 0);
+		const FGFWalkRefusal& Line = Move->GetLastWalkRefusal();
+		AddInfo(FString::Printf(TEXT("#341 evidence: %s StairRefused: %s, face top %.1f cm, component %s, normal %s"),
+			Kit.Id, *Line.Reason, Line.FaceTopCm, *Line.Component, *Line.ImpactNormal.ToCompactString()));
+		TestTrue(*FString::Printf(TEXT("%s line names the step box (%s)"), Kit.Id, *Line.Component), Line.Component.Contains(TEXT("_Step0")));
+		TestTrue(*FString::Printf(TEXT("%s line measures the face top (%.1f vs %.1f)"), Kit.Id, Line.FaceTopCm, Kit.TopCm()),
+			FMath::IsNearlyEqual(Line.FaceTopCm, Kit.TopCm(), 3.f));
+		TestTrue(*FString::Printf(TEXT("%s face top is walkable"), Kit.Id), Line.bFaceTopWalkable);
+		TestTrue(*FString::Printf(TEXT("%s line has a reason"), Kit.Id), !Line.Reason.IsEmpty());
 		Pawn->Destroy();
 	}
 	return true;

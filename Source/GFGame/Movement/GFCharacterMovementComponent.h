@@ -30,6 +30,20 @@ struct GFGAME_API FGFLandingTarget
 	bool bLit = false;
 };
 
+/** The last refused walking hit the #341 log wrote, so a test reads what a playtest line would say. */
+struct GFGAME_API FGFWalkRefusal
+{
+	FString Reason;
+	FString Actor;
+	FString Component;
+	FString Mesh;
+	FVector ImpactPoint = FVector::ZeroVector;
+	FVector ImpactNormal = FVector::ZeroVector;
+	/** Top of the blocking component just past the face, in cm above the pawn's feet. Negative when no top was found. */
+	float FaceTopCm = -1.f;
+	bool bFaceTopWalkable = false;
+};
+
 UCLASS()
 class GFGAME_API UGFCharacterMovementComponent : public UCharacterMovementComponent
 {
@@ -60,11 +74,16 @@ public:
 	int32 GetRiserAssistCount() const { return RiserAssistCount; }
 
 	/**
-	 * How many stair-like risers both the engine step and the assist refused since spawn (a walkable top within 1.5
-	 * step heights, or a tread with no headroom, depth or landing). Plain walls do not count. Each one also writes a
-	 * rate-limited LogGF "StairRefused:" line naming the actor, component and static mesh, so a playtest names the piece.
+	 * How many blocking hits stopped this pawn while it walked, since spawn (#341). Every non-walkable blocking hit that
+	 * reaches HandleImpact on the ground counts: a stair the engine step and the assist both refused, a wall, a hull, a
+	 * pawn. Hits inside a step attempt that then succeeds do not count. Each one may write a LogGF "StairRefused:" line,
+	 * rate limited per hit component, naming the actor, component, static mesh, hit point, impact normal and the height
+	 * of the blocking face, so a playtest names the piece that felt like an invisible wall.
 	 */
 	int32 GetStairRefusalCount() const { return StairRefusalCount; }
+
+	/** What the last logged StairRefused line said. Empty until one is written. */
+	const FGFWalkRefusal& GetLastWalkRefusal() const { return LastWalkRefusal; }
 
 	/** Copies BaseRunSpeed onto MaxWalkSpeed. Does not include the sprint multiplier. */
 	void ApplyBaseRunSpeed();
@@ -228,10 +247,13 @@ private:
 	void ApplyFlipPose(float TimeLeft);
 	void PollAccelHopLanding();
 	/** The #341 fallback behind StepUp. Same up, forward, down shape as the engine step, sized to the tread it found. */
-	/** OutWhy names a stair-like refusal for the #341 log (null for a plain wall); OutRise is the riser it measured. */
+	/** OutWhy names a stair-like refusal for the #341 log (null when the assist had no view); OutRise is the riser it measured. */
 	bool TryRiserAssist(const FVector& GravDir, const FVector& Delta, const FHitResult& Hit, FStepDownResult* OutStepDownResult,
 		const TCHAR*& OutWhy, float& OutRise);
-	void NoteStairRefusal(const FHitResult& Hit, const TCHAR* Why, float Rise);
+	/** Counts and maybe logs one refused walking hit. Called from HandleImpact, which every refused walking hit reaches. */
+	void NoteStairRefusal(const FHitResult& Hit);
+	/** Top of the hit component just past the face, cm above the feet. False when the trace found no top. */
+	bool MeasureFaceTop(const FHitResult& Hit, float& OutTopCm, bool& bOutWalkable) const;
 	double AccelHopNow() const;
 
 	FGFStaminaState Sim;
@@ -276,7 +298,15 @@ private:
 	int32 RiserAssistCount = 0;
 	double RiserAssistLoggedAt = -1000.0;
 	int32 StairRefusalCount = 0;
-	double StairRefusalLoggedAt = -1000.0;
+	/** When each hit component last wrote a StairRefused line, so one wall does not hide the next. */
+	TMap<TWeakObjectPtr<UPrimitiveComponent>, double> StairRefusalLoggedAt;
+	/** What the last refused StepUp learned, read by the HandleImpact that follows it for the same component. */
+	TWeakObjectPtr<UPrimitiveComponent> PendingRefusalComponent;
+	const TCHAR* PendingRefusalWhy = nullptr;
+	float PendingRefusalRise = -1.f;
+	/** True while StepUp runs. The engine step calls HandleImpact on its forward leg, which is not a refusal yet. */
+	bool bInsideStepUp = false;
+	FGFWalkRefusal LastWalkRefusal;
 	bool bAccelHopWasFalling = false;
 	bool bLastAccelHopLit = false;
 };
