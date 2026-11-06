@@ -151,6 +151,7 @@ FGFElderTalk::FSideOffer FGFElderTalk::SideOfferFor(const FGFSideQuestCatalog& C
 			Done.Add(Line.LineId);
 		}
 	}
+	// Load repairs the board. This guard only skips a view whose pointer and status still disagree.
 	const FGFSideQuestProgress* Active = Board.Active();
 	const bool bActive = Active && Active->Status == EGFSideQuestStatus::Active;
 	return SideOfferFor(Catalog, bActive ? Active->LineId : NAME_None, bActive ? Active->StepId : NAME_None, bActive ? Active->Count : 0,

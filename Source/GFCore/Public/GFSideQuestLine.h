@@ -1,10 +1,11 @@
 #pragma once
 
-// Pure rules for the side quest board. Apply is the only way side progress moves; Refresh only flips lines
-// between Locked and Available from the player's errand standing. Mirrors FGFQuestLine.
+// Pure rules for the side quest board. Apply is the only way side progress moves. Refresh repairs the active
+// pointer, then flips lines between Locked and Available from the player's errand standing. Mirrors FGFQuestLine.
 //
 // Rules:
 //   One Active side line per player. TalkAccepted for a second line while one is Active: Refused OtherActive.
+//   RepairActiveLine: exactly one line is Active if and only if ActiveLineId names it. Load runs it before use.
 //   A line is offered (Available) when its town is the player's faction and the errand rank is at least
 //   UnlockRank (default Member; ASK CANON on Champion). Outsiders and Initiates see no offer.
 //   A line needs MinSteps steps before it is offered. Stub lines stay Locked until their content lands.
@@ -115,7 +116,7 @@ struct GFCORE_API FGFSideQuestLine
 
 	FGFSideQuestApplyResult Apply(const FGFSideQuestEvent& Event);
 
-	/** Adds a board entry for every catalog line and sets Locked / Available on lines that are neither Active nor Done. */
+	/** Repairs the active pointer, then adds a board entry for every catalog line and sets Locked / Available on lines that are neither Active nor Done. */
 	void Refresh();
 
 	/** The Active line's current step (null when no line is Active). */

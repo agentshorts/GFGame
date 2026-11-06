@@ -2,7 +2,9 @@
 
 // Side quest board, as data. Lives beside The Elder's Errand (GFQuestTypes.h) and does not touch it.
 // Every player key owns one board: one progress entry per side line, plus at most one Active line.
-// FGFSideQuestLine (GFSideQuestLine.h) is the only writer. UGFQuestSubsystem saves the boards in the "Quest" blob.
+// ActiveLineId names that Active line, or it is None when no line is Active. RepairActiveLine restores that.
+// FGFSideQuestLine (GFSideQuestLine.h) applies events and refreshes offers. UGFQuestSubsystem saves the boards
+// in the "Quest" blob and repairs them on load.
 #include "CoreMinimal.h"
 #include "GFItemTypes.h"
 #include "GFSideQuestTypes.generated.h"
@@ -64,7 +66,7 @@ struct GFCORE_API FGFSideQuestProgress
 	}
 };
 
-/** Every side line one player has seen, plus the single Active one (None when no line is Active). */
+/** Every side line one player has seen, plus the single Active one (None when no line is Active). RepairActiveLine keeps the pointer and that status in agreement. */
 USTRUCT(BlueprintType)
 struct GFCORE_API FGFSideQuestBoard
 {
@@ -112,6 +114,22 @@ struct GFCORE_API FGFSideQuestBoard
 	{
 		return ActiveLineId == Other.ActiveLineId && Lines == Other.Lines;
 	}
+
+	/**
+	 * Makes ActiveLineId and the line statuses agree. Load and refresh both call this.
+	 *
+	 * Repair rule: exactly one line is Active if and only if ActiveLineId names it.
+	 * Keep the line ActiveLineId names when that line's status is Active.
+	 * Otherwise keep the first Active line in Lines order (the order the board already stores) and point ActiveLineId at it.
+	 * A line with no LineId cannot be named, so it is not kept.
+	 * Every other Active line drops to Available, the resting status a line has when it is offered and not running.
+	 * That line's StepId and Count clear, because they only mean something while Active.
+	 * Done and Locked lines stay as they are. When no line is Active, ActiveLineId clears.
+	 * Logs a warning when the board changes. A consistent board is left untouched and is not logged.
+	 *
+	 * Returns true when the board changed.
+	 */
+	bool RepairActiveLine();
 };
 
 /**

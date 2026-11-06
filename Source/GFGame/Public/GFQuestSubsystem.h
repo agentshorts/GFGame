@@ -4,7 +4,7 @@
 // copies step / count / rank onto the player state, and saves the lines in the world mode blob "Quest"
 // (UGFSaveSubsystem gathers that blob with the other mode states). No save version bump.
 // Also owns the side quest board (QL-a): one FGFSideQuestLine per player key, fed by FGFSideQuestEvents, saved
-// in the same blob (FGFQuestSave::SideBoards), with the Active side line copied onto the player state.
+// in the same blob (FGFQuestSave::SideBoards). Load repairs the board, then copies the Active line onto the player state.
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "GFModeTypes.h"

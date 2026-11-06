@@ -69,19 +69,22 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
 	EGFFactionRank FactionRank = EGFFactionRank::Outsider;
 
-	/** Active side line on the board (None when no side line is Active). The server writes it. Same replication as the errand fields. */
+	/**
+	 * Copy of the repaired board's Active line (None when no side line is Active).
+	 * The server writes this and the step, count, and status from that board. These fields are not a separate source of truth.
+	 */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
 	FName ActiveSideLineId;
 
-	/** Step of the Active side line. None when no side line is Active. */
+	/** Step of the copied Active line. None when no side line is Active. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
 	FName ActiveSideStepId;
 
-	/** Count inside the Active side step. */
+	/** Count inside the copied Active step. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
 	int32 ActiveSideCount = 0;
 
-	/** Active while a side line runs, else Locked. The full board stays on the server. */
+	/** Active while the copied line is the board's Active line, else Locked. The full board stays on the server. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GF|Quest")
 	EGFSideQuestStatus ActiveSideStatus = EGFSideQuestStatus::Locked;
 
@@ -238,7 +241,7 @@ public:
 	void SetCurrentZoneId(FName NewId);
 	/** Server. Copies the quest step, the step count, and the rank onto the replicated fields. */
 	void SetQuestReplicated(EGFQuestStep Step, int32 Count, EGFFactionRank Rank);
-	/** Server. Copies the Active side line, its step, count, and status onto the replicated fields. */
+	/** Server. Copies the repaired board's Active line onto the replicated fields. */
 	void SetSideQuestReplicated(FName LineId, FName StepId, int32 Count, EGFSideQuestStatus Status);
 	/** Server. Copies the Done side lines onto the replicated list. */
 	void SetSideDoneReplicated(const TArray<FName>& LineIds);

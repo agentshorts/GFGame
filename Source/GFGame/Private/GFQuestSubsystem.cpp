@@ -166,13 +166,16 @@ void UGFQuestSubsystem::RestoreModeState(const TArray<uint8>& In)
 			Line.Progress = Record.Progress;
 		}
 		// Blobs saved before the side board existed have no SideBoards and load with empty boards.
+		// Repair before Refresh and before the player-state copy, so a bad save cannot stay stuck.
 		for (const FGFSideQuestBoardRecord& Record : Save.SideBoards)
 		{
 			if (Record.PlayerKey.IsEmpty())
 			{
 				continue;
 			}
-			SideLineFor(Record.PlayerKey).Board = Record.Board;
+			FGFSideQuestLine& Side = SideLineFor(Record.PlayerKey);
+			Side.Board = Record.Board;
+			Side.Board.RepairActiveLine();
 		}
 		// Every known player gets Locked / Available re-derived from the restored errand standing.
 		for (const TPair<FString, FGFQuestLine>& Pair : Lines)
@@ -213,6 +216,7 @@ void UGFQuestSubsystem::PushPlayer(AGFPlayerState* PS) const
 	const FGFQuestProgress& View = Progress ? *Progress : Defaults;
 	PS->SetQuestReplicated(View.Step, View.Count, View.Rank);
 
+	// Side fields mirror the repaired board. Push runs after load repair, so this copy follows that board.
 	const FGFSideQuestBoard* Board = FindSideBoard(PS->PlayerKey);
 	const FGFSideQuestProgress* Active = Board ? Board->Active() : nullptr;
 	if (Active && Active->Status == EGFSideQuestStatus::Active)

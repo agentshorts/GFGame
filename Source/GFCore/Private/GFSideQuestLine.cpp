@@ -2,6 +2,7 @@
 #include "GFSideQuestRows.h"
 #include "GFQuestLine.h"
 #include "GFDataTables.h"
+#include "GFLog.h"
 #include "Engine/DataTable.h"
 
 const FName FGFSideQuestCodes::RankLow(TEXT("RankLow"));
@@ -287,8 +288,62 @@ bool FGFSideQuestLine::IsUnlocked(const FGFSideQuestLineRule& Line, FName InFact
 		&& static_cast<uint8>(InRank) >= static_cast<uint8>(Line.UnlockRank);
 }
 
+bool FGFSideQuestBoard::RepairActiveLine()
+{
+	const FName Previous = ActiveLineId;
+	int32 KeepIndex = INDEX_NONE;
+	if (!Previous.IsNone())
+	{
+		KeepIndex = Lines.IndexOfByPredicate([Previous](const FGFSideQuestProgress& Line)
+		{
+			return Line.LineId == Previous && Line.Status == EGFSideQuestStatus::Active;
+		});
+	}
+	if (KeepIndex == INDEX_NONE)
+	{
+		KeepIndex = Lines.IndexOfByPredicate([](const FGFSideQuestProgress& Line)
+		{
+			return !Line.LineId.IsNone() && Line.Status == EGFSideQuestStatus::Active;
+		});
+	}
+
+	int32 Demoted = 0;
+	for (int32 Index = 0; Index < Lines.Num(); ++Index)
+	{
+		if (Index == KeepIndex || Lines[Index].Status != EGFSideQuestStatus::Active)
+		{
+			continue;
+		}
+		Lines[Index].Status = EGFSideQuestStatus::Available;
+		Lines[Index].StepId = NAME_None;
+		Lines[Index].Count = 0;
+		++Demoted;
+	}
+
+	const FName Next = KeepIndex == INDEX_NONE ? NAME_None : Lines[KeepIndex].LineId;
+	const bool bChanged = Demoted > 0 || Next != Previous;
+	ActiveLineId = Next;
+	if (!bChanged)
+	{
+		return false;
+	}
+	if (Demoted > 0)
+	{
+		UE_LOG(LogGF, Warning, TEXT("SideQuest: repaired board, active line '%s' (was '%s'), %d other Active lines set to Available."),
+			*Next.ToString(), *Previous.ToString(), Demoted);
+	}
+	else
+	{
+		UE_LOG(LogGF, Warning, TEXT("SideQuest: repaired board, active line '%s' (was '%s')."),
+			*Next.ToString(), *Previous.ToString());
+	}
+	return true;
+}
+
 void FGFSideQuestLine::Refresh()
 {
+	// Load repairs before this runs. Repair again so a later standing update cannot leave a bad board in place.
+	Board.RepairActiveLine();
 	for (const FGFSideQuestLineRule& Rule : ActiveRules().Lines)
 	{
 		FGFSideQuestProgress* Progress = Board.Find(Rule.LineId);
