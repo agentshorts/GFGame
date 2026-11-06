@@ -233,7 +233,7 @@ void AGFMiningCrackMarker::Show(const FVector& At, const FVector& Normal, float 
 	}
 	FGFMiningCrack::Apply(Plate, Fraction);
 	const float Ink = 0.08f + 0.16f * static_cast<float>(Params.Stage);
-	Plate->SetVectorParameterValueOnMaterials(TEXT("Color"), FLinearColor(Ink, Ink * 0.85f, Ink * 0.7f, 1.f));
+	Plate->SetVectorParameterValueOnMaterials(TEXT("Color"), FVector(Ink, Ink * 0.85f, Ink * 0.7f));
 }
 
 void AGFMiningCrackMarker::Hide()
