@@ -1,5 +1,5 @@
-// Mining clip choices (GFMiningAnim): the tap clip, the field pose rules against the owner stack, and every key the
-// character asks for has a row.
+// Mining clip choices (GFMiningAnim): the tap clip, the field pose rules against the owner stack, contact times, and
+// every key the character asks for has a row.
 // Run: UnrealEditor-Cmd GFGame.uproject -ExecCmds="Automation RunTests GFGame.MiningAnim;Quit" -unattended -nullrhi
 
 #include "Misc/AutomationTest.h"
@@ -165,6 +165,147 @@ bool FGFMiningFieldOwnerTest::RunTest(const FString&)
 	Apply(Field, S, Field.End());
 	TestEqual(TEXT("emote survives the field end"), int32(S.TopOwner()), int32(EGFAnimOwner::Emote));
 	TestEqual(TEXT("end clip queued underneath"), MiningKey(S), GFMiningAnim::FieldEnd());
+	return true;
+}
+
+namespace
+{
+	FName ContactMiningKey(const FGFAnimOwnerStack& Stack)
+	{
+		const FGFAnimClaim* Claim = Stack.Find(EGFAnimOwner::Mining);
+		return Claim ? Claim->Key : NAME_None;
+	}
+
+	/** What BeginMiningContact does after the clip has claimed: note the new claim, then arm when the key has a contact. */
+	void ArmContact(FGFAnimOwnerStack& Stack, FGFMiningContact& Contact, FName Key, float ClipSeconds, EGFMiningContactLand Land)
+	{
+		Stack.Claim(EGFAnimOwner::Mining, Key, false, ClipSeconds);
+		Contact.NoteClaim(Key);
+		const float Seconds = GFMiningAnim::ContactSeconds(Key);
+		if (GFMiningAnim::DelayLand(true, Seconds))
+		{
+			Contact.Arm(Key, Seconds, Land);
+		}
+	}
+
+	EGFMiningContactLand StepContact(FGFMiningContact& Contact, FGFAnimOwnerStack& Stack, float DeltaSeconds)
+	{
+		// The character reads the Mining key, then the anim component expires claims afterwards.
+		const EGFMiningContactLand Land = Contact.Tick(DeltaSeconds, ContactMiningKey(Stack));
+		Stack.Tick(DeltaSeconds);
+		return Land;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMiningContactSecondsTest, "GFGame.MiningAnim.ContactSeconds", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFMiningContactSecondsTest::RunTest(const FString&)
+{
+	struct FContact
+	{
+		FName Key;
+		int32 Frame;
+	};
+	const FContact Contacts[] = {
+		{ GFMiningAnim::Punch(), 6 },
+		{ GFMiningAnim::Dig(), 9 },
+		{ GFMiningAnim::Claw(), 7 },
+		{ GFMiningAnim::Overcharge(), 13 },
+		{ GFMiningAnim::ElementSwap(), 6 },
+	};
+	for (const FContact& Row : Contacts)
+	{
+		TestEqual(FString::Printf(TEXT("%s contact frame"), *Row.Key.ToString()), GFMiningAnim::ContactFrame(Row.Key), Row.Frame);
+		const float Seconds = static_cast<float>(Row.Frame) / GFMiningAnim::ClipFps;
+		TestEqual(FString::Printf(TEXT("%s contact seconds"), *Row.Key.ToString()), GFMiningAnim::ContactSeconds(Row.Key), Seconds);
+		TestTrue(FString::Printf(TEXT("%s delays when the clip claims"), *Row.Key.ToString()), GFMiningAnim::DelayLand(true, Seconds));
+		TestFalse(FString::Printf(TEXT("%s lands now when the clip is missing"), *Row.Key.ToString()), GFMiningAnim::DelayLand(false, Seconds));
+	}
+
+	const FName NoContact[] = {
+		GFMiningAnim::FieldStart(),
+		GFMiningAnim::FieldLoop(),
+		GFMiningAnim::FieldEnd(),
+		GFAim::FistScopeAnim(),
+		FName(TEXT("Player.No_Such_Clip")),
+		NAME_None,
+	};
+	for (const FName Key : NoContact)
+	{
+		const FString Label = Key.IsNone() ? TEXT("None") : Key.ToString();
+		TestEqual(FString::Printf(TEXT("%s has no contact frame"), *Label), GFMiningAnim::ContactFrame(Key), 0);
+		TestEqual(FString::Printf(TEXT("%s contact seconds are 0"), *Label), GFMiningAnim::ContactSeconds(Key), 0.f);
+		TestFalse(FString::Printf(TEXT("%s does not delay"), *Label), GFMiningAnim::DelayLand(true, GFMiningAnim::ContactSeconds(Key)));
+	}
+	TestEqual(TEXT("Punch contact is 0.2 s"), GFMiningAnim::ContactSeconds(GFMiningAnim::Punch()), 0.2f);
+	TestEqual(TEXT("Dig contact is 0.3 s"), GFMiningAnim::ContactSeconds(GFMiningAnim::Dig()), 0.3f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMiningContactScheduleTest, "GFGame.MiningAnim.ContactSchedule", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFMiningContactScheduleTest::RunTest(const FString&)
+{
+	const FName Punch = GFMiningAnim::Punch();
+	const FName Claw = GFMiningAnim::Claw();
+	const float PunchContact = GFMiningAnim::ContactSeconds(Punch);
+	const float ClawContact = GFMiningAnim::ContactSeconds(Claw);
+
+	FGFAnimOwnerStack Stack;
+	FGFMiningContact Contact;
+	ArmContact(Stack, Contact, Punch, 0.4f, EGFMiningContactLand::RemoveBlock);
+	TestTrue(TEXT("punch land is waiting"), Contact.IsPending());
+	TestEqual(TEXT("waiting on the punch claim"), Contact.PendingKey(), Punch);
+	TestEqual(TEXT("land fires at the contact"), int32(StepContact(Contact, Stack, PunchContact)), int32(EGFMiningContactLand::RemoveBlock));
+	TestFalse(TEXT("land fires once"), Contact.IsPending());
+	TestEqual(TEXT("a later tick does not land again"), int32(StepContact(Contact, Stack, 1.f)), int32(EGFMiningContactLand::None));
+
+	ArmContact(Stack, Contact, Punch, 0.4f, EGFMiningContactLand::RemoveBlock);
+	TestEqual(TEXT("half the contact does not land"), int32(StepContact(Contact, Stack, PunchContact * 0.5f)), int32(EGFMiningContactLand::None));
+	TestTrue(TEXT("still waiting at half contact"), Contact.IsPending());
+	TestEqual(TEXT("punch claim still held"), ContactMiningKey(Stack), Punch);
+	TestEqual(TEXT("the rest of the contact lands"), int32(StepContact(Contact, Stack, PunchContact)), int32(EGFMiningContactLand::RemoveBlock));
+
+	// Releasing the Mining claim before contact skips the land, and putting the key back does not revive it.
+	ArmContact(Stack, Contact, Punch, 0.4f, EGFMiningContactLand::RemoveBlock);
+	Stack.Release(EGFAnimOwner::Mining);
+	TestEqual(TEXT("released claim skips the land"), int32(StepContact(Contact, Stack, PunchContact)), int32(EGFMiningContactLand::None));
+	TestFalse(TEXT("release clears the wait"), Contact.IsPending());
+	Stack.Claim(EGFAnimOwner::Mining, Punch, false, 0.4f);
+	TestEqual(TEXT("the same key without a new arm does not land"), int32(StepContact(Contact, Stack, PunchContact)), int32(EGFMiningContactLand::None));
+
+	// A new Mining claim replaces the punch. The punch land is dropped. The claw lands on its own contact.
+	ArmContact(Stack, Contact, Punch, 0.4f, EGFMiningContactLand::RemoveBlock);
+	TestEqual(TEXT("early punch frame does not land"), int32(StepContact(Contact, Stack, 0.05f)), int32(EGFMiningContactLand::None));
+	ArmContact(Stack, Contact, Claw, 0.4f, EGFMiningContactLand::Claw);
+	TestEqual(TEXT("replacement waits on the claw"), Contact.PendingKey(), Claw);
+	TestEqual(TEXT("claw contact is not the punch land"), int32(StepContact(Contact, Stack, ClawContact)), int32(EGFMiningContactLand::Claw));
+	TestFalse(TEXT("punch land did not survive the replacement"), Contact.IsPending());
+
+	// Replacing the claim and not arming the new one skips the old land.
+	ArmContact(Stack, Contact, Punch, 0.4f, EGFMiningContactLand::RemoveBlock);
+	Contact.NoteClaim(Claw);
+	Stack.Claim(EGFAnimOwner::Mining, Claw, false, 0.4f);
+	TestFalse(TEXT("replace without a land clears the wait"), Contact.IsPending());
+	TestEqual(TEXT("unarmed replacement does not land"), int32(StepContact(Contact, Stack, 1.f)), int32(EGFMiningContactLand::None));
+
+	// The claim expiring before contact is a release. The land does not fire into an empty Mining slot.
+	Stack.Claim(EGFAnimOwner::Mining, Punch, false, 0.1f);
+	Contact.NoteClaim(Punch);
+	Contact.Arm(Punch, PunchContact, EGFMiningContactLand::RemoveBlock);
+	TestEqual(TEXT("short clip has not connected yet"), int32(StepContact(Contact, Stack, 0.1f)), int32(EGFMiningContactLand::None));
+	TestEqual(TEXT("short clip expired"), ContactMiningKey(Stack), NAME_None);
+	TestEqual(TEXT("expired claim skips the land"), int32(StepContact(Contact, Stack, PunchContact)), int32(EGFMiningContactLand::None));
+
+	// An owner above Mining covers the body. The Mining claim is still the punch, so the land still fires.
+	ArmContact(Stack, Contact, Punch, 0.4f, EGFMiningContactLand::RemoveBlock);
+	Stack.Claim(EGFAnimOwner::Emote, TEXT("Player.Emote_Wave"), false, 2.f);
+	TestEqual(TEXT("emote shows over the punch"), int32(Stack.TopOwner()), int32(EGFAnimOwner::Emote));
+	TestEqual(TEXT("covered punch still lands"), int32(StepContact(Contact, Stack, PunchContact)), int32(EGFMiningContactLand::RemoveBlock));
+	TestEqual(TEXT("emote stays up after the land"), int32(Stack.TopOwner()), int32(EGFAnimOwner::Emote));
+
+	Contact.Arm(GFMiningAnim::FieldLoop(), 0.f, EGFMiningContactLand::RemoveBlock);
+	TestFalse(TEXT("zero contact is not armed"), Contact.IsPending());
+	Contact.Arm(Punch, PunchContact, EGFMiningContactLand::None);
+	TestFalse(TEXT("an empty land is not armed"), Contact.IsPending());
 	return true;
 }
 

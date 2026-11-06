@@ -183,6 +183,8 @@ protected:
 	bool AimedCellNeedsHands() const;
 	bool TraceCameraAim(FHitResult& OutHit, FVector& OutAimPoint) const;
 	bool TraceBlock(FHitResult& OutHit) const;
+	/** Filled cell on the aim trace that this pawn can ask to clear. Does not edit the world. */
+	bool CanRemoveAimedBlock(FHitResult& OutHit) const;
 	FVector AimMuzzleLocation() const;
 	void ApplyAimShot(const FGFAimStepOut& Shot);
 
@@ -226,12 +228,21 @@ protected:
 	void UpdateFistPose();
 	/** Claims a mining clip (GFMiningAnim keys) as EGFAnimOwner::Mining; false when the clip is missing. Owners above it still show. */
 	bool PlayMiningClip(FName Key, bool bLoop, float* OutSeconds = nullptr);
+	/**
+	 * One-shot: claim Key first, then run Land at GFMiningAnim::ContactSeconds.
+	 * Contact 0, or a clip that does not load, runs Land immediately.
+	 */
+	void BeginMiningContact(FName Key, EGFMiningContactLand Land);
+	/** TryRemoveBlock, or the matching magic TryActivate / Request, for a contact land. */
+	void RunMiningContactLand(EGFMiningContactLand Land);
 	/** Applies a FGFMiningField cue to the Mining claim. */
 	void ApplyMiningCue(EGFMiningFieldCue Cue);
-	/** Tap to mine: Mine_Dig or Mine_Punch from where the block trace lands. */
+	/** Tap to mine: Mine_Dig or Mine_Punch first, then TryRemoveBlock at that clip's contact. */
 	void PlayMineTap();
 	/** LMB hold: Mine_Field_Start once past the tap time, then Mine_Field_Loop until release. */
 	void UpdateMiningField(float DeltaSeconds);
+	/** Fires a one-shot land when its contact time arrives, or drops it when that Mining claim is gone. */
+	void UpdateMiningContact(float DeltaSeconds);
 	/** Release: Mine_Field_End when the field pose is up. */
 	void EndMiningField();
 	/**
@@ -254,6 +265,8 @@ protected:
 	bool bMagicHeld = false;
 	/** LMB hold field pose (GFMiningAnim.h). The pose and the Mining claim move together through its cues. */
 	FGFMiningField MiningField;
+	/** Dig, punch, claw, element swap or overcharge land waiting on the Mining claim's contact time. */
+	FGFMiningContact MiningContact;
 	/** #356 traversal clips: edges and held claims for Climbing, Mantling and WallRun. */
 	FGFTraversalAnimDriver TraversalAnim;
 	TMap<FName, FGFTraversalClipInfo> TraversalClipCache;

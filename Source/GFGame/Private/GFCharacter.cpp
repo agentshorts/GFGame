@@ -183,6 +183,7 @@ void AGFCharacter::Tick(float DeltaSeconds)
 		}
 	}
 	UpdateMiningField(DeltaSeconds);
+	UpdateMiningContact(DeltaSeconds);
 	if (SpringArm && !bFirstPerson)
 	{
 		if (const UGFCharacterMovementComponent* Move = GetGFMovement())
@@ -415,10 +416,8 @@ void AGFCharacter::OnRemove(const FInputActionValue&)
 	}
 	if (GFResolvePrimaryUse(AimState.Held, AimState.bSnoutZoom) == EGFTriggerUse::PlaceBlock)
 	{
-		if (TryRemoveBlock())
-		{
-			PlayMineTap();
-		}
+		// Clip first. The cell clears at the punch or dig contact, or now when that clip cannot play.
+		PlayMineTap();
 		return;
 	}
 	PushAim(EGFAimEvent::FirePressed);
@@ -447,7 +446,7 @@ void AGFCharacter::OnRemoveReleased(const FInputActionValue&)
 		PlayMiningClip(GFMiningAnim::Punch(), false);
 		return;
 	}
-	if (AimedCellNeedsHands() && TryRemoveBlock())
+	if (AimedCellNeedsHands())
 	{
 		PlayMineTap();
 	}
@@ -455,38 +454,25 @@ void AGFCharacter::OnRemoveReleased(const FInputActionValue&)
 
 void AGFCharacter::OnClaw(const FInputActionValue&)
 {
-	if (UGFMagicComponent* Magic = FindMagic())
+	if (FindMagic())
 	{
-		SendMagicAim();
-		if (!Magic->TryActivate(GFMagic::InputClaw))
-		{
-			Magic->RequestClaw();
-		}
-		PlayMiningClip(GFMiningAnim::Claw(), false);
+		BeginMiningContact(GFMiningAnim::Claw(), EGFMiningContactLand::Claw);
 	}
 }
 
 void AGFCharacter::OnToggleElement(const FInputActionValue&)
 {
-	if (UGFMagicComponent* Magic = FindMagic())
+	if (FindMagic())
 	{
-		if (!Magic->TryActivate(GFMagic::InputToggle))
-		{
-			Magic->RequestToggle();
-		}
-		PlayMiningClip(GFMiningAnim::ElementSwap(), false);
+		BeginMiningContact(GFMiningAnim::ElementSwap(), EGFMiningContactLand::ElementSwap);
 	}
 }
 
 void AGFCharacter::OnOvercharge(const FInputActionValue&)
 {
-	if (UGFMagicComponent* Magic = FindMagic())
+	if (FindMagic())
 	{
-		if (!Magic->TryActivate(GFMagic::InputOvercharge))
-		{
-			Magic->RequestOvercharge();
-		}
-		PlayMiningClip(GFMiningAnim::Overcharge(), false);
+		BeginMiningContact(GFMiningAnim::Overcharge(), EGFMiningContactLand::Overcharge);
 	}
 }
 
@@ -804,21 +790,34 @@ bool AGFCharacter::TryPlaceBlock()
 	return true;
 }
 
+bool AGFCharacter::CanRemoveAimedBlock(FHitResult& OutHit) const
+{
+	AGFVoxelWorld* Voxel = FindVoxelWorld();
+	if (!Voxel || !TraceBlock(OutHit))
+	{
+		return false;
+	}
+	FIntVector HitCell, Adjacent;
+	Voxel->HitToCells(OutHit.ImpactPoint, OutHit.ImpactNormal, HitCell, Adjacent);
+	const AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	return PS && !Voxel->GetBlock(HitCell).IsNone();
+}
+
 bool AGFCharacter::TryRemoveBlock()
 {
 	FHitResult Hit;
+	if (!CanRemoveAimedBlock(Hit))
+	{
+		return false;
+	}
 	AGFVoxelWorld* Voxel = FindVoxelWorld();
-	if (!Voxel || !TraceBlock(Hit))
+	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	if (!Voxel || !PS)
 	{
 		return false;
 	}
 	FIntVector HitCell, Adjacent;
 	Voxel->HitToCells(Hit.ImpactPoint, Hit.ImpactNormal, HitCell, Adjacent);
-	AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
-	if (!PS || Voxel->GetBlock(HitCell).IsNone())
-	{
-		return false;
-	}
 	PS->RequestEdit(HitCell, NAME_None);
 	return true;
 }
@@ -1203,18 +1202,84 @@ bool AGFCharacter::PlayMiningClip(FName Key, bool bLoop, float* OutSeconds)
 	{
 		*OutSeconds = Seconds;
 	}
+	// This claim replaced the previous Mining key. A land still waiting on that key must not fire.
+	MiningContact.NoteClaim(Key);
 	return true;
+}
+
+void AGFCharacter::BeginMiningContact(FName Key, EGFMiningContactLand Land)
+{
+	const float Contact = GFMiningAnim::ContactSeconds(Key);
+	if (Contact <= 0.f)
+	{
+		// No contact on this key: land, then the clip. That is the order these actions used before contact frames.
+		RunMiningContactLand(Land);
+		PlayMiningClip(Key, false);
+		return;
+	}
+	const bool bClaimed = PlayMiningClip(Key, false);
+	if (GFMiningAnim::DelayLand(bClaimed, Contact))
+	{
+		MiningContact.Arm(Key, Contact, Land);
+		return;
+	}
+	// The clip did not load. Land now so a missing FBX cannot skip the dig, punch or cast.
+	RunMiningContactLand(Land);
+}
+
+void AGFCharacter::RunMiningContactLand(EGFMiningContactLand Land)
+{
+	switch (Land)
+	{
+	case EGFMiningContactLand::RemoveBlock:
+		TryRemoveBlock();
+		break;
+	case EGFMiningContactLand::Claw:
+		if (UGFMagicComponent* Magic = FindMagic())
+		{
+			SendMagicAim();
+			if (!Magic->TryActivate(GFMagic::InputClaw))
+			{
+				Magic->RequestClaw();
+			}
+		}
+		break;
+	case EGFMiningContactLand::ElementSwap:
+		if (UGFMagicComponent* Magic = FindMagic())
+		{
+			if (!Magic->TryActivate(GFMagic::InputToggle))
+			{
+				Magic->RequestToggle();
+			}
+		}
+		break;
+	case EGFMiningContactLand::Overcharge:
+		if (UGFMagicComponent* Magic = FindMagic())
+		{
+			if (!Magic->TryActivate(GFMagic::InputOvercharge))
+			{
+				Magic->RequestOvercharge();
+			}
+		}
+		break;
+	case EGFMiningContactLand::None:
+		break;
+	default:
+		break;
+	}
 }
 
 void AGFCharacter::PlayMineTap()
 {
 	FHitResult Hit;
+	if (!CanRemoveAimedBlock(Hit))
+	{
+		return;
+	}
 	const UCapsuleComponent* Capsule = GetCapsuleComponent();
 	const float FeetZ = GetActorLocation().Z - (Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 0.f);
-	const FName Key = TraceBlock(Hit)
-		? GFMiningAnim::TapAnim(Hit.ImpactPoint.Z, Hit.ImpactNormal.Z, FeetZ)
-		: GFMiningAnim::Punch();
-	PlayMiningClip(Key, false);
+	const FName Key = GFMiningAnim::TapAnim(Hit.ImpactPoint.Z, Hit.ImpactNormal.Z, FeetZ);
+	BeginMiningContact(Key, EGFMiningContactLand::RemoveBlock);
 }
 
 void AGFCharacter::ApplyMiningCue(EGFMiningFieldCue Cue)
@@ -1255,6 +1320,17 @@ void AGFCharacter::UpdateMiningField(float DeltaSeconds)
 {
 	const FName MiningKey = SimpleAnim ? SimpleAnim->GetClaimKey(EGFAnimOwner::Mining) : NAME_None;
 	ApplyMiningCue(MiningField.Tick(DeltaSeconds, bMagicHeld, MagicPressSeconds, GFMagic::TapSeconds, bFistClipHeld, MiningKey));
+}
+
+void AGFCharacter::UpdateMiningContact(float DeltaSeconds)
+{
+	// After the field cue, so a Mining claim replaced this frame cancels the land before it can connect.
+	const FName MiningKey = SimpleAnim ? SimpleAnim->GetClaimKey(EGFAnimOwner::Mining) : NAME_None;
+	const EGFMiningContactLand Land = MiningContact.Tick(DeltaSeconds, MiningKey);
+	if (Land != EGFMiningContactLand::None)
+	{
+		RunMiningContactLand(Land);
+	}
 }
 
 void AGFCharacter::EndMiningField()
