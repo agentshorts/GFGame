@@ -441,6 +441,7 @@ void UGFBlockIntegritySubsystem::Step()
 	{
 		TownNodes->TickOngoing(GetWorld(), MiningNow, Budget, [this](const FString& Key) { return FindCaster(Key); });
 	}
+	PublishTargetedFractions(Voxel);
 }
 
 FName UGFBlockIntegritySubsystem::ActiveShape(const UGFMagicComponent* Caster) const
@@ -1211,8 +1212,10 @@ void UGFBlockIntegritySubsystem::ReportVoxelFX(UGFMagicComponent* Caster, EGFMag
 		const float BeforeRem = (Prev && Prev->bStarted) ? Prev->Remaining : Full;
 		TArray<FGFMiningFXEvent> Events;
 		FGFMiningFX::Collect(BeforeRem, 0.f, Full, true, Element, FGFMiningFX::KitForBlock(Break.BlockId), LocationOf(Break.Cell), NormalOf(Break.Cell), Events);
-		for (const FGFMiningFXEvent& Event : Events)
+		const FName CasterId = Caster ? Caster->ContributorKey() : NAME_None;
+		for (FGFMiningFXEvent& Event : Events)
 		{
+			Event.CasterId = CasterId;
 			PlayMiningFX(Event);
 		}
 	}
@@ -1236,9 +1239,61 @@ void UGFBlockIntegritySubsystem::ReportVoxelFX(UGFMagicComponent* Caster, EGFMag
 		}
 		TArray<FGFMiningFXEvent> Events;
 		FGFMiningFX::Collect(BeforeRem, Pair.Value.Remaining, Full, false, Element, FGFMiningFX::KitForBlock(BlockId), LocationOf(Pair.Key), NormalOf(Pair.Key), Events);
-		for (const FGFMiningFXEvent& Event : Events)
+		const FName CasterId = Caster ? Caster->ContributorKey() : NAME_None;
+		for (FGFMiningFXEvent& Event : Events)
 		{
+			Event.CasterId = CasterId;
 			PlayMiningFX(Event);
 		}
+	}
+}
+
+void UGFBlockIntegritySubsystem::FillVoxelTarget(UGFMagicComponent* Caster, AGFVoxelWorld* Voxel, FGFTargetedCellFraction& Out) const
+{
+	Out = FGFTargetedCellFraction();
+	if (!Caster || !Voxel)
+	{
+		return;
+	}
+	const FVector Origin = Caster->CastOrigin();
+	const FVector Aim = Caster->GetAimPoint();
+	auto BlockAt = [Voxel](const FIntVector& Cell) { return Voxel->GetBlock(Cell); };
+	const FIntVector Cell = FGFMagicRules::ResolveCenter(Origin, Aim, Voxel->GetActorLocation(), BlockAt);
+	const FName BlockId = Voxel->GetBlock(Cell);
+	if (BlockId.IsNone())
+	{
+		return;
+	}
+	const float Full = FGFMagicRules::IntegrityOf(FGFMagicCatalog::BlockHardness(BlockId));
+	const FMagicWound* Wound = Wounds.Find(Cell);
+	const float Remaining = (Wound && Wound->bStarted) ? Wound->Remaining : Full;
+	Out.bActive = true;
+	Out.bTown = false;
+	Out.Cell = Cell;
+	Out.Fraction = Full > KINDA_SMALL_NUMBER ? FMath::Clamp(Remaining / Full, 0.f, 1.f) : 1.f;
+}
+
+void UGFBlockIntegritySubsystem::PublishTargetedFractions(AGFVoxelWorld* Voxel)
+{
+	for (UGFMagicComponent* Caster : Casters())
+	{
+		if (!Caster)
+		{
+			continue;
+		}
+		FGFTargetedCellFraction Next;
+		if (Caster->IsFieldHeld())
+		{
+			bool bTownDecided = false;
+			if (TownNodes)
+			{
+				bTownDecided = TownNodes->CopyAimFraction(Caster, Next);
+			}
+			if (!bTownDecided)
+			{
+				FillVoxelTarget(Caster, Voxel, Next);
+			}
+		}
+		Caster->AuthoritySetTargetedFraction(Next);
 	}
 }

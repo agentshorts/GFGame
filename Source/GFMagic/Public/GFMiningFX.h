@@ -77,6 +77,10 @@ struct GFMAGIC_API FGFMiningFXEvent
 	/** 1, 2, or 3 when Kind is Crack (75%, 50%, 25% of integrity left). */
 	UPROPERTY()
 	int32 CrackStage = 0;
+
+	/** Player key of the caster. Empty when the event has no owner, so remote clients do not shake for it. */
+	UPROPERTY()
+	FName CasterId;
 };
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FGFOnMiningFX, const FGFMiningFXEvent& /*Event*/);
@@ -101,6 +105,8 @@ private:
 struct GFMAGIC_API FGFMiningFX
 {
 	static FGFOnMiningFX& OnPlayed();
+	/** Fired where the cosmetic is drawn (listen host and clients). The server break does not use this. */
+	static FGFOnMiningFX& OnCosmetic();
 
 	static FName ElementName(EGFMagicElement Element);
 	static int32 CrackStage(float Remaining, float Full);

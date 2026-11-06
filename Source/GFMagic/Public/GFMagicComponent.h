@@ -9,6 +9,7 @@
 #include "GFMagicTypes.h"
 #include "GFMagicRules.h"
 #include "GFMagicShapes.h"
+#include "GFMiningFeel.h"
 #include "GameplayEffect.h"
 #include "GFMagicComponent.generated.h"
 
@@ -90,6 +91,17 @@ public:
 	/** Local or authority. Sends an RPC from a client. */
 	void SetFieldHeld(bool bHeld);
 	void SetAim(const FVector& Origin, const FVector& Point);
+
+	/** Authority. The aimed cell only. Unchanged payloads do not replicate again. */
+	void AuthoritySetTargetedFraction(const FGFTargetedCellFraction& Next);
+	const FGFTargetedCellFraction& GetTargetedFraction() const { return TargetedFraction; }
+
+	/** Owning client. One mining step of cosmetic crack, then reconcile against the last server word. */
+	void SetCrackTolerance(float Tolerance);
+	void PredictCrackStep(FName BlockId, EGFMagicElement Element, float IntegrityPerSecond, float Rate, float Dt, bool bTown, const FIntVector& Cell, const FString& NodeKey);
+	void ReconcileCrack();
+	/** Authority returns the server fraction. A client returns the guess, which never spends the node. */
+	float ShownCrackFraction() const;
 	void RequestClaw();
 	void RequestToggle();
 	void RequestOvercharge();
@@ -163,6 +175,9 @@ private:
 	UFUNCTION()
 	void OnRep_Haul();
 
+	UFUNCTION()
+	void OnRep_TargetedFraction();
+
 	UPROPERTY(Replicated)
 	bool bFieldHeld = false;
 
@@ -192,6 +207,13 @@ private:
 
 	UPROPERTY(Replicated)
 	bool bOvercharge = false;
+
+	/** Owner only. One aimed cell, not the wound map. */
+	UPROPERTY(ReplicatedUsing = OnRep_TargetedFraction)
+	FGFTargetedCellFraction TargetedFraction;
+
+	FGFCrackClient Crack;
+	float CrackTolerance = FGFMiningFeelRules::DefaultPredictTolerance;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UGameplayEffect>> UpgradeEffects;

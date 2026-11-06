@@ -15,6 +15,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GFMagicRules.h"
+#include "GFMiningFeel.h"
 #include "GFRewards.h"
 #include "GFTownNodes.generated.h"
 
@@ -148,6 +149,12 @@ public:
 	/** True once a hit opened a node on a house or wall piece. */
 	bool IsPiece(const UPrimitiveComponent* Component) const;
 
+	/**
+	 * The aimed town node only. False when the trace misses, so the caller can publish the voxel cell instead.
+	 * A blocked trace returns true with an inactive fraction.
+	 */
+	bool CopyAimFraction(UGFMagicComponent* Caster, FGFTargetedCellFraction& Out) const;
+
 	/** Cone and Frostbind traces. Spray and Rootmaul are globs and swings. */
 	void CastShapes(UGFMagicComponent* Caster, int32& Budget, double Now);
 
@@ -201,7 +208,7 @@ private:
 	FNode& FindOrAdd(const UPrimitiveComponent* Component, FName BlockId, bool bCrystal, bool bPiece, const FVector& Impact, const FVector& Normal);
 	const FNode* Find(const UPrimitiveComponent* Component) const;
 	void CommitBreak(FNode& Node, const FMagicBreak& Break, const FVector& At, double Now, UGFMagicComponent* Fallback, TFunctionRef<UGFMagicComponent*(const FString&)> FindCaster);
-	void EmitContact(UWorld* World, const FNode& Node, EGFMagicElement Element, const FVector& Normal, float BeforeRemaining, bool bBroke);
+	void EmitContact(UWorld* World, const FNode& Node, EGFMagicElement Element, const FVector& Normal, float BeforeRemaining, bool bBroke, UGFMagicComponent* Caster);
 	void Publish(UWorld* World);
 
 	TMap<FString, FNode> Nodes;

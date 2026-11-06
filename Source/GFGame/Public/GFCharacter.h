@@ -19,14 +19,18 @@ class UGFFerryRiderComponent;
 class AGFVoxelWorld;
 class UGFCharacterMovementComponent;
 class UGFMagicComponent;
+class UPrimitiveComponent;
+class AGFMiningCrackMarker;
 class USoundBase;
 struct FInputActionValue;
+struct FGFMiningFXEvent;
+enum class EGFMiningFXKind : uint8;
 
 /**
  * The player character. Third-person over the shoulder by default: spring arm 300 cm, socket (0, 60, 20),
  * pitch -20, FOV 90, camera lag 12. V toggles a plain first-person view. Right mouse places a block while a
  * block is selected, and aims otherwise. Holding left mouse (or the right trigger) with fists or a block
- * raises the sparkfield. A short tap still punches, or picks up a spell-proof build. Shoulder swap is middle
+ * raises the sparkfield after MiningFieldRiseSeconds (150 ms). A shorter tap still punches, or picks up a spell-proof build. Shoulder swap is middle
  * mouse. Q still swings the grapple. C calls the claw, R swaps Spark and the faction element, T overcharges.
  * Shift sprints, Ctrl dashes, E yanks. Space can hop three times before landing. MaxWalkSpeed stays the base run.
  * X talks to the nearest villager or elder within reach. The server checks that reach again.
@@ -101,6 +105,28 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GF|Build")
 	float BuildReach = 800.f;
 
+	/** Hold at least this long before the sparkfield rises. A shorter press stays a punch or dig. Keep equal to GFMagic::TapSeconds. */
+	UPROPERTY(EditDefaultsOnly, Config, BlueprintReadOnly, Category = "GF|Mining", meta = (ClampMin = "0.05", ClampMax = "0.5"))
+	float MiningFieldRiseSeconds = 0.15f;
+
+	/** Break hit-stop. Clamped to 40-60 ms when it plays. */
+	UPROPERTY(EditDefaultsOnly, Config, BlueprintReadOnly, Category = "GF|Mining", meta = (ClampMin = "0.04", ClampMax = "0.06"))
+	float MiningBreakHitStopSeconds = 0.05f;
+
+	UPROPERTY(EditDefaultsOnly, Config, BlueprintReadOnly, Category = "GF|Mining", meta = (ClampMin = "0.01"))
+	float MiningHitShakeSeconds = 0.12f;
+
+	/** Camera kick on a hit, cm. Small on purpose. */
+	UPROPERTY(EditDefaultsOnly, Config, BlueprintReadOnly, Category = "GF|Mining", meta = (ClampMin = "0"))
+	float MiningHitShakeCm = 1.6f;
+
+	UPROPERTY(EditDefaultsOnly, Config, BlueprintReadOnly, Category = "GF|Mining", meta = (ClampMin = "0.01"))
+	float MiningCrosshairTickSeconds = 0.14f;
+
+	/** How far cosmetic crack prediction may lead the server fraction before it snaps back. */
+	UPROPERTY(EditDefaultsOnly, Config, BlueprintReadOnly, Category = "GF|Mining", meta = (ClampMin = "0.01", ClampMax = "0.5"))
+	float MiningPredictTolerance = 0.2f;
+
 	/**
 	 * Tallest ledge the player walks up without jumping, cm, applied to CharacterMovement MaxStepHeight.
 	 * Slightly over one block (GFBlockSize, 100 cm) so one-block voxel steps, such as Big Grumble's stairwells,
@@ -170,6 +196,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void PostInitializeComponents() override;
 	virtual void PossessedBy(AController* NewController) override;
@@ -239,12 +266,21 @@ protected:
 	void ApplyMiningCue(EGFMiningFieldCue Cue);
 	/** Tap to mine: Mine_Dig or Mine_Punch first, then TryRemoveBlock at that clip's contact. */
 	void PlayMineTap();
-	/** LMB hold: Mine_Field_Start once past the tap time, then Mine_Field_Loop until release. */
+	/** LMB hold: Mine_Field_Start once past the rise time, then Mine_Field_Loop until release. */
 	void UpdateMiningField(float DeltaSeconds);
 	/** Fires a one-shot land when its contact time arrives, or drops it when that Mining claim is gone. */
 	void UpdateMiningContact(float DeltaSeconds);
 	/** Release: Mine_Field_End when the field pose is up. */
 	void EndMiningField();
+	float MiningRiseSeconds() const;
+	void RaiseMiningField();
+	void PlayMiningFeel(EGFMiningFXKind Kind);
+	void HandleMiningCosmetic(const FGFMiningFXEvent& Event);
+	void UpdateMiningHitStop();
+	void UpdateMiningShake(float DeltaSeconds);
+	void UpdateMiningCracks(float DeltaSeconds);
+	void PaintCrack(UPrimitiveComponent* Target, float Fraction, bool bShow);
+	void SyncCrackMarker(bool bShow, float Fraction, const FVector& At, const FVector& Normal);
 	/**
 	 * #356: climb, mantle and wall run clips from the movement state (GFTraversalAnim.h), on every copy that draws the
 	 * body. A clip that is not imported is never claimed, so locomotion keeps the body until the FBX land.
@@ -263,6 +299,8 @@ protected:
 	/** True only after Fist_Scope actually replaced locomotion, so a missing clip does not pause the walk. */
 	bool bFistClipHeld = false;
 	bool bMagicHeld = false;
+	/** True after the rise window, once SetFieldHeld has gone out for this press. */
+	bool bMiningFieldUp = false;
 	/** LMB hold field pose (GFMiningAnim.h). The pose and the Mining claim move together through its cues. */
 	FGFMiningField MiningField;
 	/** Dig, punch, claw, element swap or overcharge land waiting on the Mining claim's contact time. */
@@ -272,6 +310,15 @@ protected:
 	TMap<FName, FGFTraversalClipInfo> TraversalClipCache;
 	float MagicPressSeconds = 0.f;
 	float MagicAimElapsed = 0.f;
+	float CrackStepAccum = 0.f;
+	float MiningShakeLeft = 0.f;
+	float MiningShakePhase = 0.f;
+	double MiningHitStopUntil = 0.0;
+	float MiningHitStopSavedDilation = 1.f;
+	bool bMiningHitStop = false;
+	FDelegateHandle MiningCosmeticHandle;
+	TObjectPtr<AGFMiningCrackMarker> CrackMarker;
+	TWeakObjectPtr<UPrimitiveComponent> CrackPainted;
 	bool bFistScopeSoundSearched = false;
 	int32 AimProfileRevision = INDEX_NONE;
 	TWeakObjectPtr<USoundBase> FistScopeSound;

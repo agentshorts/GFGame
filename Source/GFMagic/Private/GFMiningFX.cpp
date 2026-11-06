@@ -71,6 +71,12 @@ FGFOnMiningFX& FGFMiningFX::OnPlayed()
 	return Delegate;
 }
 
+FGFOnMiningFX& FGFMiningFX::OnCosmetic()
+{
+	static FGFOnMiningFX Delegate;
+	return Delegate;
+}
+
 FName FGFMiningFX::ElementName(EGFMagicElement Element)
 {
 	switch (Element)
@@ -300,6 +306,7 @@ void FGFMiningFX::SpawnCosmetic(UWorld* World, const FGFMiningFXEvent& Event)
 	{
 		return;
 	}
+	OnCosmetic().Broadcast(Event);
 	TArray<const FGFMiningFXRow*> Rows;
 	Gather(Event.Kind, Event.Element, Event.Kit, Rows);
 	TSet<FString> Seen;

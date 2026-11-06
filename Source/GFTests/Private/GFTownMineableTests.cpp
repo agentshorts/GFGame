@@ -36,6 +36,7 @@
 #include "StaticMeshResources.h"
 #include "GFNetTestUtils.h"
 #include "GFMiningFX.h"
+#include "GFMiningFeel.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -1747,6 +1748,196 @@ bool FGFWallCrystalRegrowWaitTest::RunTest(const FString&)
 	TestFalse(TEXT("The wall shows again"), Piece->IsHidden());
 	TestTrue(TEXT("The wall blocks again"), Piece->GetActorEnableCollision());
 	TestEqual(TEXT("Crystal integrity is full again"), W.Magic->GetTownNodeRemaining(Wall), 200.f);
+	return true;
+}
+
+// The Log break stays on the server. The client may see a partial fraction. It does not grant the plank or hide the tree first.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFNetMiningFeelLogBreakTest, "GFGame.Net.MiningFeel.LogBreakAuthority", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGFNetMiningFeelLogBreakTest::RunTest(const FString&)
+{
+	using namespace GFNetTest;
+	using namespace GFTownMineTest;
+	FCtxRef Ctx = Start(this, 2);
+	TSharedRef<FString> Key = MakeShared<FString>();
+	TSharedRef<int32> WoodBefore = MakeShared<int32>(0);
+	TSharedRef<bool> SawRibbon = MakeShared<bool>(false);
+	TSharedRef<bool> SawPartial = MakeShared<bool>(false);
+	TSharedRef<bool> EarlyReward = MakeShared<bool>(false);
+	TSharedRef<bool> EarlyHide = MakeShared<bool>(false);
+
+	Do(Ctx, [this, Key, WoodBefore]()
+	{
+		UWorld* Server = ServerWorld();
+		UWorld* Client = ClientWorlds().Num() > 0 ? ClientWorlds()[0] : nullptr;
+		AGFGameState* GS = GameState(Server);
+		AGFPlayerState* Mine = Client ? LocalPlayerState(Client) : nullptr;
+		AGFPlayerState* OnServer = Mine ? PlayerStateByKey(Server, Mine->PlayerKey) : nullptr;
+		AGFVoxelWorld* Grid = Voxel(Server);
+		if (!TestNotNull(TEXT("Server digger"), OnServer) || !TestNotNull(TEXT("Client digger"), Mine) || !GS || !Grid)
+		{
+			return;
+		}
+		*Key = Mine->PlayerKey;
+		GS->bFreeBuild = true;
+		GS->bEnforcePlotPermissions = false;
+		GS->MaxEditReach = 0.f;
+		OnServer->bCharacterReady = true;
+		APawn* Pawn = OnServer->GetPawn();
+		if (!TestNotNull(TEXT("Pawn"), Pawn))
+		{
+			return;
+		}
+		if (ACharacter* Character = Cast<ACharacter>(Pawn))
+		{
+			if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+			{
+				Move->StopMovementImmediately();
+				Move->Velocity = FVector::ZeroVector;
+				Move->GravityScale = 0.f;
+				Move->DisableMovement();
+				Move->SetComponentTickEnabled(false);
+			}
+		}
+		if (APawn* ClientPawn = Mine->GetPawn())
+		{
+			if (ACharacter* Character = Cast<ACharacter>(ClientPawn))
+			{
+				if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+				{
+					Move->GravityScale = 0.f;
+					Move->DisableMovement();
+				}
+			}
+		}
+		TArray<FGFMineableEntry> All;
+		FString Err;
+		const FGFMineableEntry* Entry = FGFMineable::LoadTownWhitelist(All, Err) ? FindEntry(All, TEXT("SM_Town_ForestTree_A")) : nullptr;
+		UStaticMesh* Mesh = Entry ? LoadMesh(Entry->Path) : nullptr;
+		if (!TestNotNull(TEXT("Tree mesh"), Mesh))
+		{
+			return;
+		}
+		const FVector Plant = Grid->CellToWorld(FIntVector(8, 8, 6)) + FVector(0, 0, 800);
+		FActorSpawnParameters Params;
+		Params.bDeferConstruction = true;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AStaticMeshActor* Actor = Server->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Plant, FRotator::ZeroRotator, Params);
+		if (!TestNotNull(TEXT("Tree actor"), Actor))
+		{
+			return;
+		}
+		Actor->SetReplicates(true);
+		Actor->bAlwaysRelevant = true;
+		Actor->FinishSpawning(FTransform(FRotator::ZeroRotator, Plant));
+		UStaticMeshComponent* Comp = Actor->GetStaticMeshComponent();
+		Comp->SetMobility(EComponentMobility::Movable);
+		Comp->SetStaticMesh(Mesh);
+		Comp->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+		Comp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		Comp->RecreatePhysicsState();
+		const FStand Stand = StandOutside(Server, Comp, 200.f, [](const FHitResult&) { return true; });
+		if (!TestTrue(TEXT("Server can see the tree"), Stand.bOk))
+		{
+			return;
+		}
+		Pawn->SetActorLocation(Stand.At, false, nullptr, ETeleportType::TeleportPhysics);
+		*WoodBefore = OnServer->Inventory ? OnServer->Inventory->GetCount(TEXT("WoodPlank")) : 0;
+		if (UGFMagicComponent* Magic = Mine->FindComponentByClass<UGFMagicComponent>())
+		{
+			Magic->SetAim(Stand.At, Stand.Impact);
+		}
+	});
+	WaitUntil(Ctx, TEXT("the server is aiming at the tree"), 5.f, [Key]()
+	{
+		AGFPlayerState* OnServer = PlayerStateByKey(ServerWorld(), *Key);
+		UGFMagicComponent* Magic = OnServer ? OnServer->FindComponentByClass<UGFMagicComponent>() : nullptr;
+		APawn* Pawn = OnServer ? OnServer->GetPawn() : nullptr;
+		return Magic && Pawn && FVector::Dist(Magic->GetAimPoint(), Pawn->GetActorLocation()) > 50.f && FVector::Dist(Magic->GetAimPoint(), Pawn->GetActorLocation()) < 500.f;
+	});
+	Do(Ctx, []()
+	{
+		if (AGFPlayerState* Mine = LocalPlayerState(ClientWorlds()[0]))
+		{
+			if (UGFMagicComponent* Magic = Mine->FindComponentByClass<UGFMagicComponent>())
+			{
+				Magic->SetFieldHeld(true);
+			}
+		}
+	});
+	WaitUntil(Ctx, TEXT("the server breaks the tree after a partial fraction, and the client does not grant or hide early"), 10.f, [Key, WoodBefore, SawRibbon, SawPartial, EarlyReward, EarlyHide]()
+	{
+		UWorld* Server = ServerWorld();
+		UWorld* Client = ClientWorlds().Num() > 0 ? ClientWorlds()[0] : nullptr;
+		AGFPlayerState* OnServer = PlayerStateByKey(Server, *Key);
+		AGFPlayerState* Mine = Client ? LocalPlayerState(Client) : nullptr;
+		UGFBlockIntegritySubsystem* Magic = Server ? Server->GetSubsystem<UGFBlockIntegritySubsystem>() : nullptr;
+		bool bDepleted = false;
+		if (Server && Magic)
+		{
+			for (TActorIterator<AStaticMeshActor> It(Server); It; ++It)
+			{
+				if (UStaticMeshComponent* Comp = It->GetStaticMeshComponent())
+				{
+					if (Magic->IsTownNodeDepleted(Comp))
+					{
+						bDepleted = true;
+					}
+				}
+			}
+		}
+		if (Ribbons(Server) > 0 || Ribbons(Client) > 0)
+		{
+			*SawRibbon = true;
+		}
+		const int32 ClientWood = (Mine && Mine->Inventory) ? Mine->Inventory->GetCount(TEXT("WoodPlank")) : *WoodBefore;
+		if (!bDepleted && ClientWood > *WoodBefore)
+		{
+			*EarlyReward = true;
+		}
+		if (Client && !bDepleted)
+		{
+			for (TActorIterator<AStaticMeshActor> It(Client); It; ++It)
+			{
+				UStaticMesh* Mesh = It->GetStaticMeshComponent() ? It->GetStaticMeshComponent()->GetStaticMesh() : nullptr;
+				if (Mesh && Mesh->GetName().Contains(TEXT("ForestTree")) && It->IsHidden())
+				{
+					*EarlyHide = true;
+				}
+			}
+		}
+		if (!bDepleted && Mine)
+		{
+			if (UGFMagicComponent* ClientMagic = Mine->FindComponentByClass<UGFMagicComponent>())
+			{
+				const FGFTargetedCellFraction& Rep = ClientMagic->GetTargetedFraction();
+				if (Rep.bTown && Rep.bActive && Rep.Serial > 0 && Rep.Fraction < 0.98f && Rep.Fraction > 0.05f)
+				{
+					*SawPartial = true;
+				}
+			}
+		}
+		bool bClientRelay = false;
+		if (Client)
+		{
+			for (TActorIterator<AGFTownMineRelay> It(Client); It; ++It)
+			{
+				for (const FGFTownNodeRep& Node : It->GetNodes())
+				{
+					bClientRelay = bClientRelay || Node.bDepleted;
+				}
+			}
+		}
+		return OnServer && Mine && OnServer->Inventory && Mine->Inventory
+			&& bDepleted
+			&& OnServer->Inventory->GetCount(TEXT("WoodPlank")) == *WoodBefore + 1
+			&& Mine->Inventory->GetCount(TEXT("WoodPlank")) == *WoodBefore + 1
+			&& bClientRelay
+			&& *SawRibbon
+			&& *SawPartial
+			&& !*EarlyReward
+			&& !*EarlyHide;
+	});
+	Stop(Ctx);
 	return true;
 }
 

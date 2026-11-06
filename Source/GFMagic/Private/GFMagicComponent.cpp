@@ -32,6 +32,7 @@ void UGFMagicComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME_CONDITION(UGFMagicComponent, CrystalCharge, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UGFMagicComponent, GrantedDrops, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UGFMagicComponent, bOvercharge, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UGFMagicComponent, TargetedFraction, COND_OwnerOnly);
 }
 
 bool UGFMagicComponent::IsAuthority() const
@@ -259,6 +260,63 @@ void UGFMagicComponent::SetFieldHeld(bool bHeld)
 	{
 		ServerSetFieldHeld(bHeld);
 	}
+}
+
+void UGFMagicComponent::AuthoritySetTargetedFraction(const FGFTargetedCellFraction& Next)
+{
+	if (!IsAuthority())
+	{
+		return;
+	}
+	if (TargetedFraction.Matches(Next))
+	{
+		return;
+	}
+	const int32 NextSerial = TargetedFraction.Serial + 1;
+	TargetedFraction = Next;
+	TargetedFraction.Serial = NextSerial;
+	if (AActor* Owner = GetOwner())
+	{
+		Owner->ForceNetUpdate();
+	}
+}
+
+void UGFMagicComponent::SetCrackTolerance(float Tolerance)
+{
+	CrackTolerance = FMath::Clamp(Tolerance, 0.01f, 0.5f);
+}
+
+void UGFMagicComponent::PredictCrackStep(FName BlockId, EGFMagicElement InElement, float IntegrityPerSecond, float Rate, float Dt, bool bTown, const FIntVector& Cell, const FString& NodeKey)
+{
+	if (IsAuthority() || BlockId.IsNone())
+	{
+		return;
+	}
+	Crack.BeginTarget(bTown, Cell, NodeKey);
+	Crack.PredictStep(FGFMiningFeelRules::FractionLoss(BlockId, InElement, IntegrityPerSecond, Rate, Dt));
+	Crack.Reconcile(TargetedFraction, CrackTolerance);
+}
+
+void UGFMagicComponent::ReconcileCrack()
+{
+	if (!IsAuthority())
+	{
+		Crack.Reconcile(TargetedFraction, CrackTolerance);
+	}
+}
+
+float UGFMagicComponent::ShownCrackFraction() const
+{
+	if (IsAuthority())
+	{
+		return TargetedFraction.bActive ? TargetedFraction.Fraction : 1.f;
+	}
+	return Crack.Shown();
+}
+
+void UGFMagicComponent::OnRep_TargetedFraction()
+{
+	Crack.Reconcile(TargetedFraction, CrackTolerance);
 }
 
 void UGFMagicComponent::SetAim(const FVector& Origin, const FVector& Point)

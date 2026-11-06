@@ -86,6 +86,9 @@ private:
 	void OfferDinoHit(UGFMagicComponent* Caster, const FVector& Origin, const FVector& Dir, float Range, float HalfAngleDeg, float Damage);
 	void TryFieldDinoHit(UGFMagicComponent* Caster);
 	void ReportVoxelFX(UGFMagicComponent* Caster, EGFMagicElement Element, AGFVoxelWorld* Voxel, const TMap<FIntVector, FMagicWound>& Before, const FMagicHitOutput& Out);
+	/** After the step: the aimed cell's fraction only, on that caster. */
+	void PublishTargetedFractions(AGFVoxelWorld* Voxel);
+	void FillVoxelTarget(UGFMagicComponent* Caster, AGFVoxelWorld* Voxel, FGFTargetedCellFraction& Out) const;
 	AGFMiningFXRelay* EnsureFXRelay();
 
 	TSet<FIntVector> Placed;

@@ -18,6 +18,65 @@
 
 namespace
 {
+	double& CrosshairTickStart()
+	{
+		static double Start = 0.0;
+		return Start;
+	}
+
+	double& CrosshairTickUntil()
+	{
+		static double Until = 0.0;
+		return Until;
+	}
+
+	float& CrosshairTickDuration()
+	{
+		static float Duration = 0.14f;
+		return Duration;
+	}
+}
+
+void FGFCrosshairTick::Pulse(double NowSeconds, float DurationSeconds)
+{
+	CrosshairTickDuration() = FMath::Max(0.01f, DurationSeconds);
+	CrosshairTickStart() = NowSeconds;
+	CrosshairTickUntil() = NowSeconds + static_cast<double>(CrosshairTickDuration());
+}
+
+float FGFCrosshairTick::Alpha(double NowSeconds)
+{
+	const float Duration = CrosshairTickDuration();
+	if (Duration <= 0.f || NowSeconds >= CrosshairTickUntil())
+	{
+		return 0.f;
+	}
+	const float Along = static_cast<float>((NowSeconds - CrosshairTickStart()) / static_cast<double>(Duration));
+	return FMath::Clamp(1.f - Along, 0.f, 1.f);
+}
+
+void FGFCrosshairTick::Reset()
+{
+	CrosshairTickStart() = 0.0;
+	CrosshairTickUntil() = 0.0;
+	CrosshairTickDuration() = 0.14f;
+}
+
+void GFApplyCrosshairTick(FGFCrosshairSettings& Settings, float InAlpha)
+{
+	const float T = FMath::Clamp(InAlpha, 0.f, 1.f);
+	if (T <= 0.f)
+	{
+		return;
+	}
+	Settings.Thickness += 2.f * T;
+	Settings.Size += 3.f * T;
+	Settings.Opacity = FMath::Clamp(Settings.Opacity + 0.1f * T, 0.f, 1.f);
+	Settings.bCenterDot = true;
+}
+
+namespace
+{
 	class SGFCrosshairPreview : public SLeafWidget
 	{
 	public:

@@ -24,14 +24,21 @@
 #include "GFMagicComponent.h"
 #include "GFMagicTables.h"
 #include "GFMagicTypes.h"
+#include "GFMineable.h"
 #include "GFMiningAnim.h"
+#include "GFMiningFeel.h"
+#include "GFMiningFX.h"
+#include "GFTownNodes.h"
+#include "GFCrosshairPanel.h"
 #include "GFTraversalAnim.h"
 #include "GFArenaDirector.h"
 #include "Aim/GFAimSim.h"
 #include "Animation/AnimSequenceBase.h"
 #include "CollisionQueryParams.h"
 #include "CollisionShape.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "HAL/PlatformTime.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "Camera/CameraComponent.h"
@@ -127,6 +134,28 @@ void AGFCharacter::BeginPlay()
 	{
 		FootIK->Bind();
 	}
+	MiningCosmeticHandle = FGFMiningFX::OnCosmetic().AddUObject(this, &AGFCharacter::HandleMiningCosmetic);
+}
+
+void AGFCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	FGFMiningFX::OnCosmetic().Remove(MiningCosmeticHandle);
+	if (bMiningHitStop)
+	{
+		CustomTimeDilation = MiningHitStopSavedDilation;
+		bMiningHitStop = false;
+	}
+	if (CrackPainted.IsValid())
+	{
+		FGFMiningCrack::Clear(CrackPainted.Get());
+		CrackPainted = nullptr;
+	}
+	if (CrackMarker)
+	{
+		CrackMarker->Destroy();
+		CrackMarker = nullptr;
+	}
+	Super::EndPlay(EndPlayReason);
 }
 
 void AGFCharacter::PostInitializeComponents()
@@ -168,7 +197,9 @@ void AGFCharacter::Tick(float DeltaSeconds)
 	RefreshHotbarSelection();
 	SyncAimContext();
 	GFAimAdvance(AimState, AimTuning, DeltaSeconds);
+	UpdateMiningHitStop();
 	ApplyShoulderOffset();
+	UpdateMiningShake(DeltaSeconds);
 	ApplyAimView();
 	UpdateCameraFade();
 	UpdateFistPose();
@@ -181,9 +212,14 @@ void AGFCharacter::Tick(float DeltaSeconds)
 			MagicAimElapsed = 0.f;
 			SendMagicAim();
 		}
+		if (!bMiningFieldUp && FGFMiningFeelRules::FieldRises(MagicPressSeconds, MiningRiseSeconds()))
+		{
+			RaiseMiningField();
+		}
 	}
 	UpdateMiningField(DeltaSeconds);
 	UpdateMiningContact(DeltaSeconds);
+	UpdateMiningCracks(DeltaSeconds);
 	if (SpringArm && !bFirstPerson)
 	{
 		if (const UGFCharacterMovementComponent* Move = GetGFMovement())
@@ -403,14 +439,13 @@ void AGFCharacter::OnRemove(const FInputActionValue&)
 		PushAim(EGFAimEvent::FirePressed);
 		return;
 	}
-	if (UGFMagicComponent* Magic = FindMagic())
+	if (FindMagic())
 	{
 		bMagicHeld = true;
+		bMiningFieldUp = false;
 		MiningField.Press();
 		MagicPressSeconds = 0.f;
 		MagicAimElapsed = 0.f;
-		Magic->SetFieldHeld(true);
-		Magic->TryActivate(GFMagic::InputField);
 		SendMagicAim();
 		return;
 	}
@@ -429,17 +464,27 @@ void AGFCharacter::OnRemoveReleased(const FInputActionValue&)
 	{
 		return;
 	}
+	const float Held = MagicPressSeconds;
+	const bool bWasField = bMiningFieldUp;
 	bMagicHeld = false;
-	if (UGFMagicComponent* Magic = FindMagic())
+	bMiningFieldUp = false;
+	CrackStepAccum = 0.f;
+	if (!bWasField && FGFMiningFeelRules::FieldRises(Held, MiningRiseSeconds()))
 	{
-		Magic->ReleaseAbility(GFMagic::InputField);
-		Magic->SetFieldHeld(false);
+		RaiseMiningField();
 	}
-	EndMiningField();
-	if (MagicPressSeconds >= GFMagic::TapSeconds)
+	if (bWasField || bMiningFieldUp)
 	{
+		if (UGFMagicComponent* Magic = FindMagic())
+		{
+			Magic->ReleaseAbility(GFMagic::InputField);
+			Magic->SetFieldHeld(false);
+		}
+		bMiningFieldUp = false;
+		EndMiningField();
 		return;
 	}
+	EndMiningField();
 	if (AimState.Held == EGFAimHeldKind::Fists)
 	{
 		PushAim(EGFAimEvent::FirePressed);
@@ -1232,7 +1277,10 @@ void AGFCharacter::RunMiningContactLand(EGFMiningContactLand Land)
 	switch (Land)
 	{
 	case EGFMiningContactLand::RemoveBlock:
-		TryRemoveBlock();
+		if (TryRemoveBlock())
+		{
+			PlayMiningFeel(EGFMiningFXKind::Break);
+		}
 		break;
 	case EGFMiningContactLand::Claw:
 		if (UGFMagicComponent* Magic = FindMagic())
@@ -1319,7 +1367,219 @@ void AGFCharacter::ApplyMiningCue(EGFMiningFieldCue Cue)
 void AGFCharacter::UpdateMiningField(float DeltaSeconds)
 {
 	const FName MiningKey = SimpleAnim ? SimpleAnim->GetClaimKey(EGFAnimOwner::Mining) : NAME_None;
-	ApplyMiningCue(MiningField.Tick(DeltaSeconds, bMagicHeld, MagicPressSeconds, GFMagic::TapSeconds, bFistClipHeld, MiningKey));
+	ApplyMiningCue(MiningField.Tick(DeltaSeconds, bMagicHeld, MagicPressSeconds, MiningRiseSeconds(), bFistClipHeld, MiningKey));
+}
+
+float AGFCharacter::MiningRiseSeconds() const
+{
+	return FMath::Clamp(MiningFieldRiseSeconds, 0.05f, 0.5f);
+}
+
+void AGFCharacter::RaiseMiningField()
+{
+	if (bMiningFieldUp)
+	{
+		return;
+	}
+	bMiningFieldUp = true;
+	if (UGFMagicComponent* Magic = FindMagic())
+	{
+		Magic->SetFieldHeld(true);
+		Magic->TryActivate(GFMagic::InputField);
+		SendMagicAim();
+	}
+}
+
+void AGFCharacter::PlayMiningFeel(EGFMiningFXKind Kind)
+{
+	if (!IsLocallyControlled())
+	{
+		return;
+	}
+	const UWorld* World = GetWorld();
+	if (World && World->GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	const FGFMiningFeelResponse Response = FGFMiningFeelRules::ResponseFor(Kind);
+	if (Response.bShake)
+	{
+		MiningShakeLeft = FMath::Max(MiningHitShakeSeconds, 0.01f);
+		MiningShakePhase = HALF_PI;
+	}
+	if (Response.bCrosshair)
+	{
+		FGFCrosshairTick::Pulse(FPlatformTime::Seconds(), FMath::Max(MiningCrosshairTickSeconds, 0.01f));
+	}
+	if (Response.bHitStop && !bMiningHitStop)
+	{
+		bMiningHitStop = true;
+		MiningHitStopSavedDilation = CustomTimeDilation;
+		CustomTimeDilation = 0.f;
+		MiningHitStopUntil = FPlatformTime::Seconds() + static_cast<double>(FGFMiningFeelRules::ClampHitStop(MiningBreakHitStopSeconds));
+	}
+}
+
+void AGFCharacter::HandleMiningCosmetic(const FGFMiningFXEvent& Event)
+{
+	if (!IsLocallyControlled())
+	{
+		return;
+	}
+	const AGFPlayerState* PS = GetPlayerState<AGFPlayerState>();
+	const FName Me = PS ? FName(*PS->PlayerKey) : NAME_None;
+	if (Event.CasterId.IsNone() || Event.CasterId != Me)
+	{
+		return;
+	}
+	PlayMiningFeel(Event.Kind);
+}
+
+void AGFCharacter::UpdateMiningHitStop()
+{
+	if (!bMiningHitStop)
+	{
+		return;
+	}
+	if (FPlatformTime::Seconds() >= MiningHitStopUntil)
+	{
+		CustomTimeDilation = MiningHitStopSavedDilation;
+		bMiningHitStop = false;
+	}
+}
+
+void AGFCharacter::UpdateMiningShake(float DeltaSeconds)
+{
+	if (!SpringArm || MiningShakeLeft <= 0.f)
+	{
+		return;
+	}
+	const float Duration = FMath::Max(MiningHitShakeSeconds, 0.01f);
+	const float Alpha = FMath::Clamp(MiningShakeLeft / Duration, 0.f, 1.f);
+	const float Amp = FMath::Max(0.f, MiningHitShakeCm) * Alpha;
+	SpringArm->SocketOffset += FVector(0.f, FMath::Sin(MiningShakePhase) * Amp, FMath::Cos(MiningShakePhase * 0.7f) * Amp * 0.35f);
+	if (!bMiningHitStop)
+	{
+		MiningShakePhase += DeltaSeconds * 48.f;
+		MiningShakeLeft = FMath::Max(0.f, MiningShakeLeft - DeltaSeconds);
+	}
+}
+
+void AGFCharacter::PaintCrack(UPrimitiveComponent* Target, float Fraction, bool bShow)
+{
+	if (CrackPainted.IsValid() && CrackPainted.Get() != Target)
+	{
+		FGFMiningCrack::Clear(CrackPainted.Get());
+		CrackPainted = nullptr;
+	}
+	if (!Target || Target->IsA(UInstancedStaticMeshComponent::StaticClass()))
+	{
+		return;
+	}
+	if (!bShow || Fraction >= 0.999f)
+	{
+		FGFMiningCrack::Clear(Target);
+		return;
+	}
+	FGFMiningCrack::Apply(Target, Fraction);
+	CrackPainted = Target;
+}
+
+void AGFCharacter::SyncCrackMarker(bool bShow, float Fraction, const FVector& At, const FVector& Normal)
+{
+	UWorld* World = GetWorld();
+	if (!World || World->GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	if (!bShow)
+	{
+		if (CrackMarker)
+		{
+			CrackMarker->Hide();
+		}
+		return;
+	}
+	if (!CrackMarker)
+	{
+		FActorSpawnParameters Params;
+		Params.Owner = this;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		CrackMarker = World->SpawnActor<AGFMiningCrackMarker>(AGFMiningCrackMarker::StaticClass(), At, FRotator::ZeroRotator, Params);
+	}
+	if (CrackMarker)
+	{
+		CrackMarker->Show(At, Normal, Fraction);
+	}
+}
+
+void AGFCharacter::UpdateMiningCracks(float DeltaSeconds)
+{
+	UGFMagicComponent* Magic = FindMagic();
+	if (!Magic)
+	{
+		return;
+	}
+	Magic->SetCrackTolerance(FMath::Clamp(MiningPredictTolerance, 0.01f, 0.5f));
+	FHitResult Hit;
+	FVector AimPoint = FVector::ZeroVector;
+	const bool bTraced = TraceCameraAim(Hit, AimPoint);
+	UPrimitiveComponent* Prim = bTraced ? Hit.GetComponent() : nullptr;
+	FVector At = bTraced ? FVector(Hit.ImpactPoint) : GetActorLocation();
+	FVector Normal = bTraced ? Hit.ImpactNormal : FVector::UpVector;
+	if (!HasAuthority() && bMiningFieldUp)
+	{
+		CrackStepAccum += DeltaSeconds;
+		int32 Steps = 0;
+		while (CrackStepAccum >= GFMagic::TickSeconds && Steps < 5)
+		{
+			CrackStepAccum -= GFMagic::TickSeconds;
+			++Steps;
+			if (!bTraced)
+			{
+				continue;
+			}
+			FName BlockId = NAME_None;
+			bool bTown = false;
+			FIntVector Cell = FIntVector::ZeroValue;
+			FString NodeKey;
+			if (AGFVoxelWorld* Voxel = Cast<AGFVoxelWorld>(Hit.GetActor()))
+			{
+				FIntVector Adjacent = FIntVector::ZeroValue;
+				Voxel->HitToCells(Hit.ImpactPoint, Hit.ImpactNormal, Cell, Adjacent);
+				BlockId = Voxel->GetBlock(Cell);
+			}
+			else if (Prim)
+			{
+				const UGFMineableAssetUserData* Data = FGFMineable::Find(FGFMineable::MeshOf(Prim));
+				BlockId = FGFTownNodeRules::BlockIdFor(Data);
+				if (!BlockId.IsNone())
+				{
+					bTown = true;
+					NodeKey = FGFTownNodeRules::KeyFor(Prim);
+				}
+			}
+			float PerSecond = 100.f;
+			if (const FGFMiningSpellRow* Spell = FGFMagicCatalog::FieldSpell(Magic->GetElement()))
+			{
+				PerSecond = Spell->ConePower > 0.f ? Spell->ConePower : Spell->IntegrityPerSecond;
+			}
+			Magic->PredictCrackStep(BlockId, Magic->GetElement(), PerSecond, Magic->FieldRate(), GFMagic::TickSeconds, bTown, Cell, NodeKey);
+		}
+	}
+	else
+	{
+		CrackStepAccum = 0.f;
+		if (!HasAuthority())
+		{
+			Magic->ReconcileCrack();
+		}
+	}
+	const float Fraction = Magic->ShownCrackFraction();
+	const bool bServerActive = Magic->GetTargetedFraction().bActive;
+	const bool bShow = HasAuthority() ? (bServerActive && Fraction < 0.999f) : Fraction < 0.999f;
+	PaintCrack(Prim, Fraction, bShow);
+	SyncCrackMarker(bShow, Fraction, At, Normal);
 }
 
 void AGFCharacter::UpdateMiningContact(float DeltaSeconds)

@@ -1,4 +1,5 @@
 #include "GFHUD.h"
+#include "HAL/PlatformTime.h"
 #include "GFPlayerController.h"
 #include "GFElder.h"
 #include "GFElderBook.h"
@@ -335,7 +336,7 @@ void AGFHUD::DrawMiningRange()
 void AGFHUD::DrawCrosshair()
 {
 	const AGFCharacter* Character = Cast<AGFCharacter>(GetOwningPawn());
-	const FGFCrosshairSettings Settings = Character ? Character->GetCrosshairSettings() : FGFCrosshairSettings();
+	FGFCrosshairSettings Settings = Character ? Character->GetCrosshairSettings() : FGFCrosshairSettings();
 	const FGFAimState IdleAim;
 	const FGFAimState& Aim = Character ? Character->GetAimState() : IdleAim;
 	if (Character && !GFShouldDrawCrosshair(Settings, Aim))
@@ -345,6 +346,7 @@ void AGFHUD::DrawCrosshair()
 	const float Extra = Character
 		? GFCrosshairGap(Settings, Character->IsCrosshairSpreadActive(), false) - Settings.Gap
 		: 0.f;
+	GFApplyCrosshairTick(Settings, FGFCrosshairTick::Alpha(FPlatformTime::Seconds()));
 	const FGFCrosshairDraw Draw = GFBuildCrosshair(Settings, Canvas->ClipX * 0.5f, Canvas->ClipY * 0.5f, Extra);
 	for (const FGFCrosshairMark& Mark : Draw.Marks)
 	{

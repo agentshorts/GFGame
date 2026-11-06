@@ -189,8 +189,8 @@ namespace GFMagic
 	static constexpr float TickSeconds = 0.1f;
 	/** Cells a tick will damage, across every caster. */
 	static constexpr int32 CellsPerTick = 64;
-	/** A shorter press is a tap (punch, or pick up a build), not a mine. */
-	static constexpr float TapSeconds = 0.2f;
+	/** A shorter press is a tap (punch, or pick up a build), not a mine. The character config MiningFieldRiseSeconds is the live window. */
+	static constexpr float TapSeconds = 0.15f;
 
 	static constexpr int32 InputField = 1;
 	static constexpr int32 InputClaw = 2;
