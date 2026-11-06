@@ -1634,6 +1634,12 @@ void AGFCharacter::UpdateTraversalAnim(float DeltaSeconds)
 	In.ClimbSpeedCms = FMath::Max(0.f, static_cast<float>(Move->Velocity.Z));
 	In.WallRunSpeedCms = static_cast<float>(Move->Velocity.Size2D());
 	In.DeltaSeconds = DeltaSeconds;
+	// #387: the owner and the server see every climb and mantle edge in the sim. A simulated proxy only has the
+	// replicated phase, plus the start count that moves when a start was skipped between updates.
+	if (GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		In.EdgeSeq = Move->GetWallClimbEdgeSeq();
+	}
 	const FGFTraversalAnimDriver::FCues Cues = TraversalAnim.Tick(In, [this](FName Key) { return TraversalClipInfo(Key); });
 	for (const FGFTraversalAnimCue& Cue : Cues)
 	{

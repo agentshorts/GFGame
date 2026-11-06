@@ -269,6 +269,7 @@ void UGFCharacterMovementComponent::GetLifetimeReplicatedProps(TArray<FLifetimeP
 	DOREPLIFETIME_CONDITION(UGFCharacterMovementComponent, bInsideKindleRing, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UGFCharacterMovementComponent, ReplicatedFlipTimeLeft, COND_SkipOwner);
 	DOREPLIFETIME_CONDITION(UGFCharacterMovementComponent, ReplicatedWallClimbPhase, COND_SkipOwner);
+	DOREPLIFETIME_CONDITION(UGFCharacterMovementComponent, ReplicatedWallClimbEdgeSeq, COND_SkipOwner);
 }
 
 EGFWallClimbPhase UGFCharacterMovementComponent::GetWallClimbPhase() const
@@ -660,11 +661,28 @@ void UGFCharacterMovementComponent::PerformMovement(float DeltaTime)
 		{
 			ReplicatedFlipTimeLeft = Sim.FlipTimeLeft;
 		}
-		const uint8 Phase = static_cast<uint8>(Sim.bMantling ? EGFWallClimbPhase::Mantling
-			: (Sim.bWallClimbing ? EGFWallClimbPhase::Climbing : EGFWallClimbPhase::None));
-		if (ReplicatedWallClimbPhase != Phase)
+		// #387: the phase byte alone loses a start when the end and the next start land between two net updates.
+		// A replay steps those same starts again, so only a live move advances the count. The phase still follows
+		// the sim on a replay, or a correction would leave the last published phase in place.
+		FGFWallClimbNet Net;
+		Net.Phase = ReplicatedWallClimbPhase;
+		Net.EdgeSeq = ReplicatedWallClimbEdgeSeq;
+		if (bReplayMove)
 		{
-			ReplicatedWallClimbPhase = Phase;
+			Net.Phase = static_cast<uint8>(Sim.bMantling ? EGFWallClimbPhase::Mantling
+				: (Sim.bWallClimbing ? EGFWallClimbPhase::Climbing : EGFWallClimbPhase::None));
+		}
+		else
+		{
+			Net = GFAdvanceWallClimbNet(Net, Sim.bWallClimbing, Sim.bMantling);
+		}
+		if (ReplicatedWallClimbEdgeSeq != Net.EdgeSeq)
+		{
+			ReplicatedWallClimbEdgeSeq = Net.EdgeSeq;
+		}
+		if (ReplicatedWallClimbPhase != Net.Phase)
+		{
+			ReplicatedWallClimbPhase = Net.Phase;
 		}
 		if (GFTraversalSim::MantleFinished(SimAtMoveStart, Sim))
 		{

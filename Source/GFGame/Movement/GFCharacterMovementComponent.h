@@ -67,6 +67,31 @@ enum class EGFWallClimbPhase : uint8
 	Mantling = 2,
 };
 
+/**
+ * #387: the replicated climb phase plus a start count beside it. EdgeSeq increments when a climb or a mantle
+ * starts, so a proxy whose next update still shows the same phase can tell a new start from the one it already
+ * played. The count wraps through 0.
+ */
+struct FGFWallClimbNet
+{
+	uint8 Phase = 0;
+	uint8 EdgeSeq = 0;
+};
+
+inline FGFWallClimbNet GFAdvanceWallClimbNet(FGFWallClimbNet Prev, bool bWallClimbing, bool bMantling)
+{
+	const uint8 Phase = static_cast<uint8>(bMantling ? EGFWallClimbPhase::Mantling
+		: (bWallClimbing ? EGFWallClimbPhase::Climbing : EGFWallClimbPhase::None));
+	const bool bStart = (Phase == static_cast<uint8>(EGFWallClimbPhase::Climbing) || Phase == static_cast<uint8>(EGFWallClimbPhase::Mantling))
+		&& Prev.Phase != Phase;
+	if (bStart)
+	{
+		++Prev.EdgeSeq;
+	}
+	Prev.Phase = Phase;
+	return Prev;
+}
+
 class UGFCharacterMovementComponent;
 DECLARE_MULTICAST_DELEGATE_TwoParams(FGFOnAccelHopLanded, const UGFCharacterMovementComponent* /*Movement*/, const FGFAccelHopLandingEvent& /*Event*/);
 /** Server only. One hop tile landing the server applied or rejected, for the host's pawn and for remote players. */
@@ -190,6 +215,9 @@ public:
 	/** #355: None, Climbing or Mantling. The owner and the server read the sim; simulated proxies read the replicated copy. */
 	UFUNCTION(BlueprintPure, Category = "GF|Movement")
 	EGFWallClimbPhase GetWallClimbPhase() const;
+
+	/** #387: climb and mantle starts published with the phase. Simulated proxies pass this to the anim driver. Wraps. */
+	uint8 GetWallClimbEdgeSeq() const { return ReplicatedWallClimbEdgeSeq; }
 
 	/**
 	 * #356: lip height above the feet for the current mantle, cm (Decision #370: up to 120 takes the Low clip, else
@@ -352,6 +380,13 @@ protected:
 	/** #355: EGFWallClimbPhase for simulated proxies. The owner predicts Sim instead. */
 	UPROPERTY(Replicated)
 	uint8 ReplicatedWallClimbPhase = 0;
+
+	/**
+	 * #387: increments on each climb or mantle start, next to the phase. A coalesced update can leave the phase
+	 * unchanged while this count moves, which is how a proxy sees the start it missed.
+	 */
+	UPROPERTY(Replicated)
+	uint8 ReplicatedWallClimbEdgeSeq = 0;
 
 private:
 	void RefreshStaminaGate();

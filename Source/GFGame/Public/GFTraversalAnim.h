@@ -175,6 +175,12 @@ struct FGFTraversalAnimInput
 	/** Wall run speed along the wall, cm/s. */
 	float WallRunSpeedCms = 0.f;
 	float DeltaSeconds = 0.f;
+	/**
+	 * #387: climb and mantle start count from the movement component. The owner passes 0, so a local pawn still
+	 * edges only on the previous-frame flags. A simulated proxy passes the replicated count. A change while the
+	 * phase stays Climbing or Mantling is a start that landed between two updates. Wraps with the publisher.
+	 */
+	uint8 EdgeSeq = 0;
 };
 
 /** One change to apply to UGFSimpleAnimComponent. */
@@ -199,8 +205,12 @@ struct FGFTraversalAnimCue
  * Turns movement edges into traversal claims. Pure rules, so a test drives it with no world, mesh or data table.
  * Climbing: rising edge claims Enter (timed, its clip length plus EnterGraceSeconds), then Loop held at climb speed / 350. Leaving the climb
  * without a mantle or a wall run claims Exit_Fall (timed); into a wall run or a mantle it just releases.
- * Mantling: releases the climb, claims MantleKey(lip) held until the mantle ends, then releases it.
+ * A re-grab while that fall clip is held releases it before Enter, so the new climb does not depend on the claim
+ * replacing the timer. Mantling: releases the climb, claims MantleKey(lip) held until the mantle ends, then releases it.
  * Wall run: claims Loop_L / Loop_R held at wall run speed / 450, swaps on a side change, releases when it ends.
+ * EdgeSeq (#387): when it changes, a climb or a mantle that is already the current phase starts again. That is the
+ * start a remote pawn missed when the end and the next start arrived as one update. EdgeSeq 0 on every frame
+ * (the owner) leaves those edges on the previous-frame flags alone.
  * A missing clip is tried once per edge and never claimed, so the body never freezes on a clip that is not there.
  */
 struct FGFTraversalAnimDriver
@@ -219,6 +229,10 @@ struct FGFTraversalAnimDriver
 	float EnterSecondsLeft = 0.f;
 	bool bWasClimbing = false;
 	bool bWasMantling = false;
+	/** #387: last EdgeSeq applied. A difference is a start the phase flags did not show. */
+	uint8 SeenEdgeSeq = 0;
+	/** Timed Exit_Fall is still the climb claim. Cleared when that claim is released or a new climb starts. */
+	bool bExitFallHeld = false;
 	/** The mantle key claimed for this mantle, or None. */
 	FName MantleHeld = NAME_None;
 	/** The wall run key tried for this side (claimed or missing), so a missing clip is not reloaded every frame. */
@@ -230,10 +244,14 @@ struct FGFTraversalAnimDriver
 		FCues Cues;
 		const bool bClimbing = In.bClimbing && !In.bMantling;
 		const bool bWallRun = In.WallRunSide != EGFWallRunSide::None && !bClimbing && !In.bMantling;
+		// Owner frames keep EdgeSeq at 0, so this stays false and the flags below are the whole edge.
+		const bool bEdge = In.EdgeSeq != SeenEdgeSeq;
 
 		// Mantle edges first: a mantle ends the climb that led to it.
-		if (In.bMantling && !bWasMantling)
+		// bEdge while already mantling: the previous mantle ended and another started between two updates.
+		if (In.bMantling && (!bWasMantling || bEdge))
 		{
+			ReleaseMantle(Cues);
 			ReleaseClimb(Cues);
 			const bool bLow = ClipInfo(GFTraversalAnim::MantleLow()).IsAvailable();
 			const FName Key = GFTraversalAnim::MantleKey(In.MantleLipCm, bLow);
@@ -250,7 +268,7 @@ struct FGFTraversalAnimDriver
 
 		if (bClimbing)
 		{
-			if (!bWasClimbing)
+			if (!bWasClimbing || bEdge)
 			{
 				StartClimb(In, ClipInfo, Cues);
 			}
@@ -278,6 +296,7 @@ struct FGFTraversalAnimDriver
 					Cues.Add(Claim(EGFAnimOwner::Climbing, GFTraversalAnim::ClimbExitFall(), false, Exit.Seconds, 1.f));
 					ClimbPose = EClimbPose::None; // the timed claim runs out on its own
 					EnterSecondsLeft = 0.f;
+					bExitFallHeld = true;
 				}
 				else
 				{
@@ -318,6 +337,7 @@ struct FGFTraversalAnimDriver
 
 		bWasClimbing = bClimbing;
 		bWasMantling = In.bMantling;
+		SeenEdgeSeq = In.EdgeSeq;
 		return Cues;
 	}
 
@@ -335,6 +355,7 @@ struct FGFTraversalAnimDriver
 		WallRunTried = NAME_None;
 		bWasClimbing = false;
 		bWasMantling = false;
+		SeenEdgeSeq = 0;
 		return Cues;
 	}
 
@@ -375,6 +396,12 @@ private:
 
 	void StartClimb(const FGFTraversalAnimInput& In, FClipInfoFn ClipInfo, FCues& Cues)
 	{
+		// Loop, Enter, or the timed Exit_Fall is already on this owner. Release it before the new Enter so a
+		// re-grab during the fall, or a start the phase byte skipped, does not depend on the claim replacing it.
+		if (ClimbPose != EClimbPose::None || bExitFallHeld)
+		{
+			ReleaseClimb(Cues);
+		}
 		const FGFTraversalClipInfo Enter = ClipInfo(GFTraversalAnim::ClimbEnter());
 		if (Enter.IsAvailable())
 		{
@@ -404,6 +431,7 @@ private:
 		Cues.Add(Release(EGFAnimOwner::Climbing));
 		ClimbPose = EClimbPose::None;
 		EnterSecondsLeft = 0.f;
+		bExitFallHeld = false;
 	}
 
 	void ReleaseMantle(FCues& Cues)
