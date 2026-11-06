@@ -169,8 +169,8 @@
   {
    "asset": "SM_Town_House_Large",
    "path": "/Game/Art/Town/Homes/SM_Town_House_Large",
-   "folder": "SM_Town_House_Large_v2",
-   "manifest": "manifest_v2.json",
+   "folder": "../crystal_lining_structures_v1/SM_Town_House_Large_v3",
+   "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
     1
@@ -179,14 +179,14 @@
     "Main",
     "Crystal"
    ],
-   "tri_count": 1524,
-   "reason": "crystal weave bands, corner seams, roof-ridge strip, window mullions and door inlay"
+   "tri_count": 1224,
+   "reason": "crystal_slot"
   },
   {
    "asset": "SM_Town_House_Med",
    "path": "/Game/Art/Town/Homes/SM_Town_House_Med",
-   "folder": "SM_Town_House_Med_v2",
-   "manifest": "manifest_v2.json",
+   "folder": "../crystal_lining_structures_v1/SM_Town_House_Med_v3",
+   "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
     1
@@ -195,14 +195,14 @@
     "Main",
     "Crystal"
    ],
-   "tri_count": 890,
-   "reason": "crystal weave bands, corner seams, roof-ridge strip, window mullions and door inlay"
+   "tri_count": 714,
+   "reason": "crystal_slot"
   },
   {
    "asset": "SM_Town_House_Small",
    "path": "/Game/Art/Town/Homes/SM_Town_House_Small",
-   "folder": "SM_Town_House_Small_v2",
-   "manifest": "manifest_v2.json",
+   "folder": "../crystal_lining_structures_v1/SM_Town_House_Small_v3",
+   "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
     1
@@ -211,8 +211,8 @@
     "Main",
     "Crystal"
    ],
-   "tri_count": 432,
-   "reason": "crystal weave bands, corner seams, roof-ridge strip, window mullions and door inlay"
+   "tri_count": 472,
+   "reason": "crystal_slot"
   },
   {
    "asset": "SM_Town_LampPost",

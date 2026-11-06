@@ -1,10 +1,10 @@
 """Builds the towns_v2 maps from the kit layout placements (run after Tools/import_towns_v2.py):
 
-  L_Town_Cinderwright_A   fixes_v1/layouts/Town_Cinderwright_Layout_v3 (v2 plus the second crane), charcoal ground slabs
-  L_Town_Rime_A           layouts_v1/Town_Rime_Layout_v1, snow/ice ground
+  L_Town_Cinderwright_A   crystal_lining_layout_v2/Town_Cinderwright_Layout_v4, charcoal ground slabs
+  L_Town_Rime_A           crystal_lining_layout_v2/Town_Rime_Layout_v2, snow/ice ground
   L_Homestead_Verdant_A   layouts_v1/Town_Verdant_Homestead_Layout_v1, grass ground
-  L_World_Factions_A      fixes_v1/layouts/World_Factions_Layout_v3 with its layout_refs flattened (Verdant A v2, Verdant
-                          homestead v1, Rime v1, Cinderwright v3), grass / snow / charcoal ground split between towns
+  L_World_Factions_A      crystal_lining_layout_v2/World_Factions_Layout_v4 with its layout_refs flattened (Verdant A v3, Verdant
+                          homestead v1, Rime v2, Cinderwright v4), grass / snow / charcoal ground split between towns
 
   UnrealEditor-Cmd.exe GFGame.uproject -run=pythonscript -script="<abs>/Tools/place_towns_v2.py" -unattended -nullrhi -nosplash
 
@@ -44,21 +44,25 @@ MATS = {"grass": "/Game/Art/Blocks/Materials/MI_Block_Grass_Top", "snow": "/Game
         "charcoal": "/Game/Art/Blocks/Materials/MI_Block_Basalt_Top"}
 LAYOUTS = {
     "Town_Verdant_A_Layout_v2": os.path.join(V1_KIT, "Town_Verdant_A_Layout_v2", "Town_Verdant_A_Layout_v2_placements.json"),
+    "Town_Verdant_A_Layout_v3": os.path.join(os.path.dirname(KIT), "crystal_lining_layout_v2", "Town_Verdant_A_Layout_v3_placements.json"),
     "Town_Verdant_Homestead_Layout_v1": os.path.join(KIT, "layouts_v1", "Town_Verdant_Homestead_Layout_v1_placements.json"),
     "Town_Rime_Layout_v1": os.path.join(KIT, "layouts_v1", "Town_Rime_Layout_v1_placements.json"),
+    "Town_Rime_Layout_v2": os.path.join(os.path.dirname(KIT), "crystal_lining_layout_v2", "Town_Rime_Layout_v2_placements.json"),
     "Town_Cinderwright_Layout_v2": os.path.join(KIT, "layouts_v2", "Town_Cinderwright_Layout_v2_placements.json"),
     "Town_Cinderwright_Layout_v3": os.path.join(KIT, "fixes_v1", "layouts", "Town_Cinderwright_Layout_v3_placements.json"),  # FIXES_V1
+    "Town_Cinderwright_Layout_v4": os.path.join(os.path.dirname(KIT), "crystal_lining_layout_v2", "Town_Cinderwright_Layout_v4_placements.json"),
     "World_Factions_Layout_v3": os.path.join(KIT, "fixes_v1", "layouts", "World_Factions_Layout_v3_placements.json"),  # FIXES_V1
     "World_Factions_Layout_v2": os.path.join(KIT, "layouts_v2", "World_Factions_Layout_v2_placements.json"),
+    "World_Factions_Layout_v4": os.path.join(os.path.dirname(KIT), "crystal_lining_layout_v2", "World_Factions_Layout_v4_placements.json"),
 }
-CW = "Town_Cinderwright_Layout_v3"  # FIXES_V1 (was Town_Cinderwright_Layout_v2)
+CW = "Town_Cinderwright_Layout_v4"
 GROUND_SLAB = "SM_Town_Cinderwright_GroundSlab"  # FIXES_V1: 64 m charcoal slab, pivot at the bottom centre, 6.25 cm thick
 SLAB_CM, SLAB_T = 6400.0, 6.25
 LIGHTS = (os.environ.get("GFTOWN_LIGHTS", "").strip() or "director").lower()
 MAPS = [("L_Town_Cinderwright_A", CW, "charcoal"),
-        ("L_Town_Rime_A", "Town_Rime_Layout_v1", "snow"),
+        ("L_Town_Rime_A", "Town_Rime_Layout_v2", "snow"),
         ("L_Homestead_Verdant_A", "Town_Verdant_Homestead_Layout_v1", "grass"),
-        ("L_World_Factions_A", "World_Factions_Layout_v3", None)]  # FIXES_V1 (was v2)
+        ("L_World_Factions_A", "World_Factions_Layout_v4", None)]
 report = {"maps": {}}
 
 
@@ -261,10 +265,10 @@ def build(map_name, layout_name, ground, paths):
         for p in P:
             by[p[7]].append(p)
         cx = bounds(by[CW])[0]  # FIXES_V1
-        vx1 = max(bounds(by[k])[1] for k in ("Town_Verdant_A_Layout_v2", "Town_Verdant_Homestead_Layout_v1", "Town_Rime_Layout_v1"))
+        vx1 = max(bounds(by[k])[1] for k in ("Town_Verdant_A_Layout_v3", "Town_Verdant_Homestead_Layout_v1", "Town_Rime_Layout_v2"))
         split_x = (cx + vx1) / 2 if cx > vx1 else cx
-        ry = bounds(by["Town_Rime_Layout_v1"])[2]
-        vy1 = max(bounds(by[k])[3] for k in ("Town_Verdant_A_Layout_v2", "Town_Verdant_Homestead_Layout_v1"))
+        ry = bounds(by["Town_Rime_Layout_v2"])[2]
+        vy1 = max(bounds(by[k])[3] for k in ("Town_Verdant_A_Layout_v3", "Town_Verdant_Homestead_Layout_v1"))
         split_y = (ry + vy1) / 2 if ry > vy1 else ry
         X0, X1, Y0, Y1 = x0 - pad, x1 + pad, y0 - pad, y1 + pad
         rep["ground"].append(slab("Ground_Grass", X0, split_x, Y0, split_y, "grass"))

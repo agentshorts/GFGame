@@ -689,10 +689,10 @@ bool FGFTownsV2MineDataTest::RunTest(const FString&)
 		TestEqual(Name + TEXT(" tri count (manifest tri_count)"), LodTris(Mesh), E.TriCount);
 		TestTrue(Name + TEXT(" sits on the ground (min z ~ 0)"), FMath::Abs(Mesh->GetBoundingBox().Min.Z) < 0.5);
 	}
-	TestEqual(TEXT("towns_v2 meshes (kit plus the fixes_v1 ground slab)"), All.Num(), 66);
+	TestEqual(TEXT("towns_v2 meshes (kit plus the fixes_v1 ground slab and the unlined Rime wall)"), All.Num(), 67);
 	TestEqual(TEXT("whole-mesh (ash trees, snow pines)"), Whole, 4);
 	TestEqual(TEXT("crystal-slot meshes"), Slots, 25);
-	TestEqual(TEXT("not mineable"), None, 37);
+	TestEqual(TEXT("not mineable"), None, 38);
 	TestEqual(TEXT("mineable list (crystal slots plus trees)"), Whole + Slots, 29);
 	for (const TCHAR* Refused : { TEXT("SM_Town_Cinderwright_LavaField_Pool"), TEXT("SM_Town_Cinderwright_LavaField_Straight"), TEXT("SM_Town_Cinderwright_YardPlate_Tile"), TEXT("SM_Town_Cinderwright_SmokePlume_A"), TEXT("SM_Town_Cinderwright_Chimney"), TEXT("SM_Town_Cinderwright_Crane"), TEXT("SM_Town_Cinderwright_PowerLine_Span"), TEXT("SM_Town_Cinderwright_CharcoalRock_A"), TEXT("SM_Town_Homestead_Glasshouse"), TEXT("SM_Town_Rime_IceGround_Tile"), TEXT("SM_Town_Road_T") })
 	{

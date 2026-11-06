@@ -172,7 +172,7 @@
   {
    "asset": "SM_Town_Cinderwright_House_Large",
    "path": "/Game/Art/Town/Cinderwright/Homes/SM_Town_Cinderwright_House_Large",
-   "folder": "fixes_v1/chunk_H/SM_Town_Cinderwright_House_Large_v2",
+   "folder": "../crystal_lining_structures_v1/SM_Town_Cinderwright_House_Large_v3",
    "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
@@ -182,13 +182,13 @@
     "Main",
     "Crystal"
    ],
-   "tri_count": 1142,
+   "tri_count": 1342,
    "reason": "crystal_slot"
   },
   {
    "asset": "SM_Town_Cinderwright_House_Med",
    "path": "/Game/Art/Town/Cinderwright/Homes/SM_Town_Cinderwright_House_Med",
-   "folder": "fixes_v1/chunk_H/SM_Town_Cinderwright_House_Med_v2",
+   "folder": "../crystal_lining_structures_v1/SM_Town_Cinderwright_House_Med_v3",
    "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
@@ -198,13 +198,13 @@
     "Main",
     "Crystal"
    ],
-   "tri_count": 632,
+   "tri_count": 782,
    "reason": "crystal_slot"
   },
   {
    "asset": "SM_Town_Cinderwright_House_Small",
    "path": "/Game/Art/Town/Cinderwright/Homes/SM_Town_Cinderwright_House_Small",
-   "folder": "fixes_v1/chunk_H/SM_Town_Cinderwright_House_Small_v2",
+   "folder": "../crystal_lining_structures_v1/SM_Town_Cinderwright_House_Small_v3",
    "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
@@ -214,7 +214,7 @@
     "Main",
     "Crystal"
    ],
-   "tri_count": 424,
+   "tri_count": 564,
    "reason": "crystal_slot"
   },
   {
@@ -657,7 +657,23 @@
   {
    "asset": "SM_Town_Homestead_StarterHouse_Cinderwright",
    "path": "/Game/Art/Town/Homestead/Houses/SM_Town_Homestead_StarterHouse_Cinderwright",
-   "folder": "chunk_K/SM_Town_Homestead_StarterHouse_Cinderwright_v2",
+   "folder": "../crystal_lining_structures_v1/SM_Town_Homestead_StarterHouse_Cinderwright_v3",
+   "manifest": "manifest_v3.json",
+   "mode": "slots",
+   "slots": [
+    1
+   ],
+   "material_slots": [
+    "Main",
+    "Crystal"
+   ],
+   "tri_count": 346,
+   "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Homestead_StarterHouse_Rime",
+   "path": "/Game/Art/Town/Homestead/Houses/SM_Town_Homestead_StarterHouse_Rime",
+   "folder": "../crystal_lining_structures_v1/SM_Town_Homestead_StarterHouse_Rime_v2",
    "manifest": "manifest_v2.json",
    "mode": "slots",
    "slots": [
@@ -667,14 +683,14 @@
     "Main",
     "Crystal"
    ],
-   "tri_count": 286,
+   "tri_count": 382,
    "reason": "crystal_slot"
   },
   {
-   "asset": "SM_Town_Homestead_StarterHouse_Rime",
-   "path": "/Game/Art/Town/Homestead/Houses/SM_Town_Homestead_StarterHouse_Rime",
-   "folder": "chunk_K/SM_Town_Homestead_StarterHouse_Rime_v1",
-   "manifest": "manifest_v1.json",
+   "asset": "SM_Town_Homestead_StarterHouse_Verdant",
+   "path": "/Game/Art/Town/Homestead/Houses/SM_Town_Homestead_StarterHouse_Verdant",
+   "folder": "../crystal_lining_structures_v1/SM_Town_Homestead_StarterHouse_Verdant_v2",
+   "manifest": "manifest_v2.json",
    "mode": "slots",
    "slots": [
     1
@@ -684,22 +700,6 @@
     "Crystal"
    ],
    "tri_count": 322,
-   "reason": "crystal_slot"
-  },
-  {
-   "asset": "SM_Town_Homestead_StarterHouse_Verdant",
-   "path": "/Game/Art/Town/Homestead/Houses/SM_Town_Homestead_StarterHouse_Verdant",
-   "folder": "chunk_K/SM_Town_Homestead_StarterHouse_Verdant_v1",
-   "manifest": "manifest_v1.json",
-   "mode": "slots",
-   "slots": [
-    1
-   ],
-   "material_slots": [
-    "Main",
-    "Crystal"
-   ],
-   "tri_count": 262,
    "reason": "crystal_slot"
   },
   {
@@ -721,7 +721,7 @@
   {
    "asset": "SM_Town_Rime_House_Large",
    "path": "/Game/Art/Town/Rime/Homes/SM_Town_Rime_House_Large",
-   "folder": "fixes_v1/chunk_H/SM_Town_Rime_House_Large_v2",
+   "folder": "../crystal_lining_structures_v1/SM_Town_Rime_House_Large_v3",
    "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
@@ -731,13 +731,13 @@
     "Main",
     "Crystal"
    ],
-   "tri_count": 1576,
+   "tri_count": 1846,
    "reason": "crystal_slot"
   },
   {
    "asset": "SM_Town_Rime_House_Med",
    "path": "/Game/Art/Town/Rime/Homes/SM_Town_Rime_House_Med",
-   "folder": "fixes_v1/chunk_H/SM_Town_Rime_House_Med_v2",
+   "folder": "../crystal_lining_structures_v1/SM_Town_Rime_House_Med_v3",
    "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
@@ -747,13 +747,13 @@
     "Main",
     "Crystal"
    ],
-   "tri_count": 1156,
+   "tri_count": 1336,
    "reason": "crystal_slot"
   },
   {
    "asset": "SM_Town_Rime_House_Small",
    "path": "/Game/Art/Town/Rime/Homes/SM_Town_Rime_House_Small",
-   "folder": "fixes_v1/chunk_H/SM_Town_Rime_House_Small_v2",
+   "folder": "../crystal_lining_structures_v1/SM_Town_Rime_House_Small_v3",
    "manifest": "manifest_v3.json",
    "mode": "slots",
    "slots": [
@@ -763,7 +763,7 @@
     "Main",
     "Crystal"
    ],
-   "tri_count": 624,
+   "tri_count": 764,
    "reason": "crystal_slot"
   },
   {
@@ -853,7 +853,7 @@
   {
    "asset": "SM_Town_Rime_Wall_Corner",
    "path": "/Game/Art/Town/Rime/SM_Town_Rime_Wall_Corner",
-   "folder": "chunk_G/SM_Town_Rime_Wall_Corner_v1",
+   "folder": "../crystal_lining_structures_v1/SM_Town_Rime_Wall_Corner_v2",
    "manifest": "manifest.json",
    "mode": "slots",
    "slots": [
@@ -863,13 +863,13 @@
     "Main",
     "Crystal"
    ],
-   "tri_count": 468,
+   "tri_count": 660,
    "reason": "crystal_slot"
   },
   {
    "asset": "SM_Town_Rime_Wall_Gate",
    "path": "/Game/Art/Town/Rime/SM_Town_Rime_Wall_Gate",
-   "folder": "chunk_G/SM_Town_Rime_Wall_Gate_v1",
+   "folder": "../crystal_lining_structures_v1/SM_Town_Rime_Wall_Gate_v2",
    "manifest": "manifest.json",
    "mode": "slots",
    "slots": [
@@ -879,13 +879,13 @@
     "Main",
     "Crystal"
    ],
-   "tri_count": 408,
+   "tri_count": 648,
    "reason": "crystal_slot"
   },
   {
    "asset": "SM_Town_Rime_Wall_Straight",
    "path": "/Game/Art/Town/Rime/SM_Town_Rime_Wall_Straight",
-   "folder": "chunk_G/SM_Town_Rime_Wall_Straight_v1",
+   "folder": "../crystal_lining_structures_v1/SM_Town_Rime_Wall_Straight_v2",
    "manifest": "manifest.json",
    "mode": "slots",
    "slots": [
@@ -895,8 +895,21 @@
     "Main",
     "Crystal"
    ],
-   "tri_count": 228,
+   "tri_count": 396,
    "reason": "crystal_slot"
+  },
+  {
+   "asset": "SM_Town_Rime_Wall_Straight_Unlined",
+   "path": "/Game/Art/Town/Rime/SM_Town_Rime_Wall_Straight_Unlined",
+   "folder": "../crystal_lining_structures_v1/SM_Town_Rime_Wall_Straight_Unlined_v1",
+   "manifest": "manifest.json",
+   "mode": "none",
+   "slots": [],
+   "material_slots": [
+    "Main"
+   ],
+   "tri_count": 204,
+   "reason": "none"
   },
   {
    "asset": "SM_Town_Road_Corner",

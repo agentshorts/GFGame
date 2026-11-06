@@ -140,7 +140,7 @@ def world_region(placements):
 FERRY_OUT_CM = 1200.0    # a basket ferry station stands this far outside its town wall
 FERRY_SIDE_CM = 800.0    # and this far to -X of the gate, off the link road
 FERRY_CLEAR_CM = 500.0   # Verdant trees whose footprint reaches this close to a station are left out
-FERRY_TOWNS = (("VerdantLanding", "Town_Verdant_A_Layout_v2"), ("RimeLanding", "Town_Rime_Layout_v1"))
+FERRY_TOWNS = (("VerdantLanding", "Town_Verdant_A_Layout_v3"), ("RimeLanding", "Town_Rime_Layout_v2"))
 
 
 def ferry_stations(placements):
@@ -189,12 +189,17 @@ def world_clearing(layouts, name, kit, v1_kit):
 
 def default_layouts(kit):
     v1 = os.path.join(os.path.dirname(kit), "town_v1")
+    lining = os.path.join(os.path.dirname(kit), "crystal_lining_layout_v2")
     return {
         "Town_Verdant_A_Layout_v2": os.path.join(v1, "Town_Verdant_A_Layout_v2", "Town_Verdant_A_Layout_v2_placements.json"),
+        "Town_Verdant_A_Layout_v3": os.path.join(lining, "Town_Verdant_A_Layout_v3_placements.json"),
         "Town_Verdant_Homestead_Layout_v1": os.path.join(kit, "layouts_v1", "Town_Verdant_Homestead_Layout_v1_placements.json"),
         "Town_Rime_Layout_v1": os.path.join(kit, "layouts_v1", "Town_Rime_Layout_v1_placements.json"),
+        "Town_Rime_Layout_v2": os.path.join(lining, "Town_Rime_Layout_v2_placements.json"),
         "Town_Cinderwright_Layout_v3": os.path.join(kit, "fixes_v1", "layouts", "Town_Cinderwright_Layout_v3_placements.json"),
+        "Town_Cinderwright_Layout_v4": os.path.join(lining, "Town_Cinderwright_Layout_v4_placements.json"),
         "World_Factions_Layout_v3": os.path.join(kit, "fixes_v1", "layouts", "World_Factions_Layout_v3_placements.json"),
+        "World_Factions_Layout_v4": os.path.join(lining, "World_Factions_Layout_v4_placements.json"),
     }
 
 
