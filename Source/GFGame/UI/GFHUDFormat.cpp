@@ -6,6 +6,18 @@ namespace
 	{
 		return TEXT(" \u00B7 ");
 	}
+
+	/** Whole numbers stay whole. Anything else keeps one decimal. A negative pool reads as 0. */
+	FString MiningAmount(float Value)
+	{
+		const float Shown = FMath::IsFinite(Value) ? FMath::Max(0.f, Value) : 0.f;
+		const float Rounded = FMath::RoundToFloat(Shown);
+		if (FMath::IsNearlyEqual(Shown, Rounded, 0.05f))
+		{
+			return FString::FromInt(FMath::RoundToInt(Rounded));
+		}
+		return FString::Printf(TEXT("%.1f"), Shown);
+	}
 }
 
 FString GFFormatZoneLabel(EGFTerritoryZone Zone, FName FactionId, bool bSafe, bool bHazard, FName HazardName)
@@ -323,6 +335,47 @@ FGFHudRect GFHudStaminaBounds(float CanvasW, float CanvasH)
 FGFHudRect GFHudCrosshairBounds(float CanvasW, float CanvasH)
 {
 	return CenterKeep(CanvasW, CanvasH, GFHUD::CrosshairKeepHalf);
+}
+
+FGFMiningHudView GFFormatMiningHud(EGFMagicElement Element, float CrystalPool, int32 ClawCharges, bool bTargetActive, float TargetedFraction)
+{
+	FGFMiningHudView View;
+	View.Element = Element;
+	View.ElementLabel = GFElementName(Element);
+	View.Color = GFElementColor(Element);
+	View.CrystalPool = FMath::IsFinite(CrystalPool) ? CrystalPool : 0.f;
+	View.ClawCharges = ClawCharges;
+	View.CrystalLabel = FString::Printf(TEXT("Crystal %s"), *MiningAmount(View.CrystalPool));
+	View.ClawLabel = FString::Printf(TEXT("Claw %d"), ClawCharges);
+	if (bTargetActive)
+	{
+		View.bIntegrityVisible = true;
+		View.IntegrityFraction = FMath::IsFinite(TargetedFraction) ? FMath::Clamp(TargetedFraction, 0.f, 1.f) : 0.f;
+	}
+	return View;
+}
+
+FGFMiningHudLayout GFLayoutMiningHud(float CanvasW, float CanvasH, bool bIntegrityVisible)
+{
+	FGFMiningHudLayout Out;
+	if (CanvasW <= 1.f || CanvasH <= 1.f)
+	{
+		return Out;
+	}
+	const float CenterX = CanvasW * 0.5f;
+	const float CenterY = CanvasH * 0.5f;
+	Out.Readout.W = GFHUD::MiningReadoutW;
+	Out.Readout.H = GFHUD::MiningReadoutH;
+	Out.Readout.X = CenterX + GFHUD::StaminaKeepHalf + GFHUD::MiningReadoutGap;
+	Out.Readout.Y = CenterY - Out.Readout.H * 0.5f;
+	if (bIntegrityVisible)
+	{
+		Out.Integrity.W = GFHUD::IntegrityBarW;
+		Out.Integrity.H = GFHUD::IntegrityBarH;
+		Out.Integrity.X = CenterX - Out.Integrity.W * 0.5f;
+		Out.Integrity.Y = CenterY + GFHUD::CrosshairKeepHalf + GFHUD::IntegrityBarGap;
+	}
+	return Out;
 }
 
 FGFFieldHudLayout GFLayoutFieldHud(float CanvasW, float CanvasH, int32 TrackerLines, bool bSpotted, bool bInteract)

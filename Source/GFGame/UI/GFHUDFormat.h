@@ -65,6 +65,18 @@ namespace GFHUD
 	/** Half-size of the default crosshair keep-out (gap 4 plus size 10, plus the stroke). */
 	constexpr float CrosshairKeepHalf = 18.f;
 
+	/** Element, crystal pool and claw charges, to the right of the stamina arc. */
+	constexpr float MiningReadoutW = 120.f;
+	constexpr float MiningReadoutH = 52.f;
+	constexpr float MiningReadoutGap = 8.f;
+	/**
+	 * Aimed-cell integrity bar under the crosshair.
+	 * Top is CrosshairKeepHalf plus this gap. Bottom stays above the interact prompt.
+	 */
+	constexpr float IntegrityBarW = 40.f;
+	constexpr float IntegrityBarH = 4.f;
+	constexpr float IntegrityBarGap = 6.f;
+
 	inline const TCHAR* ControlsHint()
 	{
 		return TEXT("WASD move, Shift sprint, Ctrl dash, Q swing, E yank, Space jump, LMB dig, RMB place or aim, wheel or 1-9 hotbar, Tab/I bag, Alt+wheel zoom, MMB shoulder, V view, Enter chat, Esc menu, Home return");
@@ -186,6 +198,38 @@ GFGAME_API FGFHudRect GFHudStaminaBounds(float CanvasW, float CanvasH);
 
 /** Square around the screen center that covers the default crosshair. */
 GFGAME_API FGFHudRect GFHudCrosshairBounds(float CanvasW, float CanvasH);
+
+/**
+ * Element, crystal pool and claw charges, plus the owner-only targeted integrity fraction.
+ * Built from those values alone. No widget and no world, so a test can call it without a session.
+ * The integrity bar is shown only while bTargetActive is set. Its fraction is clamped to 0..1.
+ * A hidden bar reports fraction 0.
+ */
+struct GFGAME_API FGFMiningHudView
+{
+	EGFMagicElement Element = EGFMagicElement::Spark;
+	FString ElementLabel;
+	FLinearColor Color = FLinearColor::White;
+
+	float CrystalPool = 0.f;
+	FString CrystalLabel;
+
+	int32 ClawCharges = 0;
+	FString ClawLabel;
+
+	bool bIntegrityVisible = false;
+	float IntegrityFraction = 0.f;
+};
+
+/** Readout beside the stamina arc. Integrity is empty unless the bar is visible. A zero canvas leaves both empty. */
+struct GFGAME_API FGFMiningHudLayout
+{
+	FGFHudRect Readout;
+	FGFHudRect Integrity;
+};
+
+GFGAME_API FGFMiningHudView GFFormatMiningHud(EGFMagicElement Element, float CrystalPool, int32 ClawCharges, bool bTargetActive, float TargetedFraction);
+GFGAME_API FGFMiningHudLayout GFLayoutMiningHud(float CanvasW, float CanvasH, bool bIntegrityVisible);
 
 /**
  * Quest tracker (top right), spotted banner (top center), interact prompt (under the crosshair).

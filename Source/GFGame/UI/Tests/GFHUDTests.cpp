@@ -181,4 +181,80 @@ bool FGFHUDGameWorldTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFHUDMiningReadoutTest, "GFGame.HUD.MiningReadout", HUDFlags)
+bool FGFHUDMiningReadoutTest::RunTest(const FString&)
+{
+	const FGFMiningHudView Magma = GFFormatMiningHud(EGFMagicElement::Magma, 37.5f, 1, false, 0.4f);
+	TestTrue(TEXT("Element binds"), Magma.Element == EGFMagicElement::Magma);
+	TestEqual(TEXT("Element label"), Magma.ElementLabel, FString(TEXT("Magma")));
+	TestTrue(TEXT("Element colour"), Magma.Color == GFElementColor(EGFMagicElement::Magma));
+	TestEqual(TEXT("Crystal pool binds"), Magma.CrystalPool, 37.5f);
+	TestEqual(TEXT("Crystal label"), Magma.CrystalLabel, FString(TEXT("Crystal 37.5")));
+	TestEqual(TEXT("Claw charges bind"), Magma.ClawCharges, 1);
+	TestEqual(TEXT("Claw label"), Magma.ClawLabel, FString(TEXT("Claw 1")));
+	TestFalse(TEXT("Inactive target hides the bar"), Magma.bIntegrityVisible);
+	TestEqual(TEXT("Hidden bar drops the fraction"), Magma.IntegrityFraction, 0.f);
+
+	const FGFMiningHudView Full = GFFormatMiningHud(EGFMagicElement::Spark, 100.f, 2, true, 1.4f);
+	TestEqual(TEXT("Spark label"), Full.ElementLabel, FString(TEXT("Spark")));
+	TestEqual(TEXT("Full pool label"), Full.CrystalLabel, FString(TEXT("Crystal 100")));
+	TestEqual(TEXT("Two charges"), Full.ClawCharges, 2);
+	TestEqual(TEXT("Two charges label"), Full.ClawLabel, FString(TEXT("Claw 2")));
+	TestTrue(TEXT("Active target shows the bar"), Full.bIntegrityVisible);
+	TestEqual(TEXT("Fraction above 1 clamps"), Full.IntegrityFraction, 1.f);
+
+	const FGFMiningHudView Spent = GFFormatMiningHud(EGFMagicElement::Root, 0.f, 0, true, -0.25f);
+	TestEqual(TEXT("Root label"), Spent.ElementLabel, FString(TEXT("Root")));
+	TestEqual(TEXT("Empty pool"), Spent.CrystalPool, 0.f);
+	TestEqual(TEXT("Empty pool label"), Spent.CrystalLabel, FString(TEXT("Crystal 0")));
+	TestEqual(TEXT("No charges"), Spent.ClawCharges, 0);
+	TestEqual(TEXT("No charges label"), Spent.ClawLabel, FString(TEXT("Claw 0")));
+	TestTrue(TEXT("A spent target still shows the bar"), Spent.bIntegrityVisible);
+	TestEqual(TEXT("Fraction below 0 clamps"), Spent.IntegrityFraction, 0.f);
+
+	const FGFMiningHudView Frost = GFFormatMiningHud(EGFMagicElement::Frost, 12.f, 2, true, 0.5f);
+	TestEqual(TEXT("Frost label"), Frost.ElementLabel, FString(TEXT("Frost")));
+	TestTrue(TEXT("Frost colour"), Frost.Color == GFElementColor(EGFMagicElement::Frost));
+	TestEqual(TEXT("Mid pool label"), Frost.CrystalLabel, FString(TEXT("Crystal 12")));
+	TestEqual(TEXT("Half fraction stays"), Frost.IntegrityFraction, 0.5f);
+
+	const FGFMiningHudLayout Hidden = GFLayoutMiningHud(1280.f, 720.f, false);
+	TestFalse(TEXT("Readout is placed while the bar is hidden"), Hidden.Readout.IsEmpty());
+	TestTrue(TEXT("Hidden bar has no rect"), Hidden.Integrity.IsEmpty());
+	const FGFMiningHudLayout NoCanvas = GFLayoutMiningHud(0.f, 720.f, true);
+	TestTrue(TEXT("No canvas drops the readout"), NoCanvas.Readout.IsEmpty());
+	TestTrue(TEXT("No canvas drops the bar"), NoCanvas.Integrity.IsEmpty());
+
+	const float Sizes[][2] = { { 1280.f, 720.f }, { 1920.f, 1080.f }, { 640.f, 360.f } };
+	for (const auto& Size : Sizes)
+	{
+		const float W = Size[0];
+		const float H = Size[1];
+		const FString Tag = FString::Printf(TEXT("%.0fx%.0f"), W, H);
+		const FGFMiningHudLayout Layout = GFLayoutMiningHud(W, H, true);
+		const FGFHudRect Stamina = GFHudStaminaBounds(W, H);
+		const FGFHudRect Cross = GFHudCrosshairBounds(W, H);
+		const FGFHudRect Hotbar = GFHudHotbarBounds(W, H);
+		const FGFHudRect Interact = GFLayoutFieldHud(W, H, 0, false, true).Interact;
+		TestFalse(*FString::Printf(TEXT("%s readout placed"), *Tag), Layout.Readout.IsEmpty());
+		TestFalse(*FString::Printf(TEXT("%s bar placed"), *Tag), Layout.Integrity.IsEmpty());
+		TestTrue(*FString::Printf(TEXT("%s readout inside"), *Tag), GFHudRectInside(Layout.Readout, W, H));
+		TestTrue(*FString::Printf(TEXT("%s bar inside"), *Tag), GFHudRectInside(Layout.Integrity, W, H));
+		TestTrue(*FString::Printf(TEXT("%s readout is beside the stamina arc"), *Tag), Layout.Readout.X >= Stamina.Right() + GFHUD::MiningReadoutGap - 0.05f);
+		TestTrue(*FString::Printf(TEXT("%s bar is under the crosshair"), *Tag), Layout.Integrity.Y >= Cross.Bottom() + GFHUD::IntegrityBarGap - 0.05f);
+		TestTrue(*FString::Printf(TEXT("%s bar stays above the interact prompt"), *Tag), Layout.Integrity.Bottom() <= H * 0.5f + GFHUD::InteractBelowCenter - 0.05f);
+		TestTrue(*FString::Printf(TEXT("%s bar is centred"), *Tag), HudNear(Layout.Integrity.X + Layout.Integrity.W * 0.5f, W * 0.5f));
+		TestFalse(*FString::Printf(TEXT("%s readout misses the stamina arc"), *Tag), GFHudRectsOverlap(Layout.Readout, Stamina));
+		TestFalse(*FString::Printf(TEXT("%s readout misses the crosshair"), *Tag), GFHudRectsOverlap(Layout.Readout, Cross));
+		TestFalse(*FString::Printf(TEXT("%s readout misses the bar"), *Tag), GFHudRectsOverlap(Layout.Readout, Layout.Integrity));
+		TestFalse(*FString::Printf(TEXT("%s readout misses the hotbar"), *Tag), GFHudRectsOverlap(Layout.Readout, Hotbar));
+		TestFalse(*FString::Printf(TEXT("%s readout misses the prompt"), *Tag), GFHudRectsOverlap(Layout.Readout, Interact));
+		TestFalse(*FString::Printf(TEXT("%s bar misses the crosshair"), *Tag), GFHudRectsOverlap(Layout.Integrity, Cross));
+		TestFalse(*FString::Printf(TEXT("%s bar misses the stamina arc"), *Tag), GFHudRectsOverlap(Layout.Integrity, Stamina));
+		TestFalse(*FString::Printf(TEXT("%s bar misses the prompt"), *Tag), GFHudRectsOverlap(Layout.Integrity, Interact));
+		TestFalse(*FString::Printf(TEXT("%s bar misses the hotbar"), *Tag), GFHudRectsOverlap(Layout.Integrity, Hotbar));
+	}
+	return true;
+}
+
 #endif

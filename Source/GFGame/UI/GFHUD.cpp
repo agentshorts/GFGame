@@ -290,6 +290,7 @@ void AGFHUD::DrawHUD()
 	DrawAimOverlay();
 	DrawCompass();
 	DrawStaminaArc();
+	DrawMiningHud();
 	// The lit diamond lies on the ground, so it goes down first and the landing circle is drawn over it (#347).
 	DrawAccelHopLitMarker();
 	DrawLandingMarker();
@@ -960,6 +961,45 @@ void AGFHUD::DrawStaminaArc()
 	DrawSweep(FullTurn, Track, TrackSteps);
 	const int32 FillSteps = FMath::Clamp(FMath::CeilToInt(static_cast<float>(TrackSteps) * Fraction), 2, TrackSteps);
 	DrawSweep(FullTurn * Fraction, Fill, FillSteps);
+}
+
+void AGFHUD::DrawMiningHud()
+{
+	if (!Canvas)
+	{
+		return;
+	}
+	const APlayerController* PC = GetOwningPlayerController();
+	const AGFPlayerState* PS = PC ? PC->GetPlayerState<AGFPlayerState>() : nullptr;
+	const UGFMagicComponent* Magic = PS ? PS->FindComponentByClass<UGFMagicComponent>() : nullptr;
+	if (!Magic)
+	{
+		return;
+	}
+	const FGFTargetedCellFraction& Aimed = Magic->GetTargetedFraction();
+	const FGFMiningHudView View = GFFormatMiningHud(Magic->GetElement(), Magic->GetCrystalCharge(), Magic->GetClawCharges(), Aimed.bActive, Aimed.Fraction);
+	const FGFMiningHudLayout Layout = GFLayoutMiningHud(Canvas->ClipX, Canvas->ClipY, View.bIntegrityVisible);
+	UFont* Font = HudFont();
+	const FGFHudRect& Box = Layout.Readout;
+	if (!Box.IsEmpty())
+	{
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.6f), Box.X, Box.Y, Box.W, Box.H);
+		DrawRect(View.Color, Box.X, Box.Y, 4.f, Box.H);
+		const float TextX = Box.X + 10.f;
+		DrawText(View.ElementLabel, View.Color, TextX, Box.Y + 2.f, Font, 0.7f, false);
+		DrawText(View.CrystalLabel, FLinearColor(0.75f, 0.88f, 1.f), TextX, Box.Y + 18.f, Font, 0.62f, false);
+		DrawText(View.ClawLabel, FLinearColor(0.95f, 0.86f, 0.62f), TextX, Box.Y + 34.f, Font, 0.62f, false);
+	}
+	if (View.bIntegrityVisible && !Layout.Integrity.IsEmpty())
+	{
+		const FGFHudRect& Bar = Layout.Integrity;
+		DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.22f), Bar.X, Bar.Y, Bar.W, Bar.H);
+		const float FillW = Bar.W * View.IntegrityFraction;
+		if (FillW > 0.f)
+		{
+			DrawRect(FLinearColor(0.93f, 0.86f, 0.55f, 0.95f), Bar.X, Bar.Y, FillW, Bar.H);
+		}
+	}
 }
 
 void AGFHUD::DrawLandingMarker()

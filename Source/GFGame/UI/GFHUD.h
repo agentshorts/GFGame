@@ -1,6 +1,6 @@
 #pragma once
 
-// Canvas HUD (crosshair, hotbar, zone, chat, toasts, quest tracker, spotted alert, interact prompt, Beat Hop judgement pops). No UMG. A one-line Slate text box is the chat entry.
+// Canvas HUD (crosshair, hotbar, mining readout, target integrity bar, zone, chat, toasts, quest tracker, spotted alert, interact prompt, Beat Hop judgement pops). No UMG. A one-line Slate text box is the chat entry.
 // Common UI replaces this later.
 
 #include "CoreMinimal.h"
@@ -198,6 +198,8 @@ private:
 	void RemoveAimSettings();
 	void DrawCompass();
 	void DrawStaminaArc();
+	/** Element, crystal pool and claw charges beside the stamina arc. Integrity bar under the crosshair while a target is active. */
+	void DrawMiningHud();
 	void DrawLandingMarker();
 	/** v2 (#342): a pulsing diamond over the road's lit target tile, so it reads even at a grazing angle. */
 	void DrawAccelHopLitMarker();
