@@ -603,7 +603,8 @@ bool FGFTownNodeField::CopyAimFraction(UGFMagicComponent* Caster, FGFTargetedCel
 	}
 	const float Range = FMath::Max(1.f, Caster->FieldRange());
 	FTownHit Hit;
-	const ETownTrace Kind = TraceTown(World, PS, Origin, Origin + Dir * Range, true, Hit);
+	// Voxel collision must not count as a town block, or an aimed stone never publishes a fraction.
+	const ETownTrace Kind = TraceTown(World, PS, Origin, Origin + Dir * Range, false, Hit);
 	if (Kind == ETownTrace::Miss)
 	{
 		return false;

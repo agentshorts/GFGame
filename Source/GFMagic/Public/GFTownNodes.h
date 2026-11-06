@@ -151,7 +151,7 @@ public:
 
 	/**
 	 * The aimed town node only. False when the trace misses, so the caller can publish the voxel cell instead.
-	 * A blocked trace returns true with an inactive fraction.
+	 * A hit on the voxel world is a miss. A blocked trace returns true with an inactive fraction.
 	 */
 	bool CopyAimFraction(UGFMagicComponent* Caster, FGFTargetedCellFraction& Out) const;
 
