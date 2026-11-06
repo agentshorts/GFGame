@@ -58,6 +58,12 @@ public:
 
 	/** True when Key's Active side step advances on HireSpawned. Out gets the line and its town. */
 	bool WaitsOnHire(const FString& PlayerKey, FName& OutLineId, FName& OutTownId) const;
+	/**
+	 * Server. Puts Key back on LineId's HireSpawned step when no other line is Active, and copies that onto the
+	 * player state. A mid escort give-up calls this so the line waits on a hire again.
+	 * OnModePlayerReady asks on rejoin.
+	 */
+	bool ReopenHireWait(const FString& PlayerKey, FName LineId);
 
 	/**
 	 * Rank Leader was recorded for this player.
@@ -81,6 +87,11 @@ private:
 	void PostSide(EGFElderKind Kind, const FString& PlayerKey, FName LineId) const;
 	/** Fires OnSideHireAsked when Key waits on a hire. */
 	void AskHireIfWaiting(const FString& PlayerKey);
+	/**
+	 * While an escort is still open, the saved board waits on that line's hire step.
+	 * The live board is left as it is, so a hire that already spawned can stay Done until reload.
+	 */
+	void HoldOpenEscorts(FGFQuestSave& Save) const;
 	void OnFactionLeaderSet(FName FactionId, const FString& PlayerKey, const FString& PreviousKey, FName Reason);
 	FGFQuestLine& LineFor(const FString& PlayerKey);
 	void PushPlayer(AGFPlayerState* PS) const;

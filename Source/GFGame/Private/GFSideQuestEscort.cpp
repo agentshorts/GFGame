@@ -90,6 +90,32 @@ bool FGFSideQuestEscortRules::ShouldRenewCalm(float Now, float CalmedUntil)
 	return CalmedUntil - Now < CalmRenewBelowSeconds;
 }
 
+bool FGFSideQuestEscortRules::IsAligned(const TArray<FGFSideQuestEscort>& Escorts)
+{
+	TSet<FString> Open;
+	for (const FGFSideQuestEscort& Escort : Escorts)
+	{
+		if (Escort.PlayerKey.IsEmpty())
+		{
+			return false;
+		}
+		if (Escort.Phase != EGFSideQuestEscortPhase::Done)
+		{
+			if (Escort.LineId.IsNone() || Open.Contains(Escort.PlayerKey))
+			{
+				return false;
+			}
+			Open.Add(Escort.PlayerKey);
+		}
+		const bool bHasHire = Escort.Hire.IsValid();
+		if (bHasHire != (Escort.Phase == EGFSideQuestEscortPhase::Escorting))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 UGFSideQuestEscorts* UGFSideQuestEscorts::Get(const UObject* WorldContext)
 {
 	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
@@ -120,7 +146,7 @@ void UGFSideQuestEscorts::Deinitialize()
 		}
 	}
 	Escorts.Reset();
-	Hires.Reset();
+	EnsureAligned();
 	Super::Deinitialize();
 }
 
@@ -159,20 +185,46 @@ bool UGFSideQuestEscorts::Ask(const FString& PlayerKey, FName LineId, FName Town
 	{
 		return false;
 	}
-	Hires.SetNum(Escorts.Num());
+	EnsureAligned();
 	return true;
 }
 
 AGFDino* UGFSideQuestEscorts::HireFor(const FString& PlayerKey) const
 {
-	for (int32 Index = 0; Index < Escorts.Num(); ++Index)
+	for (const FGFSideQuestEscort& Escort : Escorts)
 	{
-		if (Escorts[Index].PlayerKey == PlayerKey && Escorts[Index].Phase == EGFSideQuestEscortPhase::Escorting && Hires.IsValidIndex(Index))
+		if (Escort.PlayerKey == PlayerKey && Escort.Phase == EGFSideQuestEscortPhase::Escorting)
 		{
-			return Hires[Index].Get();
+			return Escort.Hire.Get();
 		}
 	}
 	return nullptr;
+}
+
+bool UGFSideQuestEscorts::GiveUp(const FString& PlayerKey)
+{
+	if (!IsServer() || PlayerKey.IsEmpty())
+	{
+		return false;
+	}
+	const int32 Index = Escorts.IndexOfByPredicate([&PlayerKey](const FGFSideQuestEscort& Escort)
+	{
+		return Escort.PlayerKey == PlayerKey && Escort.Phase != EGFSideQuestEscortPhase::Done;
+	});
+	if (Index == INDEX_NONE)
+	{
+		return false;
+	}
+	const FName LineId = Escorts[Index].LineId;
+	if (Escorts[Index].Hire.IsValid())
+	{
+		StandDown(Index, false);
+	}
+	Escorts.RemoveAt(Index);
+	EnsureAligned();
+	// The hire step may already be Done. Put it back to a wait so rejoin can ask. Asking stays on player ready.
+	UGFQuestSubsystem* Quest = UGFQuestSubsystem::Get(this);
+	return Quest && Quest->ReopenHireWait(PlayerKey, LineId);
 }
 
 void UGFSideQuestEscorts::TickEscorts(float DeltaSeconds)
@@ -182,12 +234,11 @@ void UGFSideQuestEscorts::TickEscorts(float DeltaSeconds)
 	{
 		return;
 	}
-	Hires.SetNum(Escorts.Num());
 	for (int32 Index = 0; Index < Escorts.Num(); ++Index)
 	{
 		FGFSideQuestEscort& Escort = Escorts[Index];
 		APawn* Body = UGFTamingComponent::FindTamerPawn(World, Escort.PlayerKey);
-		AGFDino* Hire = Hires[Index].Get();
+		AGFDino* Hire = Escort.Hire.Get();
 		const bool bHireAlive = Hire && !Hire->IsActorBeingDestroyed() && Hire->GetLife() == EGFDinoLife::Alive;
 		switch (FGFSideQuestEscortRules::Advance(Escort, DeltaSeconds, Body != nullptr, bHireAlive))
 		{
@@ -221,10 +272,15 @@ void UGFSideQuestEscorts::TickEscorts(float DeltaSeconds)
 	{
 		if (Escorts[Index].Phase == EGFSideQuestEscortPhase::Done)
 		{
+			// The hire lives on this row. Let it go before the row goes, so a drop cannot leave it behind.
+			if (Escorts[Index].Hire.IsValid())
+			{
+				StandDown(Index, false);
+			}
 			Escorts.RemoveAt(Index);
-			Hires.RemoveAt(Index);
 		}
 	}
+	EnsureAligned();
 }
 
 bool UGFSideQuestEscorts::SpawnFor(int32 Index, APawn* Body)
@@ -248,7 +304,7 @@ bool UGFSideQuestEscorts::SpawnFor(int32 Index, APawn* Body)
 	{
 		Hire->Taming->ServerEscortCalm(FGFSideQuestEscortRules::CalmSeconds);
 	}
-	Hires[Index] = Hire;
+	Escort.Hire = Hire;
 	FGFSideQuestEscortRules::Spawned(Escort);
 	// Raised only now that the body is in the world, so the HireSpawned step means a hire actually came.
 	FGFSideQuestEvents::Raise(World, FGFSideQuestEvents::Progress(Escort.PlayerKey, EGFSideQuestEventKind::HireSpawned, Escort.TownId));
@@ -258,7 +314,7 @@ bool UGFSideQuestEscorts::SpawnFor(int32 Index, APawn* Body)
 void UGFSideQuestEscorts::EscortStep(int32 Index, APawn* Body, float DeltaSeconds)
 {
 	(void)DeltaSeconds;
-	AGFDino* Hire = Hires.IsValidIndex(Index) ? Hires[Index].Get() : nullptr;
+	AGFDino* Hire = Escorts.IsValidIndex(Index) ? Escorts[Index].Hire.Get() : nullptr;
 	const UWorld* World = GetWorld();
 	if (!Hire || !Body || !World)
 	{
@@ -289,14 +345,19 @@ void UGFSideQuestEscorts::EscortStep(int32 Index, APawn* Body, float DeltaSecond
 
 void UGFSideQuestEscorts::StandDown(int32 Index, bool bWorldEnding)
 {
-	if (!Hires.IsValidIndex(Index))
+	if (!Escorts.IsValidIndex(Index))
 	{
 		return;
 	}
-	if (AGFDino* Hire = Hires[Index].Get())
+	if (AGFDino* Hire = Escorts[Index].Hire.Get())
 	{
 		// Let go the way a theft case lets go of a hire spawn: despawned, unless the player tamed it on the walk.
 		AGFTheftDirector::LetGoHire(Hire, true, bWorldEnding);
 	}
-	Hires[Index].Reset();
+	Escorts[Index].Hire.Reset();
+}
+
+void UGFSideQuestEscorts::EnsureAligned() const
+{
+	checkf(FGFSideQuestEscortRules::IsAligned(Escorts), TEXT("Side quest escort and its hire are out of line."));
 }

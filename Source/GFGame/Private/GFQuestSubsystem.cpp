@@ -5,6 +5,7 @@
 #include "GFFashionQuestTravel.h"
 #include "GFElderBook.h"
 #include "GFLog.h"
+#include "GFSideQuestEscort.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 
@@ -142,6 +143,8 @@ void UGFQuestSubsystem::CaptureModeState(TArray<uint8>& Out) const
 		Record.Board = Pair.Value.Board;
 		Save.SideBoards.Add(Record);
 	}
+	// An escort still out is saved as a hire wait. Reload then has no escort row and asks again on rejoin.
+	HoldOpenEscorts(Save);
 	if (Save.Records.Num() > 0 || Save.SideBoards.Num() > 0)
 	{
 		FGFModeBytes::Write(Save, Out);
@@ -513,6 +516,109 @@ void UGFQuestSubsystem::AskHireIfWaiting(const FString& PlayerKey)
 	if (!PlayerKey.IsEmpty() && WaitsOnHire(PlayerKey, LineId, TownId))
 	{
 		OnSideHireAsked.Broadcast(PlayerKey, LineId, TownId);
+	}
+}
+
+namespace
+{
+	const FGFSideQuestStepRule* GFSideHireStep(const FGFSideQuestCatalog& Catalog, FName LineId)
+	{
+		const FGFSideQuestLineRule* Rule = Catalog.FindLine(LineId);
+		if (!Rule)
+		{
+			return nullptr;
+		}
+		for (const FGFSideQuestStepRule& Step : Rule->Steps)
+		{
+			if (Step.AdvanceKind == EGFSideQuestEventKind::HireSpawned)
+			{
+				return &Step;
+			}
+		}
+		return nullptr;
+	}
+
+	/** Points Board at LineId's hire step. False when some other line is already Active. */
+	bool GFSideWaitOnHire(FGFSideQuestBoard& Board, FName LineId, FName StepId)
+	{
+		if (LineId.IsNone() || StepId.IsNone())
+		{
+			return false;
+		}
+		if (!Board.ActiveLineId.IsNone() && Board.ActiveLineId != LineId)
+		{
+			return false;
+		}
+		FGFSideQuestProgress* Progress = Board.Find(LineId);
+		if (!Progress)
+		{
+			FGFSideQuestProgress Added;
+			Added.LineId = LineId;
+			Progress = &Board.Lines.Add_GetRef(Added);
+		}
+		Progress->Status = EGFSideQuestStatus::Active;
+		Progress->StepId = StepId;
+		Progress->Count = 0;
+		Board.ActiveLineId = LineId;
+		return true;
+	}
+}
+
+bool UGFQuestSubsystem::ReopenHireWait(const FString& PlayerKey, FName LineId)
+{
+	if (PlayerKey.IsEmpty() || LineId.IsNone())
+	{
+		return false;
+	}
+	const FGFSideQuestStepRule* Step = GFSideHireStep(SideCatalog, LineId);
+	if (!Step)
+	{
+		return false;
+	}
+	FGFSideQuestLine& Line = SideLineFor(PlayerKey);
+	if (!GFSideWaitOnHire(Line.Board, LineId, Step->StepId))
+	{
+		UE_LOG(LogGF, Warning, TEXT("SideQuest: %s escort give-up could not put %s back on its hire step."), *PlayerKey, *LineId.ToString());
+		return false;
+	}
+	if (const AGFGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGFGameState>() : nullptr)
+	{
+		PushPlayer(GS->FindPlayerByKey(PlayerKey));
+	}
+	return true;
+}
+
+void UGFQuestSubsystem::HoldOpenEscorts(FGFQuestSave& Save) const
+{
+	const UGFSideQuestEscorts* Escorts = UGFSideQuestEscorts::Get(this);
+	if (!Escorts)
+	{
+		return;
+	}
+	for (const FGFSideQuestEscort& Escort : Escorts->GetEscorts())
+	{
+		if (Escort.Phase == EGFSideQuestEscortPhase::Done || Escort.PlayerKey.IsEmpty() || Escort.LineId.IsNone())
+		{
+			continue;
+		}
+		const FGFSideQuestStepRule* Step = GFSideHireStep(SideCatalog, Escort.LineId);
+		if (!Step)
+		{
+			continue;
+		}
+		FGFSideQuestBoardRecord* Record = Save.SideBoards.FindByPredicate([&Escort](const FGFSideQuestBoardRecord& Row)
+		{
+			return Row.PlayerKey == Escort.PlayerKey;
+		});
+		if (!Record)
+		{
+			Record = &Save.SideBoards.AddDefaulted_GetRef();
+			Record->PlayerKey = Escort.PlayerKey;
+		}
+		if (!GFSideWaitOnHire(Record->Board, Escort.LineId, Step->StepId))
+		{
+			UE_LOG(LogGF, Warning, TEXT("SideQuest: %s escort is out, and %s could not be saved as a hire wait."), *Escort.PlayerKey, *Escort.LineId.ToString());
+		}
 	}
 }
 

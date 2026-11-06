@@ -3,6 +3,7 @@
 // Side quest hire reward (QL-c). When a side line reaches a HireSpawned step, a short escort hire walks with the
 // player: one dino spawned near them through the theft director's hire spawn, kept calm so it never turns on them,
 // trailing the player like a follower, then let go the way a theft case lets go of a hire spawn.
+// The hire pointer lives on the escort row, keyed by that row's player key and line id, so the two cannot drift.
 // Raises HireSpawned when the body actually spawns, so the step completes. Server only.
 // This is not a theft case: it never opens a case, never hires against a thief, and never reads or changes heat (#299).
 #include "CoreMinimal.h"
@@ -23,7 +24,11 @@ enum class EGFSideQuestEscortPhase : uint8
 	Done
 };
 
-/** One escort, pure. The subsystem holds the dino beside it. */
+/**
+ * One escort and the hire walking it.
+ * The pure rules never read Hire. The subsystem sets Hire when the body spawns and clears it when the hire is let go,
+ * so a remove drops the escort and the dino together. Key is PlayerKey plus LineId.
+ */
 struct GFGAME_API FGFSideQuestEscort
 {
 	FString PlayerKey;
@@ -33,6 +38,8 @@ struct GFGAME_API FGFSideQuestEscort
 	/** Seconds of escort left (Escorting) or of waiting for a body (Pending). */
 	float Left = 0.f;
 	bool bFollowing = false;
+	/** Null until spawn. Set only while Escorting. */
+	TWeakObjectPtr<AGFDino> Hire;
 };
 
 /** What one escort should do this tick. */
@@ -84,6 +91,12 @@ struct GFGAME_API FGFSideQuestEscortRules
 
 	/** Renew calm when it ends within CalmRenewBelowSeconds. */
 	static bool ShouldRenewCalm(float Now, float CalmedUntil);
+
+	/**
+	 * Each open row has a player key and a line id, and a player has at most one open row.
+	 * A hire is present only while that row is Escorting.
+	 */
+	static bool IsAligned(const TArray<FGFSideQuestEscort>& Escorts);
 };
 
 UCLASS()
@@ -108,6 +121,13 @@ public:
 	const TArray<FGFSideQuestEscort>& GetEscorts() const { return Escorts; }
 	/** The hire walking with Key (null when none is out). */
 	AGFDino* HireFor(const FString& PlayerKey) const;
+	/** IsAligned on the rows this subsystem holds. */
+	bool CheckAlignment() const { return FGFSideQuestEscortRules::IsAligned(Escorts); }
+	/**
+	 * Server. Drops Key's open escort. A hire that is out is let go with it, and the line waits on the hire
+	 * again. The rejoin ask is OnModePlayerReady, which runs separately.
+	 */
+	bool GiveUp(const FString& PlayerKey);
 
 private:
 	bool IsServer() const;
@@ -115,9 +135,8 @@ private:
 	bool SpawnFor(int32 Index, APawn* Body);
 	void StandDown(int32 Index, bool bWorldEnding);
 	void EscortStep(int32 Index, APawn* Body, float DeltaSeconds);
+	void EnsureAligned() const;
 
 	TArray<FGFSideQuestEscort> Escorts;
-	/** Parallel to Escorts. */
-	TArray<TWeakObjectPtr<AGFDino>> Hires;
 	FDelegateHandle AskHandle;
 };
