@@ -58,6 +58,7 @@ void FGFStaminaState::ResetFull(const UGFMovementTuning& Tuning)
 	SwingVelocity = FVector::ZeroVector;
 	bOverrideVelocity = false;
 	OverrideVelocity = FVector::ZeroVector;
+	CurrentMove = EGFTraversalMove::None;
 	JumpsUsed = 0;
 	bTraversalJump = false;
 	bJumpAccepted = false;
@@ -268,10 +269,13 @@ FGFStaminaState GFStaminaSim::Step(const FGFStaminaState& State, const FGFStamin
 
 	const bool bTraversalBusy = Next.bGripping || Next.bWallRunning || Next.bSwiveling || Next.bSwinging || Next.bYanking
 		|| Next.bWallClimbing || Next.bMantling;
+	// A kick, launch, or release writes a real exit velocity this tick. That velocity owns the tick.
+	// A zero override is only a stop (yank or mantle arrived) and does not.
+	const bool bExitOwnsTick = Next.bOverrideVelocity && !Next.OverrideVelocity.IsNearlyZero();
 	const bool bAirDash = !Command.bGrounded;
 	const float DashOverride = bAirDash ? Command.AirDashDurationOverride : Command.GroundDashDurationOverride;
 	const float DashDuration = DashOverride >= 0.f ? DashOverride : Tuning.DashDuration;
-	if (Command.bDashPressed && !Next.bDashing && !bTraversalBusy && DashDuration > 0.f)
+	if (Command.bDashPressed && !Next.bDashing && !bTraversalBusy && !bExitOwnsTick && DashDuration > 0.f)
 	{
 		const bool bAir = bAirDash;
 		const bool bAirOk = bAir && Next.AirDashesUsed < Tuning.AirDashesPerAirtime;
@@ -288,6 +292,8 @@ FGFStaminaState GFStaminaSim::Step(const FGFStaminaState& State, const FGFStamin
 			Next.DashDir = ResolveDashDirection(Command.MoveDirection, Command.CameraForward);
 			Next.DashTimeLeft = GFStaminaSimDetail::GFStaminaNonNegative(DashDuration - Dt);
 			Next.bDashing = true;
+			Next.bOverrideVelocity = false;
+			Next.OverrideVelocity = FVector::ZeroVector;
 			if (bAir)
 			{
 				++Next.AirDashesUsed;
@@ -347,5 +353,6 @@ FGFStaminaState GFStaminaSim::Step(const FGFStaminaState& State, const FGFStamin
 	}
 
 	Next.bWasGrounded = Command.bGrounded;
+	GFTraversalSim::PublishCurrentMove(Next);
 	return Next;
 }

@@ -139,6 +139,92 @@ void GFTraversalSim::ClearActivity(FGFStaminaState& State, const UGFMovementTuni
 	State.bYanking = false;
 	State.bOverrideVelocity = false;
 	State.OverrideVelocity = FVector::ZeroVector;
+	State.CurrentMove = EGFTraversalMove::None;
+}
+
+void GFTraversalSim::PublishCurrentMove(FGFStaminaState& State)
+{
+	// A block always clears. An in-progress run or climb must not keep going once the visit is closed.
+	if (State.bWallRunBlocked)
+	{
+		State.bWallRunning = false;
+	}
+	if (State.bWallClimbBlocked)
+	{
+		State.bWallClimbing = false;
+	}
+
+	// First match wins: the move that cancels the others when it starts (yank, then swing, swivel, grip),
+	// then the wall chain (mantle, climb, wall run), then dash.
+	const bool Active[] = {
+		State.bYanking,
+		State.bSwinging,
+		State.bSwiveling,
+		State.bGripping,
+		State.bMantling,
+		State.bWallClimbing,
+		State.bWallRunning,
+		State.bDashing,
+	};
+	const EGFTraversalMove Ids[] = {
+		EGFTraversalMove::Yank,
+		EGFTraversalMove::Swing,
+		EGFTraversalMove::Swivel,
+		EGFTraversalMove::Grip,
+		EGFTraversalMove::Mantle,
+		EGFTraversalMove::WallClimb,
+		EGFTraversalMove::WallRun,
+		EGFTraversalMove::Dash,
+	};
+	int32 Winner = INDEX_NONE;
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Active); ++Index)
+	{
+		if (Active[Index])
+		{
+			Winner = Index;
+			break;
+		}
+	}
+
+	if (Winner != 0)
+	{
+		State.bYanking = false;
+	}
+	if (Winner != 1)
+	{
+		State.bSwinging = false;
+	}
+	if (Winner != 2)
+	{
+		State.bSwiveling = false;
+	}
+	if (Winner != 3)
+	{
+		State.bGripping = false;
+	}
+	if (Winner != 4)
+	{
+		State.bMantling = false;
+	}
+	if (Winner != 5)
+	{
+		State.bWallClimbing = false;
+	}
+	if (Winner != 6)
+	{
+		State.bWallRunning = false;
+	}
+	if (Winner != 7)
+	{
+		State.bDashing = false;
+		State.DashTimeLeft = 0.f;
+	}
+	else
+	{
+		State.bOverrideVelocity = false;
+		State.OverrideVelocity = FVector::ZeroVector;
+	}
+	State.CurrentMove = Winner == INDEX_NONE ? EGFTraversalMove::None : Ids[Winner];
 }
 
 bool GFTraversalSim::ShouldShowLandingMarker(const FGFStaminaState& State, bool bGrounded, bool bEnabled)
@@ -337,6 +423,13 @@ bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Comma
 		}
 	}
 
+	// Grip already replaced a dash. Clear it before the kick or the cling so the dash timer cannot revive it.
+	if (Next.bGripping)
+	{
+		Next.bDashing = false;
+		Next.DashTimeLeft = 0.f;
+	}
+
 	if (Next.bGripping && Command.bJumpPressed)
 	{
 		const FVector Normal = GFTraversalDetail::GFTraversalFlatNormal(Next.GripNormal);
@@ -454,6 +547,12 @@ bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Comma
 		Next.SwingVelocity = Command.Velocity;
 	}
 
+	// Yank and swing both continue from their own flags. Yank is the one that cancels the other on the press.
+	if (Next.bYanking)
+	{
+		Next.bSwinging = false;
+	}
+
 	if (Next.bSwinging && !Command.bGrappleSwingHeld)
 	{
 		Next.bSwinging = false;
@@ -516,7 +615,10 @@ bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Comma
 		}
 	}
 
-	const bool bBusy = Next.bGripping || Next.bDashing || Next.bSwiveling || Next.bSwinging || Next.bYanking || Next.bOverrideVelocity;
+	// A live move blocks climb and wall run. A zero override is a stop written when a yank or a mantle arrives,
+	// so it is not a move and must not block the next one. A kick, launch, or release still owns the tick.
+	const bool bExitOwnsTick = Next.bOverrideVelocity && !Next.OverrideVelocity.IsNearlyZero();
+	const bool bBusy = Next.bGripping || Next.bDashing || Next.bSwiveling || Next.bSwinging || Next.bYanking || bExitOwnsTick;
 
 	// #355 wall climb and its mantle. Cling, dash, pole and rope above already won this step if they are busy.
 	if (Command.bGrounded)
@@ -575,10 +677,16 @@ bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Comma
 	}
 	else if (Next.bMantling)
 	{
+		Next.bWallClimbing = false;
 		StepMantle();
 	}
 	else
 	{
+		// A closed visit does not keep climbing.
+		if (Next.bWallClimbBlocked)
+		{
+			Next.bWallClimbing = false;
+		}
 		bool bClimbWall = false;
 		FVector ClimbNormal = Next.WallClimbNormal;
 		if (Contact.bWallAhead && GFTraversalDetail::GFTraversalIsWallNormal(Contact.WallAheadNormal, Tuning.WallNormalMaxZ))
@@ -685,12 +793,17 @@ bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Comma
 		Next.bWallRunning = false;
 		Next.WallRunTimeLeft = Tuning.WallRunMaxSeconds;
 	}
-	else if (bBusy || Next.bWallClimbing || Next.bMantling || (Next.bOverrideVelocity && !bClimbHandoff))
+	else if (bBusy || Next.bWallClimbing || Next.bMantling || ((Next.bOverrideVelocity && !Next.OverrideVelocity.IsNearlyZero()) && !bClimbHandoff))
 	{
 		Next.bWallRunning = false;
 	}
 	else
 	{
+		// A closed visit does not keep running, and it does not spend stamina while the flag was left on.
+		if (Next.bWallRunBlocked)
+		{
+			Next.bWallRunning = false;
+		}
 		FVector AlongDir = FVector::ForwardVector;
 		const bool bAlong = GFTraversalDetail::GFTraversalAlongWall(Command.MoveDirection, RunNormal, Tuning.WallRunAlongMin, AlongDir);
 		const float RunSpeed = bClimbHandoff ? FMath::Max(Command.HorizontalSpeed, Tuning.WallClimbToRunSpeed) : Command.HorizontalSpeed;

@@ -1315,6 +1315,207 @@ bool FGFMovementWallClimbBusyTest::RunTest(const FString&)
 	Run.Contact.WallNormal = GFClimbNormal;
 	FGFStaminaState WallRun = GFStaminaSim::Step(GFMovementFullState(), Run, Tuning);
 	TestTrue(TEXT("Plain wall run is unchanged"), WallRun.bWallRunning && !WallRun.bWallClimbing);
+	TestTrue(TEXT("A plain wall run is the current move"), WallRun.CurrentMove == EGFTraversalMove::WallRun);
+	return true;
+}
+
+// #386: one current move. The cases below are the overlaps the independent flags allowed.
+namespace GFCurrentMoveTestsPrivate
+{
+	int32 GFActiveMoveCount(const FGFStaminaState& State)
+	{
+		return (State.bDashing ? 1 : 0)
+			+ (State.bGripping ? 1 : 0)
+			+ (State.bWallRunning ? 1 : 0)
+			+ (State.bWallClimbing ? 1 : 0)
+			+ (State.bMantling ? 1 : 0)
+			+ (State.bSwiveling ? 1 : 0)
+			+ (State.bSwinging ? 1 : 0)
+			+ (State.bYanking ? 1 : 0);
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMovementCurrentMoveTest, "GFGame.Movement.CurrentMove", GFMovementTestsPrivate::GFMovementFlags)
+bool FGFMovementCurrentMoveTest::RunTest(const FString&)
+{
+	using namespace GFMovementTestsPrivate;
+	using namespace GFWallClimbTestsPrivate;
+	using namespace GFCurrentMoveTestsPrivate;
+	const UGFMovementTuning& Tuning = GFMovementTuningCDO();
+
+	const FGFStaminaState Climbing = GFClimbingState(Tuning);
+	TestTrue(TEXT("A climb is the current move"), Climbing.CurrentMove == EGFTraversalMove::WallClimb);
+	TestEqual(TEXT("A climb is the only move"), GFActiveMoveCount(Climbing), 1);
+
+	// Exit velocity owns the tick. The old step started a dash on top of the kick, launch, or release.
+	FGFStaminaCommand ClimbKick = GFClimbCommand(0.05f, GFClimbInto, false);
+	ClimbKick.bJumpPressed = true;
+	ClimbKick.bDashPressed = true;
+	const FGFStaminaState Kicked = GFStaminaSim::Step(Climbing, ClimbKick, Tuning);
+	TestFalse(TEXT("A climb kick is not also a dash"), Kicked.bDashing);
+	TestTrue(TEXT("A climb kick keeps its exit velocity"), Kicked.bOverrideVelocity && !Kicked.OverrideVelocity.IsNearlyZero());
+	TestTrue(TEXT("A climb kick leaves no move in charge"), Kicked.CurrentMove == EGFTraversalMove::None);
+	TestEqual(TEXT("A climb kick is one writer"), GFActiveMoveCount(Kicked), 0);
+
+	FGFStaminaState Grip = GFMovementFullState();
+	Grip.bGripping = true;
+	Grip.GripTimeLeft = 1.f;
+	Grip.GripNormal = FVector(1.0, 0.0, 0.0);
+	Grip.bWasGrounded = false;
+	FGFStaminaCommand GripKick = GFMovementCommand(0.05f);
+	GripKick.bGrounded = false;
+	GripKick.bJumpPressed = true;
+	GripKick.bDashPressed = true;
+	const FGFStaminaState GripKicked = GFStaminaSim::Step(Grip, GripKick, Tuning);
+	TestFalse(TEXT("A cling kick is not also a dash"), GripKicked.bDashing);
+	TestTrue(TEXT("A cling kick keeps its exit velocity"), GripKicked.bOverrideVelocity && !GripKicked.bGripping);
+	TestTrue(TEXT("A cling kick leaves no move in charge"), GripKicked.CurrentMove == EGFTraversalMove::None);
+
+	FGFStaminaState Orbit = GFMovementFullState();
+	FGFStaminaCommand Grab = GFMovementCommand(0.05f);
+	Grab.bGrounded = false;
+	Grab.HorizontalSpeed = 500.f;
+	Grab.PlayerLocation = FVector(100.0, 0.0, 120.0);
+	Grab.MoveDirection = FVector(0.0, 1.0, 0.0);
+	Grab.Contact.bSwivelContact = true;
+	Grab.Contact.SwivelOrigin = FVector(0.0, 0.0, 120.0);
+	Orbit = GFStaminaSim::Step(Orbit, Grab, Tuning);
+	TestTrue(TEXT("A pole orbit is the current move"), Orbit.CurrentMove == EGFTraversalMove::Swivel);
+	FGFStaminaCommand Launch = Grab;
+	Launch.bJumpPressed = true;
+	Launch.bDashPressed = true;
+	Launch.PlayerLocation = Orbit.TravelLocation;
+	const FGFStaminaState Launched = GFStaminaSim::Step(Orbit, Launch, Tuning);
+	TestFalse(TEXT("A pole launch is not also a dash"), Launched.bDashing);
+	TestTrue(TEXT("A pole launch keeps its exit velocity"), Launched.bOverrideVelocity && !Launched.bSwiveling);
+	TestTrue(TEXT("A pole launch leaves no move in charge"), Launched.CurrentMove == EGFTraversalMove::None);
+
+	FGFStaminaState Rope = GFMovementFullState();
+	Rope.bSwinging = true;
+	Rope.bWasGrounded = false;
+	Rope.GrappleAnchor = FVector(0.0, 0.0, 500.0);
+	Rope.TravelLocation = FVector::ZeroVector;
+	Rope.RopeLength = 500.f;
+	Rope.SwingVelocity = FVector(400.0, 0.0, 0.0);
+	FGFStaminaCommand Release = GFMovementCommand(0.05f);
+	Release.bGrounded = false;
+	Release.bDashPressed = true;
+	const FGFStaminaState Released = GFStaminaSim::Step(Rope, Release, Tuning);
+	TestFalse(TEXT("A rope release is not also a dash"), Released.bDashing);
+	TestTrue(TEXT("A rope release keeps its exit velocity"), Released.bOverrideVelocity && !Released.bSwinging);
+	TestTrue(TEXT("A rope release leaves no move in charge"), Released.CurrentMove == EGFTraversalMove::None);
+
+	// A yank that arrives with a zero stop used to count as busy and block the climb on that same tick.
+	FGFStaminaState Arrived = GFMovementFullState();
+	Arrived.bYanking = true;
+	Arrived.GrappleAnchor = FVector(0.0, 0.0, 100.0);
+	Arrived.TravelLocation = FVector(0.0, 0.0, 100.0);
+	FGFStaminaCommand Into = GFClimbCommand(0.05f, GFClimbInto, true);
+	Into.PlayerLocation = FVector(0.0, 0.0, 100.0);
+	const FGFStaminaState Climbed = GFStaminaSim::Step(Arrived, Into, Tuning);
+	TestTrue(TEXT("Arriving on a yank does not block the climb"), Climbed.bWallClimbing && !Climbed.bYanking);
+	TestTrue(TEXT("The climb is the current move"), Climbed.CurrentMove == EGFTraversalMove::WallClimb);
+	TestEqual(TEXT("The climb is the only move"), GFActiveMoveCount(Climbed), 1);
+
+	// The same arrival with no wall lets the dash start, and the zero stop does not stay on as a second writer.
+	FGFStaminaState Stopped = GFMovementFullState();
+	Stopped.bYanking = true;
+	Stopped.bWasGrounded = false;
+	Stopped.GrappleAnchor = FVector(0.0, 0.0, 100.0);
+	Stopped.TravelLocation = FVector(0.0, 0.0, 100.0);
+	FGFStaminaCommand Dash = GFMovementCommand(0.05f);
+	Dash.bGrounded = false;
+	Dash.bDashPressed = true;
+	Dash.PlayerLocation = FVector(0.0, 0.0, 100.0);
+	const FGFStaminaState Dashed = GFStaminaSim::Step(Stopped, Dash, Tuning);
+	TestTrue(TEXT("A dash after a yank stop is the current move"), Dashed.bDashing && !Dashed.bYanking);
+	TestFalse(TEXT("A dash does not keep the zero stop"), Dashed.bOverrideVelocity);
+	TestTrue(TEXT("The dash is the current move"), Dashed.CurrentMove == EGFTraversalMove::Dash);
+	TestEqual(TEXT("The dash is the only move"), GFActiveMoveCount(Dashed), 1);
+
+	// A block always clears, including stamina: the old step kept running and kept climbing.
+	FGFStaminaState BlockedRun = GFMovementFullState();
+	BlockedRun.bWallRunning = true;
+	BlockedRun.bWallRunBlocked = true;
+	BlockedRun.bWasGrounded = false;
+	BlockedRun.WallRunTimeLeft = Tuning.WallRunMaxSeconds;
+	BlockedRun.WallRunSpeed = 500.f;
+	FGFStaminaCommand Stay = GFMovementCommand(0.2f);
+	Stay.bGrounded = false;
+	Stay.HorizontalSpeed = 500.f;
+	Stay.MoveDirection = FVector(0.0, 1.0, 0.0);
+	Stay.Contact.bWallContact = true;
+	Stay.Contact.WallNormal = FVector(1.0, 0.0, 0.0);
+	const float RunStamina = BlockedRun.Stamina;
+	const FGFStaminaState RunCleared = GFStaminaSim::Step(BlockedRun, Stay, Tuning);
+	TestFalse(TEXT("A wall run block clears the run"), RunCleared.bWallRunning);
+	TestTrue(TEXT("The wall run visit stays closed"), RunCleared.bWallRunBlocked);
+	TestTrue(TEXT("A blocked wall run spends nothing"), GFMovementNear(RunCleared.Stamina, RunStamina));
+	TestTrue(TEXT("A blocked wall run is not the current move"), RunCleared.CurrentMove == EGFTraversalMove::None);
+
+	FGFStaminaState BlockedClimb = GFMovementFullState();
+	BlockedClimb.bWallClimbing = true;
+	BlockedClimb.bWallClimbBlocked = true;
+	BlockedClimb.bWasGrounded = false;
+	BlockedClimb.WallClimbTimeLeft = Tuning.WallClimbMaxSeconds;
+	BlockedClimb.WallClimbCoyoteLeft = Tuning.WallClimbCoyoteSeconds;
+	BlockedClimb.WallClimbNormal = GFClimbNormal;
+	FGFStaminaCommand Hold = GFClimbCommand(0.2f, GFClimbInto, false);
+	const float ClimbStamina = BlockedClimb.Stamina;
+	const FGFStaminaState ClimbCleared = GFStaminaSim::Step(BlockedClimb, Hold, Tuning);
+	TestFalse(TEXT("A wall climb block clears the climb"), ClimbCleared.bWallClimbing);
+	TestTrue(TEXT("The wall climb visit stays closed"), ClimbCleared.bWallClimbBlocked);
+	TestTrue(TEXT("A blocked wall climb spends nothing"), GFMovementNear(ClimbCleared.Stamina, ClimbStamina));
+	TestFalse(TEXT("A blocked wall climb does not drive velocity"), ClimbCleared.bOverrideVelocity);
+	TestTrue(TEXT("A blocked wall climb is not the current move"), ClimbCleared.CurrentMove == EGFTraversalMove::None);
+
+	// Flags the old step left set together.
+	FGFStaminaState BothRopes = GFMovementFullState();
+	BothRopes.bSwinging = true;
+	BothRopes.bYanking = true;
+	BothRopes.bWasGrounded = false;
+	BothRopes.GrappleAnchor = FVector(0.0, 0.0, 500.0);
+	BothRopes.TravelLocation = FVector::ZeroVector;
+	BothRopes.RopeLength = 500.f;
+	BothRopes.SwingVelocity = FVector(100.0, 0.0, 0.0);
+	FGFStaminaCommand HoldRope = GFMovementCommand(0.05f);
+	HoldRope.bGrounded = false;
+	HoldRope.bGrappleSwingHeld = true;
+	const FGFStaminaState YankWon = GFStaminaSim::Step(BothRopes, HoldRope, Tuning);
+	TestTrue(TEXT("Yank and swing collapse to the yank"), YankWon.bYanking && !YankWon.bSwinging);
+	TestTrue(TEXT("The yank is the current move"), YankWon.CurrentMove == EGFTraversalMove::Yank);
+	TestEqual(TEXT("Yank and swing are not both in charge"), GFActiveMoveCount(YankWon), 1);
+
+	FGFStaminaState BothCling = GFMovementFullState();
+	BothCling.bGripping = true;
+	BothCling.bDashing = true;
+	BothCling.DashTimeLeft = 0.2f;
+	BothCling.GripTimeLeft = 1.f;
+	BothCling.GripNormal = FVector(1.0, 0.0, 0.0);
+	BothCling.bWasGrounded = false;
+	FGFStaminaCommand HoldCling = GFMovementCommand(0.05f);
+	HoldCling.bGrounded = false;
+	FGFStaminaState ClingWon = GFStaminaSim::Step(BothCling, HoldCling, Tuning);
+	TestTrue(TEXT("Grip and dash collapse to the grip"), ClingWon.bGripping && !ClingWon.bDashing);
+	TestTrue(TEXT("The dash timer does not survive the grip"), ClingWon.DashTimeLeft <= 0.f);
+	TestTrue(TEXT("The grip is the current move"), ClingWon.CurrentMove == EGFTraversalMove::Grip);
+	ClingWon = GFStaminaSim::Step(ClingWon, HoldCling, Tuning);
+	TestFalse(TEXT("The next tick does not revive the dash"), ClingWon.bDashing);
+	TestTrue(TEXT("The grip is still the current move"), ClingWon.bGripping && ClingWon.CurrentMove == EGFTraversalMove::Grip);
+
+	FGFStaminaState BothWall = GFMovementFullState();
+	BothWall.bMantling = true;
+	BothWall.bWallClimbing = true;
+	BothWall.MantleTimeLeft = Tuning.WallClimbMantleMaxSeconds;
+	BothWall.MantleTarget = FVector(100.0, 0.0, 400.0);
+	BothWall.bWasGrounded = false;
+	FGFStaminaCommand Rise = GFMovementCommand(0.05f);
+	Rise.bGrounded = false;
+	Rise.PlayerLocation = FVector(0.0, 0.0, 88.0);
+	const FGFStaminaState MantleWon = GFStaminaSim::Step(BothWall, Rise, Tuning);
+	TestTrue(TEXT("Mantle and climb collapse to the mantle"), MantleWon.bMantling && !MantleWon.bWallClimbing);
+	TestTrue(TEXT("The mantle is the current move"), MantleWon.CurrentMove == EGFTraversalMove::Mantle);
+	TestEqual(TEXT("Mantle and climb are not both in charge"), GFActiveMoveCount(MantleWon), 1);
 	return true;
 }
 

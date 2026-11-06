@@ -67,6 +67,24 @@ struct GFGAME_API FGFStaminaCommand
 	bool bWallClimbAllowed = true;
 };
 
+/**
+ * The one traversal move in charge. Exit velocity (a kick, a launch, a release, a stop) is not a move:
+ * CurrentMove is None while that velocity is the only thing left.
+ * Wall climb phase for replication stays EGFWallClimbPhase, derived from the climb and mantle flags.
+ */
+enum class EGFTraversalMove : uint8
+{
+	None = 0,
+	Dash,
+	Grip,
+	WallRun,
+	WallClimb,
+	Mantle,
+	Swivel,
+	Swing,
+	Yank,
+};
+
 /** Result of the last steps. Copied into saved moves so a replay starts from the same pool. */
 struct GFGAME_API FGFStaminaState
 {
@@ -124,6 +142,12 @@ struct GFGAME_API FGFStaminaState
 
 	bool bOverrideVelocity = false;
 	FVector OverrideVelocity = FVector::ZeroVector;
+
+	/**
+	 * The move in charge among dash, grip, wall run, wall climb, mantle, swivel, swing, and yank.
+	 * Step publishes this after those flags settle. None while walking, falling, or on an exit velocity.
+	 */
+	EGFTraversalMove CurrentMove = EGFTraversalMove::None;
 
 	/** Jump presses since the last landing or wall-kick. Jump 1 is free. The air dash does not touch this. */
 	int32 JumpsUsed = 0;
@@ -220,6 +244,12 @@ namespace GFTraversalSim
 
 	/** Drops active traversal. Leaves the grapple cooldown where it was. */
 	GFGAME_API void ClearActivity(FGFStaminaState& State, const UGFMovementTuning& Tuning);
+
+	/**
+	 * One move in charge, and a wall-run or wall-climb block clears that move.
+	 * Writes CurrentMove from the flag that remains. A dash drops any override so it is the only velocity.
+	 */
+	GFGAME_API void PublishCurrentMove(FGFStaminaState& State);
 
 	/** Airborne, air dash, or a swing. Hidden while clinging, climbing, mantling, wall running, or orbiting. */
 	GFGAME_API bool ShouldShowLandingMarker(const FGFStaminaState& State, bool bGrounded, bool bEnabled);
