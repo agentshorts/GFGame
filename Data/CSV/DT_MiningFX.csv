@@ -1,4 +1,4 @@
-# Mining FX v1. Paths are the Niagara systems in Content/FX/Mining, built from engine lightweight templates by Tools/FX/make_mining_fx_v1.py.
+# Mining FX v1. Paths are the Niagara systems in Content/FX/Mining, built from engine lightweight templates by Tools/FX/make_mining_fx_v1.py, v2.py and v3.py.
 # Kind: Hit, Crack, Break, Beam. Element: Spark, Magma, Root, Frost, or Any. Kit: Tree, Crystal, or Any. Hit, Crack and Break rows must be one-shot systems; only Beam rows may loop.
 ---,Kind,Element,Kit,SystemPath
 Hit_Spark,Hit,Spark,Any,/Game/FX/Mining/NS_Mine_Hit.NS_Mine_Hit
@@ -7,8 +7,8 @@ Hit_Root,Hit,Root,Any,/Game/FX/Mining/NS_Rootmaul_Hit.NS_Rootmaul_Hit
 Hit_Frost,Hit,Frost,Any,/Game/FX/Mining/NS_Frost_Shatter.NS_Frost_Shatter
 Hit_Tree,Hit,Any,Tree,/Game/FX/Mining/NS_Mine_Break_Wood.NS_Mine_Break_Wood
 Hit_Crystal,Hit,Any,Crystal,/Game/FX/Mining/NS_Mine_Break_Crystal.NS_Mine_Break_Crystal
-Crack_Any,Crack,Any,Any,/Game/FX/Mining/NS_Mine_Hit.NS_Mine_Hit
-Break_Any,Break,Any,Any,/Game/FX/Mining/NS_Mine_Hit.NS_Mine_Hit
+Crack_Any,Crack,Any,Any,/Game/FX/Mining/NS_Mining_Crack.NS_Mining_Crack
+Break_Any,Break,Any,Any,/Game/FX/Mining/NS_Mining_Break.NS_Mining_Break
 Break_Tree,Break,Any,Tree,/Game/FX/Mining/NS_Mine_Break_Wood.NS_Mine_Break_Wood
 Break_Crystal,Break,Any,Crystal,/Game/FX/Mining/NS_Mine_Break_Crystal.NS_Mine_Break_Crystal
 Beam_Spark,Beam,Spark,Any,/Game/FX/Mining/NS_Sparkcone_v2.NS_Sparkcone_v2
