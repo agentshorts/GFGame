@@ -706,8 +706,9 @@ bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Comma
 		}
 
 		const bool bFloorOrCoyote = Command.bGrounded || Next.WallClimbCoyoteLeft > 0.f;
-		const bool bGroundHop = Command.bGrounded && Command.bJumpPressed;
-		if (!Next.bWallClimbing && !Next.bWallClimbBlocked && bInto && bFloorOrCoyote && !bGroundHop
+		// A jump press is a hop. Coyote counts as floor for the climb start, so a press in that window
+		// used to start a climb and the branch below turned it into a kick. ResolveJump then refused the hop.
+		if (!Next.bWallClimbing && !Next.bWallClimbBlocked && bInto && bFloorOrCoyote && !Command.bJumpPressed
 			&& Tuning.WallClimbMaxSeconds > 0.f && (bInfinite || Next.Stamina > 0.f))
 		{
 			Next.bWallClimbing = true;
@@ -730,6 +731,14 @@ bool GFTraversalSim::Apply(FGFStaminaState& Next, const FGFStaminaCommand& Comma
 			if (!bClimbWall)
 			{
 				Next.bWallClimbing = false;
+			}
+			else if (Command.bJumpPressed && Command.bGrounded)
+			{
+				// Still on the floor: the press is the ground hop, not a kick. Block a re-grab this visit.
+				Next.bWallClimbing = false;
+				Next.bWallClimbBlocked = true;
+				Next.bOverrideVelocity = false;
+				Next.OverrideVelocity = FVector::ZeroVector;
 			}
 			else if (Command.bJumpPressed)
 			{

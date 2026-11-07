@@ -1519,4 +1519,67 @@ bool FGFMovementCurrentMoveTest::RunTest(const FString&)
 	return true;
 }
 
+// #401: a ground press in the start clearing. Trees and rocks sit just outside the open floor, and the floor
+// check flickers, so the press lands in the climb coyote window or on a climb that has not left the ground.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMovementJumpCoyoteWallTest, "GFGame.Movement.Jump.CoyoteWall", GFMovementTestsPrivate::GFMovementFlags)
+bool FGFMovementJumpCoyoteWallTest::RunTest(const FString&)
+{
+	using namespace GFMovementTestsPrivate;
+	using namespace GFWallClimbTestsPrivate;
+	const UGFMovementTuning& Tuning = GFMovementTuningCDO();
+
+	FGFStaminaState Armed = GFStaminaSim::Step(GFMovementFullState(), GFMovementCommand(0.05f), Tuning);
+	TestFalse(TEXT("Standing is not a climb"), Armed.bWallClimbing);
+	TestTrue(TEXT("Standing arms coyote"), GFMovementNear(Armed.WallClimbCoyoteLeft, Tuning.WallClimbCoyoteSeconds));
+
+	FGFStaminaCommand CoyoteJump = GFClimbCommand(0.05f, GFClimbInto, false);
+	CoyoteJump.bJumpPressed = true;
+	const FGFStaminaState CoyoteHop = GFStaminaSim::Step(Armed, CoyoteJump, Tuning);
+	TestTrue(TEXT("A jump in the coyote window into a wall is accepted"), CoyoteHop.bJumpAccepted);
+	TestFalse(TEXT("That press is not a kick"), CoyoteHop.bTraversalJump);
+	TestFalse(TEXT("That press does not climb"), CoyoteHop.bWallClimbing);
+	TestTrue(TEXT("Coyote hop matches jump speed"), GFMovementNear(CoyoteHop.JumpZSpeed, Tuning.JumpZVelocity));
+	TestEqual(TEXT("Coyote hop is jump 1"), CoyoteHop.JumpsUsed, 1);
+	TestTrue(TEXT("Coyote hop leaves no move in charge"), CoyoteHop.CurrentMove == EGFTraversalMove::None);
+
+	const FGFStaminaState Climbing = GFClimbingState(Tuning);
+	TestTrue(TEXT("Setup is a grounded climb"), Climbing.bWallClimbing && Climbing.CurrentMove == EGFTraversalMove::WallClimb);
+	FGFStaminaCommand GroundJump = GFClimbCommand(0.05f, GFClimbInto, true);
+	GroundJump.bJumpPressed = true;
+	const FGFStaminaState GroundHop = GFStaminaSim::Step(Climbing, GroundJump, Tuning);
+	TestTrue(TEXT("A jump while still on the floor is accepted"), GroundHop.bJumpAccepted);
+	TestFalse(TEXT("A grounded climb press is not a kick"), GroundHop.bTraversalJump);
+	TestFalse(TEXT("The hop leaves the climb"), GroundHop.bWallClimbing);
+	TestTrue(TEXT("Grounded climb hop matches jump speed"), GFMovementNear(GroundHop.JumpZSpeed, Tuning.JumpZVelocity));
+	TestEqual(TEXT("Grounded climb hop is jump 1"), GroundHop.JumpsUsed, 1);
+	TestTrue(TEXT("Grounded climb hop leaves no move in charge"), GroundHop.CurrentMove == EGFTraversalMove::None);
+	TestFalse(TEXT("The hop does not keep the climb speed"), GroundHop.bOverrideVelocity);
+
+	FGFStaminaCommand StillIn = GFClimbCommand(0.05f, GFClimbInto, false);
+	const FGFStaminaState After = GFStaminaSim::Step(GroundHop, StillIn, Tuning);
+	TestFalse(TEXT("Holding into the wall after the hop does not re-climb"), After.bWallClimbing);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFMovementJumpPlainGroundTest, "GFGame.Movement.Jump.PlainGround", GFMovementTestsPrivate::GFMovementFlags)
+bool FGFMovementJumpPlainGroundTest::RunTest(const FString&)
+{
+	using namespace GFMovementTestsPrivate;
+	const UGFMovementTuning& Tuning = GFMovementTuningCDO();
+
+	FGFStaminaCommand Hop = GFMovementCommand(0.05f);
+	Hop.bJumpPressed = true;
+	Hop.bGrounded = true;
+	const FGFStaminaState State = GFStaminaSim::Step(GFMovementFullState(), Hop, Tuning);
+	TestTrue(TEXT("A plain grounded press is accepted"), State.bJumpAccepted);
+	TestFalse(TEXT("A plain grounded press is not a kick"), State.bTraversalJump);
+	TestFalse(TEXT("A plain grounded press does not climb"), State.bWallClimbing || State.bMantling || State.bGripping);
+	TestTrue(TEXT("Plain hop matches tuning jump speed"), GFMovementNear(State.JumpZSpeed, Tuning.JumpZVelocity));
+	TestEqual(TEXT("Plain hop speed is the tuning value"), State.JumpZSpeed, Tuning.JumpZVelocity);
+	TestEqual(TEXT("Plain hop is jump 1"), State.JumpsUsed, 1);
+	TestTrue(TEXT("Plain hop is free"), GFMovementNear(State.Stamina, Tuning.MaxStamina));
+	TestTrue(TEXT("Plain hop leaves no move in charge"), State.CurrentMove == EGFTraversalMove::None);
+	return true;
+}
+
 #endif
