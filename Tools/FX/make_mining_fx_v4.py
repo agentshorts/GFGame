@@ -78,7 +78,8 @@ def loop_behaviors(system):
             continue
         state = L.get_property_text(o, "EmitterState")
         m = re.search(r"LoopBehavior=(\w+)", state or "")
-        out.append(m.group(1) if m else "?")
+        # export text omits default values; the default LoopBehavior is Infinite
+        out.append(m.group(1) if m else "Infinite")
     return out
 
 
