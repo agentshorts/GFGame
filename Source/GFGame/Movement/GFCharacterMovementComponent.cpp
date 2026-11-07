@@ -907,9 +907,10 @@ void UGFCharacterMovementComponent::ApplyWallClimbMove()
 	{
 		Velocity = Sim.OverrideVelocity;
 	}
-	else
+	else if (!Sim.bJumpAccepted)
 	{
 		// A climb that just dropped (peel, out of time or stamina) falls from here instead of keeping its climb speed.
+		// An accepted hop already wrote Z. Clamping that Z puts the pawn back on the floor.
 		Velocity.Z = FMath::Min(Velocity.Z, 0.0);
 	}
 }
